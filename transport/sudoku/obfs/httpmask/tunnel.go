@@ -1394,9 +1394,10 @@ func (c *pollConn) pushLoop() {
 	)
 
 	var (
-		buf        bytes.Buffer
-		pendingRaw int
-		timer      = time.NewTimer(flushInterval)
+		buf         bytes.Buffer
+		encodedLine = make([]byte, base64.StdEncoding.EncodedLen(maxLineRawBytes)+1)
+		pendingRaw  int
+		timer       = time.NewTimer(flushInterval)
 	)
 	defer timer.Stop()
 
@@ -1503,11 +1504,10 @@ func (c *pollConn) pushLoop() {
 				}
 			}
 
-			buf.Grow(encLen + 1)
-			encoded := buf.AvailableBuffer()[:encLen]
-			base64.StdEncoding.Encode(encoded, chunk)
-			encoded = append(encoded, '\n')
-			_, _ = buf.Write(encoded)
+			line := encodedLine[:encLen+1]
+			base64.StdEncoding.Encode(line[:encLen], chunk)
+			line[encLen] = '\n'
+			_, _ = buf.Write(line)
 			pendingRaw += len(chunk)
 		}
 		return nil
