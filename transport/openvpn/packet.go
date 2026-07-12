@@ -7,6 +7,11 @@ import (
 	"fmt"
 )
 
+type ControlCryptor interface {
+	Wrap(header []byte, packetID uint32, unixTime uint32, plaintext []byte) ([]byte, error)
+	Unwrap(packet []byte) (header []byte, packetID uint32, unixTime uint32, plaintext []byte, err error)
+}
+
 const (
 	KeyIDMask   = 0x07
 	OpcodeShift = 3
@@ -167,7 +172,7 @@ func DecodeControlPlain(opcode Opcode, plain []byte) (ackIDs []uint32, ackRemote
 	return ackIDs, ackRemote, messageID, payload, nil
 }
 
-func (p ControlPacket) Encode(crypt *TLSCrypt, packetID uint32, unixTime uint32) ([]byte, error) {
+func (p ControlPacket) Encode(crypt ControlCryptor, packetID uint32, unixTime uint32) ([]byte, error) {
 	plain, err := p.EncodePlain()
 	if err != nil {
 		return nil, err
@@ -185,7 +190,7 @@ func (p ControlPacket) Encode(crypt *TLSCrypt, packetID uint32, unixTime uint32)
 	return crypt.Wrap(header, packetID, unixTime, plain)
 }
 
-func DecodeControlPacket(crypt *TLSCrypt, packet []byte) (*ControlPacket, uint32, uint32, error) {
+func DecodeControlPacket(crypt ControlCryptor, packet []byte) (*ControlPacket, uint32, uint32, error) {
 	if crypt == nil {
 		if len(packet) < TLSCryptHeaderSize+1 {
 			return nil, 0, 0, errors.New("control packet too short")

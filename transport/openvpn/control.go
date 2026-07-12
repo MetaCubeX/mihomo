@@ -22,7 +22,7 @@ type PacketIO interface {
 
 type ControlChannel struct {
 	io     PacketIO
-	crypt  *TLSCrypt
+	crypt  ControlCryptor
 	clock  func() time.Time
 	keyID  uint8
 	local  SessionID
@@ -39,7 +39,7 @@ type ControlChannel struct {
 	writeDeadline time.Time
 }
 
-func NewControlChannel(io PacketIO, crypt *TLSCrypt, local SessionID) *ControlChannel {
+func NewControlChannel(io PacketIO, crypt ControlCryptor, local SessionID) *ControlChannel {
 	return &ControlChannel{
 		io:          io,
 		crypt:       crypt,

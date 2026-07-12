@@ -1283,6 +1283,13 @@ proxies: # socks5
       -----BEGIN PRIVATE KEY-----
       MIIE...example
       -----END PRIVATE KEY-----
+    # 从 .ovpn 中复制 <tls-auth></tls-auth> 内的内容，不需要保留 <tls-auth> 标签；与 tls-crypt 互斥
+    # tls-auth: |
+    #   -----BEGIN OpenVPN Static key V1-----
+    #   00000000000000000000000000000000
+    #   ...
+    #   -----END OpenVPN Static key V1-----
+    # key-direction: "1" # tls-auth 使用，支持 "1" 或 "0"；如果不填或为空字符串，则为双向模式（bidirectional）
     # 从 .ovpn 中复制 <tls-crypt></tls-crypt> 内的内容，不需要保留 <tls-crypt> 标签；没有 tls-crypt 的配置可省略
     # tls-crypt: |
     #   -----BEGIN OpenVPN Static key V1-----

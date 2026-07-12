@@ -46,7 +46,10 @@ type ClientConfig struct {
 	CA       []byte
 	Cert     []byte
 	Key      []byte
+	TLSAuth  []byte
 	TLSCrypt []byte
+
+	KeyDirection string
 
 	Username string
 	Password string
@@ -57,6 +60,7 @@ type ClientConfig struct {
 	PingRestart  time.Duration
 
 	TLSCryptKey []byte
+	TLSAuthKey  []byte
 }
 
 // DataCipherKeyLength returns the key size for the negotiated data cipher.
@@ -132,8 +136,16 @@ func (c *ClientConfig) Prepare() error {
 	c.Cipher = normalizeCipher(c.Cipher)
 	c.Auth = normalizeAuth(c.Auth)
 	c.CompLZO = normalizeCompLZO(c.CompLZO)
+
 	if err := c.ValidateInstallScriptSubset(); err != nil {
 		return err
+	}
+	if len(bytes.TrimSpace(c.TLSAuth)) > 0 {
+		key, err := DecodeStaticKey(c.TLSAuth)
+		if err != nil {
+			return fmt.Errorf("parse tls-auth key: %w", err)
+		}
+		c.TLSAuthKey = key
 	}
 	if len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
 		key, err := DecodeStaticKey(c.TLSCrypt)
@@ -163,6 +175,12 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	}
 	if c.Auth != AuthMD5 && c.Auth != AuthSHA1 && c.Auth != AuthSHA256 && c.Auth != AuthSHA384 && c.Auth != AuthSHA512 {
 		return fmt.Errorf("unsupported openvpn auth %q: only %s, %s, %s, %s and %s are supported", c.Auth, AuthMD5, AuthSHA1, AuthSHA256, AuthSHA384, AuthSHA512)
+	}
+	if c.KeyDirection != "1" && c.KeyDirection != "0" && c.KeyDirection != "" {
+		return fmt.Errorf("unsupported openvpn key-direction %q: only '1' and '0' are supported", c.KeyDirection)
+	}
+	if len(bytes.TrimSpace(c.TLSAuth)) > 0 && len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
+		return errors.New("openvpn tls-auth and tls-crypt are mutually exclusive")
 	}
 	for name, value := range map[string][]byte{
 		"ca": c.CA,

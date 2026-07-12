@@ -52,6 +52,8 @@ type OpenVPNOption struct {
 	CA               string            `proxy:"ca"`
 	Cert             string            `proxy:"cert,omitempty"`
 	Key              string            `proxy:"key,omitempty"`
+	TLSAuth          string            `proxy:"tls-auth,omitempty"`
+	KeyDirection     string            `proxy:"key-direction,omitempty"`
 	TLSCrypt         string            `proxy:"tls-crypt,omitempty"`
 	Username         string            `proxy:"username,omitempty"`
 	Password         string            `proxy:"password,omitempty"`
@@ -81,6 +83,8 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		CA:           []byte(option.CA),
 		Cert:         []byte(option.Cert),
 		Key:          []byte(option.Key),
+		TLSAuth:      []byte(option.TLSAuth),
+		KeyDirection: option.KeyDirection,
 		TLSCrypt:     []byte(option.TLSCrypt),
 		Username:     option.Username,
 		Password:     option.Password,

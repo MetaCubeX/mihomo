@@ -44,10 +44,16 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	if io == nil {
 		return nil, errors.New("nil openvpn packet io")
 	}
-	var crypt *TLSCrypt
+	var crypt ControlCryptor
 	if len(config.TLSCryptKey) > 0 {
 		var err error
 		crypt, err = NewTLSCrypt(config.TLSCryptKey, true)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(config.TLSAuthKey) > 0 {
+		var err error
+		crypt, err = NewTLSAuth(config.TLSAuthKey, config.KeyDirection)
 		if err != nil {
 			return nil, err
 		}

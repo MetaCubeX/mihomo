@@ -185,3 +185,49 @@ func TestClientConfigAuthUserPassChaCha20Poly1305(t *testing.T) {
 		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
 	}
 }
+
+func TestClientConfigTLSAuth(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost:   "vpn.example.com",
+		RemotePort:   1194,
+		Proto:        "udp",
+		Dev:          "tun",
+		Cipher:       "AES-128-GCM",
+		Auth:         "SHA256",
+		CA:           []byte(testCert),
+		Username:     "user",
+		Password:     "secret",
+		TLSAuth:      []byte(testTLSCryptBlock()),
+		KeyDirection: "1",
+	}
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.TLSAuthKey) != 256 {
+		t.Fatalf("unexpected tls-auth key length: %d", len(cfg.TLSAuthKey))
+	}
+}
+
+func TestClientConfigRejectsTLSAuthTLSCryptTogether(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost:   "vpn.example.com",
+		RemotePort:   1194,
+		Proto:        "udp",
+		Dev:          "tun",
+		Cipher:       "AES-128-GCM",
+		Auth:         "SHA256",
+		CA:           []byte(testCert),
+		Username:     "user",
+		Password:     "secret",
+		TLSAuth:      []byte(testTLSCryptBlock()),
+		TLSCrypt:     []byte(testTLSCryptBlock()),
+		KeyDirection: "1",
+	}
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected mutual exclusion error")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
