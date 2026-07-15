@@ -47,7 +47,7 @@ func (is *IPSuffix) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool,
 		}
 	}
 
-	if (is.ipBytes[size-bits/8-1] << (8 - bits%8)) != (mIPBytes[size-bits/8-1] << (8 - bits%8)) {
+	if bits%8 != 0 && (is.ipBytes[size-bits/8-1] << (8 - bits%8)) != (mIPBytes[size-bits/8-1] << (8 - bits%8)) {
 		return false, ""
 	}
 
