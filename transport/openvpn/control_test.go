@@ -267,6 +267,106 @@ func TestClientWaitServerResetRetransmitsUDP(t *testing.T) {
 	}
 }
 
+func TestClientWaitForSoftReset(t *testing.T) {
+	for _, name := range []string{"plain", "tls-auth", "tls-crypt"} {
+		t.Run(name, func(t *testing.T) {
+			var (
+				config      ClientConfig
+				serverCrypt ControlCryptor
+				err         error
+			)
+			switch name {
+			case "tls-auth":
+				config.TLSAuthKey = testStaticKey()
+				config.KeyDirection = "1"
+				serverCrypt, err = NewTLSAuth(testStaticKey(), "0")
+			case "tls-crypt":
+				config.TLSCryptKey = testStaticKey()
+				serverCrypt, err = NewTLSCrypt(testStaticKey(), false)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			clientIO, serverIO := newMemoryPacketPair()
+			client, err := NewClient(&config, clientIO)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			var serverID SessionID
+			copy(serverID[:], []byte("server01"))
+			client.control.SetRemoteSessionID(serverID)
+			serverControl := NewControlChannel(serverIO, serverCrypt, serverID)
+			serverControl.SetRemoteSessionID(client.control.LocalSessionID())
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if _, err := serverControl.Send(ctx, PControlV1, nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := serverIO.WritePacket(ctx, []byte{opcodeKeyID(PControlSoftResetV1, 1)}); err != nil {
+				t.Fatal(err)
+			}
+			softReset, err := (ControlPacket{
+				Opcode:       PControlSoftResetV1,
+				KeyID:        1,
+				LocalSession: serverID,
+				MessageID:    0,
+			}).Encode(serverCrypt, 1, 1714567890)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := serverIO.WritePacket(ctx, softReset); err != nil {
+				t.Fatal(err)
+			}
+			if err := client.WaitForSoftReset(ctx); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestClientWaitForSoftResetIgnoresInvalidPackets(t *testing.T) {
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	var otherID SessionID
+	copy(otherID[:], []byte("server02"))
+
+	encode := func(t *testing.T, keyID uint8, local SessionID) []byte {
+		t.Helper()
+		packet, err := (ControlPacket{
+			Opcode:       PControlSoftResetV1,
+			KeyID:        keyID,
+			LocalSession: local,
+			MessageID:    0,
+		}).Encode(nil, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return packet
+	}
+
+	tests := []struct {
+		name   string
+		packet []byte
+	}{
+		{"malformed", []byte{opcodeKeyID(PControlSoftResetV1, 1)}},
+		{"initial key id", encode(t, 0, serverID)},
+		{"wrong session", encode(t, 1, otherID)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			control := NewControlChannel(nil, nil, SessionID{})
+			control.SetRemoteSessionID(serverID)
+			client := &Client{control: control}
+			if client.isCurrentSoftReset(test.packet) {
+				t.Fatal("expected packet to be ignored")
+			}
+		})
+	}
+}
+
 func TestTCPPacketIOFraming(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()

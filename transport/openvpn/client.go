@@ -205,6 +205,35 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 	}
 }
 
+// WaitForSoftReset watches raw control packets because a soft reset starts a new key epoch.
+func (c *Client) WaitForSoftReset(ctx context.Context) error {
+	for {
+		raw, err := c.mux.ReadPacket(ctx)
+		if err != nil {
+			return err
+		}
+		if c.isCurrentSoftReset(raw) {
+			return nil
+		}
+	}
+}
+
+func (c *Client) isCurrentSoftReset(raw []byte) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	opcode, _ := parseOpcodeKeyID(raw[0])
+	if opcode != PControlSoftResetV1 {
+		return false
+	}
+	packet, _, _, err := DecodeControlPacket(c.control.crypt, raw)
+	if err != nil {
+		return false
+	}
+	remote := c.control.RemoteSessionID()
+	return remote != (SessionID{}) && packet.LocalSession == remote && packet.KeyID != 0
+}
+
 func (c *Client) SinceSend() time.Duration {
 	return time.Duration(int64(time.Since(start)) - c.lastSendNano.Load())
 }
