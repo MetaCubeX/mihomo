@@ -2,6 +2,7 @@ package sniffer
 
 import (
 	"errors"
+	"math"
 	"net"
 	"net/netip"
 	"time"
@@ -106,11 +107,15 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 	if sd.shouldOverride(metadata) {
 		inWhitelist := false
 		overrideDest := false
+		skipThreshold := uint8(5)
 		for sniffer, config := range sd.sniffers {
 			if sniffer.SupportNetwork() == C.TCP || sniffer.SupportNetwork() == C.ALLNet {
 				inWhitelist = sniffer.SupportPort(metadata.DstPort)
 				if inWhitelist {
 					overrideDest = config.OverrideDest
+					if config.SkipThreshold > 0 {
+						skipThreshold = config.SkipThreshold
+					}
 					break
 				}
 			}
@@ -123,7 +128,7 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 
 		dst := metadata.AddrPort()
 		if !forceSniffer {
-			if count, ok := sd.skipList.Get(dst); ok && count > 5 {
+			if count, ok := sd.skipList.Get(dst); ok && count > skipThreshold {
 				log.Debugln("[Sniffer] Skip sniffing[%s] due to multiple failures", dst)
 				return false
 			}
@@ -245,7 +250,7 @@ func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (s
 func (sd *Dispatcher) cacheSniffFailed(metadata *C.Metadata) {
 	dst := metadata.AddrPort()
 	sd.skipList.Compute(dst, func(oldValue uint8, loaded bool) (newValue uint8, delete bool) {
-		if oldValue <= 5 {
+		if oldValue < math.MaxUint8 {
 			oldValue++
 		}
 		return oldValue, false

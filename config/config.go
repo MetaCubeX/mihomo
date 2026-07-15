@@ -378,13 +378,15 @@ type RawSniffer struct {
 	Ports           []string `yaml:"port-whitelist" json:"port-whitelist"`
 	ForceDnsMapping bool     `yaml:"force-dns-mapping" json:"force-dns-mapping"`
 	ParsePureIp     bool     `yaml:"parse-pure-ip" json:"parse-pure-ip"`
+	SkipThreshold   int      `yaml:"skip-threshold" json:"skip-threshold"`
 
 	Sniff map[string]RawSniffingConfig `yaml:"sniff" json:"sniff"`
 }
 
 type RawSniffingConfig struct {
-	Ports        []string `yaml:"ports" json:"ports"`
-	OverrideDest *bool    `yaml:"override-destination" json:"override-destination"`
+	Ports         []string `yaml:"ports" json:"ports"`
+	OverrideDest  *bool    `yaml:"override-destination" json:"override-destination"`
+	SkipThreshold *int     `yaml:"skip-threshold" json:"skip-threshold"`
 }
 
 type RawTLS struct {
@@ -590,6 +592,7 @@ func DefaultRawConfig() *RawConfig {
 			ForceDnsMapping: true,
 			ParsePureIp:     true,
 			OverrideDest:    true,
+			SkipThreshold:   5,
 		},
 		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
 		ExternalControllerCors: RawCors{
@@ -1770,12 +1773,17 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]P.RuleProvider
 			if sniffConfig.OverrideDest != nil {
 				overrideDest = *sniffConfig.OverrideDest
 			}
+			skipThreshold := snifferRaw.SkipThreshold
+			if sniffConfig.SkipThreshold != nil {
+				skipThreshold = *sniffConfig.SkipThreshold
+			}
 			for _, snifferType := range snifferTypes.List {
 				if snifferType.String() == strings.ToUpper(sniffType) {
 					find = true
 					loadSniffer[snifferType] = sniffer.SnifferConfig{
-						Ports:        ports,
-						OverrideDest: overrideDest,
+						Ports:         ports,
+						OverrideDest:  overrideDest,
+						SkipThreshold: uint8(skipThreshold),
 					}
 				}
 			}
@@ -1800,8 +1808,9 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]P.RuleProvider
 				if snifferType.String() == strings.ToUpper(snifferName) {
 					find = true
 					loadSniffer[snifferType] = sniffer.SnifferConfig{
-						Ports:        globalPorts,
-						OverrideDest: snifferRaw.OverrideDest,
+						Ports:         globalPorts,
+						OverrideDest:  snifferRaw.OverrideDest,
+						SkipThreshold: uint8(snifferRaw.SkipThreshold),
 					}
 				}
 			}
