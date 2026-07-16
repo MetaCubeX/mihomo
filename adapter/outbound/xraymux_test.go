@@ -286,6 +286,165 @@ func TestXrayMuxUsesNormalUDPWithoutSourceIdentity(t *testing.T) {
 	}
 }
 
+func TestXrayMuxUsesDedicatedPoolWhenXUDPConcurrencyIsPositive(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	wrapped, err := NewXrayMux(XrayMuxOption{
+		Enabled:         true,
+		MaxConcurrency:  8,
+		XUDPConcurrency: 4,
+		XUDPProxyUDP443: "allow",
+	}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	stream, err := wrapped.DialContext(context.Background(), &C.Metadata{NetWork: C.TCP, Host: "tcp.example", DstPort: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stream.Close() })
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "udp.example", DstPort: 53})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = packetConn.Close() })
+
+	if got := base.dialCount(); got != 2 {
+		t.Fatalf("carrier dial count = %d, want separate TCP and XUDP carriers", got)
+	}
+	for i := 0; i < 2; i++ {
+		server := <-base.carrierServers
+		t.Cleanup(func() { _ = server.Close() })
+	}
+}
+
+func TestXrayMuxSharesPoolWhenXUDPConcurrencyIsZero(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	stream, err := wrapped.DialContext(context.Background(), &C.Metadata{NetWork: C.TCP, Host: "tcp.example", DstPort: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stream.Close() })
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "udp.example", DstPort: 53})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = packetConn.Close() })
+	server := <-base.carrierServers
+	t.Cleanup(func() { _ = server.Close() })
+
+	if got := base.dialCount(); got != 1 {
+		t.Fatalf("carrier dial count = %d, want shared TCP and XUDP carrier", got)
+	}
+}
+
+func TestXrayMuxEnforcesDedicatedXUDPConcurrency(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPConcurrency: 1}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	var packetConns []C.PacketConn
+	for i := 0; i < 2; i++ {
+		packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "udp.example", DstPort: 53})
+		if err != nil {
+			t.Fatal(err)
+		}
+		packetConns = append(packetConns, packetConn)
+	}
+	t.Cleanup(func() {
+		for _, packetConn := range packetConns {
+			_ = packetConn.Close()
+		}
+	})
+
+	if got := base.dialCount(); got != 2 {
+		t.Fatalf("carrier dial count = %d, want 2 at XUDP concurrency 1", got)
+	}
+	for i := 0; i < 2; i++ {
+		server := <-base.carrierServers
+		t.Cleanup(func() { _ = server.Close() })
+	}
+}
+
+func TestXrayMuxRejectsUDP443ByDefault(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "quic.example", DstPort: 443})
+	if packetConn != nil || !errors.Is(err, ErrXrayMuxUDP443Rejected) {
+		t.Fatalf("ListenPacketContext = (%v, %v), want UDP/443 rejection", packetConn, err)
+	}
+	if got := base.dialCount(); got != 0 {
+		t.Fatalf("carrier dial count = %d, want 0", got)
+	}
+}
+
+func TestXrayMuxAllowsUDP443(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPProxyUDP443: "allow"}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "quic.example", DstPort: 443})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = packetConn.Close() })
+	server := <-base.carrierServers
+	t.Cleanup(func() { _ = server.Close() })
+
+	if got := base.dialCount(); got != 1 {
+		t.Fatalf("carrier dial count = %d, want 1", got)
+	}
+	base.mu.Lock()
+	packetCalls := base.packetCalls
+	base.mu.Unlock()
+	if packetCalls != 0 {
+		t.Fatalf("base packet calls = %d, want 0", packetCalls)
+	}
+}
+
+func TestXrayMuxSkipsUDP443(t *testing.T) {
+	skipErr := errors.New("base UDP called")
+	base := newFakeXrayMuxAdapter()
+	base.packetErr = skipErr
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPProxyUDP443: "skip"}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "quic.example", DstPort: 443})
+	if packetConn != nil || !errors.Is(err, skipErr) {
+		t.Fatalf("ListenPacketContext = (%v, %v), want base proxy result", packetConn, err)
+	}
+	if got := base.dialCount(); got != 0 {
+		t.Fatalf("carrier dial count = %d, want 0", got)
+	}
+	base.mu.Lock()
+	packetCalls := base.packetCalls
+	base.mu.Unlock()
+	if packetCalls != 1 {
+		t.Fatalf("base packet calls = %d, want 1", packetCalls)
+	}
+}
+
 func TestXrayMuxServerFirstNewFrame(t *testing.T) {
 	base := newFakeXrayMuxAdapter()
 	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
@@ -385,5 +544,44 @@ func TestXrayMuxCloseClosesPoolBeforeBaseExactlyOnce(t *testing.T) {
 	}
 	if len(events) < 2 || events[0] != "carrier" || events[len(events)-1] != "base" {
 		t.Fatalf("close events = %v, want carrier before base", events)
+	}
+}
+
+func TestXrayMuxCloseClosesDedicatedXUDPPoolBeforeBase(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPConcurrency: 4}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := wrapped.DialContext(context.Background(), &C.Metadata{NetWork: C.TCP, Host: "close.example", DstPort: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "close.example", DstPort: 53})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer packetConn.Close()
+	for i := 0; i < 2; i++ {
+		server := <-base.carrierServers
+		defer server.Close()
+	}
+
+	if err := wrapped.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := wrapped.Close(); err != nil {
+		t.Fatal(err)
+	}
+	base.mu.Lock()
+	events := append([]string(nil), base.events...)
+	closeCalls := base.closeCalls
+	base.mu.Unlock()
+	if closeCalls != 1 {
+		t.Fatalf("base close calls = %d, want 1", closeCalls)
+	}
+	if len(events) != 3 || events[0] != "carrier" || events[1] != "carrier" || events[2] != "base" {
+		t.Fatalf("close events = %v, want both carriers before base", events)
 	}
 }

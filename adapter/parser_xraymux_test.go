@@ -10,16 +10,29 @@ import (
 
 func TestParseProxyXrayMuxConfigurations(t *testing.T) {
 	tests := []struct {
-		name               string
-		xrayMux            map[string]any
-		wantWrapped        bool
-		wantMaxConcurrency int
-		wantMaxConnections int
+		name                    string
+		xrayMux                 map[string]any
+		wantWrapped             bool
+		wantMaxConcurrency      int
+		wantMaxConnections      int
+		wantXUDPConcurrency     int
+		wantXUDPProxyUDP443Mode string
 	}{
 		{name: "omitted"},
 		{name: "disabled", xrayMux: map[string]any{"enabled": false}},
-		{name: "defaults", xrayMux: map[string]any{"enabled": true}, wantWrapped: true, wantMaxConcurrency: 8, wantMaxConnections: 128},
-		{name: "custom", xrayMux: map[string]any{"enabled": true, "max-concurrency": 3, "max-connections": 19}, wantWrapped: true, wantMaxConcurrency: 3, wantMaxConnections: 19},
+		{
+			name: "defaults", xrayMux: map[string]any{"enabled": true}, wantWrapped: true,
+			wantMaxConcurrency: 8, wantMaxConnections: 128, wantXUDPProxyUDP443Mode: "reject",
+		},
+		{
+			name: "custom",
+			xrayMux: map[string]any{
+				"enabled": true, "max-concurrency": 3, "max-connections": 19,
+				"xudp-concurrency": 4, "xudp-proxy-udp443": "allow",
+			},
+			wantWrapped: true, wantMaxConcurrency: 3, wantMaxConnections: 19,
+			wantXUDPConcurrency: 4, wantXUDPProxyUDP443Mode: "allow",
+		},
 	}
 
 	for _, tt := range tests {
@@ -40,7 +53,10 @@ func TestParseProxyXrayMuxConfigurations(t *testing.T) {
 			}
 			if ok {
 				options := xrayMux.Options()
-				if options.MaxConcurrency != tt.wantMaxConcurrency || options.MaxConnections != tt.wantMaxConnections {
+				if options.MaxConcurrency != tt.wantMaxConcurrency ||
+					options.MaxConnections != tt.wantMaxConnections ||
+					options.XUDPConcurrency != tt.wantXUDPConcurrency ||
+					options.XUDPProxyUDP443 != tt.wantXUDPProxyUDP443Mode {
 					t.Fatalf("options = %+v", options)
 				}
 			}
@@ -63,6 +79,16 @@ func TestParseProxyRejectsInvalidXrayMuxConfigurations(t *testing.T) {
 			name:    "negative connections",
 			mapping: map[string]any{"name": "test", "type": "direct", "xray-mux": map[string]any{"enabled": true, "max-connections": -1}},
 			match:   "max-connections",
+		},
+		{
+			name:    "negative xudp concurrency",
+			mapping: map[string]any{"name": "test", "type": "direct", "xray-mux": map[string]any{"enabled": true, "xudp-concurrency": -1}},
+			match:   "xudp-concurrency",
+		},
+		{
+			name:    "unknown udp 443 policy",
+			mapping: map[string]any{"name": "test", "type": "direct", "xray-mux": map[string]any{"enabled": true, "xudp-proxy-udp443": "drop"}},
+			match:   "xudp-proxy-udp443",
 		},
 		{
 			name: "smux conflict",

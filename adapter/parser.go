@@ -241,7 +241,7 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			return nil, err
 		}
 	}
-	if xrayMuxOption.Enabled || xrayMuxOption.MaxConcurrency < 0 || xrayMuxOption.MaxConnections < 0 {
+	if xrayMuxOption.Enabled || xrayMuxOption.MaxConcurrency < 0 || xrayMuxOption.MaxConnections < 0 || xrayMuxOption.XUDPConcurrency < 0 {
 		proxy, err = outbound.NewXrayMux(*xrayMuxOption, proxy)
 		if err != nil {
 			return nil, err
