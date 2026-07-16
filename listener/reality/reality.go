@@ -54,7 +54,7 @@ func (c Config) Build(tunnel C.Tunnel) (*Builder, error) {
 	}
 	realityConfig.PrivateKey = privateKey
 
-	realityConfig.MaxTimeDiff = time.Duration(c.MaxTimeDifference) * time.Microsecond
+	realityConfig.MaxTimeDiff = time.Duration(c.MaxTimeDifference) * time.Millisecond
 
 	realityConfig.ShortIds = make(map[[8]byte]bool)
 	for i, shortIDString := range c.ShortID {

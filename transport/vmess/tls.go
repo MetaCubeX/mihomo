@@ -111,7 +111,11 @@ func StreamTLSConn(ctx context.Context, conn net.Conn, cfg *TLSConfig) (net.Conn
 		return nil, err
 	}
 
-	if clientFingerprint, ok := tlsC.GetFingerprint(cfg.ClientFingerprint); ok {
+	clientFingerprintName := cfg.ClientFingerprint
+	if cfg.Reality != nil && clientFingerprintName == "" {
+		clientFingerprintName = "chrome"
+	}
+	if clientFingerprint, ok := tlsC.GetFingerprint(clientFingerprintName); ok {
 		if cfg.Reality != nil {
 			return tlsC.GetRealityConn(ctx, conn, clientFingerprint, tlsConfig.ServerName, cfg.Reality)
 		}

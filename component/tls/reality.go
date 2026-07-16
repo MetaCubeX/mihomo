@@ -26,13 +26,20 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-const RealityMaxShortIDLen = 8
+const (
+	RealityMaxShortIDLen = 8
+
+	// The REALITY protocol uses Xray-style release bytes as a compatibility
+	// gate. These bytes represent Mihomo's tested REALITY compatibility, not
+	// Mihomo's application version.
+	realityClientVersionMajor byte = 26
+	realityClientVersionMinor byte = 3
+	realityClientVersionPatch byte = 27
+)
 
 type RealityConfig struct {
 	PublicKey *ecdh.PublicKey
 	ShortID   [RealityMaxShortIDLen]byte
-
-	SupportX25519MLKEM768 bool
 }
 
 func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHelloID, serverName string, realityConfig *RealityConfig) (net.Conn, error) {
@@ -55,13 +62,6 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 			return nil, err
 		}
 
-		if !realityConfig.SupportX25519MLKEM768 { // for X25519MLKEM768 does not work properly with the old reality server
-			err = BuildRemovedX25519MLKEM768HandshakeState(uConn)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		hello := uConn.HandshakeState.Hello
 		rawSessionID := hello.Raw[39 : 39+32] // the location of session ID
 		for i := range rawSessionID {         // https://github.com/golang/go/issues/5373
@@ -71,9 +71,9 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
 
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
-		hello.SessionId[0] = 1
-		hello.SessionId[1] = 8
-		hello.SessionId[2] = 2
+		hello.SessionId[0] = realityClientVersionMajor
+		hello.SessionId[1] = realityClientVersionMinor
+		hello.SessionId[2] = realityClientVersionPatch
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
