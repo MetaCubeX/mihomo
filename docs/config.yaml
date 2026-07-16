@@ -966,8 +966,8 @@ proxies: # socks5
     reality-opts:
       public-key: xxx
       short-id: xxx # optional
-      support-x25519mlkem768: false # 如果服务端支持可手动设置为true
-    client-fingerprint: chrome # cannot be empty
+    # REALITY 默认为 chrome；旧服务端如不支持 X25519MLKEM768，请显式使用 chrome120
+    client-fingerprint: chrome
 
   - name: "vless-reality-grpc"
     type: vless
@@ -993,7 +993,7 @@ proxies: # socks5
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
-      support-x25519mlkem768: false # 如果服务端支持可手动设置为true
+    # 旧服务端如不支持 X25519MLKEM768，请设置 client-fingerprint: chrome120
 
   - name: "vless-ws"
     type: vless
@@ -2193,6 +2193,7 @@ listeners:
     #     - 0123456789abcdef
     #   server-names:
     #     - test.com
+    #   max-time-difference: 0 # 客户端时间最大允许偏差，单位毫秒；0 表示不限制
     #   #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
     #   #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
     #   limit-fallback-upload:
@@ -2373,6 +2374,7 @@ listeners:
         - 0123456789abcdef
       server-names:
         - test.com
+      max-time-difference: 0 # 客户端时间最大允许偏差，单位毫秒；0 表示不限制
       #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
       #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
       limit-fallback-upload:
@@ -2553,6 +2555,7 @@ listeners:
     #     - 0123456789abcdef
     #   server-names:
     #     - test.com
+    #   max-time-difference: 0 # 客户端时间最大允许偏差，单位毫秒；0 表示不限制
     #   #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
     #   #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
     #   limit-fallback-upload:
