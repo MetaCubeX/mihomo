@@ -8,10 +8,10 @@ import (
 	"github.com/metacubex/mihomo/adapter/outbound"
 )
 
-func TestParseProxyXrayMuxConfigurations(t *testing.T) {
+func TestParseProxyMuxCoolConfigurations(t *testing.T) {
 	tests := []struct {
 		name                    string
-		xrayMux                 map[string]any
+		muxCool                 map[string]any
 		wantWrapped             bool
 		wantMaxConcurrency      int
 		wantMaxConnections      int
@@ -19,14 +19,14 @@ func TestParseProxyXrayMuxConfigurations(t *testing.T) {
 		wantXUDPProxyUDP443Mode string
 	}{
 		{name: "omitted"},
-		{name: "disabled", xrayMux: map[string]any{"enabled": false}},
+		{name: "disabled", muxCool: map[string]any{"enabled": false}},
 		{
-			name: "defaults", xrayMux: map[string]any{"enabled": true}, wantWrapped: true,
+			name: "defaults", muxCool: map[string]any{"enabled": true}, wantWrapped: true,
 			wantMaxConcurrency: 8, wantMaxConnections: 128, wantXUDPProxyUDP443Mode: "reject",
 		},
 		{
 			name: "custom",
-			xrayMux: map[string]any{
+			muxCool: map[string]any{
 				"enabled": true, "max-concurrency": 3, "max-connections": 19,
 				"xudp-concurrency": 4, "xudp-proxy-udp443": "allow",
 			},
@@ -38,8 +38,8 @@ func TestParseProxyXrayMuxConfigurations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mapping := map[string]any{"name": "test", "type": "direct"}
-			if tt.xrayMux != nil {
-				mapping["xray-mux"] = tt.xrayMux
+			if tt.muxCool != nil {
+				mapping["mux.cool"] = tt.muxCool
 			}
 			parsed, err := ParseProxy(mapping)
 			if err != nil {
@@ -47,12 +47,12 @@ func TestParseProxyXrayMuxConfigurations(t *testing.T) {
 			}
 			defer parsed.Close()
 			wrapped := unwrapAutoClose(t, parsed.Adapter())
-			xrayMux, ok := wrapped.(*outbound.XrayMux)
+			muxCool, ok := wrapped.(*outbound.MuxCool)
 			if ok != tt.wantWrapped {
-				t.Fatalf("XrayMux wrapper present = %t, want %t (%T)", ok, tt.wantWrapped, wrapped)
+				t.Fatalf("MuxCool wrapper present = %t, want %t (%T)", ok, tt.wantWrapped, wrapped)
 			}
 			if ok {
-				options := xrayMux.Options()
+				options := muxCool.Options()
 				if options.MaxConcurrency != tt.wantMaxConcurrency ||
 					options.MaxConnections != tt.wantMaxConnections ||
 					options.XUDPConcurrency != tt.wantXUDPConcurrency ||
@@ -64,7 +64,7 @@ func TestParseProxyXrayMuxConfigurations(t *testing.T) {
 	}
 }
 
-func TestParseProxyRejectsInvalidXrayMuxConfigurations(t *testing.T) {
+func TestParseProxyRejectsInvalidMuxCoolConfigurations(t *testing.T) {
 	tests := []struct {
 		name    string
 		mapping map[string]any
@@ -72,22 +72,22 @@ func TestParseProxyRejectsInvalidXrayMuxConfigurations(t *testing.T) {
 	}{
 		{
 			name:    "negative concurrency",
-			mapping: map[string]any{"name": "test", "type": "direct", "xray-mux": map[string]any{"enabled": true, "max-concurrency": -1}},
+			mapping: map[string]any{"name": "test", "type": "direct", "mux.cool": map[string]any{"enabled": true, "max-concurrency": -1}},
 			match:   "max-concurrency",
 		},
 		{
 			name:    "negative connections",
-			mapping: map[string]any{"name": "test", "type": "direct", "xray-mux": map[string]any{"enabled": true, "max-connections": -1}},
+			mapping: map[string]any{"name": "test", "type": "direct", "mux.cool": map[string]any{"enabled": true, "max-connections": -1}},
 			match:   "max-connections",
 		},
 		{
 			name:    "negative xudp concurrency",
-			mapping: map[string]any{"name": "test", "type": "direct", "xray-mux": map[string]any{"enabled": true, "xudp-concurrency": -1}},
+			mapping: map[string]any{"name": "test", "type": "direct", "mux.cool": map[string]any{"enabled": true, "xudp-concurrency": -1}},
 			match:   "xudp-concurrency",
 		},
 		{
 			name:    "unknown udp 443 policy",
-			mapping: map[string]any{"name": "test", "type": "direct", "xray-mux": map[string]any{"enabled": true, "xudp-proxy-udp443": "drop"}},
+			mapping: map[string]any{"name": "test", "type": "direct", "mux.cool": map[string]any{"enabled": true, "xudp-proxy-udp443": "drop"}},
 			match:   "xudp-proxy-udp443",
 		},
 		{
@@ -95,7 +95,7 @@ func TestParseProxyRejectsInvalidXrayMuxConfigurations(t *testing.T) {
 			mapping: map[string]any{
 				"name": "test", "type": "direct",
 				"smux":     map[string]any{"enabled": true},
-				"xray-mux": map[string]any{"enabled": true},
+				"mux.cool": map[string]any{"enabled": true},
 			},
 			match: "cannot be enabled together",
 		},

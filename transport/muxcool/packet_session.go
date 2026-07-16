@@ -1,4 +1,4 @@
-package xraymux
+package muxcool
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/metacubex/mihomo/common/pool"
 )
 
-var ErrPacketTooLarge = fmt.Errorf("xray mux packet exceeds %d bytes", MaxPayloadSize)
+var ErrPacketTooLarge = fmt.Errorf("mux.cool packet exceeds %d bytes", MaxPayloadSize)
 
 type packetMessage struct {
 	payload []byte
@@ -199,7 +199,7 @@ func (s *packetSession) Close() error {
 }
 
 func (s *packetSession) LocalAddr() net.Addr {
-	return muxAddr("xray-mux-udp")
+	return muxAddr("mux.cool-udp")
 }
 
 func (s *packetSession) SetDeadline(t time.Time) error {

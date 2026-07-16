@@ -11,10 +11,10 @@ import (
 
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/xraymux"
+	"github.com/metacubex/mihomo/transport/muxcool"
 )
 
-type fakeXrayMuxAdapter struct {
+type fakeMuxCoolAdapter struct {
 	*Base
 	mu             sync.Mutex
 	dialMetadata   []C.Metadata
@@ -27,14 +27,14 @@ type fakeXrayMuxAdapter struct {
 	events         []string
 }
 
-func newFakeXrayMuxAdapter() *fakeXrayMuxAdapter {
-	return &fakeXrayMuxAdapter{
+func newFakeMuxCoolAdapter() *fakeMuxCoolAdapter {
+	return &fakeMuxCoolAdapter{
 		Base:           NewBase(BaseOption{Name: "fake", Addr: "fake:0", Type: C.Direct, UDP: true}),
 		carrierServers: make(chan net.Conn, 8),
 	}
 }
 
-func (f *fakeXrayMuxAdapter) DialContext(_ context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (f *fakeMuxCoolAdapter) DialContext(_ context.Context, metadata *C.Metadata) (C.Conn, error) {
 	f.mu.Lock()
 	f.dialMetadata = append(f.dialMetadata, *metadata)
 	err := f.dialErr
@@ -55,7 +55,7 @@ func (f *fakeXrayMuxAdapter) DialContext(_ context.Context, metadata *C.Metadata
 	}}, f), nil
 }
 
-func (f *fakeXrayMuxAdapter) ListenPacketContext(context.Context, *C.Metadata) (C.PacketConn, error) {
+func (f *fakeMuxCoolAdapter) ListenPacketContext(context.Context, *C.Metadata) (C.PacketConn, error) {
 	f.mu.Lock()
 	f.packetCalls++
 	err := f.packetErr
@@ -63,7 +63,7 @@ func (f *fakeXrayMuxAdapter) ListenPacketContext(context.Context, *C.Metadata) (
 	return nil, err
 }
 
-func (f *fakeXrayMuxAdapter) Close() error {
+func (f *fakeMuxCoolAdapter) Close() error {
 	f.mu.Lock()
 	f.closeCalls++
 	f.events = append(f.events, "base")
@@ -82,21 +82,21 @@ func (c *closeEventConn) Close() error {
 	return c.Conn.Close()
 }
 
-func (f *fakeXrayMuxAdapter) dialCount() int {
+func (f *fakeMuxCoolAdapter) dialCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.dialMetadata)
 }
 
-func (f *fakeXrayMuxAdapter) firstMetadata() C.Metadata {
+func (f *fakeMuxCoolAdapter) firstMetadata() C.Metadata {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.dialMetadata[0]
 }
 
-func TestXrayMuxDialsSentinelAndPoolsTCPStreams(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+func TestMuxCoolDialsSentinelAndPoolsTCPStreams(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +124,11 @@ func TestXrayMuxDialsSentinelAndPoolsTCPStreams(t *testing.T) {
 	for _, write := range writes {
 		done := make(chan error, 1)
 		go func() { _, err := write.conn.Write([]byte(write.data)); done <- err }()
-		frame, err := xraymux.DecodeFrame(server)
+		frame, err := muxcool.DecodeFrame(server)
 		if err != nil {
 			t.Fatalf("decode New: %v", err)
 		}
-		if frame.Status != xraymux.StatusNew || string(frame.Payload) != write.data {
+		if frame.Status != muxcool.StatusNew || string(frame.Payload) != write.data {
 			t.Fatalf("New frame = %+v", frame)
 		}
 		if err := <-done; err != nil {
@@ -139,16 +139,16 @@ func TestXrayMuxDialsSentinelAndPoolsTCPStreams(t *testing.T) {
 		t.Fatalf("base dial count = %d, want 1", got)
 	}
 	carrierMetadata := base.firstMetadata()
-	if carrierMetadata.NetWork != C.TCP || carrierMetadata.Host != xrayMuxDestination || carrierMetadata.DstPort != xrayMuxPort {
+	if carrierMetadata.NetWork != C.TCP || carrierMetadata.Host != muxCoolDestination || carrierMetadata.DstPort != muxCoolPort {
 		t.Fatalf("carrier metadata = %+v", carrierMetadata)
 	}
 }
 
-func TestXrayMuxDoesNotBypassFailedCarrier(t *testing.T) {
+func TestMuxCoolDoesNotBypassFailedCarrier(t *testing.T) {
 	dialErr := errors.New("sentinel unavailable")
-	base := newFakeXrayMuxAdapter()
+	base := newFakeMuxCoolAdapter()
 	base.dialErr = dialErr
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,17 +161,17 @@ func TestXrayMuxDoesNotBypassFailedCarrier(t *testing.T) {
 	if got := base.dialCount(); got != 1 {
 		t.Fatalf("base dial count = %d, want no fallback", got)
 	}
-	if metadata := base.firstMetadata(); metadata.Host != xrayMuxDestination {
+	if metadata := base.firstMetadata(); metadata.Host != muxCoolDestination {
 		t.Fatalf("dialed host = %q", metadata.Host)
 	}
 }
 
-func TestXrayMuxDialContextDelegatesUDPStreams(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
+func TestMuxCoolDialContextDelegatesUDPStreams(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
 	udpClient, udpPeer := net.Pipe()
 	t.Cleanup(func() { _ = udpPeer.Close() })
 	base.udpConn = NewConn(udpClient, base)
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,10 +184,10 @@ func TestXrayMuxDialContextDelegatesUDPStreams(t *testing.T) {
 	}
 }
 
-func TestXrayMuxPoolsUDPAndDerivesXUDPGlobalID(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
+func TestMuxCoolPoolsUDPAndDerivesXUDPGlobalID(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
 	base.Base.udp = false
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,14 +214,14 @@ func TestXrayMuxPoolsUDPAndDerivesXUDPGlobalID(t *testing.T) {
 		_, err := packetConn.WriteTo([]byte("query"), queryAddr)
 		writeDone <- err
 	}()
-	frame, err := xraymux.DecodeFrame(server)
+	frame, err := muxcool.DecodeFrame(server)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := <-writeDone; err != nil {
 		t.Fatal(err)
 	}
-	if frame.Status != xraymux.StatusNew || frame.Network != xraymux.NetworkUDP || frame.Destination != "dns.example" || frame.Port != 53 {
+	if frame.Status != muxcool.StatusNew || frame.Network != muxcool.NetworkUDP || frame.Destination != "dns.example" || frame.Port != 53 {
 		t.Fatalf("UDP New = %+v", frame)
 	}
 	if want := utils.GlobalID(metadata.SourceAddress()); frame.GlobalID != want {
@@ -231,9 +231,9 @@ func TestXrayMuxPoolsUDPAndDerivesXUDPGlobalID(t *testing.T) {
 		t.Fatalf("payload = %q", frame.Payload)
 	}
 
-	response, err := xraymux.EncodeFrame(xraymux.Frame{
-		SessionID: frame.SessionID, Status: xraymux.StatusKeep, Option: xraymux.OptionData,
-		Network: xraymux.NetworkUDP, Destination: "8.8.4.4", Port: 53, Payload: []byte("answer"),
+	response, err := muxcool.EncodeFrame(muxcool.Frame{
+		SessionID: frame.SessionID, Status: muxcool.StatusKeep, Option: muxcool.OptionData,
+		Network: muxcool.NetworkUDP, Destination: "8.8.4.4", Port: 53, Payload: []byte("answer"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -259,9 +259,9 @@ func TestXrayMuxPoolsUDPAndDerivesXUDPGlobalID(t *testing.T) {
 	}
 }
 
-func TestXrayMuxUsesNormalUDPWithoutSourceIdentity(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+func TestMuxCoolUsesNormalUDPWithoutSourceIdentity(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestXrayMuxUsesNormalUDPWithoutSourceIdentity(t *testing.T) {
 	go func() {
 		_, _ = packetConn.WriteTo([]byte("query"), net.UDPAddrFromAddrPort(netip.MustParseAddrPort("1.1.1.1:53")))
 	}()
-	frame, err := xraymux.DecodeFrame(server)
+	frame, err := muxcool.DecodeFrame(server)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,9 +286,9 @@ func TestXrayMuxUsesNormalUDPWithoutSourceIdentity(t *testing.T) {
 	}
 }
 
-func TestXrayMuxUsesDedicatedPoolWhenXUDPConcurrencyIsPositive(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{
+func TestMuxCoolUsesDedicatedPoolWhenXUDPConcurrencyIsPositive(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{
 		Enabled:         true,
 		MaxConcurrency:  8,
 		XUDPConcurrency: 4,
@@ -319,9 +319,9 @@ func TestXrayMuxUsesDedicatedPoolWhenXUDPConcurrencyIsPositive(t *testing.T) {
 	}
 }
 
-func TestXrayMuxSharesPoolWhenXUDPConcurrencyIsZero(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+func TestMuxCoolSharesPoolWhenXUDPConcurrencyIsZero(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,9 +345,9 @@ func TestXrayMuxSharesPoolWhenXUDPConcurrencyIsZero(t *testing.T) {
 	}
 }
 
-func TestXrayMuxEnforcesDedicatedXUDPConcurrency(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPConcurrency: 1}, base)
+func TestMuxCoolEnforcesDedicatedXUDPConcurrency(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true, XUDPConcurrency: 1}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,16 +376,16 @@ func TestXrayMuxEnforcesDedicatedXUDPConcurrency(t *testing.T) {
 	}
 }
 
-func TestXrayMuxRejectsUDP443ByDefault(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+func TestMuxCoolRejectsUDP443ByDefault(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = wrapped.Close() })
 
 	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "quic.example", DstPort: 443})
-	if packetConn != nil || !errors.Is(err, ErrXrayMuxUDP443Rejected) {
+	if packetConn != nil || !errors.Is(err, ErrMuxCoolUDP443Rejected) {
 		t.Fatalf("ListenPacketContext = (%v, %v), want UDP/443 rejection", packetConn, err)
 	}
 	if got := base.dialCount(); got != 0 {
@@ -393,9 +393,9 @@ func TestXrayMuxRejectsUDP443ByDefault(t *testing.T) {
 	}
 }
 
-func TestXrayMuxAllowsUDP443(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPProxyUDP443: "allow"}, base)
+func TestMuxCoolAllowsUDP443(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true, XUDPProxyUDP443: "allow"}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,11 +420,11 @@ func TestXrayMuxAllowsUDP443(t *testing.T) {
 	}
 }
 
-func TestXrayMuxSkipsUDP443(t *testing.T) {
+func TestMuxCoolSkipsUDP443(t *testing.T) {
 	skipErr := errors.New("base UDP called")
-	base := newFakeXrayMuxAdapter()
+	base := newFakeMuxCoolAdapter()
 	base.packetErr = skipErr
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPProxyUDP443: "skip"}, base)
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true, XUDPProxyUDP443: "skip"}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,9 +445,9 @@ func TestXrayMuxSkipsUDP443(t *testing.T) {
 	}
 }
 
-func TestXrayMuxServerFirstNewFrame(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+func TestMuxCoolServerFirstNewFrame(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,18 +460,18 @@ func TestXrayMuxServerFirstNewFrame(t *testing.T) {
 	server := <-base.carrierServers
 	t.Cleanup(func() { _ = server.Close() })
 	_ = server.SetReadDeadline(time.Now().Add(time.Second))
-	frame, err := xraymux.DecodeFrame(server)
+	frame, err := muxcool.DecodeFrame(server)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if frame.Status != xraymux.StatusNew || frame.Option&xraymux.OptionData != 0 || len(frame.Payload) != 0 {
+	if frame.Status != muxcool.StatusNew || frame.Option&muxcool.OptionData != 0 || len(frame.Payload) != 0 {
 		t.Fatalf("server-first frame = %+v", frame)
 	}
 }
 
-func TestXrayMuxContextCancellationClosesOnlyLogicalSession(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+func TestMuxCoolContextCancellationClosesOnlyLogicalSession(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,18 +490,18 @@ func TestXrayMuxContextCancellationClosesOnlyLogicalSession(t *testing.T) {
 	t.Cleanup(func() { _ = server.Close() })
 
 	cancel()
-	end, err := xraymux.DecodeFrame(server)
+	end, err := muxcool.DecodeFrame(server)
 	if err != nil {
 		t.Fatalf("decode cancelled End: %v", err)
 	}
-	if end.SessionID != 1 || end.Status != xraymux.StatusEnd {
+	if end.SessionID != 1 || end.Status != muxcool.StatusEnd {
 		t.Fatalf("cancel frame = %+v", end)
 	}
 	if _, err := first.Read(make([]byte, 1)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled read error = %v", err)
 	}
 
-	response, err := xraymux.EncodeFrame(xraymux.Frame{SessionID: 2, Status: xraymux.StatusKeep, Option: xraymux.OptionData, Payload: []byte("ok")})
+	response, err := muxcool.EncodeFrame(muxcool.Frame{SessionID: 2, Status: muxcool.StatusKeep, Option: muxcool.OptionData, Payload: []byte("ok")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,9 +515,9 @@ func TestXrayMuxContextCancellationClosesOnlyLogicalSession(t *testing.T) {
 	}
 }
 
-func TestXrayMuxCloseClosesPoolBeforeBaseExactlyOnce(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+func TestMuxCoolCloseClosesPoolBeforeBaseExactlyOnce(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,9 +547,9 @@ func TestXrayMuxCloseClosesPoolBeforeBaseExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestXrayMuxCloseClosesDedicatedXUDPPoolBeforeBase(t *testing.T) {
-	base := newFakeXrayMuxAdapter()
-	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true, XUDPConcurrency: 4}, base)
+func TestMuxCoolCloseClosesDedicatedXUDPPoolBeforeBase(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true, XUDPConcurrency: 4}, base)
 	if err != nil {
 		t.Fatal(err)
 	}

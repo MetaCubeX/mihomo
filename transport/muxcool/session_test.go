@@ -1,4 +1,4 @@
-package xraymux
+package muxcool
 
 import (
 	"context"
@@ -81,7 +81,7 @@ func TestLogicalSessionIsFullDuplexAndHasAddresses(t *testing.T) {
 	if conn.LocalAddr() == nil || conn.RemoteAddr() == nil || conn.RemoteAddr().String() != "echo.example:443" {
 		t.Fatalf("addresses = local %v remote %v", conn.LocalAddr(), conn.RemoteAddr())
 	}
-	if conn.LocalAddr().Network() != "xray-mux" || conn.RemoteAddr().Network() != "xray-mux" {
+	if conn.LocalAddr().Network() != "mux.cool" || conn.RemoteAddr().Network() != "mux.cool" {
 		t.Fatalf("address networks = local %q remote %q", conn.LocalAddr().Network(), conn.RemoteAddr().Network())
 	}
 }

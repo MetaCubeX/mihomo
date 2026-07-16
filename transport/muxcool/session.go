@@ -1,4 +1,4 @@
-package xraymux
+package muxcool
 
 import (
 	"context"
@@ -23,7 +23,7 @@ type workerSession interface {
 
 // logicalConn is the caller-facing half of a logical Mux stream. net.Pipe gives
 // each direction independent buffering and deadline state while the session
-// goroutines translate the other half to and from Xray Mux frames.
+// goroutines translate the other half to and from mux.cool frames.
 type logicalConn struct {
 	net.Conn
 	localAddr  net.Addr
@@ -56,7 +56,7 @@ func (c *logicalConn) Write(p []byte) (int, error) {
 
 type muxAddr string
 
-func (a muxAddr) Network() string { return "xray-mux" }
+func (a muxAddr) Network() string { return "mux.cool" }
 func (a muxAddr) String() string  { return string(a) }
 
 type session struct {
@@ -118,7 +118,7 @@ func makeSession(owner sessionOwner, id uint16, destination string, port uint16)
 	}
 	logical := &logicalConn{
 		Conn:       client,
-		localAddr:  muxAddr("xray-mux"),
+		localAddr:  muxAddr("mux.cool"),
 		remoteAddr: muxAddr(net.JoinHostPort(destination, strconv.Itoa(int(port)))),
 		session:    s,
 	}

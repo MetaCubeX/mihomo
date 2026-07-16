@@ -486,6 +486,16 @@ proxies: # socks5
       # statistic: false # 控制是否将底层连接显示在面板中，方便打断底层连接
       # only-tcp: false # 如果设置为 true, smux 的设置将不会对 udp 生效，udp 连接会直接走底层协议
 
+    # mux.cool is Xray-compatible multiplexing and is separate from smux above. Do not enable both.
+    # It carries TCP streams and UDP/XUDP packet sessions over shared TCP carriers.
+    # Packet loss can cause head-of-line blocking for every logical session on the carrier.
+    mux.cool:
+      enabled: false
+      # max-concurrency: 8 # Maximum active TCP/UDP sessions per shared carrier. 0 uses the default (8).
+      # max-connections: 128 # Maximum lifetime sessions per carrier before rotation. 0 uses the default (128).
+      # xudp-concurrency: 4 # Dedicated XUDP sessions per carrier. 0 shares the main pool.
+      # xudp-proxy-udp443: reject # reject, allow, or skip mux.cool for UDP/443.
+
   - name: "ss2"
     type: ss
     server: server

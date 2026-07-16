@@ -1,4 +1,4 @@
-package xraymux
+package muxcool
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var errWorkerUnavailable = errors.New("xray mux carrier is unavailable")
+var errWorkerUnavailable = errors.New("mux.cool carrier is unavailable")
 
 type carrierWorker struct {
 	conn        net.Conn

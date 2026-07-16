@@ -225,15 +225,15 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 		}
 	}
 
-	xrayMuxOption := &outbound.XrayMuxOption{}
-	if muxMapping, muxExist := mapping["xray-mux"].(map[string]any); muxExist {
-		err = decoder.Decode(muxMapping, xrayMuxOption)
+	muxCoolOption := &outbound.MuxCoolOption{}
+	if muxMapping, muxExist := mapping["mux.cool"].(map[string]any); muxExist {
+		err = decoder.Decode(muxMapping, muxCoolOption)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if muxOption.Enabled && xrayMuxOption.Enabled {
-		return nil, fmt.Errorf("smux and xray-mux cannot be enabled together")
+	if muxOption.Enabled && muxCoolOption.Enabled {
+		return nil, fmt.Errorf("smux and mux.cool cannot be enabled together")
 	}
 	if muxOption.Enabled {
 		proxy, err = outbound.NewSingMux(*muxOption, proxy)
@@ -241,8 +241,8 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			return nil, err
 		}
 	}
-	if xrayMuxOption.Enabled || xrayMuxOption.MaxConcurrency < 0 || xrayMuxOption.MaxConnections < 0 || xrayMuxOption.XUDPConcurrency < 0 {
-		proxy, err = outbound.NewXrayMux(*xrayMuxOption, proxy)
+	if muxCoolOption.Enabled || muxCoolOption.MaxConcurrency < 0 || muxCoolOption.MaxConnections < 0 || muxCoolOption.XUDPConcurrency < 0 {
+		proxy, err = outbound.NewMuxCool(*muxCoolOption, proxy)
 		if err != nil {
 			return nil, err
 		}

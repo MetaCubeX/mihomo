@@ -1,4 +1,4 @@
-package xraymux
+package muxcool
 
 import (
 	"bytes"

@@ -1,4 +1,4 @@
-package xraymux
+package muxcool
 
 import (
 	"encoding/binary"
@@ -69,7 +69,7 @@ type ProtocolError struct {
 }
 
 func (e *ProtocolError) Error() string {
-	return fmt.Sprintf("xray mux %s: %v", e.Op, e.Err)
+	return fmt.Sprintf("mux.cool %s: %v", e.Op, e.Err)
 }
 
 func (e *ProtocolError) Unwrap() error {

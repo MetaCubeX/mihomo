@@ -9,21 +9,21 @@ import (
 
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/xraymux"
+	"github.com/metacubex/mihomo/transport/muxcool"
 )
 
 const (
-	xrayMuxDestination = "v1.mux.cool"
-	xrayMuxPort        = 9527
+	muxCoolDestination = "v1.mux.cool"
+	muxCoolPort        = 9527
 
 	xudpProxyUDP443Reject = "reject"
 	xudpProxyUDP443Allow  = "allow"
 	xudpProxyUDP443Skip   = "skip"
 )
 
-var ErrXrayMuxUDP443Rejected = errors.New("xray mux rejected UDP/443 traffic")
+var ErrMuxCoolUDP443Rejected = errors.New("mux.cool rejected UDP/443 traffic")
 
-type XrayMuxOption struct {
+type MuxCoolOption struct {
 	Enabled         bool   `proxy:"enabled,omitempty"`
 	MaxConcurrency  int    `proxy:"max-concurrency,omitempty"`
 	MaxConnections  int    `proxy:"max-connections,omitempty"`
@@ -31,40 +31,40 @@ type XrayMuxOption struct {
 	XUDPProxyUDP443 string `proxy:"xudp-proxy-udp443,omitempty"`
 }
 
-type XrayMux struct {
+type MuxCool struct {
 	ProxyAdapter
-	pool      *xraymux.Pool
-	xudpPool  *xraymux.Pool
-	option    XrayMuxOption
+	pool      *muxcool.Pool
+	xudpPool  *muxcool.Pool
+	option    MuxCoolOption
 	closeOnce sync.Once
 	closeErr  error
 }
 
-func NewXrayMux(option XrayMuxOption, proxy ProxyAdapter) (ProxyAdapter, error) {
+func NewMuxCool(option MuxCoolOption, proxy ProxyAdapter) (ProxyAdapter, error) {
 	if option.MaxConcurrency < 0 {
-		return nil, fmt.Errorf("xray-mux max-concurrency must not be negative")
+		return nil, fmt.Errorf("mux.cool max-concurrency must not be negative")
 	}
 	if option.MaxConnections < 0 {
-		return nil, fmt.Errorf("xray-mux max-connections must not be negative")
+		return nil, fmt.Errorf("mux.cool max-connections must not be negative")
 	}
 	if option.XUDPConcurrency < 0 {
-		return nil, fmt.Errorf("xray-mux xudp-concurrency must not be negative")
+		return nil, fmt.Errorf("mux.cool xudp-concurrency must not be negative")
 	}
 	switch option.XUDPProxyUDP443 {
 	case "":
 		option.XUDPProxyUDP443 = xudpProxyUDP443Reject
 	case xudpProxyUDP443Reject, xudpProxyUDP443Allow, xudpProxyUDP443Skip:
 	default:
-		return nil, fmt.Errorf("xray-mux xudp-proxy-udp443 must be reject, allow, or skip")
+		return nil, fmt.Errorf("mux.cool xudp-proxy-udp443 must be reject, allow, or skip")
 	}
 	if option.MaxConcurrency == 0 {
-		option.MaxConcurrency = xraymux.DefaultMaxConcurrency
+		option.MaxConcurrency = muxcool.DefaultMaxConcurrency
 	}
 	if option.MaxConnections == 0 {
-		option.MaxConnections = xraymux.DefaultMaxConnections
+		option.MaxConnections = muxcool.DefaultMaxConnections
 	}
 
-	wrapper := &XrayMux{ProxyAdapter: proxy, option: option}
+	wrapper := &MuxCool{ProxyAdapter: proxy, option: option}
 	wrapper.pool = wrapper.newPool(option.MaxConcurrency)
 	if option.XUDPConcurrency > 0 {
 		wrapper.xudpPool = wrapper.newPool(option.XUDPConcurrency)
@@ -72,28 +72,28 @@ func NewXrayMux(option XrayMuxOption, proxy ProxyAdapter) (ProxyAdapter, error) 
 	return wrapper, nil
 }
 
-func (x *XrayMux) newPool(maxConcurrency int) *xraymux.Pool {
-	return xraymux.NewPool(x.dialCarrier, xraymux.Options{
+func (x *MuxCool) newPool(maxConcurrency int) *muxcool.Pool {
+	return muxcool.NewPool(x.dialCarrier, muxcool.Options{
 		MaxConcurrency: maxConcurrency,
 		MaxConnections: x.option.MaxConnections,
 	})
 }
 
-func (x *XrayMux) Options() XrayMuxOption {
+func (x *MuxCool) Options() MuxCoolOption {
 	return x.option
 }
 
-func (x *XrayMux) dialCarrier(ctx context.Context) (net.Conn, error) {
+func (x *MuxCool) dialCarrier(ctx context.Context) (net.Conn, error) {
 	metadata := &C.Metadata{
 		NetWork: C.TCP,
 		Type:    C.INNER,
-		Host:    xrayMuxDestination,
-		DstPort: xrayMuxPort,
+		Host:    muxCoolDestination,
+		DstPort: muxCoolPort,
 	}
 	return x.ProxyAdapter.DialContext(ctx, metadata)
 }
 
-func (x *XrayMux) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (x *MuxCool) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	if metadata.NetWork != C.TCP {
 		return x.ProxyAdapter.DialContext(ctx, metadata)
 	}
@@ -104,11 +104,11 @@ func (x *XrayMux) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn
 	return NewConn(conn, x), nil
 }
 
-func (x *XrayMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+func (x *MuxCool) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	if metadata.DstPort == 443 {
 		switch x.option.XUDPProxyUDP443 {
 		case xudpProxyUDP443Reject:
-			return nil, ErrXrayMuxUDP443Rejected
+			return nil, ErrMuxCoolUDP443Rejected
 		case xudpProxyUDP443Skip:
 			return x.ProxyAdapter.ListenPacketContext(ctx, metadata)
 		}
@@ -129,21 +129,21 @@ func (x *XrayMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 	return NewPacketConn(packetConn, x), nil
 }
 
-func (x *XrayMux) SupportUDP() bool {
+func (x *MuxCool) SupportUDP() bool {
 	return true
 }
 
-func (x *XrayMux) SupportUOT() bool {
+func (x *MuxCool) SupportUOT() bool {
 	return true
 }
 
-func (x *XrayMux) ProxyInfo() C.ProxyInfo {
+func (x *MuxCool) ProxyInfo() C.ProxyInfo {
 	info := x.ProxyAdapter.ProxyInfo()
 	info.XUDP = true
 	return info
 }
 
-func (x *XrayMux) Close() error {
+func (x *MuxCool) Close() error {
 	x.closeOnce.Do(func() {
 		if x.xudpPool != nil {
 			_ = x.xudpPool.Close()

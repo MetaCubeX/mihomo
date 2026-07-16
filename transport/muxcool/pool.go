@@ -1,4 +1,4 @@
-package xraymux
+package muxcool
 
 import (
 	"context"
@@ -15,7 +15,7 @@ const (
 	DefaultIdleTimeout         = 16 * time.Second
 )
 
-var ErrPoolClosed = errors.New("xray mux pool is closed")
+var ErrPoolClosed = errors.New("mux.cool pool is closed")
 
 type Timer interface {
 	Stop() bool
