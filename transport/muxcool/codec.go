@@ -283,11 +283,12 @@ func decodeFrameWithPayloadPool(r io.Reader, metadataBuffer []byte, poolPayload 
 				return decodedFrame{}, protocolError("decode target", errors.New("follow-up target is only valid for UDP"))
 			}
 			frame.Port = binary.BigEndian.Uint16(targetBytes[1:3])
-			host, consumed, err := readAddress(targetBytes[3:])
+			host, address, consumed, err := readAddress(targetBytes[3:], poolPayload)
 			if err != nil {
 				return decodedFrame{}, protocolError("decode target", err)
 			}
 			frame.Destination = host
+			frame.DestinationIP = address
 			targetBytes = targetBytes[3+consumed:]
 			if frame.Status == StatusNew && frame.Network == NetworkUDP && frame.Option&OptionData != 0 {
 				if len(targetBytes) != len(frame.GlobalID) {
@@ -325,12 +326,15 @@ func decodeFrameWithPayloadPool(r io.Reader, metadataBuffer []byte, poolPayload 
 }
 
 func (f *decodedFrame) releasePayload() {
-	if !f.payloadPooled {
-		return
-	}
-	_ = pool.Put(f.Payload)
+	releasePooledPayload(f.Payload, f.payloadPooled)
 	f.Payload = nil
 	f.payloadPooled = false
+}
+
+func releasePooledPayload(payload []byte, pooled bool) {
+	if pooled {
+		_ = pool.Put(payload)
+	}
 }
 
 func validateFrame(frame Frame) error {
@@ -366,32 +370,44 @@ func validateFrame(frame Frame) error {
 	return nil
 }
 
-func readAddress(raw []byte) (string, int, error) {
+func readAddress(raw []byte, structuredIP bool) (string, netip.Addr, int, error) {
 	if len(raw) < 1 {
-		return "", 0, io.ErrUnexpectedEOF
+		return "", netip.Addr{}, 0, io.ErrUnexpectedEOF
 	}
 	switch raw[0] {
 	case addressIPv4:
 		if len(raw) < 1+net.IPv4len {
-			return "", 0, io.ErrUnexpectedEOF
+			return "", netip.Addr{}, 0, io.ErrUnexpectedEOF
 		}
-		return net.IP(raw[1 : 1+net.IPv4len]).String(), 1 + net.IPv4len, nil
+		var rawAddress [net.IPv4len]byte
+		copy(rawAddress[:], raw[1:1+net.IPv4len])
+		address := netip.AddrFrom4(rawAddress)
+		if structuredIP {
+			return "", address, 1 + net.IPv4len, nil
+		}
+		return address.String(), netip.Addr{}, 1 + net.IPv4len, nil
 	case addressIPv6:
 		if len(raw) < 1+net.IPv6len {
-			return "", 0, io.ErrUnexpectedEOF
+			return "", netip.Addr{}, 0, io.ErrUnexpectedEOF
 		}
-		return net.IP(raw[1 : 1+net.IPv6len]).String(), 1 + net.IPv6len, nil
+		var rawAddress [net.IPv6len]byte
+		copy(rawAddress[:], raw[1:1+net.IPv6len])
+		address := netip.AddrFrom16(rawAddress)
+		if structuredIP {
+			return "", address, 1 + net.IPv6len, nil
+		}
+		return address.String(), netip.Addr{}, 1 + net.IPv6len, nil
 	case addressDomain:
 		if len(raw) < 2 {
-			return "", 0, io.ErrUnexpectedEOF
+			return "", netip.Addr{}, 0, io.ErrUnexpectedEOF
 		}
 		length := int(raw[1])
 		if length == 0 || len(raw) < 2+length {
-			return "", 0, io.ErrUnexpectedEOF
+			return "", netip.Addr{}, 0, io.ErrUnexpectedEOF
 		}
-		return string(raw[2 : 2+length]), 2 + length, nil
+		return string(raw[2 : 2+length]), netip.Addr{}, 2 + length, nil
 	default:
-		return "", 0, fmt.Errorf("invalid address type %d", raw[0])
+		return "", netip.Addr{}, 0, fmt.Errorf("invalid address type %d", raw[0])
 	}
 }
 

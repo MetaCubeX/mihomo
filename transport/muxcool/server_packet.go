@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/common/net/deadline"
@@ -23,8 +24,7 @@ type serverPacketMessage struct {
 }
 
 func (m *serverPacketMessage) release() {
-	frame := decodedFrame{Frame: Frame{Payload: m.payload}, payloadPooled: m.payloadPooled}
-	frame.releasePayload()
+	releasePooledPayload(m.payload, m.payloadPooled)
 	m.payload = nil
 	m.payloadPooled = false
 }
@@ -39,18 +39,21 @@ type serverPacketFlow struct {
 	destination M.Socksaddr
 	reusable    bool
 
-	input         chan serverPacketMessage
-	done          chan struct{}
-	readDeadline  deadline.PipeDeadline
-	writeDeadline deadline.PipeDeadline
-	readOptions   N.ReadWaitOptions
+	input            chan serverPacketMessage
+	done             chan struct{}
+	readDeadline     deadline.PipeDeadline
+	writeDeadline    deadline.PipeDeadline
+	writeDeadlineSet atomic.Bool
+	readOptions      N.ReadWaitOptions
 
-	mu         sync.Mutex
-	current    *serverPacketAttachment
-	generation uint64
-	idleTimer  ServerTimer
-	closed     bool
-	closeErr   error
+	mu          sync.Mutex
+	current     *serverPacketAttachment
+	currentFast atomic.Pointer[serverPacketAttachment]
+	generation  uint64
+	idleTimer   ServerTimer
+	closed      bool
+	closedFast  atomic.Bool
+	closeErr    error
 }
 
 func newServerPacketFlow(
@@ -107,6 +110,7 @@ func (f *serverPacketFlow) attach(carrier *serverCarrier, id uint16) (*serverPac
 	}
 	previous := f.current
 	f.current = attachment
+	f.currentFast.Store(attachment)
 	f.mu.Unlock()
 
 	if previous != nil {
@@ -122,6 +126,7 @@ func (f *serverPacketFlow) detach(attachment *serverPacketAttachment, cause erro
 		return
 	}
 	f.current = nil
+	f.currentFast.Store(nil)
 	if f.closed {
 		f.mu.Unlock()
 		return
@@ -140,10 +145,7 @@ func (f *serverPacketFlow) detach(attachment *serverPacketAttachment, cause erro
 }
 
 func (f *serverPacketFlow) enqueue(attachment *serverPacketAttachment, frame decodedFrame) error {
-	f.mu.Lock()
-	current := f.current == attachment && attachment.generation == f.generation && !f.closed
-	f.mu.Unlock()
-	if !current {
+	if f.currentFast.Load() != attachment {
 		frame.releasePayload()
 		return net.ErrClosed
 	}
@@ -217,16 +219,17 @@ func (f *serverPacketFlow) WaitReadPacket() (*buf.Buffer, M.Socksaddr, error) {
 }
 
 func (f *serverPacketFlow) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) error {
-	select {
-	case <-f.done:
+	if f.closedFast.Load() {
 		return f.terminalError()
-	case <-f.writeDeadline.Wait():
-		return os.ErrDeadlineExceeded
-	default:
 	}
-	f.mu.Lock()
-	attachment := f.current
-	f.mu.Unlock()
+	if f.writeDeadlineSet.Load() {
+		select {
+		case <-f.writeDeadline.Wait():
+			return os.ErrDeadlineExceeded
+		default:
+		}
+	}
+	attachment := f.currentFast.Load()
 	if attachment == nil {
 		// A reusable XUDP backend may emit a late response while detached. The
 		// packet belongs to no active carrier generation and must be dropped.
@@ -239,10 +242,7 @@ func (f *serverPacketFlow) WritePacket(buffer *buf.Buffer, destination M.Socksad
 	// A write admitted by the old generation may finish after a rebind. Its
 	// failure owns only that retired attachment and must not kill the current
 	// XUDP backend or attachment.
-	f.mu.Lock()
-	current := f.current == attachment && f.generation == attachment.generation
-	f.mu.Unlock()
-	if !current {
+	if f.currentFast.Load() != attachment {
 		return nil
 	}
 	return err
@@ -257,8 +257,7 @@ func (f *serverPacketFlow) Close() error {
 
 func (f *serverPacketFlow) SetDeadline(value time.Time) error {
 	f.readDeadline.Set(value)
-	f.writeDeadline.Set(value)
-	return nil
+	return f.SetWriteDeadline(value)
 }
 
 func (f *serverPacketFlow) SetReadDeadline(value time.Time) error {
@@ -267,7 +266,13 @@ func (f *serverPacketFlow) SetReadDeadline(value time.Time) error {
 }
 
 func (f *serverPacketFlow) SetWriteDeadline(value time.Time) error {
+	if !value.IsZero() {
+		f.writeDeadlineSet.Store(true)
+	}
 	f.writeDeadline.Set(value)
+	if value.IsZero() {
+		f.writeDeadlineSet.Store(false)
+	}
 	return nil
 }
 
@@ -298,12 +303,14 @@ func (f *serverPacketFlow) markClosed(cause error, generation uint64, requireIdl
 	}
 	f.closed = true
 	f.closeErr = cause
+	f.closedFast.Store(true)
 	if f.idleTimer != nil {
 		f.idleTimer.Stop()
 		f.idleTimer = nil
 	}
 	current := f.current
 	f.current = nil
+	f.currentFast.Store(nil)
 	f.mu.Unlock()
 	return current, cause, true
 }

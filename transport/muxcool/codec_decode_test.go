@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"net/netip"
 	"testing"
 )
 
@@ -52,6 +53,33 @@ func TestDecodeFrameReadsXrayGoldenVectors(t *testing.T) {
 				t.Fatalf("GlobalID = %v", got.GlobalID)
 			}
 		})
+	}
+}
+
+func TestDecodeFramePooledKeepsStructuredIP(t *testing.T) {
+	raw, err := EncodeFrame(Frame{
+		SessionID: 1, Status: StatusKeep, Option: OptionData, Network: NetworkUDP,
+		DestinationIP: netip.MustParseAddr("1.2.3.4"), Port: 53, Payload: []byte("payload"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := decodeFramePooled(bytes.NewReader(raw), make([]byte, MaxMetadataSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer decoded.releasePayload()
+	if decoded.Destination != "" || decoded.DestinationIP != netip.MustParseAddr("1.2.3.4") {
+		t.Fatalf("decoded target = (%q, %v), want structured IPv4", decoded.Destination, decoded.DestinationIP)
+	}
+
+	public, err := DecodeFrame(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if public.Destination != "1.2.3.4" || public.DestinationIP.IsValid() {
+		t.Fatalf("public target = (%q, %v), want stable string representation", public.Destination, public.DestinationIP)
 	}
 }
 

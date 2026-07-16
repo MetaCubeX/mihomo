@@ -113,14 +113,11 @@ func (p *Pool) openContext(
 		}
 
 		for _, worker := range p.workers {
-			if !worker.available() {
-				continue
-			}
-			p.stopIdleLocked(worker)
 			conn, err := openWorkerSession(worker, ctx, destination, port, globalID, packet, p.options.FirstPayloadTimeout)
 			if err != nil {
 				continue
 			}
+			p.stopIdleLocked(worker)
 			p.mu.Unlock()
 			return conn, nil
 		}

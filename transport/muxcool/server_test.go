@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,6 +21,35 @@ import (
 type testServerHandler struct {
 	tcp func(context.Context, net.Conn, M.Metadata) error
 	udp func(context.Context, N.PacketConn, M.Metadata) error
+}
+
+func TestServerPacketFlowWriteDeadlineFastPath(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	flow := newServerPacketFlow(
+		nil, xudpFlowKey{}, ctx, cancel, testServerHandler{}, M.Socksaddr{},
+		M.Socksaddr{Fqdn: "deadline.example", Port: 53}, false,
+	)
+	packet := buf.NewSize(1)
+	defer packet.Release()
+	_, _ = packet.Write([]byte{1})
+
+	if err := flow.SetWriteDeadline(time.Now().Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := flow.WritePacket(packet, flow.destination); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("expired write = %v, want deadline exceeded", err)
+	}
+	if err := flow.SetWriteDeadline(time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := flow.WritePacket(packet, flow.destination); err != nil {
+		t.Fatalf("reset write = %v", err)
+	}
+
+	flow.closeWithError(io.EOF)
+	if err := flow.WritePacket(packet, flow.destination); !errors.Is(err, io.EOF) {
+		t.Fatalf("closed write = %v, want EOF", err)
+	}
 }
 
 type manualServerTimer struct {
@@ -514,6 +544,7 @@ func TestServerXUDPStaleWriteFailureDoesNotCloseCurrentGeneration(t *testing.T) 
 	oldCarrier := newServerCarrier(runtime, context.Background(), oldConn, testCarrierMetadata(), testServerHandler{})
 	oldAttachment := &serverPacketAttachment{flow: flow, carrier: oldCarrier, id: 1, generation: 1}
 	flow.current = oldAttachment
+	flow.currentFast.Store(oldAttachment)
 	flow.generation = 1
 
 	packet := buf.NewSize(MaxPayloadSize)
@@ -534,6 +565,7 @@ func TestServerXUDPStaleWriteFailureDoesNotCloseCurrentGeneration(t *testing.T) 
 	newAttachment := &serverPacketAttachment{flow: flow, carrier: newCarrier, id: 2, generation: 2}
 	flow.mu.Lock()
 	flow.current = newAttachment
+	flow.currentFast.Store(newAttachment)
 	flow.generation = 2
 	flow.mu.Unlock()
 	close(oldConn.release)

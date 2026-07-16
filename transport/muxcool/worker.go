@@ -98,12 +98,6 @@ func (w *carrierWorker) allocateIDLocked() (uint16, error) {
 	return uint16(w.nextID), nil
 }
 
-func (w *carrierWorker) available() bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.availableLocked()
-}
-
 func (w *carrierWorker) availableLocked() bool {
 	return !w.closed && !w.draining && len(w.sessions) < w.maxActive && w.lifetime < w.maxLifetime && w.nextID < uint32(^uint16(0))
 }

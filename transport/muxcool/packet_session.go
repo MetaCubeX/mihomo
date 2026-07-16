@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/common/net/deadline"
@@ -37,13 +38,15 @@ type packetSession struct {
 	writeMu sync.Mutex
 	sentNew bool
 
-	input         chan packetMessage
-	done          chan struct{}
-	closeOnce     sync.Once
-	causeMu       sync.Mutex
-	cause         error
-	readDeadline  deadline.PipeDeadline
-	writeDeadline deadline.PipeDeadline
+	input            chan packetMessage
+	done             chan struct{}
+	closeOnce        sync.Once
+	closedFast       atomic.Bool
+	causeMu          sync.Mutex
+	cause            error
+	readDeadline     deadline.PipeDeadline
+	writeDeadline    deadline.PipeDeadline
+	writeDeadlineSet atomic.Bool
 }
 
 func newPacketSession(
@@ -137,14 +140,17 @@ func (s *packetSession) WriteTo(payload []byte, addr net.Addr) (int, error) {
 	}
 
 	s.writeMu.Lock()
-	select {
-	case <-s.done:
+	if s.closedFast.Load() {
 		s.writeMu.Unlock()
 		return 0, s.terminalCause()
-	case <-s.writeDeadline.Wait():
-		s.writeMu.Unlock()
-		return 0, os.ErrDeadlineExceeded
-	default:
+	}
+	if s.writeDeadlineSet.Load() {
+		select {
+		case <-s.writeDeadline.Wait():
+			s.writeMu.Unlock()
+			return 0, os.ErrDeadlineExceeded
+		default:
+		}
 	}
 
 	frame := Frame{
@@ -187,8 +193,7 @@ func (s *packetSession) LocalAddr() net.Addr {
 
 func (s *packetSession) SetDeadline(t time.Time) error {
 	s.readDeadline.Set(t)
-	s.writeDeadline.Set(t)
-	return nil
+	return s.SetWriteDeadline(t)
 }
 
 func (s *packetSession) SetReadDeadline(t time.Time) error {
@@ -197,7 +202,13 @@ func (s *packetSession) SetReadDeadline(t time.Time) error {
 }
 
 func (s *packetSession) SetWriteDeadline(t time.Time) error {
+	if !t.IsZero() {
+		s.writeDeadlineSet.Store(true)
+	}
 	s.writeDeadline.Set(t)
+	if t.IsZero() {
+		s.writeDeadlineSet.Store(false)
+	}
 	return nil
 }
 
@@ -214,11 +225,11 @@ func (s *packetSession) deliverFrame(frame Frame) error {
 func (s *packetSession) deliverDecodedFrame(decoded decodedFrame) error {
 	frame := decoded.Frame
 	if frame.Option&OptionData != 0 {
-		if frame.Network != NetworkUDP || frame.Destination == "" {
+		if frame.Network != NetworkUDP || frame.Destination == "" && !frame.DestinationIP.IsValid() {
 			decoded.releasePayload()
 			return protocolError("deliver UDP", errors.New("response frame is missing a UDP target"))
 		}
-		addr, err := makePacketAddr(frame.Destination, frame.Port)
+		addr, err := makeDecodedPacketAddr(frame)
 		if err != nil {
 			decoded.releasePayload()
 			return protocolError("deliver UDP", err)
@@ -242,6 +253,16 @@ func (s *packetSession) deliverDecodedFrame(decoded decodedFrame) error {
 	return nil
 }
 
+func makeDecodedPacketAddr(frame Frame) (net.Addr, error) {
+	if frame.DestinationIP.IsValid() {
+		if frame.DestinationIP.Zone() != "" {
+			return nil, errors.New("scoped IP addresses are not supported")
+		}
+		return net.UDPAddrFromAddrPort(netip.AddrPortFrom(frame.DestinationIP.Unmap(), frame.Port)), nil
+	}
+	return makePacketAddr(frame.Destination, frame.Port)
+}
+
 func (s *packetSession) closeCarrier(cause error) {
 	s.finish(cause, false)
 }
@@ -255,6 +276,7 @@ func (s *packetSession) finish(cause error, sendEnd bool) {
 		s.causeMu.Lock()
 		s.cause = cause
 		s.causeMu.Unlock()
+		s.closedFast.Store(true)
 		close(s.done)
 		s.writeMu.Unlock()
 		s.owner.removeSession(s.id)

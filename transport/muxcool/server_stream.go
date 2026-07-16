@@ -17,8 +17,7 @@ type serverStreamMessage struct {
 }
 
 func (m *serverStreamMessage) release() {
-	frame := decodedFrame{Frame: Frame{Payload: m.payload}, payloadPooled: m.payloadPooled}
-	frame.releasePayload()
+	releasePooledPayload(m.payload, m.payloadPooled)
 	m.payload = nil
 	m.payloadPooled = false
 }

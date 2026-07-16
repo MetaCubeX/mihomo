@@ -10,6 +10,10 @@ import (
 	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/net/deadline"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/sing/common/buf"
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 var (
@@ -195,6 +199,14 @@ func BenchmarkSessionDeliver(b *testing.B) {
 	}
 }
 
+func BenchmarkDownlinkMessageRelease(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		message := downlinkMessage{payload: pool.Get(1024)[:1024], payloadPooled: true}
+		message.releasePayload()
+	}
+}
+
 func BenchmarkWriteStreamData(b *testing.B) {
 	payload := make([]byte, 64*1024)
 	b.ReportAllocs()
@@ -267,6 +279,22 @@ func BenchmarkCarrierWorkerWriteFrame(b *testing.B) {
 	}
 }
 
+func BenchmarkServerCarrierWriteFrame(b *testing.B) {
+	carrier := &serverCarrier{conn: benchmarkConn{}}
+	frame := Frame{SessionID: 1, Status: StatusKeep, Option: OptionData, Payload: make([]byte, MaxPayloadSize)}
+	if err := carrier.writeFrame(frame); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.SetBytes(MaxPayloadSize)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := carrier.writeFrame(frame); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkCarrierWorkerClose(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
@@ -317,6 +345,45 @@ func BenchmarkPoolPacketSessionChurn(b *testing.B) {
 		}
 		_ = packetConn.Close()
 	}
+}
+
+func BenchmarkPoolPacketSessionChurnParallel(b *testing.B) {
+	var server net.Conn
+	pool := NewPool(func(context.Context) (net.Conn, error) {
+		client, peer := net.Pipe()
+		server = peer
+		go func() { _, _ = io.Copy(io.Discard, peer) }()
+		return client, nil
+	}, Options{
+		MaxConcurrency: 1 << 20,
+		MaxConnections: int(^uint(0) >> 1),
+		AfterFunc: func(time.Duration, func()) Timer {
+			return benchmarkTimer{}
+		},
+	})
+	b.Cleanup(func() {
+		_ = pool.Close()
+		if server != nil {
+			_ = server.Close()
+		}
+	})
+
+	warm, err := pool.ListenPacketContext(context.Background(), "dns.example", 53, [8]byte{})
+	if err != nil {
+		b.Fatal(err)
+	}
+	_ = warm.Close()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			packetConn, err := pool.ListenPacketContext(context.Background(), "dns.example", 53, [8]byte{})
+			if err != nil {
+				b.Error(err)
+				return
+			}
+			_ = packetConn.Close()
+		}
+	})
 }
 
 func BenchmarkStreamSessionLifecycle(b *testing.B) {
@@ -482,6 +549,60 @@ func BenchmarkPacketSessionDecodeDeliverCopiedWaitReadFrom(b *testing.B) {
 		benchmarkInt = len(data)
 		if put != nil {
 			put()
+		}
+	}
+}
+
+func BenchmarkServerPacketFlowEnqueue(b *testing.B) {
+	flow := &serverPacketFlow{
+		input: make(chan serverPacketMessage, 1),
+		done:  make(chan struct{}),
+	}
+	attachment := &serverPacketAttachment{flow: flow, generation: 1}
+	flow.current = attachment
+	flow.currentFast.Store(attachment)
+	flow.generation = 1
+	frame := decodedFrame{Frame: Frame{
+		Status:        StatusKeep,
+		Option:        OptionData,
+		Network:       NetworkUDP,
+		DestinationIP: netip.MustParseAddr("1.1.1.1"),
+		Port:          53,
+		Payload:       make([]byte, 1024),
+	}}
+
+	b.ReportAllocs()
+	b.SetBytes(1024)
+	for i := 0; i < b.N; i++ {
+		if err := flow.enqueue(attachment, frame); err != nil {
+			b.Fatal(err)
+		}
+		message := <-flow.input
+		benchmarkInt = len(message.payload)
+	}
+}
+
+func BenchmarkServerPacketFlowWritePacket(b *testing.B) {
+	carrier := &serverCarrier{conn: benchmarkConn{}}
+	flow := &serverPacketFlow{
+		done:          make(chan struct{}),
+		writeDeadline: deadline.MakePipeDeadline(),
+	}
+	attachment := &serverPacketAttachment{flow: flow, carrier: carrier, id: 1, generation: 1}
+	flow.current = attachment
+	flow.currentFast.Store(attachment)
+	packet := buf.NewSize(1024)
+	if _, err := packet.Write(make([]byte, 1024)); err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(packet.Release)
+	destination := M.Socksaddr{Addr: netip.MustParseAddr("1.1.1.1"), Port: 53}
+
+	b.ReportAllocs()
+	b.SetBytes(1024)
+	for i := 0; i < b.N; i++ {
+		if err := flow.WritePacket(packet, destination); err != nil {
+			b.Fatal(err)
 		}
 	}
 }

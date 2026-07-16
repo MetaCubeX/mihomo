@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/sing/common/auth"
@@ -194,6 +195,7 @@ type serverCarrier struct {
 	mu          sync.Mutex
 	sessions    map[uint16]serverSession
 	closed      bool
+	closedFast  atomic.Bool
 	closeErr    error
 	closeOnce   sync.Once
 }
@@ -373,11 +375,10 @@ func (c *serverCarrier) writeFrame(frame Frame) error {
 	encoded, err := encodeFrame(c.writeBuffer, frame)
 	if err == nil {
 		c.writeBuffer = encoded[:0]
-		c.mu.Lock()
-		closed := c.closed
-		closeErr := c.closeErr
-		c.mu.Unlock()
-		if closed {
+		if c.closedFast.Load() {
+			c.mu.Lock()
+			closeErr := c.closeErr
+			c.mu.Unlock()
 			if closeErr == nil {
 				closeErr = net.ErrClosed
 			}
@@ -403,6 +404,7 @@ func (c *serverCarrier) closeWithError(cause error) {
 		c.mu.Lock()
 		c.closed = true
 		c.closeErr = cause
+		c.closedFast.Store(true)
 		sessions := make([]serverSession, 0, len(c.sessions))
 		for _, session := range c.sessions {
 			if session != nil {

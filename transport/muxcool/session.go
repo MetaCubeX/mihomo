@@ -59,6 +59,16 @@ type muxAddr string
 func (a muxAddr) Network() string { return "mux.cool" }
 func (a muxAddr) String() string  { return string(a) }
 
+type muxRemoteAddr struct {
+	host string
+	port uint16
+}
+
+func (muxRemoteAddr) Network() string { return "mux.cool" }
+func (a muxRemoteAddr) String() string {
+	return net.JoinHostPort(a.host, strconv.Itoa(int(a.port)))
+}
+
 type session struct {
 	owner       sessionOwner
 	id          uint16
@@ -81,8 +91,7 @@ type downlinkMessage struct {
 }
 
 func (m *downlinkMessage) releasePayload() {
-	frame := decodedFrame{Frame: Frame{Payload: m.payload}, payloadPooled: m.payloadPooled}
-	frame.releasePayload()
+	releasePooledPayload(m.payload, m.payloadPooled)
 	m.payload = nil
 	m.payloadPooled = false
 }
@@ -119,7 +128,7 @@ func makeSession(owner sessionOwner, id uint16, destination string, port uint16)
 	logical := &logicalConn{
 		Conn:       client,
 		localAddr:  muxAddr("mux.cool"),
-		remoteAddr: muxAddr(net.JoinHostPort(destination, strconv.Itoa(int(port)))),
+		remoteAddr: muxRemoteAddr{host: destination, port: port},
 		session:    s,
 	}
 	return logical, s
