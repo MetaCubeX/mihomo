@@ -17,15 +17,16 @@ type carrierWorker struct {
 	onClosed    func(*carrierWorker)
 	onIdle      func(*carrierWorker)
 
-	writeMu   sync.Mutex
-	mu        sync.Mutex
-	sessions  map[uint16]*session
-	nextID    uint32
-	lifetime  int
-	draining  bool
-	closed    bool
-	closeErr  error
-	closeOnce sync.Once
+	writeMu     sync.Mutex
+	writeBuffer []byte
+	mu          sync.Mutex
+	sessions    map[uint16]workerSession
+	nextID      uint32
+	lifetime    int
+	draining    bool
+	closed      bool
+	closeErr    error
+	closeOnce   sync.Once
 }
 
 func newCarrierWorker(conn net.Conn, maxActive, maxLifetime int, onClosed func(*carrierWorker)) *carrierWorker {
@@ -34,7 +35,7 @@ func newCarrierWorker(conn net.Conn, maxActive, maxLifetime int, onClosed func(*
 		maxActive:   maxActive,
 		maxLifetime: maxLifetime,
 		onClosed:    onClosed,
-		sessions:    make(map[uint16]*session),
+		sessions:    make(map[uint16]workerSession),
 	}
 	go w.readLoop()
 	return w
@@ -47,27 +48,53 @@ func (w *carrierWorker) openSession(
 	firstPayloadTimeout time.Duration,
 ) (net.Conn, error) {
 	w.mu.Lock()
+	id, err := w.allocateIDLocked()
+	if err != nil {
+		w.mu.Unlock()
+		return nil, err
+	}
+	conn, logicalSession := makeSession(w, id, destination, port)
+	w.sessions[id] = logicalSession
+	w.mu.Unlock()
+
+	logicalSession.start(ctx, firstPayloadTimeout)
+	return conn, nil
+}
+
+func (w *carrierWorker) openPacketSession(
+	ctx context.Context,
+	destination string,
+	port uint16,
+	globalID [8]byte,
+) (net.PacketConn, error) {
+	w.mu.Lock()
+	id, err := w.allocateIDLocked()
+	if err != nil {
+		w.mu.Unlock()
+		return nil, err
+	}
+	logicalSession := makePacketSession(w, id, destination, port, globalID)
+	w.sessions[id] = logicalSession
+	w.mu.Unlock()
+
+	logicalSession.start(ctx)
+	return logicalSession, nil
+}
+
+func (w *carrierWorker) allocateIDLocked() (uint16, error) {
 	if !w.availableLocked() {
 		err := w.closeErr
 		if err == nil {
 			err = errWorkerUnavailable
 		}
-		w.mu.Unlock()
-		return nil, err
+		return 0, err
 	}
-
 	w.nextID++
-	id := uint16(w.nextID)
-	conn, logicalSession := makeSession(w, id, destination, port)
-	w.sessions[id] = logicalSession
 	w.lifetime++
 	if w.lifetime >= w.maxLifetime || w.nextID == uint32(^uint16(0)) {
 		w.draining = true
 	}
-	w.mu.Unlock()
-
-	logicalSession.start(ctx, firstPayloadTimeout)
-	return conn, nil
+	return uint16(w.nextID), nil
 }
 
 func (w *carrierWorker) available() bool {
@@ -87,12 +114,13 @@ func (w *carrierWorker) activeSessions() int {
 }
 
 func (w *carrierWorker) writeFrame(frame Frame) error {
-	raw, err := EncodeFrame(frame)
+	w.writeMu.Lock()
+	raw, err := encodeFrame(w.writeBuffer, frame)
 	if err != nil {
+		w.writeMu.Unlock()
 		return err
 	}
-
-	w.writeMu.Lock()
+	w.writeBuffer = raw[:0]
 	w.mu.Lock()
 	if w.closed {
 		err = w.closeErr
@@ -128,8 +156,9 @@ func (w *carrierWorker) removeSession(id uint16) {
 }
 
 func (w *carrierWorker) readLoop() {
+	metadataBuffer := make([]byte, MaxMetadataSize)
 	for {
-		frame, err := DecodeFrame(w.conn)
+		frame, err := decodeFrame(w.conn, metadataBuffer)
 		if err != nil {
 			w.close(err)
 			return
@@ -151,17 +180,9 @@ func (w *carrierWorker) readLoop() {
 			continue
 		}
 
-		terminal := frame.Status == StatusEnd || frame.Option&OptionError != 0
-		if terminal {
-			var cause error
-			if frame.Option&OptionError != 0 {
-				cause = protocolError("remote session", errors.New("remote reported an error"))
-			}
-			_ = logicalSession.deliverFinal(frame.Payload, cause)
-			continue
-		}
-		if frame.Option&OptionData != 0 {
-			_ = logicalSession.deliver(frame.Payload)
+		if err := logicalSession.deliverFrame(frame); err != nil && !errors.Is(err, net.ErrClosed) {
+			w.close(err)
+			return
 		}
 	}
 }
@@ -175,11 +196,11 @@ func (w *carrierWorker) close(cause error) {
 		w.mu.Lock()
 		w.closed = true
 		w.closeErr = cause
-		sessions := make([]*session, 0, len(w.sessions))
+		sessions := make([]workerSession, 0, len(w.sessions))
 		for _, logicalSession := range w.sessions {
 			sessions = append(sessions, logicalSession)
 		}
-		w.sessions = make(map[uint16]*session)
+		w.sessions = make(map[uint16]workerSession)
 		w.mu.Unlock()
 
 		_ = w.conn.Close()

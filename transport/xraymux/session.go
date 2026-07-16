@@ -16,6 +16,11 @@ type sessionOwner interface {
 	removeSession(uint16)
 }
 
+type workerSession interface {
+	deliverFrame(Frame) error
+	closeCarrier(error)
+}
+
 // logicalConn is the caller-facing half of a logical Mux stream. net.Pipe gives
 // each direction independent buffering and deadline state while the session
 // goroutines translate the other half to and from Xray Mux frames.
@@ -204,6 +209,21 @@ func (s *session) deliverFinal(payload []byte, cause error) error {
 		terminal: true,
 		cause:    cause,
 	})
+}
+
+func (s *session) deliverFrame(frame Frame) error {
+	terminal := frame.Status == StatusEnd || frame.Option&OptionError != 0
+	if terminal {
+		var cause error
+		if frame.Option&OptionError != 0 {
+			cause = protocolError("remote session", errors.New("remote reported an error"))
+		}
+		return s.deliverFinal(frame.Payload, cause)
+	}
+	if frame.Option&OptionData != 0 {
+		return s.deliver(frame.Payload)
+	}
+	return nil
 }
 
 func (s *session) enqueueDownlink(message downlinkMessage) error {

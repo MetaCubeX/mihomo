@@ -139,6 +139,40 @@ func TestCarrierWorkerDemultiplexesResponses(t *testing.T) {
 	}
 }
 
+func TestCarrierWorkerDemultiplexesStreamsAndPacketsOnOneCarrier(t *testing.T) {
+	carrier := newTestCarrier()
+	worker := newCarrierWorker(carrier, 8, 128, nil)
+	t.Cleanup(func() { worker.close(nil) })
+	stream, err := worker.openSession(context.Background(), "stream.example", 443, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packetConn, err := worker.openPacketSession(context.Background(), "packet.example", 53, [8]byte{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stream.Close(); _ = packetConn.Close() })
+
+	carrier.inject(t, Frame{SessionID: 1, Status: StatusKeep, Option: OptionData, Payload: []byte("stream")})
+	carrier.inject(t, Frame{
+		SessionID: 2, Status: StatusKeep, Option: OptionData, Network: NetworkUDP,
+		Destination: "9.9.9.9", Port: 53, Payload: []byte("packet"),
+	})
+
+	streamPayload := make([]byte, len("stream"))
+	if _, err := io.ReadFull(stream, streamPayload); err != nil {
+		t.Fatal(err)
+	}
+	packetPayload := make([]byte, len("packet"))
+	n, addr, err := packetConn.ReadFrom(packetPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(streamPayload) != "stream" || n != len(packetPayload) || string(packetPayload) != "packet" || addr.String() != "9.9.9.9:53" {
+		t.Fatalf("responses = stream %q, packet (%d, %q, %v)", streamPayload, n, packetPayload, addr)
+	}
+}
+
 func TestCarrierWorkerEndsUnknownSession(t *testing.T) {
 	carrier := newTestCarrier()
 	worker := newCarrierWorker(carrier, 8, 128, nil)

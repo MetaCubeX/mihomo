@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/xraymux"
 )
@@ -77,7 +78,29 @@ func (x *XrayMux) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn
 }
 
 func (x *XrayMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	return x.ProxyAdapter.ListenPacketContext(ctx, metadata)
+	var globalID [8]byte
+	if metadata.SourceValid() {
+		globalID = utils.GlobalID(metadata.SourceAddress())
+	}
+	packetConn, err := x.pool.ListenPacketContext(ctx, metadata.String(), metadata.DstPort, globalID)
+	if err != nil {
+		return nil, err
+	}
+	return NewPacketConn(packetConn, x), nil
+}
+
+func (x *XrayMux) SupportUDP() bool {
+	return true
+}
+
+func (x *XrayMux) SupportUOT() bool {
+	return true
+}
+
+func (x *XrayMux) ProxyInfo() C.ProxyInfo {
+	info := x.ProxyAdapter.ProxyInfo()
+	info.XUDP = true
+	return info
 }
 
 func (x *XrayMux) Close() error {

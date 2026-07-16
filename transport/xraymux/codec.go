@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 )
 
 const (
@@ -44,13 +45,15 @@ const (
 )
 
 type Frame struct {
-	SessionID   uint16
-	Status      Status
-	Option      Option
-	Network     Network
-	Destination string
-	Port        uint16
-	Payload     []byte
+	SessionID     uint16
+	Status        Status
+	Option        Option
+	Network       Network
+	Destination   string
+	DestinationIP netip.Addr
+	Port          uint16
+	GlobalID      [8]byte
+	Payload       []byte
 }
 
 type ProtocolError struct {
@@ -71,17 +74,26 @@ func protocolError(op string, err error) error {
 }
 
 func EncodeFrame(frame Frame) ([]byte, error) {
+	return encodeFrame(nil, frame)
+}
+
+func encodeFrame(buffer []byte, frame Frame) ([]byte, error) {
 	if err := validateFrame(frame); err != nil {
 		return nil, protocolError("encode", err)
 	}
 
-	hasTarget := frame.Status == StatusNew || (frame.Status == StatusKeep && frame.Destination != "")
+	hasTarget := frame.Status == StatusNew || (frame.Status == StatusKeep && (frame.Destination != "" || frame.DestinationIP.IsValid()))
 	metadataLen := 4
-	var targetAddr netip.Addr
+	targetAddr := frame.DestinationIP.Unmap()
 	if hasTarget {
 		metadataLen += 3
-		if parsed, err := netip.ParseAddr(frame.Destination); err == nil && parsed.Zone() == "" {
+		if targetAddr.IsValid() && targetAddr.Zone() != "" {
+			return nil, protocolError("encode address", errors.New("scoped IPv6 addresses are not supported"))
+		}
+		if parsed, ok := parseLiteralIP(frame.Destination); !targetAddr.IsValid() && ok {
 			targetAddr = parsed.Unmap()
+		}
+		if targetAddr.IsValid() {
 			if targetAddr.Is4() {
 				metadataLen += 1 + net.IPv4len
 			} else {
@@ -94,6 +106,9 @@ func EncodeFrame(frame Frame) ([]byte, error) {
 			metadataLen += 2 + len(frame.Destination)
 		}
 	}
+	if frame.Status == StatusNew && frame.Network == NetworkUDP && frame.Option&OptionData != 0 {
+		metadataLen += len(frame.GlobalID)
+	}
 	if metadataLen > MaxMetadataSize {
 		return nil, protocolError("encode", fmt.Errorf("metadata length %d exceeds %d", metadataLen, MaxMetadataSize))
 	}
@@ -102,7 +117,12 @@ func EncodeFrame(frame Frame) ([]byte, error) {
 	if frame.Option&OptionData != 0 {
 		frameLen += 2 + len(frame.Payload)
 	}
-	result := make([]byte, frameLen)
+	var result []byte
+	if cap(buffer) >= frameLen {
+		result = buffer[:frameLen]
+	} else {
+		result = make([]byte, frameLen)
+	}
 	binary.BigEndian.PutUint16(result, uint16(metadataLen))
 	offset := 2
 	binary.BigEndian.PutUint16(result[offset:], frame.SessionID)
@@ -135,6 +155,9 @@ func EncodeFrame(frame Frame) ([]byte, error) {
 			offset += copy(result[offset:], frame.Destination)
 		}
 	}
+	if frame.Status == StatusNew && frame.Network == NetworkUDP && frame.Option&OptionData != 0 {
+		offset += copy(result[offset:], frame.GlobalID[:])
+	}
 	if frame.Option&OptionData != 0 {
 		binary.BigEndian.PutUint16(result[offset:], uint16(len(frame.Payload)))
 		offset += 2
@@ -143,7 +166,26 @@ func EncodeFrame(frame Frame) ([]byte, error) {
 	return result, nil
 }
 
+func parseLiteralIP(host string) (netip.Addr, bool) {
+	if host == "" {
+		return netip.Addr{}, false
+	}
+	first := host[0]
+	if (first < '0' || first > '9') && strings.IndexByte(host, ':') < 0 {
+		return netip.Addr{}, false
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil || addr.Zone() != "" {
+		return netip.Addr{}, false
+	}
+	return addr.Unmap(), true
+}
+
 func DecodeFrame(r io.Reader) (Frame, error) {
+	return decodeFrame(r, nil)
+}
+
+func decodeFrame(r io.Reader, metadataBuffer []byte) (Frame, error) {
 	var lengthBytes [2]byte
 	if _, err := io.ReadFull(r, lengthBytes[:]); err != nil {
 		return Frame{}, protocolError("read metadata length", err)
@@ -152,7 +194,12 @@ func DecodeFrame(r io.Reader) (Frame, error) {
 	if metadataLen < 4 || metadataLen > MaxMetadataSize {
 		return Frame{}, protocolError("read metadata", fmt.Errorf("invalid metadata length %d", metadataLen))
 	}
-	metadata := make([]byte, metadataLen)
+	var metadata []byte
+	if len(metadataBuffer) >= metadataLen {
+		metadata = metadataBuffer[:metadataLen]
+	} else {
+		metadata = make([]byte, metadataLen)
+	}
 	if _, err := io.ReadFull(r, metadata); err != nil {
 		return Frame{}, protocolError("read metadata", err)
 	}
@@ -170,7 +217,11 @@ func DecodeFrame(r io.Reader) (Frame, error) {
 	}
 
 	targetBytes := metadata[4:]
-	if frame.Status == StatusNew || len(targetBytes) > 0 {
+	hasTarget := frame.Status == StatusNew || (frame.Status == StatusKeep && len(targetBytes) > 0)
+	if len(targetBytes) > 0 && !hasTarget {
+		return Frame{}, protocolError("decode metadata", fmt.Errorf("unexpected trailing metadata: %d bytes", len(targetBytes)))
+	}
+	if hasTarget {
 		if len(targetBytes) < 4 {
 			return Frame{}, protocolError("decode target", io.ErrUnexpectedEOF)
 		}
@@ -178,15 +229,26 @@ func DecodeFrame(r io.Reader) (Frame, error) {
 		if frame.Network != NetworkTCP && frame.Network != NetworkUDP {
 			return Frame{}, protocolError("decode target", fmt.Errorf("invalid network %d", frame.Network))
 		}
+		if frame.Status == StatusKeep && frame.Network != NetworkUDP {
+			return Frame{}, protocolError("decode target", errors.New("follow-up target is only valid for UDP"))
+		}
 		frame.Port = binary.BigEndian.Uint16(targetBytes[1:3])
 		host, consumed, err := readAddress(targetBytes[3:])
 		if err != nil {
 			return Frame{}, protocolError("decode target", err)
 		}
-		if 3+consumed != len(targetBytes) {
-			return Frame{}, protocolError("decode target", fmt.Errorf("unexpected trailing metadata: %d bytes", len(targetBytes)-3-consumed))
-		}
 		frame.Destination = host
+		targetBytes = targetBytes[3+consumed:]
+		if frame.Status == StatusNew && frame.Network == NetworkUDP && frame.Option&OptionData != 0 {
+			if len(targetBytes) != len(frame.GlobalID) {
+				return Frame{}, protocolError("decode GlobalID", fmt.Errorf("invalid length %d", len(targetBytes)))
+			}
+			copy(frame.GlobalID[:], targetBytes)
+			targetBytes = nil
+		}
+		if len(targetBytes) != 0 {
+			return Frame{}, protocolError("decode target", fmt.Errorf("unexpected trailing metadata: %d bytes", len(targetBytes)))
+		}
 	}
 
 	if frame.Option&OptionData != 0 {
@@ -217,12 +279,19 @@ func validateFrame(frame Frame) error {
 	if len(frame.Payload) > 0 && frame.Option&OptionData == 0 {
 		return errors.New("payload provided without data option")
 	}
-	if frame.Status == StatusNew || (frame.Status == StatusKeep && frame.Destination != "") {
+	if frame.GlobalID != [8]byte{} && (frame.Status != StatusNew || frame.Network != NetworkUDP || frame.Option&OptionData == 0) {
+		return errors.New("GlobalID is only valid on an initial UDP data frame")
+	}
+	hasTarget := frame.Destination != "" || frame.DestinationIP.IsValid()
+	if frame.Status == StatusNew || (frame.Status == StatusKeep && hasTarget) {
 		if frame.Network != NetworkTCP && frame.Network != NetworkUDP {
 			return fmt.Errorf("invalid network %d", frame.Network)
 		}
-		if frame.Destination == "" {
+		if !hasTarget {
 			return errors.New("empty destination")
+		}
+		if frame.Status == StatusKeep && frame.Network != NetworkUDP {
+			return errors.New("follow-up target is only valid for UDP")
 		}
 	}
 	return nil

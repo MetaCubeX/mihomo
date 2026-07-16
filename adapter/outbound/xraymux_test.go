@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/xraymux"
 )
@@ -164,13 +166,11 @@ func TestXrayMuxDoesNotBypassFailedCarrier(t *testing.T) {
 	}
 }
 
-func TestXrayMuxDelegatesUDPUnchanged(t *testing.T) {
+func TestXrayMuxDialContextDelegatesUDPStreams(t *testing.T) {
 	base := newFakeXrayMuxAdapter()
 	udpClient, udpPeer := net.Pipe()
 	t.Cleanup(func() { _ = udpPeer.Close() })
 	base.udpConn = NewConn(udpClient, base)
-	packetErr := errors.New("packet delegate marker")
-	base.packetErr = packetErr
 	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
 	if err != nil {
 		t.Fatal(err)
@@ -182,15 +182,107 @@ func TestXrayMuxDelegatesUDPUnchanged(t *testing.T) {
 	if err != nil || conn != base.udpConn {
 		t.Fatalf("UDP DialContext = (%v, %v)", conn, err)
 	}
-	packetConn, err := wrapped.ListenPacketContext(context.Background(), metadata)
-	if packetConn != nil || !errors.Is(err, packetErr) {
-		t.Fatalf("ListenPacketContext = (%v, %v)", packetConn, err)
+}
+
+func TestXrayMuxPoolsUDPAndDerivesXUDPGlobalID(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	base.Base.udp = false
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+	metadata := &C.Metadata{
+		NetWork: C.UDP,
+		Host:    "dns.example",
+		DstPort: 53,
+		SrcIP:   netip.MustParseAddr("192.0.2.10"),
+		SrcPort: 4242,
+	}
+
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = packetConn.Close() })
+	server := <-base.carrierServers
+	t.Cleanup(func() { _ = server.Close() })
+
+	queryAddr := net.UDPAddrFromAddrPort(netip.MustParseAddrPort("8.8.8.8:53"))
+	writeDone := make(chan error, 1)
+	go func() {
+		_, err := packetConn.WriteTo([]byte("query"), queryAddr)
+		writeDone <- err
+	}()
+	frame, err := xraymux.DecodeFrame(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-writeDone; err != nil {
+		t.Fatal(err)
+	}
+	if frame.Status != xraymux.StatusNew || frame.Network != xraymux.NetworkUDP || frame.Destination != "dns.example" || frame.Port != 53 {
+		t.Fatalf("UDP New = %+v", frame)
+	}
+	if want := utils.GlobalID(metadata.SourceAddress()); frame.GlobalID != want {
+		t.Fatalf("GlobalID = %v, want %v", frame.GlobalID, want)
+	}
+	if string(frame.Payload) != "query" {
+		t.Fatalf("payload = %q", frame.Payload)
+	}
+
+	response, err := xraymux.EncodeFrame(xraymux.Frame{
+		SessionID: frame.SessionID, Status: xraymux.StatusKeep, Option: xraymux.OptionData,
+		Network: xraymux.NetworkUDP, Destination: "8.8.4.4", Port: 53, Payload: []byte("answer"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = server.Write(response) }()
+	buffer := make([]byte, 16)
+	n, addr, err := packetConn.ReadFrom(buffer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(buffer[:n]) != "answer" || addr.String() != "8.8.4.4:53" {
+		t.Fatalf("ReadFrom = (%q, %v)", buffer[:n], addr)
+	}
+
 	base.mu.Lock()
 	packetCalls := base.packetCalls
 	base.mu.Unlock()
-	if packetCalls != 1 {
-		t.Fatalf("packet calls = %d", packetCalls)
+	if packetCalls != 0 {
+		t.Fatalf("base packet calls = %d, want 0", packetCalls)
+	}
+	if !wrapped.SupportUDP() || !wrapped.SupportUOT() || !wrapped.ProxyInfo().XUDP {
+		t.Fatalf("capabilities = UDP %t UOT %t XUDP %t", wrapped.SupportUDP(), wrapped.SupportUOT(), wrapped.ProxyInfo().XUDP)
+	}
+}
+
+func TestXrayMuxUsesNormalUDPWithoutSourceIdentity(t *testing.T) {
+	base := newFakeXrayMuxAdapter()
+	wrapped, err := NewXrayMux(XrayMuxOption{Enabled: true}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+	packetConn, err := wrapped.ListenPacketContext(context.Background(), &C.Metadata{NetWork: C.UDP, Host: "dns.example", DstPort: 53})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = packetConn.Close() })
+	server := <-base.carrierServers
+	t.Cleanup(func() { _ = server.Close() })
+
+	go func() {
+		_, _ = packetConn.WriteTo([]byte("query"), net.UDPAddrFromAddrPort(netip.MustParseAddrPort("1.1.1.1:53")))
+	}()
+	frame, err := xraymux.DecodeFrame(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame.GlobalID != [8]byte{} {
+		t.Fatalf("GlobalID = %v, want normal UDP", frame.GlobalID)
 	}
 }
 

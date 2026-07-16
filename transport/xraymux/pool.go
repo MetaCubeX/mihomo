@@ -72,11 +72,38 @@ func NewPool(dial CarrierDialer, options Options) *Pool {
 }
 
 func (p *Pool) DialContext(ctx context.Context, destination string, port uint16) (net.Conn, error) {
+	opened, err := p.openContext(ctx, destination, port, [8]byte{}, false)
+	if err != nil {
+		return nil, err
+	}
+	return opened.stream, nil
+}
+
+func (p *Pool) ListenPacketContext(ctx context.Context, destination string, port uint16, globalID [8]byte) (net.PacketConn, error) {
+	opened, err := p.openContext(ctx, destination, port, globalID, true)
+	if err != nil {
+		return nil, err
+	}
+	return opened.packet, nil
+}
+
+type openedSession struct {
+	stream net.Conn
+	packet net.PacketConn
+}
+
+func (p *Pool) openContext(
+	ctx context.Context,
+	destination string,
+	port uint16,
+	globalID [8]byte,
+	packet bool,
+) (openedSession, error) {
 	for {
 		p.mu.Lock()
 		if p.closed {
 			p.mu.Unlock()
-			return nil, ErrPoolClosed
+			return openedSession{}, ErrPoolClosed
 		}
 
 		for _, worker := range p.workers {
@@ -84,7 +111,7 @@ func (p *Pool) DialContext(ctx context.Context, destination string, port uint16)
 				continue
 			}
 			p.stopIdleLocked(worker)
-			conn, err := worker.openSession(ctx, destination, port, p.options.FirstPayloadTimeout)
+			conn, err := openWorkerSession(worker, ctx, destination, port, globalID, packet, p.options.FirstPayloadTimeout)
 			if err != nil {
 				continue
 			}
@@ -99,9 +126,9 @@ func (p *Pool) DialContext(ctx context.Context, destination string, port uint16)
 			case <-dialing:
 				continue
 			case <-done:
-				return nil, ErrPoolClosed
+				return openedSession{}, ErrPoolClosed
 			case <-ctx.Done():
-				return nil, context.Cause(ctx)
+				return openedSession{}, context.Cause(ctx)
 			}
 		}
 
@@ -125,17 +152,17 @@ func (p *Pool) DialContext(ctx context.Context, destination string, port uint16)
 			if carrier != nil {
 				_ = carrier.Close()
 			}
-			return nil, ErrPoolClosed
+			return openedSession{}, ErrPoolClosed
 		}
 		if err != nil {
 			p.mu.Unlock()
-			return nil, err
+			return openedSession{}, err
 		}
 
 		worker := newCarrierWorker(carrier, p.options.MaxConcurrency, p.options.MaxConnections, p.removeWorker)
 		worker.onIdle = p.scheduleIdle
 		p.workers = append(p.workers, worker)
-		conn, err := worker.openSession(ctx, destination, port, p.options.FirstPayloadTimeout)
+		conn, err := openWorkerSession(worker, ctx, destination, port, globalID, packet, p.options.FirstPayloadTimeout)
 		if err == nil {
 			p.mu.Unlock()
 			return conn, nil
@@ -143,8 +170,25 @@ func (p *Pool) DialContext(ctx context.Context, destination string, port uint16)
 		p.removeWorkerLocked(worker)
 		p.mu.Unlock()
 		worker.close(err)
-		return nil, err
+		return openedSession{}, err
 	}
+}
+
+func openWorkerSession(
+	worker *carrierWorker,
+	ctx context.Context,
+	destination string,
+	port uint16,
+	globalID [8]byte,
+	packet bool,
+	firstPayloadTimeout time.Duration,
+) (openedSession, error) {
+	if packet {
+		connection, err := worker.openPacketSession(ctx, destination, port, globalID)
+		return openedSession{packet: connection}, err
+	}
+	connection, err := worker.openSession(ctx, destination, port, firstPayloadTimeout)
+	return openedSession{stream: connection}, err
 }
 
 func (p *Pool) scheduleIdle(worker *carrierWorker) {

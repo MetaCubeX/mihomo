@@ -36,6 +36,21 @@ func TestEncodeFrameMatchesXrayGoldenVectors(t *testing.T) {
 			frame: Frame{SessionID: 1, Status: StatusKeep, Option: OptionData, Payload: []byte("ok")},
 		},
 		{
+			name: "udp-new-data",
+			frame: Frame{SessionID: 4, Status: StatusNew, Option: OptionData, Network: NetworkUDP,
+				Destination: "udp.example", Port: 53, Payload: []byte("q1")},
+		},
+		{
+			name: "xudp-new-data",
+			frame: Frame{SessionID: 5, Status: StatusNew, Option: OptionData, Network: NetworkUDP,
+				Destination: "udp.example", Port: 53, GlobalID: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, Payload: []byte("q2")},
+		},
+		{
+			name: "udp-keep-data",
+			frame: Frame{SessionID: 4, Status: StatusKeep, Option: OptionData, Network: NetworkUDP,
+				Destination: "udp.example", Port: 53, Payload: []byte("r3")},
+		},
+		{
 			name:  "end",
 			frame: Frame{SessionID: 1, Status: StatusEnd},
 		},
@@ -55,6 +70,19 @@ func TestEncodeFrameMatchesXrayGoldenVectors(t *testing.T) {
 				t.Fatalf("frame mismatch\n got: %x\nwant: %x", got, want)
 			}
 		})
+	}
+}
+
+func TestEncodeFrameRejectsGlobalIDOutsideInitialUDPPayload(t *testing.T) {
+	globalID := [8]byte{1}
+	for _, frame := range []Frame{
+		{SessionID: 1, Status: StatusNew, Network: NetworkTCP, Destination: "tcp.example", Port: 443, GlobalID: globalID},
+		{SessionID: 1, Status: StatusNew, Network: NetworkUDP, Destination: "udp.example", Port: 53, GlobalID: globalID},
+		{SessionID: 1, Status: StatusKeep, Option: OptionData, Network: NetworkUDP, Destination: "udp.example", Port: 53, GlobalID: globalID, Payload: []byte("x")},
+	} {
+		if _, err := EncodeFrame(frame); err == nil {
+			t.Fatalf("EncodeFrame(%+v) accepted invalid GlobalID", frame)
+		}
 	}
 }
 

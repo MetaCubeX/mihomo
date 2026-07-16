@@ -21,6 +21,9 @@ var referenceFrames = map[string]string{
 	"ipv4-new-empty":   "000c000201000100350101020304",
 	"ipv6-new-empty":   "001800030100011f900300000000000000000000000000000001",
 	"keep-data":        "00040001020100026f6b",
+	"udp-new-data":     "001c00040101020035020b7564702e6578616d706c65000000000000000000027131",
+	"xudp-new-data":    "001c00050101020035020b7564702e6578616d706c65010203040506070800027132",
+	"udp-keep-data":    "001400040201020035020b7564702e6578616d706c6500027233",
 	"end":              "000400010300",
 }
 
@@ -80,6 +83,9 @@ func TestReferenceFrameFixtures(t *testing.T) {
 		{name: "ipv4-new-empty", status: 1, sessionID: 2},
 		{name: "ipv6-new-empty", status: 1, sessionID: 3},
 		{name: "keep-data", status: 2, option: 1, sessionID: 1, payload: "ok"},
+		{name: "udp-new-data", status: 1, option: 1, sessionID: 4, payload: "q1"},
+		{name: "xudp-new-data", status: 1, option: 1, sessionID: 5, payload: "q2"},
+		{name: "udp-keep-data", status: 2, option: 1, sessionID: 4, payload: "r3"},
 		{name: "end", status: 3, sessionID: 1},
 	}
 

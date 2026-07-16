@@ -107,6 +107,39 @@ func TestPoolReusesCarrierAndExpandsAtActiveLimit(t *testing.T) {
 	}
 }
 
+func TestPoolSharesCarrierBetweenStreamAndPacketSessions(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	pool := NewPool(dialer.dial, testPoolOptions())
+	t.Cleanup(func() { _ = pool.Close() })
+
+	stream, err := pool.DialContext(context.Background(), "stream.example", 443)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packetConn, err := pool.ListenPacketContext(context.Background(), "packet.example", 53, [8]byte{1, 2, 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stream.Close(); _ = packetConn.Close() })
+
+	if got := dialer.callCount(); got != 1 {
+		t.Fatalf("carrier dials = %d, want 1", got)
+	}
+	if got := pool.activeSessions(); got != 2 {
+		t.Fatalf("active sessions = %d, want 2", got)
+	}
+	if _, err := packetConn.WriteTo([]byte("query"), &net.UDPAddr{IP: net.IPv4(8, 8, 8, 8), Port: 53}); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := DecodeFrame(bytes.NewReader(dialer.carriers[0].bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame.SessionID != 2 || frame.Status != StatusNew || frame.Network != NetworkUDP || frame.GlobalID != [8]byte{1, 2, 3} {
+		t.Fatalf("packet frame = %+v", frame)
+	}
+}
+
 func TestPoolRotatesAtLifetimeLimitAndUsesMonotonicIDs(t *testing.T) {
 	dialer := &fakeCarrierDialer{}
 	options := testPoolOptions()

@@ -23,6 +23,9 @@ func TestDecodeFrameReadsXrayGoldenVectors(t *testing.T) {
 		{name: "ipv4-new-empty", status: StatusNew, sessionID: 2, network: NetworkTCP, destination: "1.2.3.4", port: 53},
 		{name: "ipv6-new-empty", status: StatusNew, sessionID: 3, network: NetworkTCP, destination: "::1", port: 8080},
 		{name: "keep-data", status: StatusKeep, option: OptionData, sessionID: 1, payload: "ok"},
+		{name: "udp-new-data", status: StatusNew, option: OptionData, sessionID: 4, network: NetworkUDP, destination: "udp.example", port: 53, payload: "q1"},
+		{name: "xudp-new-data", status: StatusNew, option: OptionData, sessionID: 5, network: NetworkUDP, destination: "udp.example", port: 53, payload: "q2"},
+		{name: "udp-keep-data", status: StatusKeep, option: OptionData, sessionID: 4, network: NetworkUDP, destination: "udp.example", port: 53, payload: "r3"},
 		{name: "end", status: StatusEnd, sessionID: 1},
 	}
 
@@ -45,6 +48,9 @@ func TestDecodeFrameReadsXrayGoldenVectors(t *testing.T) {
 			if string(got.Payload) != tt.payload {
 				t.Fatalf("payload = %q, want %q", got.Payload, tt.payload)
 			}
+			if tt.name == "xudp-new-data" && got.GlobalID != [8]byte{1, 2, 3, 4, 5, 6, 7, 8} {
+				t.Fatalf("GlobalID = %v", got.GlobalID)
+			}
 		})
 	}
 }
@@ -65,6 +71,12 @@ func TestDecodeFrameRejectsMalformedInput(t *testing.T) {
 		{name: "truncated domain", raw: []byte{0, 10, 0, 1, 1, 0, 1, 0, 80, 2, 4, 'a'}},
 		{name: "missing payload length", raw: []byte{0, 4, 0, 1, 2, 1}},
 		{name: "truncated payload", raw: []byte{0, 4, 0, 1, 2, 1, 0, 4, 'a'}},
+		{name: "new UDP data missing GlobalID", raw: []byte{0, 12, 0, 1, 1, 1, 2, 0, 53, 1, 1, 2, 3, 4, 0, 1, 'x'}},
+		{name: "new UDP data partial GlobalID", raw: []byte{0, 16, 0, 1, 1, 1, 2, 0, 53, 1, 1, 2, 3, 4, 1, 2, 3, 4, 0, 1, 'x'}},
+		{name: "keep UDP trailing metadata", raw: []byte{0, 13, 0, 1, 2, 1, 2, 0, 53, 1, 1, 2, 3, 4, 0, 0xff, 0, 1, 'x'}},
+		{name: "keep TCP target", raw: []byte{0, 12, 0, 1, 2, 1, 1, 0, 53, 1, 1, 2, 3, 4, 0, 1, 'x'}},
+		{name: "end with target", raw: []byte{0, 12, 0, 1, 3, 0, 2, 0, 53, 1, 1, 2, 3, 4}},
+		{name: "keepalive with metadata", raw: []byte{0, 5, 0, 1, 4, 0, 0}},
 	}
 
 	for _, tt := range tests {
