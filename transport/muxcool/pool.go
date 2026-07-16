@@ -26,6 +26,7 @@ type CarrierDialer func(context.Context) (net.Conn, error)
 type Options struct {
 	MaxConcurrency      int
 	MaxConnections      int
+	CarrierLimiter      *CarrierLimiter
 	FirstPayloadTimeout time.Duration
 	IdleTimeout         time.Duration
 	AfterFunc           func(time.Duration, func()) Timer
@@ -40,6 +41,7 @@ type Pool struct {
 	idle       map[*carrierWorker]Timer
 	dialing    chan struct{}
 	dialCancel context.CancelFunc
+	changed    chan struct{}
 	done       chan struct{}
 	closed     bool
 	closeOnce  sync.Once
@@ -67,6 +69,7 @@ func NewPool(dial CarrierDialer, options Options) *Pool {
 		dial:    dial,
 		options: options,
 		idle:    make(map[*carrierWorker]Timer),
+		changed: make(chan struct{}),
 		done:    make(chan struct{}),
 	}
 }
@@ -135,6 +138,27 @@ func (p *Pool) openContext(
 			}
 		}
 
+		var lease *carrierLease
+		if p.options.CarrierLimiter.limited() {
+			var capacityWait <-chan struct{}
+			lease, capacityWait = p.options.CarrierLimiter.tryAcquire()
+			if lease == nil {
+				changed := p.changed
+				done := p.done
+				p.mu.Unlock()
+				select {
+				case <-changed:
+					continue
+				case <-capacityWait:
+					continue
+				case <-done:
+					return openedSession{}, ErrPoolClosed
+				case <-ctx.Done():
+					return openedSession{}, context.Cause(ctx)
+				}
+			}
+		}
+
 		dialing := make(chan struct{})
 		dialCtx, cancel := context.WithCancel(ctx)
 		p.dialing = dialing
@@ -143,6 +167,14 @@ func (p *Pool) openContext(
 
 		carrier, err := p.dial(dialCtx)
 		cancel()
+		if err != nil {
+			if carrier != nil {
+				_ = carrier.Close()
+			}
+			lease.release()
+		} else if lease != nil {
+			carrier = &limitedCarrier{Conn: carrier, lease: lease}
+		}
 
 		p.mu.Lock()
 		if p.dialing == dialing {
@@ -164,6 +196,9 @@ func (p *Pool) openContext(
 
 		worker := newCarrierWorker(carrier, p.options.MaxConcurrency, p.options.MaxConnections, p.removeWorker)
 		worker.onIdle = p.scheduleIdle
+		if p.options.CarrierLimiter.limited() {
+			worker.onAvailable = p.signalAvailable
+		}
 		p.workers = append(p.workers, worker)
 		conn, err := openWorkerSession(worker, ctx, destination, port, globalID, packet, p.options.FirstPayloadTimeout)
 		if err == nil {
@@ -175,6 +210,18 @@ func (p *Pool) openContext(
 		worker.close(err)
 		return openedSession{}, err
 	}
+}
+
+func (p *Pool) signalAvailable(*carrierWorker) {
+	p.mu.Lock()
+	p.signalChangedLocked()
+	p.mu.Unlock()
+}
+
+func (p *Pool) signalChangedLocked() {
+	changed := p.changed
+	p.changed = make(chan struct{})
+	close(changed)
 }
 
 func openWorkerSession(

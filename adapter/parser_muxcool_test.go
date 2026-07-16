@@ -15,6 +15,7 @@ func TestParseProxyMuxCoolConfigurations(t *testing.T) {
 		wantWrapped             bool
 		wantMaxConcurrency      int
 		wantMaxConnections      int
+		wantMaxCarriers         int
 		wantXUDPConcurrency     int
 		wantXUDPProxyUDP443Mode string
 	}{
@@ -27,11 +28,11 @@ func TestParseProxyMuxCoolConfigurations(t *testing.T) {
 		{
 			name: "custom",
 			muxCool: map[string]any{
-				"enabled": true, "max-concurrency": 3, "max-connections": 19,
+				"enabled": true, "max-concurrency": 3, "max-connections": 19, "max-carriers": 2,
 				"xudp-concurrency": 4, "xudp-proxy-udp443": "allow",
 			},
 			wantWrapped: true, wantMaxConcurrency: 3, wantMaxConnections: 19,
-			wantXUDPConcurrency: 4, wantXUDPProxyUDP443Mode: "allow",
+			wantMaxCarriers: 2, wantXUDPConcurrency: 4, wantXUDPProxyUDP443Mode: "allow",
 		},
 	}
 
@@ -55,6 +56,7 @@ func TestParseProxyMuxCoolConfigurations(t *testing.T) {
 				options := muxCool.Options()
 				if options.MaxConcurrency != tt.wantMaxConcurrency ||
 					options.MaxConnections != tt.wantMaxConnections ||
+					options.MaxCarriers != tt.wantMaxCarriers ||
 					options.XUDPConcurrency != tt.wantXUDPConcurrency ||
 					options.XUDPProxyUDP443 != tt.wantXUDPProxyUDP443Mode {
 					t.Fatalf("options = %+v", options)
@@ -79,6 +81,11 @@ func TestParseProxyRejectsInvalidMuxCoolConfigurations(t *testing.T) {
 			name:    "negative connections",
 			mapping: map[string]any{"name": "test", "type": "direct", "mux.cool": map[string]any{"enabled": true, "max-connections": -1}},
 			match:   "max-connections",
+		},
+		{
+			name:    "negative carriers",
+			mapping: map[string]any{"name": "test", "type": "direct", "mux.cool": map[string]any{"enabled": true, "max-carriers": -1}},
+			match:   "max-carriers",
 		},
 		{
 			name:    "negative xudp concurrency",

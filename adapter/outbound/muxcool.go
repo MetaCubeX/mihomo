@@ -27,6 +27,7 @@ type MuxCoolOption struct {
 	Enabled         bool   `proxy:"enabled,omitempty"`
 	MaxConcurrency  int    `proxy:"max-concurrency,omitempty"`
 	MaxConnections  int    `proxy:"max-connections,omitempty"`
+	MaxCarriers     int    `proxy:"max-carriers,omitempty"`
 	XUDPConcurrency int    `proxy:"xudp-concurrency,omitempty"`
 	XUDPProxyUDP443 string `proxy:"xudp-proxy-udp443,omitempty"`
 }
@@ -47,6 +48,9 @@ func NewMuxCool(option MuxCoolOption, proxy ProxyAdapter) (ProxyAdapter, error) 
 	if option.MaxConnections < 0 {
 		return nil, fmt.Errorf("mux.cool max-connections must not be negative")
 	}
+	if option.MaxCarriers < 0 {
+		return nil, fmt.Errorf("mux.cool max-carriers must not be negative")
+	}
 	if option.XUDPConcurrency < 0 {
 		return nil, fmt.Errorf("mux.cool xudp-concurrency must not be negative")
 	}
@@ -65,17 +69,22 @@ func NewMuxCool(option MuxCoolOption, proxy ProxyAdapter) (ProxyAdapter, error) 
 	}
 
 	wrapper := &MuxCool{ProxyAdapter: proxy, option: option}
-	wrapper.pool = wrapper.newPool(option.MaxConcurrency)
+	var limiter *muxcool.CarrierLimiter
+	if option.MaxCarriers > 0 {
+		limiter = muxcool.NewCarrierLimiter(option.MaxCarriers)
+	}
+	wrapper.pool = wrapper.newPool(option.MaxConcurrency, limiter)
 	if option.XUDPConcurrency > 0 {
-		wrapper.xudpPool = wrapper.newPool(option.XUDPConcurrency)
+		wrapper.xudpPool = wrapper.newPool(option.XUDPConcurrency, limiter)
 	}
 	return wrapper, nil
 }
 
-func (x *MuxCool) newPool(maxConcurrency int) *muxcool.Pool {
+func (x *MuxCool) newPool(maxConcurrency int, limiter *muxcool.CarrierLimiter) *muxcool.Pool {
 	return muxcool.NewPool(x.dialCarrier, muxcool.Options{
 		MaxConcurrency: maxConcurrency,
 		MaxConnections: x.option.MaxConnections,
+		CarrierLimiter: limiter,
 	})
 }
 

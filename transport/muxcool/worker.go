@@ -17,6 +17,7 @@ type carrierWorker struct {
 	maxLifetime int
 	onClosed    func(*carrierWorker)
 	onIdle      func(*carrierWorker)
+	onAvailable func(*carrierWorker)
 
 	writeMu     sync.Mutex
 	writeBuffer []byte
@@ -143,13 +144,20 @@ func (w *carrierWorker) writeFrame(frame Frame) error {
 
 func (w *carrierWorker) removeSession(id uint16) {
 	w.mu.Lock()
+	wasFull := len(w.sessions) >= w.maxActive
 	delete(w.sessions, id)
 	isIdle := len(w.sessions) == 0
 	shouldClose := w.draining && isIdle
+	isAvailable := w.availableLocked()
 	w.mu.Unlock()
 	if shouldClose {
 		w.close(nil)
-	} else if isIdle && w.onIdle != nil {
+		return
+	}
+	if wasFull && isAvailable && w.onAvailable != nil {
+		w.onAvailable(w)
+	}
+	if isIdle && w.onIdle != nil {
 		w.onIdle(w)
 	}
 }

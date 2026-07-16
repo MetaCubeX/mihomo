@@ -319,6 +319,38 @@ func TestMuxCoolUsesDedicatedPoolWhenXUDPConcurrencyIsPositive(t *testing.T) {
 	}
 }
 
+func TestMuxCoolSharesMaxCarriersAcrossTCPAndXUDPPools(t *testing.T) {
+	base := newFakeMuxCoolAdapter()
+	wrapped, err := NewMuxCool(MuxCoolOption{
+		Enabled:         true,
+		MaxConcurrency:  1,
+		MaxCarriers:     1,
+		XUDPConcurrency: 1,
+	}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapped.Close() })
+
+	stream, err := wrapped.DialContext(context.Background(), &C.Metadata{NetWork: C.TCP, Host: "tcp.example", DstPort: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stream.Close() })
+	server := <-base.carrierServers
+	t.Cleanup(func() { _ = server.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	packetConn, err := wrapped.ListenPacketContext(ctx, &C.Metadata{NetWork: C.UDP, Host: "udp.example", DstPort: 53})
+	if packetConn != nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("XUDP at shared carrier limit = (%v, %v), want deadline exceeded", packetConn, err)
+	}
+	if got := base.dialCount(); got != 1 {
+		t.Fatalf("carrier dial count = %d, want strict shared limit of 1", got)
+	}
+}
+
 func TestMuxCoolSharesPoolWhenXUDPConcurrencyIsZero(t *testing.T) {
 	base := newFakeMuxCoolAdapter()
 	wrapped, err := NewMuxCool(MuxCoolOption{Enabled: true}, base)

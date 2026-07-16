@@ -241,7 +241,7 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			return nil, err
 		}
 	}
-	if muxCoolOption.Enabled || muxCoolOption.MaxConcurrency < 0 || muxCoolOption.MaxConnections < 0 || muxCoolOption.XUDPConcurrency < 0 {
+	if muxCoolOption.Enabled || muxCoolOption.MaxConcurrency < 0 || muxCoolOption.MaxConnections < 0 || muxCoolOption.MaxCarriers < 0 || muxCoolOption.XUDPConcurrency < 0 {
 		proxy, err = outbound.NewMuxCool(*muxCoolOption, proxy)
 		if err != nil {
 			return nil, err

@@ -107,6 +107,314 @@ func TestPoolReusesCarrierAndExpandsAtActiveLimit(t *testing.T) {
 	}
 }
 
+func TestPoolMaxCarriersWaitsForReusableCarrier(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	options := testPoolOptions()
+	options.MaxConcurrency = 1
+	options.CarrierLimiter = NewCarrierLimiter(1)
+	pool := NewPool(dialer.dial, options)
+	t.Cleanup(func() { _ = pool.Close() })
+
+	first, err := pool.DialContext(context.Background(), "one.example", 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := make(chan net.Conn, 1)
+	errors := make(chan error, 1)
+	go func() {
+		conn, err := pool.DialContext(context.Background(), "two.example", 80)
+		if err != nil {
+			errors <- err
+			return
+		}
+		result <- conn
+	}()
+
+	select {
+	case conn := <-result:
+		_ = conn.Close()
+		t.Fatal("second session opened while the only carrier was full")
+	case err := <-errors:
+		t.Fatalf("second session failed while waiting: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if got := dialer.callCount(); got != 1 {
+		t.Fatalf("carrier dials while capped = %d, want 1", got)
+	}
+
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case second := <-result:
+		defer second.Close()
+	case err := <-errors:
+		t.Fatalf("second session after capacity release: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("second session did not reuse the carrier after capacity was released")
+	}
+	if got := dialer.callCount(); got != 1 {
+		t.Fatalf("carrier dials after reuse = %d, want 1", got)
+	}
+}
+
+func TestPoolMaxCarriersWaitHonorsContext(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	options := testPoolOptions()
+	options.MaxConcurrency = 1
+	options.CarrierLimiter = NewCarrierLimiter(1)
+	pool := NewPool(dialer.dial, options)
+	t.Cleanup(func() { _ = pool.Close() })
+
+	first, err := pool.DialContext(context.Background(), "one.example", 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+
+	cause := errors.New("carrier wait canceled")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(cause)
+	conn, err := pool.DialContext(ctx, "two.example", 80)
+	if conn != nil || !errors.Is(err, cause) {
+		t.Fatalf("canceled DialContext = (%v, %v), want (nil, %v)", conn, err, cause)
+	}
+	if got := dialer.callCount(); got != 1 {
+		t.Fatalf("carrier dials after canceled wait = %d, want 1", got)
+	}
+}
+
+func TestCarrierLimiterIsSharedAcrossPools(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	limiter := NewCarrierLimiter(1)
+	options := testPoolOptions()
+	options.MaxConcurrency = 1
+	options.CarrierLimiter = limiter
+	firstPool := NewPool(dialer.dial, options)
+	secondPool := NewPool(dialer.dial, options)
+	t.Cleanup(func() { _ = firstPool.Close(); _ = secondPool.Close() })
+
+	first, err := firstPool.DialContext(context.Background(), "one.example", 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if conn, err := secondPool.DialContext(ctx, "two.example", 80); conn != nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("second pool DialContext = (%v, %v), want deadline exceeded", conn, err)
+	}
+	if got := dialer.callCount(); got != 1 {
+		t.Fatalf("shared carrier dials = %d, want 1", got)
+	}
+
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := firstPool.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := secondPool.DialContext(context.Background(), "two.example", 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	if got := dialer.callCount(); got != 2 {
+		t.Fatalf("carrier dials after release = %d, want 2", got)
+	}
+}
+
+func TestCarrierLimiterReleasesFailedDialReservation(t *testing.T) {
+	dialErr := errors.New("dial failed")
+	dialer := &fakeCarrierDialer{errors: []error{dialErr}}
+	options := testPoolOptions()
+	options.CarrierLimiter = NewCarrierLimiter(1)
+	pool := NewPool(dialer.dial, options)
+	t.Cleanup(func() { _ = pool.Close() })
+
+	if _, err := pool.DialContext(context.Background(), "failure.example", 80); !errors.Is(err, dialErr) {
+		t.Fatalf("first dial error = %v", err)
+	}
+	conn, err := pool.DialContext(context.Background(), "success.example", 80)
+	if err != nil {
+		t.Fatalf("second dial: %v", err)
+	}
+	defer conn.Close()
+	if got := dialer.callCount(); got != 2 {
+		t.Fatalf("carrier dials = %d, want 2", got)
+	}
+}
+
+func TestPoolMaxCarriersIsStrictUnderConcurrency(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	options := testPoolOptions()
+	options.MaxConcurrency = 1
+	options.CarrierLimiter = NewCarrierLimiter(2)
+	pool := NewPool(dialer.dial, options)
+	t.Cleanup(func() { _ = pool.Close() })
+
+	const callers = 16
+	results := make(chan net.Conn, callers)
+	errors := make(chan error, callers)
+	start := make(chan struct{})
+	for i := 0; i < callers; i++ {
+		go func() {
+			<-start
+			conn, err := pool.DialContext(context.Background(), "shared.example", 443)
+			if err != nil {
+				errors <- err
+				return
+			}
+			results <- conn
+		}()
+	}
+	close(start)
+
+	opened := make([]net.Conn, 0, 2)
+	for len(opened) < 2 {
+		select {
+		case conn := <-results:
+			opened = append(opened, conn)
+		case err := <-errors:
+			t.Fatalf("concurrent dial failed: %v", err)
+		case <-time.After(time.Second):
+			t.Fatal("initial carrier capacity did not open")
+		}
+	}
+	select {
+	case conn := <-results:
+		_ = conn.Close()
+		t.Fatal("session exceeded the configured physical carrier capacity")
+	case err := <-errors:
+		t.Fatalf("concurrent dial failed while waiting: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if got := dialer.callCount(); got != 2 {
+		t.Fatalf("carrier dials at concurrency limit = %d, want 2", got)
+	}
+
+	completed := len(opened)
+	for _, conn := range opened {
+		if err := conn.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for completed < callers {
+		select {
+		case conn := <-results:
+			completed++
+			if err := conn.Close(); err != nil {
+				t.Fatal(err)
+			}
+		case err := <-errors:
+			t.Fatalf("concurrent dial failed: %v", err)
+		case <-time.After(time.Second):
+			t.Fatalf("completed sessions = %d, want %d", completed, callers)
+		}
+	}
+	if got := dialer.callCount(); got != 2 {
+		t.Fatalf("carrier dials after all sessions = %d, want 2", got)
+	}
+}
+
+func TestPoolCloseUnblocksMaxCarriersWait(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	options := testPoolOptions()
+	options.MaxConcurrency = 1
+	options.CarrierLimiter = NewCarrierLimiter(1)
+	pool := NewPool(dialer.dial, options)
+
+	first, err := pool.DialContext(context.Background(), "one.example", 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := pool.DialContext(context.Background(), "two.example", 80)
+		result <- err
+	}()
+	select {
+	case err := <-result:
+		t.Fatalf("wait returned before pool close: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	if err := pool.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, ErrPoolClosed) {
+			t.Fatalf("wait error = %v, want %v", err, ErrPoolClosed)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Pool.Close did not unblock carrier capacity wait")
+	}
+}
+
+func TestPoolMaxCarriersWakesAllWaitersForReusableCapacity(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	options := testPoolOptions()
+	options.MaxConcurrency = 4
+	options.CarrierLimiter = NewCarrierLimiter(1)
+	pool := NewPool(dialer.dial, options)
+	t.Cleanup(func() { _ = pool.Close() })
+
+	active := make([]net.PacketConn, 4)
+	for i := range active {
+		conn, err := pool.ListenPacketContext(context.Background(), "active.example", 53, [8]byte{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		active[i] = conn
+	}
+
+	const waiters = 3
+	results := make(chan net.PacketConn, waiters)
+	errors := make(chan error, waiters)
+	for i := 0; i < waiters; i++ {
+		go func() {
+			conn, err := pool.ListenPacketContext(context.Background(), "waiting.example", 53, [8]byte{})
+			if err != nil {
+				errors <- err
+				return
+			}
+			results <- conn
+		}()
+	}
+	select {
+	case conn := <-results:
+		_ = conn.Close()
+		t.Fatal("waiter opened while carrier was full")
+	case err := <-errors:
+		t.Fatalf("waiter failed: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	for i := 0; i < waiters; i++ {
+		if err := active[i].Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer active[3].Close()
+	for i := 0; i < waiters; i++ {
+		select {
+		case conn := <-results:
+			defer conn.Close()
+		case err := <-errors:
+			t.Fatalf("waiter failed after capacity release: %v", err)
+		case <-time.After(time.Second):
+			t.Fatalf("woken waiters = %d, want %d", i, waiters)
+		}
+	}
+	if got := dialer.callCount(); got != 1 {
+		t.Fatalf("carrier dials = %d, want 1", got)
+	}
+}
+
 func TestPoolSharesCarrierBetweenStreamAndPacketSessions(t *testing.T) {
 	dialer := &fakeCarrierDialer{}
 	pool := NewPool(dialer.dial, testPoolOptions())
