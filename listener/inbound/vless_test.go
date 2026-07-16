@@ -1,6 +1,7 @@
 package inbound_test
 
 import (
+	"encoding/base64"
 	"net"
 	"net/netip"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/listener/inbound"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
+	utls "github.com/metacubex/utls"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -380,6 +382,21 @@ func TestInboundVless_Reality(t *testing.T) {
 			outboundOptions.Flow = "xtls-rprx-vision"
 			testInboundVless(t, inboundOptions, outboundOptions)
 		})
+	})
+	t.Run("X25519MLKEM768 and ML-DSA-65", func(t *testing.T) {
+		seed := make([]byte, 32)
+		seed[0] = 1
+		_, verifyKey, err := utls.RealityMldsa65KeyFromSeed(seed)
+		if !assert.NoError(t, err) {
+			return
+		}
+		inboundOptions := inboundOptions
+		inboundOptions.RealityConfig.Mldsa65Seed = base64.RawURLEncoding.EncodeToString(seed)
+		inboundOptions.RealityConfig.Show = true
+		outboundOptions := outboundOptions
+		outboundOptions.RealityOpts.Mldsa65Verify = base64.RawURLEncoding.EncodeToString(verifyKey)
+		outboundOptions.RealityOpts.Show = true
+		testInboundVless(t, inboundOptions, outboundOptions)
 	})
 }
 

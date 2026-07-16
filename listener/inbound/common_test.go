@@ -42,6 +42,7 @@ var tlsCertificate, tlsPrivateKey, tlsFingerprint, _ = ca.NewRandomTLSKeyPair(ca
 var tlsAuthCertificate, tlsAuthPrivateKey, _, _ = ca.NewRandomTLSKeyPair(ca.KeyPairTypeP256)
 var tlsConfigCert, _ = tls.X509KeyPair([]byte(tlsCertificate), []byte(tlsPrivateKey))
 var tlsConfig = &tls.Config{Certificates: []tls.Certificate{tlsConfigCert}, NextProtos: []string{"h2", "http/1.1"}}
+var realityTLSConfig = newRealityCarrierTLSConfig()
 var tlsClientConfig, _ = ca.GetTLSConfig(ca.Option{Fingerprint: tlsFingerprint})
 var realityPrivateKey, realityPublickey string
 var realityDest = "itunes.apple.com"
@@ -59,6 +60,15 @@ func init() {
 	}
 	realityPrivateKey = base64.RawURLEncoding.EncodeToString(privateKey.Bytes())
 	realityPublickey = base64.RawURLEncoding.EncodeToString(privateKey.PublicKey().Bytes())
+}
+
+func newRealityCarrierTLSConfig() *tls.Config {
+	certificate := tlsConfigCert
+	leaf := append([]byte(nil), certificate.Certificate[0]...)
+	for chainBytes := len(leaf); chainBytes < 6*1024; chainBytes += len(leaf) {
+		certificate.Certificate = append(certificate.Certificate, append([]byte(nil), leaf...))
+	}
+	return &tls.Config{Certificates: []tls.Certificate{certificate}, NextProtos: []string{"h2", "http/1.1"}}
 }
 
 type TestDialer struct {
@@ -330,7 +340,11 @@ func NewHttpTestTunnel() *TestTunnel {
 				ch:   make(chan struct{}),
 			}
 			if metadata.DstPort == 443 {
-				tlsConn := tls.Server(c, tlsConfig)
+				serverTLSConfig := tlsConfig
+				if metadata.Host == realityDest {
+					serverTLSConfig = realityTLSConfig
+				}
+				tlsConn := tls.Server(c, serverTLSConfig)
 				if metadata.Host == realityDest { // ignore the tls handshake error for realityDest
 					if realityRealDial {
 						rconn, err := dialer.DialContext(ctx, "tcp", metadata.RemoteAddress())
