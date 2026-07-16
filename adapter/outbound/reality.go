@@ -22,10 +22,6 @@ type RealityOptions struct {
 	SpiderX       string `proxy:"spider-x,omitempty"`
 	Show          bool   `proxy:"show,omitempty"`
 	MasterKeyLog  string `proxy:"master-key-log,omitempty"`
-
-	// Deprecated: REALITY always preserves the selected browser fingerprint.
-	// Use an explicit legacy fingerprint such as chrome120 for legacy servers.
-	SupportX25519MLKEM768 bool `proxy:"support-x25519mlkem768,omitempty"`
 }
 
 func (o RealityOptions) Parse() (*tlsC.RealityConfig, error) {

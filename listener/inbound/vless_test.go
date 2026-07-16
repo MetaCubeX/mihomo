@@ -373,16 +373,6 @@ func TestInboundVless_Reality(t *testing.T) {
 		outboundOptions.Flow = "xtls-rprx-vision"
 		testInboundVless(t, inboundOptions, outboundOptions)
 	})
-	t.Run("X25519MLKEM768", func(t *testing.T) {
-		outboundOptions := outboundOptions
-		outboundOptions.RealityOpts.SupportX25519MLKEM768 = true
-		testInboundVless(t, inboundOptions, outboundOptions)
-		t.Run("xtls-rprx-vision", func(t *testing.T) {
-			outboundOptions := outboundOptions
-			outboundOptions.Flow = "xtls-rprx-vision"
-			testInboundVless(t, inboundOptions, outboundOptions)
-		})
-	})
 	t.Run("X25519MLKEM768 and ML-DSA-65", func(t *testing.T) {
 		seed := make([]byte, 32)
 		seed[0] = 1
@@ -422,11 +412,6 @@ func TestInboundVless_Reality_Grpc(t *testing.T) {
 		GrpcOpts:          outbound.GrpcOptions{GrpcServiceName: "GunService"},
 	}
 	testInboundVless(t, inboundOptions, outboundOptions)
-	t.Run("X25519MLKEM768", func(t *testing.T) {
-		outboundOptions := outboundOptions
-		outboundOptions.RealityOpts.SupportX25519MLKEM768 = true
-		testInboundVless(t, inboundOptions, outboundOptions)
-	})
 }
 
 func TestInboundVless_XHTTP(t *testing.T) {
