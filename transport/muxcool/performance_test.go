@@ -236,7 +236,6 @@ func BenchmarkPacketSessionLifecycle(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		session := makePacketSession(owner, 2, "dns.example", 53, [8]byte{})
-		session.start(context.Background())
 		_ = session.Close()
 	}
 }

@@ -1,7 +1,6 @@
 package muxcool
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -48,7 +47,6 @@ type packetSession struct {
 }
 
 func newPacketSession(
-	ctx context.Context,
 	owner sessionOwner,
 	id uint16,
 	destination string,
@@ -56,7 +54,6 @@ func newPacketSession(
 	globalID [8]byte,
 ) (net.PacketConn, *packetSession) {
 	s := makePacketSession(owner, id, destination, port, globalID)
-	s.start(ctx)
 	return s, s
 }
 
@@ -79,20 +76,6 @@ func makePacketSession(
 		writeDeadline: deadline.MakePipeDeadline(),
 	}
 	return s
-}
-
-func (s *packetSession) start(ctx context.Context) {
-	ctxDone := ctx.Done()
-	if ctxDone == nil {
-		return
-	}
-	go func() {
-		select {
-		case <-ctxDone:
-			s.finish(context.Cause(ctx), true)
-		case <-s.done:
-		}
-	}()
 }
 
 func (s *packetSession) ReadFrom(p []byte) (int, net.Addr, error) {

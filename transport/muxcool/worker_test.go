@@ -147,7 +147,7 @@ func TestCarrierWorkerDemultiplexesStreamsAndPacketsOnOneCarrier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packetConn, err := worker.openPacketSession(context.Background(), "packet.example", 53, [8]byte{1})
+	packetConn, err := worker.openPacketSession("packet.example", 53, [8]byte{1})
 	if err != nil {
 		t.Fatal(err)
 	}

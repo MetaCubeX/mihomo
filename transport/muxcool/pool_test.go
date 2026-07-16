@@ -140,6 +140,68 @@ func TestPoolSharesCarrierBetweenStreamAndPacketSessions(t *testing.T) {
 	}
 }
 
+func TestPoolPacketSessionOutlivesDialContext(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	pool := NewPool(dialer.dial, testPoolOptions())
+	t.Cleanup(func() { _ = pool.Close() })
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	packetConn, err := pool.ListenPacketContext(ctx, "packet.example", 53, [8]byte{1, 2, 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = packetConn.Close() })
+	cancel(errors.New("dial completed"))
+
+	select {
+	case <-time.After(20 * time.Millisecond):
+	}
+	if got := pool.activeSessions(); got != 1 {
+		t.Fatalf("active sessions after dial context cancellation = %d, want 1", got)
+	}
+
+	if _, err := packetConn.WriteTo([]byte("query"), &net.UDPAddr{IP: net.IPv4(8, 8, 8, 8), Port: 53}); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := DecodeFrame(bytes.NewReader(dialer.carriers[0].bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame.Status != StatusNew || string(frame.Payload) != "query" {
+		t.Fatalf("packet frame after dial context cancellation = %+v", frame)
+	}
+
+	dialer.carriers[0].inject(t, Frame{
+		SessionID: frame.SessionID, Status: StatusKeep, Option: OptionData, Network: NetworkUDP,
+		Destination: "8.8.8.8", Port: 53, Payload: []byte("answer"),
+	})
+	buffer := make([]byte, 16)
+	n, address, err := packetConn.ReadFrom(buffer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(buffer[:n]) != "answer" || address.String() != "8.8.8.8:53" {
+		t.Fatalf("packet response = (%q, %v)", buffer[:n], address)
+	}
+}
+
+func TestPoolRejectsCanceledPacketDialContext(t *testing.T) {
+	dialer := &fakeCarrierDialer{}
+	pool := NewPool(dialer.dial, testPoolOptions())
+	t.Cleanup(func() { _ = pool.Close() })
+
+	cause := errors.New("packet dial canceled")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(cause)
+	packetConn, err := pool.ListenPacketContext(ctx, "packet.example", 53, [8]byte{})
+	if packetConn != nil || !errors.Is(err, cause) {
+		t.Fatalf("ListenPacketContext = (%v, %v), want (nil, %v)", packetConn, err, cause)
+	}
+	if got := pool.activeSessions(); got != 0 {
+		t.Fatalf("active sessions after canceled dial = %d, want 0", got)
+	}
+}
+
 func TestPoolRotatesAtLifetimeLimitAndUsesMonotonicIDs(t *testing.T) {
 	dialer := &fakeCarrierDialer{}
 	options := testPoolOptions()

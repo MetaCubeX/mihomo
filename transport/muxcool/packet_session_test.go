@@ -1,8 +1,6 @@
 package muxcool
 
 import (
-	"context"
-	"errors"
 	"net"
 	"net/netip"
 	"testing"
@@ -12,7 +10,7 @@ import (
 func TestPacketSessionWritesXrayUDPFrames(t *testing.T) {
 	owner := newFakeSessionOwner()
 	globalID := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
-	packetConn, _ := newPacketSession(context.Background(), owner, 31, "initial.example", 53, globalID)
+	packetConn, _ := newPacketSession(owner, 31, "initial.example", 53, globalID)
 	t.Cleanup(func() { _ = packetConn.Close() })
 
 	firstAddr := net.UDPAddrFromAddrPort(netip.MustParseAddrPort("8.8.8.8:53"))
@@ -42,7 +40,7 @@ func TestPacketSessionWritesXrayUDPFrames(t *testing.T) {
 
 func TestPacketSessionPreservesDatagramBoundariesAndAddresses(t *testing.T) {
 	owner := newFakeSessionOwner()
-	packetConn, session := newPacketSession(context.Background(), owner, 32, "initial.example", 53, [8]byte{})
+	packetConn, session := newPacketSession(owner, 32, "initial.example", 53, [8]byte{})
 	t.Cleanup(func() { _ = packetConn.Close() })
 
 	if err := session.deliverFrame(Frame{
@@ -77,10 +75,9 @@ func TestPacketSessionPreservesDatagramBoundariesAndAddresses(t *testing.T) {
 	}
 }
 
-func TestPacketSessionDeadlineCancellationAndClose(t *testing.T) {
+func TestPacketSessionDeadlinesAndExplicitClose(t *testing.T) {
 	owner := newFakeSessionOwner()
-	ctx, cancel := context.WithCancelCause(context.Background())
-	packetConn, _ := newPacketSession(ctx, owner, 33, "cancel.example", 53, [8]byte{})
+	packetConn, _ := newPacketSession(owner, 33, "cancel.example", 53, [8]byte{})
 
 	if err := packetConn.SetReadDeadline(time.Now().Add(-time.Second)); err != nil {
 		t.Fatal(err)
@@ -101,18 +98,12 @@ func TestPacketSessionDeadlineCancellationAndClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cause := errors.New("packet context stopped")
-	cancel(cause)
-	select {
-	case id := <-owner.removed:
-		if id != 33 {
-			t.Fatalf("removed ID = %d", id)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("packet session was not removed")
+	if n, err := packetConn.WriteTo([]byte("alive"), net.UDPAddrFromAddrPort(netip.MustParseAddrPort("1.1.1.1:53"))); err != nil || n != len("alive") {
+		t.Fatalf("WriteTo after clearing deadline = (%d, %v)", n, err)
 	}
-	if _, _, err := packetConn.ReadFrom(make([]byte, 1)); !errors.Is(err, cause) {
-		t.Fatalf("ReadFrom error = %v, want %v", err, cause)
+	data := receiveFrame(t, owner.frames)
+	if data.Status != StatusNew || string(data.Payload) != "alive" {
+		t.Fatalf("data after clearing deadline = %+v", data)
 	}
 	if err := packetConn.Close(); err != nil {
 		t.Fatal(err)
@@ -123,6 +114,14 @@ func TestPacketSessionDeadlineCancellationAndClose(t *testing.T) {
 	end := receiveFrame(t, owner.frames)
 	if end.Status != StatusEnd || end.SessionID != 33 {
 		t.Fatalf("End = %+v", end)
+	}
+	select {
+	case id := <-owner.removed:
+		if id != 33 {
+			t.Fatalf("removed ID = %d", id)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("packet session was not removed on Close")
 	}
 	select {
 	case extra := <-owner.frames:

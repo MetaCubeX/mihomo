@@ -64,7 +64,6 @@ func (w *carrierWorker) openSession(
 }
 
 func (w *carrierWorker) openPacketSession(
-	ctx context.Context,
 	destination string,
 	port uint16,
 	globalID [8]byte,
@@ -79,7 +78,6 @@ func (w *carrierWorker) openPacketSession(
 	w.sessions[id] = logicalSession
 	w.mu.Unlock()
 
-	logicalSession.start(ctx)
 	return logicalSession, nil
 }
 

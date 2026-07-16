@@ -100,6 +100,9 @@ func (p *Pool) openContext(
 	packet bool,
 ) (openedSession, error) {
 	for {
+		if err := context.Cause(ctx); err != nil {
+			return openedSession{}, err
+		}
 		p.mu.Lock()
 		if p.closed {
 			p.mu.Unlock()
@@ -184,7 +187,7 @@ func openWorkerSession(
 	firstPayloadTimeout time.Duration,
 ) (openedSession, error) {
 	if packet {
-		connection, err := worker.openPacketSession(ctx, destination, port, globalID)
+		connection, err := worker.openPacketSession(destination, port, globalID)
 		return openedSession{packet: connection}, err
 	}
 	connection, err := worker.openSession(ctx, destination, port, firstPayloadTimeout)
