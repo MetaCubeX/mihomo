@@ -1,12 +1,12 @@
 package xraymux
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 )
 
 const (
@@ -75,33 +75,72 @@ func EncodeFrame(frame Frame) ([]byte, error) {
 		return nil, protocolError("encode", err)
 	}
 
-	var metadata bytes.Buffer
-	_ = binary.Write(&metadata, binary.BigEndian, frame.SessionID)
-	_ = metadata.WriteByte(byte(frame.Status))
-	_ = metadata.WriteByte(byte(frame.Option))
-	if frame.Status == StatusNew || (frame.Status == StatusKeep && frame.Destination != "") {
-		_ = metadata.WriteByte(byte(frame.Network))
-		_ = binary.Write(&metadata, binary.BigEndian, frame.Port)
-		if err := writeAddress(&metadata, frame.Destination); err != nil {
-			return nil, protocolError("encode address", err)
+	hasTarget := frame.Status == StatusNew || (frame.Status == StatusKeep && frame.Destination != "")
+	metadataLen := 4
+	var targetAddr netip.Addr
+	if hasTarget {
+		metadataLen += 3
+		if parsed, err := netip.ParseAddr(frame.Destination); err == nil && parsed.Zone() == "" {
+			targetAddr = parsed.Unmap()
+			if targetAddr.Is4() {
+				metadataLen += 1 + net.IPv4len
+			} else {
+				metadataLen += 1 + net.IPv6len
+			}
+		} else {
+			if len(frame.Destination) == 0 || len(frame.Destination) > 255 {
+				return nil, protocolError("encode address", fmt.Errorf("invalid domain length %d", len(frame.Destination)))
+			}
+			metadataLen += 2 + len(frame.Destination)
 		}
 	}
-	if metadata.Len() > MaxMetadataSize {
-		return nil, protocolError("encode", fmt.Errorf("metadata length %d exceeds %d", metadata.Len(), MaxMetadataSize))
+	if metadataLen > MaxMetadataSize {
+		return nil, protocolError("encode", fmt.Errorf("metadata length %d exceeds %d", metadataLen, MaxMetadataSize))
 	}
 
-	capacity := 2 + metadata.Len()
+	frameLen := 2 + metadataLen
 	if frame.Option&OptionData != 0 {
-		capacity += 2 + len(frame.Payload)
+		frameLen += 2 + len(frame.Payload)
 	}
-	result := bytes.NewBuffer(make([]byte, 0, capacity))
-	_ = binary.Write(result, binary.BigEndian, uint16(metadata.Len()))
-	_, _ = result.Write(metadata.Bytes())
+	result := make([]byte, frameLen)
+	binary.BigEndian.PutUint16(result, uint16(metadataLen))
+	offset := 2
+	binary.BigEndian.PutUint16(result[offset:], frame.SessionID)
+	offset += 2
+	result[offset] = byte(frame.Status)
+	offset++
+	result[offset] = byte(frame.Option)
+	offset++
+	if hasTarget {
+		result[offset] = byte(frame.Network)
+		offset++
+		binary.BigEndian.PutUint16(result[offset:], frame.Port)
+		offset += 2
+		if targetAddr.IsValid() {
+			if targetAddr.Is4() {
+				result[offset] = addressIPv4
+				offset++
+				address := targetAddr.As4()
+				offset += copy(result[offset:], address[:])
+			} else {
+				result[offset] = addressIPv6
+				offset++
+				address := targetAddr.As16()
+				offset += copy(result[offset:], address[:])
+			}
+		} else {
+			result[offset] = addressDomain
+			result[offset+1] = byte(len(frame.Destination))
+			offset += 2
+			offset += copy(result[offset:], frame.Destination)
+		}
+	}
 	if frame.Option&OptionData != 0 {
-		_ = binary.Write(result, binary.BigEndian, uint16(len(frame.Payload)))
-		_, _ = result.Write(frame.Payload)
+		binary.BigEndian.PutUint16(result[offset:], uint16(len(frame.Payload)))
+		offset += 2
+		copy(result[offset:], frame.Payload)
 	}
-	return result.Bytes(), nil
+	return result, nil
 }
 
 func DecodeFrame(r io.Reader) (Frame, error) {
@@ -186,27 +225,6 @@ func validateFrame(frame Frame) error {
 			return errors.New("empty destination")
 		}
 	}
-	return nil
-}
-
-func writeAddress(dst *bytes.Buffer, host string) error {
-	ip := net.ParseIP(host)
-	if ip4 := ip.To4(); ip4 != nil {
-		_ = dst.WriteByte(addressIPv4)
-		_, _ = dst.Write(ip4)
-		return nil
-	}
-	if ip16 := ip.To16(); ip16 != nil {
-		_ = dst.WriteByte(addressIPv6)
-		_, _ = dst.Write(ip16)
-		return nil
-	}
-	if len(host) == 0 || len(host) > 255 {
-		return fmt.Errorf("invalid domain length %d", len(host))
-	}
-	_ = dst.WriteByte(addressDomain)
-	_ = dst.WriteByte(byte(len(host)))
-	_, _ = dst.WriteString(host)
 	return nil
 }
 

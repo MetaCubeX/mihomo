@@ -17,6 +17,38 @@ type fakeCarrierDialer struct {
 	errors   []error
 }
 
+type blockingCarrierDialer struct {
+	mu          sync.Mutex
+	started     chan struct{}
+	startedOnce sync.Once
+	release     chan struct{}
+	carrier     *testCarrier
+	calls       int
+}
+
+func newBlockingCarrierDialer() *blockingCarrierDialer {
+	return &blockingCarrierDialer{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		carrier: newTestCarrier(),
+	}
+}
+
+func (d *blockingCarrierDialer) dial(context.Context) (net.Conn, error) {
+	d.mu.Lock()
+	d.calls++
+	d.mu.Unlock()
+	d.startedOnce.Do(func() { close(d.started) })
+	<-d.release
+	return d.carrier, nil
+}
+
+func (d *blockingCarrierDialer) callCount() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.calls
+}
+
 func (d *fakeCarrierDialer) dial(context.Context) (net.Conn, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -136,6 +168,7 @@ func TestPoolRemovesIdleCarrierWithFakeClock(t *testing.T) {
 	}
 	_ = conn.Close()
 	waitFor(t, func() bool { return pool.activeSessions() == 0 })
+	waitFor(t, func() bool { return clock.timerCount() == 1 })
 	clock.FireAll()
 	waitFor(t, func() bool { return pool.workerCount() == 0 })
 	if !dialer.carriers[0].isClosed() {
@@ -159,6 +192,104 @@ func TestPoolDoesNotRetainFailedCarrierDial(t *testing.T) {
 	_ = conn.Close()
 	if got := dialer.callCount(); got != 2 {
 		t.Fatalf("carrier dials = %d, want 2", got)
+	}
+}
+
+func TestPoolCloseDoesNotWaitForCarrierDial(t *testing.T) {
+	dialer := newBlockingCarrierDialer()
+	pool := NewPool(dialer.dial, testPoolOptions())
+
+	dialResult := make(chan error, 1)
+	go func() {
+		_, err := pool.DialContext(context.Background(), "blocked.example", 443)
+		dialResult <- err
+	}()
+
+	select {
+	case <-dialer.started:
+	case <-time.After(time.Second):
+		t.Fatal("carrier dial did not start")
+	}
+
+	closeDone := make(chan struct{})
+	go func() {
+		_ = pool.Close()
+		close(closeDone)
+	}()
+
+	select {
+	case <-closeDone:
+	case <-time.After(100 * time.Millisecond):
+		close(dialer.release)
+		<-closeDone
+		<-dialResult
+		t.Fatal("Pool.Close blocked on an in-flight carrier dial")
+	}
+
+	close(dialer.release)
+	if err := <-dialResult; !errors.Is(err, ErrPoolClosed) {
+		t.Fatalf("dial error after pool close = %v, want %v", err, ErrPoolClosed)
+	}
+	if !dialer.carrier.isClosed() {
+		t.Fatal("carrier completed after pool close was not closed")
+	}
+}
+
+func TestPoolCoalescesConcurrentCarrierDials(t *testing.T) {
+	dialer := newBlockingCarrierDialer()
+	options := testPoolOptions()
+	options.MaxConcurrency = 32
+	pool := NewPool(dialer.dial, options)
+	t.Cleanup(func() { _ = pool.Close() })
+
+	const callers = 16
+	start := make(chan struct{})
+	results := make(chan net.Conn, callers)
+	errors := make(chan error, callers)
+	var ready sync.WaitGroup
+	ready.Add(callers)
+	for i := 0; i < callers; i++ {
+		go func() {
+			ready.Done()
+			<-start
+			conn, err := pool.DialContext(context.Background(), "shared.example", 443)
+			if err != nil {
+				errors <- err
+				return
+			}
+			results <- conn
+		}()
+	}
+	ready.Wait()
+	close(start)
+
+	select {
+	case <-dialer.started:
+	case <-time.After(time.Second):
+		t.Fatal("carrier dial did not start")
+	}
+
+	select {
+	case <-time.After(100 * time.Millisecond):
+		if got := dialer.callCount(); got != 1 {
+			close(dialer.release)
+			t.Fatalf("concurrent carrier dials = %d, want 1", got)
+		}
+	}
+	close(dialer.release)
+
+	for i := 0; i < callers; i++ {
+		select {
+		case err := <-errors:
+			t.Fatalf("concurrent dial failed: %v", err)
+		case conn := <-results:
+			_ = conn.Close()
+		case <-time.After(time.Second):
+			t.Fatal("concurrent dial did not complete")
+		}
+	}
+	if got := dialer.callCount(); got != 1 {
+		t.Fatalf("carrier dials = %d, want 1", got)
 	}
 }
 

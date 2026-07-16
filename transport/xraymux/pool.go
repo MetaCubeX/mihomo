@@ -35,11 +35,14 @@ type Pool struct {
 	dial    CarrierDialer
 	options Options
 
-	mu        sync.Mutex
-	workers   []*carrierWorker
-	idle      map[*carrierWorker]Timer
-	closed    bool
-	closeOnce sync.Once
+	mu         sync.Mutex
+	workers    []*carrierWorker
+	idle       map[*carrierWorker]Timer
+	dialing    chan struct{}
+	dialCancel context.CancelFunc
+	done       chan struct{}
+	closed     bool
+	closeOnce  sync.Once
 }
 
 func NewPool(dial CarrierDialer, options Options) *Pool {
@@ -64,45 +67,84 @@ func NewPool(dial CarrierDialer, options Options) *Pool {
 		dial:    dial,
 		options: options,
 		idle:    make(map[*carrierWorker]Timer),
+		done:    make(chan struct{}),
 	}
 }
 
 func (p *Pool) DialContext(ctx context.Context, destination string, port uint16) (net.Conn, error) {
-	p.mu.Lock()
-	if p.closed {
-		p.mu.Unlock()
-		return nil, ErrPoolClosed
-	}
-
-	for _, worker := range p.workers {
-		if !worker.available() {
-			continue
+	for {
+		p.mu.Lock()
+		if p.closed {
+			p.mu.Unlock()
+			return nil, ErrPoolClosed
 		}
-		p.stopIdleLocked(worker)
+
+		for _, worker := range p.workers {
+			if !worker.available() {
+				continue
+			}
+			p.stopIdleLocked(worker)
+			conn, err := worker.openSession(ctx, destination, port, p.options.FirstPayloadTimeout)
+			if err != nil {
+				continue
+			}
+			p.mu.Unlock()
+			return conn, nil
+		}
+
+		if dialing := p.dialing; dialing != nil {
+			done := p.done
+			p.mu.Unlock()
+			select {
+			case <-dialing:
+				continue
+			case <-done:
+				return nil, ErrPoolClosed
+			case <-ctx.Done():
+				return nil, context.Cause(ctx)
+			}
+		}
+
+		dialing := make(chan struct{})
+		dialCtx, cancel := context.WithCancel(ctx)
+		p.dialing = dialing
+		p.dialCancel = cancel
+		p.mu.Unlock()
+
+		carrier, err := p.dial(dialCtx)
+		cancel()
+
+		p.mu.Lock()
+		if p.dialing == dialing {
+			p.dialing = nil
+			p.dialCancel = nil
+			close(dialing)
+		}
+		if p.closed {
+			p.mu.Unlock()
+			if carrier != nil {
+				_ = carrier.Close()
+			}
+			return nil, ErrPoolClosed
+		}
+		if err != nil {
+			p.mu.Unlock()
+			return nil, err
+		}
+
+		worker := newCarrierWorker(carrier, p.options.MaxConcurrency, p.options.MaxConnections, p.removeWorker)
+		worker.onIdle = p.scheduleIdle
+		p.workers = append(p.workers, worker)
 		conn, err := worker.openSession(ctx, destination, port, p.options.FirstPayloadTimeout)
 		if err == nil {
 			p.mu.Unlock()
 			return conn, nil
 		}
-	}
-
-	carrier, err := p.dial(ctx)
-	if err != nil {
-		p.mu.Unlock()
-		return nil, err
-	}
-	worker := newCarrierWorker(carrier, p.options.MaxConcurrency, p.options.MaxConnections, p.removeWorker)
-	worker.onIdle = p.scheduleIdle
-	p.workers = append(p.workers, worker)
-	conn, err := worker.openSession(ctx, destination, port, p.options.FirstPayloadTimeout)
-	if err != nil {
 		p.removeWorkerLocked(worker)
 		p.mu.Unlock()
 		worker.close(err)
 		return nil, err
 	}
-	p.mu.Unlock()
-	return conn, nil
 }
 
 func (p *Pool) scheduleIdle(worker *carrierWorker) {
@@ -180,12 +222,17 @@ func (p *Pool) Close() error {
 	p.closeOnce.Do(func() {
 		p.mu.Lock()
 		p.closed = true
+		close(p.done)
+		dialCancel := p.dialCancel
 		workers := append([]*carrierWorker(nil), p.workers...)
 		p.workers = nil
 		for worker := range p.idle {
 			p.stopIdleLocked(worker)
 		}
 		p.mu.Unlock()
+		if dialCancel != nil {
+			dialCancel()
+		}
 		for _, worker := range workers {
 			worker.close(ErrPoolClosed)
 		}

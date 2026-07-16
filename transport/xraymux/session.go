@@ -11,6 +11,7 @@ import (
 )
 
 type sessionOwner interface {
+	// writeFrame consumes frame and its payload before returning.
 	writeFrame(Frame) error
 	removeSession(uint16)
 }
@@ -148,7 +149,7 @@ func (s *session) runUplink(firstPayloadTimeout time.Duration) {
 				SessionID: s.id,
 				Status:    StatusKeep,
 				Option:    OptionData,
-				Payload:   append([]byte(nil), buffer[:n]...),
+				Payload:   buffer[:n],
 			}
 			if !sentNew {
 				frame.Status = StatusNew
@@ -192,12 +193,14 @@ func (s *session) deliver(payload []byte) error {
 	if len(payload) == 0 {
 		return nil
 	}
-	return s.enqueueDownlink(downlinkMessage{payload: append([]byte(nil), payload...)})
+	// DecodeFrame allocates payload ownership for this session. Transfer that
+	// buffer directly to the downlink queue instead of copying every frame.
+	return s.enqueueDownlink(downlinkMessage{payload: payload})
 }
 
 func (s *session) deliverFinal(payload []byte, cause error) error {
 	return s.enqueueDownlink(downlinkMessage{
-		payload:  append([]byte(nil), payload...),
+		payload:  payload,
 		terminal: true,
 		cause:    cause,
 	})
@@ -226,7 +229,12 @@ func (s *session) finish(cause error, sendEnd bool) {
 		}
 		close(s.done)
 		_ = s.peer.Close()
-		_ = s.client.Close()
+		// A clean remote End is represented by closing the peer side only. That
+		// lets the caller drain any final payload and then observe io.EOF instead
+		// of racing with a local close and receiving io.ErrClosedPipe.
+		if cause != nil || sendEnd {
+			_ = s.client.Close()
+		}
 		s.owner.removeSession(s.id)
 	})
 }

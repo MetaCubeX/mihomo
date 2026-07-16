@@ -152,6 +152,12 @@ func (c *fakeClock) FireAll() {
 	}
 }
 
+func (c *fakeClock) timerCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.timers)
+}
+
 type recordingConn struct {
 	net.Conn
 	mu     sync.Mutex
