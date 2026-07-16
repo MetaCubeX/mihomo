@@ -217,17 +217,34 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 		return nil, err
 	}
 
+	muxOption := &outbound.SingMuxOption{}
 	if muxMapping, muxExist := mapping["smux"].(map[string]any); muxExist {
-		muxOption := &outbound.SingMuxOption{}
 		err = decoder.Decode(muxMapping, muxOption)
 		if err != nil {
 			return nil, err
 		}
-		if muxOption.Enabled {
-			proxy, err = outbound.NewSingMux(*muxOption, proxy)
-			if err != nil {
-				return nil, err
-			}
+	}
+
+	xrayMuxOption := &outbound.XrayMuxOption{}
+	if muxMapping, muxExist := mapping["xray-mux"].(map[string]any); muxExist {
+		err = decoder.Decode(muxMapping, xrayMuxOption)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if muxOption.Enabled && xrayMuxOption.Enabled {
+		return nil, fmt.Errorf("smux and xray-mux cannot be enabled together")
+	}
+	if muxOption.Enabled {
+		proxy, err = outbound.NewSingMux(*muxOption, proxy)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if xrayMuxOption.Enabled || xrayMuxOption.MaxConcurrency < 0 || xrayMuxOption.MaxConnections < 0 {
+		proxy, err = outbound.NewXrayMux(*xrayMuxOption, proxy)
+		if err != nil {
+			return nil, err
 		}
 	}
 

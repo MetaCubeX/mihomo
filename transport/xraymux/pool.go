@@ -1,0 +1,194 @@
+package xraymux
+
+import (
+	"context"
+	"errors"
+	"net"
+	"sync"
+	"time"
+)
+
+const (
+	DefaultMaxConcurrency      = 8
+	DefaultMaxConnections      = 128
+	DefaultFirstPayloadTimeout = 100 * time.Millisecond
+	DefaultIdleTimeout         = 16 * time.Second
+)
+
+var ErrPoolClosed = errors.New("xray mux pool is closed")
+
+type Timer interface {
+	Stop() bool
+}
+
+type CarrierDialer func(context.Context) (net.Conn, error)
+
+type Options struct {
+	MaxConcurrency      int
+	MaxConnections      int
+	FirstPayloadTimeout time.Duration
+	IdleTimeout         time.Duration
+	AfterFunc           func(time.Duration, func()) Timer
+}
+
+type Pool struct {
+	dial    CarrierDialer
+	options Options
+
+	mu        sync.Mutex
+	workers   []*carrierWorker
+	idle      map[*carrierWorker]Timer
+	closed    bool
+	closeOnce sync.Once
+}
+
+func NewPool(dial CarrierDialer, options Options) *Pool {
+	if options.MaxConcurrency == 0 {
+		options.MaxConcurrency = DefaultMaxConcurrency
+	}
+	if options.MaxConnections == 0 {
+		options.MaxConnections = DefaultMaxConnections
+	}
+	if options.FirstPayloadTimeout == 0 {
+		options.FirstPayloadTimeout = DefaultFirstPayloadTimeout
+	}
+	if options.IdleTimeout == 0 {
+		options.IdleTimeout = DefaultIdleTimeout
+	}
+	if options.AfterFunc == nil {
+		options.AfterFunc = func(duration time.Duration, fn func()) Timer {
+			return time.AfterFunc(duration, fn)
+		}
+	}
+	return &Pool{
+		dial:    dial,
+		options: options,
+		idle:    make(map[*carrierWorker]Timer),
+	}
+}
+
+func (p *Pool) DialContext(ctx context.Context, destination string, port uint16) (net.Conn, error) {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return nil, ErrPoolClosed
+	}
+
+	for _, worker := range p.workers {
+		if !worker.available() {
+			continue
+		}
+		p.stopIdleLocked(worker)
+		conn, err := worker.openSession(ctx, destination, port, p.options.FirstPayloadTimeout)
+		if err == nil {
+			p.mu.Unlock()
+			return conn, nil
+		}
+	}
+
+	carrier, err := p.dial(ctx)
+	if err != nil {
+		p.mu.Unlock()
+		return nil, err
+	}
+	worker := newCarrierWorker(carrier, p.options.MaxConcurrency, p.options.MaxConnections, p.removeWorker)
+	worker.onIdle = p.scheduleIdle
+	p.workers = append(p.workers, worker)
+	conn, err := worker.openSession(ctx, destination, port, p.options.FirstPayloadTimeout)
+	if err != nil {
+		p.removeWorkerLocked(worker)
+		p.mu.Unlock()
+		worker.close(err)
+		return nil, err
+	}
+	p.mu.Unlock()
+	return conn, nil
+}
+
+func (p *Pool) scheduleIdle(worker *carrierWorker) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed || !p.containsWorkerLocked(worker) || worker.activeSessions() != 0 {
+		return
+	}
+	p.stopIdleLocked(worker)
+	p.idle[worker] = p.options.AfterFunc(p.options.IdleTimeout, func() {
+		p.closeIfIdle(worker)
+	})
+}
+
+func (p *Pool) closeIfIdle(worker *carrierWorker) {
+	p.mu.Lock()
+	if p.closed || !p.containsWorkerLocked(worker) || worker.activeSessions() != 0 {
+		p.mu.Unlock()
+		return
+	}
+	p.removeWorkerLocked(worker)
+	p.mu.Unlock()
+	worker.close(nil)
+}
+
+func (p *Pool) stopIdleLocked(worker *carrierWorker) {
+	if timer := p.idle[worker]; timer != nil {
+		timer.Stop()
+		delete(p.idle, worker)
+	}
+}
+
+func (p *Pool) removeWorker(worker *carrierWorker) {
+	p.mu.Lock()
+	p.removeWorkerLocked(worker)
+	p.mu.Unlock()
+}
+
+func (p *Pool) removeWorkerLocked(worker *carrierWorker) {
+	p.stopIdleLocked(worker)
+	for index, candidate := range p.workers {
+		if candidate == worker {
+			p.workers = append(p.workers[:index], p.workers[index+1:]...)
+			return
+		}
+	}
+}
+
+func (p *Pool) containsWorkerLocked(worker *carrierWorker) bool {
+	for _, candidate := range p.workers {
+		if candidate == worker {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Pool) activeSessions() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	total := 0
+	for _, worker := range p.workers {
+		total += worker.activeSessions()
+	}
+	return total
+}
+
+func (p *Pool) workerCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.workers)
+}
+
+func (p *Pool) Close() error {
+	p.closeOnce.Do(func() {
+		p.mu.Lock()
+		p.closed = true
+		workers := append([]*carrierWorker(nil), p.workers...)
+		p.workers = nil
+		for worker := range p.idle {
+			p.stopIdleLocked(worker)
+		}
+		p.mu.Unlock()
+		for _, worker := range workers {
+			worker.close(ErrPoolClosed)
+		}
+	})
+	return nil
+}
