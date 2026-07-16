@@ -2,6 +2,8 @@ module github.com/metacubex/mihomo
 
 go 1.20
 
+replace github.com/metacubex/utls => github.com/Jolymmiles/utls v1.8.8-0.20260716213119-e541740a06a2
+
 require (
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0

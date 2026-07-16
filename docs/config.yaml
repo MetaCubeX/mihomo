@@ -964,8 +964,12 @@ proxies: # socks5
     flow: xtls-rprx-vision
     servername: www.microsoft.com # REALITY servername
     reality-opts:
-      public-key: xxx
+      public-key: xxx # X25519 public key；亦可使用 Xray 别名 password，二者同时存在时 password 优先
       short-id: xxx # optional
+      # mldsa65-verify: xxx # 可选，Xray ML-DSA-65 验证公钥（1952 字节，raw URL-safe base64）
+      # spider-x: "/?p=30-60&c=1-2&t=1-3&i=0-100&r=0-100" # 未认证回落爬虫；p/c/t/i/r 分别为 padding/concurrency/times/interval/return 的范围
+      # show: false # 输出 REALITY 协商信息，包括是否使用 X25519MLKEM768 和 ML-DSA-65
+      # master-key-log: none # TLS key log 文件；none 或空值表示禁用
     # REALITY 默认为 chrome；旧服务端如不支持 X25519MLKEM768，请显式使用 chrome120
     client-fingerprint: chrome
 
@@ -2368,13 +2372,20 @@ listeners:
     #   # rate-limit: 0 # fallback 转发限速，单位 bit/s；0 表示不限速
     # 如果填写reality-config则开启reality（注意不可与certificate和private-key同时填写）
     reality-config:
-      dest: test.com:443
+      dest: test.com:443 # 回落目标；Xray 别名 target 优先于 dest
+      # type: tcp # 可选 tcp/unix；省略时根据 target/dest 推断，纯端口会转换为 localhost:<port>
+      # xver: 0 # 发往回落目标的 PROXY protocol：0=关闭、1=v1、2=v2
       private-key: jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0 # 可由 mihomo generate reality-keypair 命令生成
       short-id:
         - 0123456789abcdef
       server-names:
         - test.com
+      # min-client-ver: 26.3.27 # 默认且最低允许值；必须为三个 0..255 的数字段
+      # max-client-ver: 26.7.11 # 可选，必须为三个 0..255 的数字段
       max-time-difference: 0 # 客户端时间最大允许偏差，单位毫秒；0 表示不限制
+      # mldsa65-seed: xxx # 可选，32 字节 ML-DSA-65 seed（raw URL-safe base64），不得与 private-key 相同
+      # show: false # 输出 REALITY 协商信息，包括 X25519MLKEM768
+      # master-key-log: none # TLS key log 文件；none 或空值表示禁用
       #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
       #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
       limit-fallback-upload:
