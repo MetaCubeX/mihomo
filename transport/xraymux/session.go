@@ -17,7 +17,7 @@ type sessionOwner interface {
 }
 
 type workerSession interface {
-	deliverFrame(Frame) error
+	deliverDecodedFrame(decodedFrame) error
 	closeCarrier(error)
 }
 
@@ -74,9 +74,21 @@ type session struct {
 }
 
 type downlinkMessage struct {
-	payload  []byte
-	terminal bool
-	cause    error
+	payload       []byte
+	payloadPooled bool
+	terminal      bool
+	cause         error
+}
+
+func (m *downlinkMessage) releasePayload() {
+	frame := decodedFrame{Frame: Frame{Payload: m.payload}, payloadPooled: m.payloadPooled}
+	frame.releasePayload()
+	m.payload = nil
+	m.payloadPooled = false
+}
+
+var sessionBufferPool = sync.Pool{
+	New: func() any { return new([MaxPayloadSize]byte) },
 }
 
 func newSession(
@@ -116,9 +128,13 @@ func makeSession(owner sessionOwner, id uint16, destination string, port uint16)
 func (s *session) start(ctx context.Context, firstPayloadTimeout time.Duration) {
 	go s.runUplink(firstPayloadTimeout)
 	go s.runDownlink()
+	ctxDone := ctx.Done()
+	if ctxDone == nil {
+		return
+	}
 	go func() {
 		select {
-		case <-ctx.Done():
+		case <-ctxDone:
 			s.finish(context.Cause(ctx), true)
 		case <-s.done:
 		}
@@ -131,7 +147,9 @@ func (s *session) runUplink(firstPayloadTimeout time.Duration) {
 	}
 
 	sentNew := false
-	buffer := make([]byte, MaxPayloadSize)
+	pooledBuffer := sessionBufferPool.Get().(*[MaxPayloadSize]byte)
+	defer sessionBufferPool.Put(pooledBuffer)
+	buffer := pooledBuffer[:]
 	for {
 		n, err := s.peer.Read(buffer)
 		if err != nil && !sentNew && isNetTimeout(err) {
@@ -180,7 +198,9 @@ func (s *session) runDownlink() {
 	for {
 		select {
 		case message := <-s.downlink:
-			if err := writeFull(s.peer, message.payload); err != nil {
+			err := writeFull(s.peer, message.payload)
+			message.releasePayload()
+			if err != nil {
 				s.finish(nil, true)
 				return
 			}
@@ -212,17 +232,26 @@ func (s *session) deliverFinal(payload []byte, cause error) error {
 }
 
 func (s *session) deliverFrame(frame Frame) error {
+	return s.deliverDecodedFrame(decodedFrame{Frame: frame})
+}
+
+func (s *session) deliverDecodedFrame(decoded decodedFrame) error {
+	frame := decoded.Frame
 	terminal := frame.Status == StatusEnd || frame.Option&OptionError != 0
+	message := downlinkMessage{payload: frame.Payload, payloadPooled: decoded.payloadPooled}
 	if terminal {
 		var cause error
 		if frame.Option&OptionError != 0 {
 			cause = protocolError("remote session", errors.New("remote reported an error"))
 		}
-		return s.deliverFinal(frame.Payload, cause)
+		message.terminal = true
+		message.cause = cause
+		return s.enqueueDownlink(message)
 	}
 	if frame.Option&OptionData != 0 {
-		return s.deliver(frame.Payload)
+		return s.enqueueDownlink(message)
 	}
+	decoded.releasePayload()
 	return nil
 }
 
@@ -231,6 +260,7 @@ func (s *session) enqueueDownlink(message downlinkMessage) error {
 	case s.downlink <- message:
 		return nil
 	case <-s.done:
+		message.releasePayload()
 		return net.ErrClosed
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,6 +26,7 @@ type carrierWorker struct {
 	lifetime    int
 	draining    bool
 	closed      bool
+	closedFast  atomic.Bool
 	closeErr    error
 	closeOnce   sync.Once
 }
@@ -121,8 +123,8 @@ func (w *carrierWorker) writeFrame(frame Frame) error {
 		return err
 	}
 	w.writeBuffer = raw[:0]
-	w.mu.Lock()
-	if w.closed {
+	if w.closedFast.Load() {
+		w.mu.Lock()
 		err = w.closeErr
 		if err == nil {
 			err = net.ErrClosed
@@ -131,7 +133,6 @@ func (w *carrierWorker) writeFrame(frame Frame) error {
 		w.writeMu.Unlock()
 		return err
 	}
-	w.mu.Unlock()
 	err = writeFull(w.conn, raw)
 	w.writeMu.Unlock()
 	if err != nil {
@@ -158,12 +159,13 @@ func (w *carrierWorker) removeSession(id uint16) {
 func (w *carrierWorker) readLoop() {
 	metadataBuffer := make([]byte, MaxMetadataSize)
 	for {
-		frame, err := decodeFrame(w.conn, metadataBuffer)
+		frame, err := decodeFramePooled(w.conn, metadataBuffer)
 		if err != nil {
 			w.close(err)
 			return
 		}
 		if frame.Status == StatusKeepAlive {
+			frame.releasePayload()
 			continue
 		}
 
@@ -171,6 +173,7 @@ func (w *carrierWorker) readLoop() {
 		logicalSession := w.sessions[frame.SessionID]
 		w.mu.Unlock()
 		if logicalSession == nil {
+			frame.releasePayload()
 			if frame.Status == StatusEnd {
 				continue
 			}
@@ -180,7 +183,7 @@ func (w *carrierWorker) readLoop() {
 			continue
 		}
 
-		if err := logicalSession.deliverFrame(frame); err != nil && !errors.Is(err, net.ErrClosed) {
+		if err := logicalSession.deliverDecodedFrame(frame); err != nil && !errors.Is(err, net.ErrClosed) {
 			w.close(err)
 			return
 		}
@@ -193,6 +196,7 @@ func (w *carrierWorker) close(cause error) {
 			cause = net.ErrClosed
 		}
 
+		w.closedFast.Store(true)
 		w.mu.Lock()
 		w.closed = true
 		w.closeErr = cause
@@ -200,7 +204,7 @@ func (w *carrierWorker) close(cause error) {
 		for _, logicalSession := range w.sessions {
 			sessions = append(sessions, logicalSession)
 		}
-		w.sessions = make(map[uint16]workerSession)
+		w.sessions = nil
 		w.mu.Unlock()
 
 		_ = w.conn.Close()

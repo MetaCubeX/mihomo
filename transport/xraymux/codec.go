@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 const (
@@ -56,6 +58,11 @@ type Frame struct {
 	Payload       []byte
 }
 
+type decodedFrame struct {
+	Frame
+	payloadPooled bool
+}
+
 type ProtocolError struct {
 	Op  string
 	Err error
@@ -78,6 +85,16 @@ func EncodeFrame(frame Frame) ([]byte, error) {
 }
 
 func encodeFrame(buffer []byte, frame Frame) ([]byte, error) {
+	if frame.Status == StatusKeep &&
+		frame.Option == OptionData &&
+		frame.Network == 0 &&
+		frame.Destination == "" &&
+		!frame.DestinationIP.IsValid() &&
+		frame.Port == 0 &&
+		frame.GlobalID == [8]byte{} &&
+		len(frame.Payload) <= int(^uint16(0)) {
+		return encodeKeepDataFrame(buffer, frame.SessionID, frame.Payload), nil
+	}
 	if err := validateFrame(frame); err != nil {
 		return nil, protocolError("encode", err)
 	}
@@ -166,6 +183,23 @@ func encodeFrame(buffer []byte, frame Frame) ([]byte, error) {
 	return result, nil
 }
 
+func encodeKeepDataFrame(buffer []byte, sessionID uint16, payload []byte) []byte {
+	frameLen := 8 + len(payload)
+	var result []byte
+	if cap(buffer) >= frameLen {
+		result = buffer[:frameLen]
+	} else {
+		result = make([]byte, frameLen)
+	}
+	binary.BigEndian.PutUint16(result, 4)
+	binary.BigEndian.PutUint16(result[2:], sessionID)
+	result[4] = byte(StatusKeep)
+	result[5] = byte(OptionData)
+	binary.BigEndian.PutUint16(result[6:], uint16(len(payload)))
+	copy(result[8:], payload)
+	return result
+}
+
 func parseLiteralIP(host string) (netip.Addr, bool) {
 	if host == "" {
 		return netip.Addr{}, false
@@ -186,13 +220,27 @@ func DecodeFrame(r io.Reader) (Frame, error) {
 }
 
 func decodeFrame(r io.Reader, metadataBuffer []byte) (Frame, error) {
-	var lengthBytes [2]byte
-	if _, err := io.ReadFull(r, lengthBytes[:]); err != nil {
-		return Frame{}, protocolError("read metadata length", err)
+	decoded, err := decodeFrameWithPayloadPool(r, metadataBuffer, false)
+	return decoded.Frame, err
+}
+
+func decodeFramePooled(r io.Reader, metadataBuffer []byte) (decodedFrame, error) {
+	return decodeFrameWithPayloadPool(r, metadataBuffer, true)
+}
+
+func decodeFrameWithPayloadPool(r io.Reader, metadataBuffer []byte, poolPayload bool) (decodedFrame, error) {
+	var lengthBytes []byte
+	if len(metadataBuffer) >= 2 {
+		lengthBytes = metadataBuffer[:2]
+	} else {
+		lengthBytes = make([]byte, 2)
 	}
-	metadataLen := int(binary.BigEndian.Uint16(lengthBytes[:]))
+	if _, err := io.ReadFull(r, lengthBytes); err != nil {
+		return decodedFrame{}, protocolError("read metadata length", err)
+	}
+	metadataLen := int(binary.BigEndian.Uint16(lengthBytes))
 	if metadataLen < 4 || metadataLen > MaxMetadataSize {
-		return Frame{}, protocolError("read metadata", fmt.Errorf("invalid metadata length %d", metadataLen))
+		return decodedFrame{}, protocolError("read metadata", fmt.Errorf("invalid metadata length %d", metadataLen))
 	}
 	var metadata []byte
 	if len(metadataBuffer) >= metadataLen {
@@ -201,7 +249,7 @@ func decodeFrame(r io.Reader, metadataBuffer []byte) (Frame, error) {
 		metadata = make([]byte, metadataLen)
 	}
 	if _, err := io.ReadFull(r, metadata); err != nil {
-		return Frame{}, protocolError("read metadata", err)
+		return decodedFrame{}, protocolError("read metadata", err)
 	}
 
 	frame := Frame{
@@ -209,59 +257,80 @@ func decodeFrame(r io.Reader, metadataBuffer []byte) (Frame, error) {
 		Status:    Status(metadata[2]),
 		Option:    Option(metadata[3]),
 	}
-	if frame.Status != StatusNew && frame.Status != StatusKeep && frame.Status != StatusEnd && frame.Status != StatusKeepAlive {
-		return Frame{}, protocolError("decode metadata", fmt.Errorf("invalid status %d", frame.Status))
-	}
-	if frame.Option & ^(OptionData|OptionError) != 0 {
-		return Frame{}, protocolError("decode metadata", fmt.Errorf("invalid option %d", frame.Option))
-	}
+	fastKeepData := metadataLen == 4 && frame.Status == StatusKeep && frame.Option == OptionData
+	if !fastKeepData {
+		if frame.Status != StatusNew && frame.Status != StatusKeep && frame.Status != StatusEnd && frame.Status != StatusKeepAlive {
+			return decodedFrame{}, protocolError("decode metadata", fmt.Errorf("invalid status %d", frame.Status))
+		}
+		if frame.Option & ^(OptionData|OptionError) != 0 {
+			return decodedFrame{}, protocolError("decode metadata", fmt.Errorf("invalid option %d", frame.Option))
+		}
 
-	targetBytes := metadata[4:]
-	hasTarget := frame.Status == StatusNew || (frame.Status == StatusKeep && len(targetBytes) > 0)
-	if len(targetBytes) > 0 && !hasTarget {
-		return Frame{}, protocolError("decode metadata", fmt.Errorf("unexpected trailing metadata: %d bytes", len(targetBytes)))
-	}
-	if hasTarget {
-		if len(targetBytes) < 4 {
-			return Frame{}, protocolError("decode target", io.ErrUnexpectedEOF)
+		targetBytes := metadata[4:]
+		hasTarget := frame.Status == StatusNew || (frame.Status == StatusKeep && len(targetBytes) > 0)
+		if len(targetBytes) > 0 && !hasTarget {
+			return decodedFrame{}, protocolError("decode metadata", fmt.Errorf("unexpected trailing metadata: %d bytes", len(targetBytes)))
 		}
-		frame.Network = Network(targetBytes[0])
-		if frame.Network != NetworkTCP && frame.Network != NetworkUDP {
-			return Frame{}, protocolError("decode target", fmt.Errorf("invalid network %d", frame.Network))
-		}
-		if frame.Status == StatusKeep && frame.Network != NetworkUDP {
-			return Frame{}, protocolError("decode target", errors.New("follow-up target is only valid for UDP"))
-		}
-		frame.Port = binary.BigEndian.Uint16(targetBytes[1:3])
-		host, consumed, err := readAddress(targetBytes[3:])
-		if err != nil {
-			return Frame{}, protocolError("decode target", err)
-		}
-		frame.Destination = host
-		targetBytes = targetBytes[3+consumed:]
-		if frame.Status == StatusNew && frame.Network == NetworkUDP && frame.Option&OptionData != 0 {
-			if len(targetBytes) != len(frame.GlobalID) {
-				return Frame{}, protocolError("decode GlobalID", fmt.Errorf("invalid length %d", len(targetBytes)))
+		if hasTarget {
+			if len(targetBytes) < 4 {
+				return decodedFrame{}, protocolError("decode target", io.ErrUnexpectedEOF)
 			}
-			copy(frame.GlobalID[:], targetBytes)
-			targetBytes = nil
-		}
-		if len(targetBytes) != 0 {
-			return Frame{}, protocolError("decode target", fmt.Errorf("unexpected trailing metadata: %d bytes", len(targetBytes)))
+			frame.Network = Network(targetBytes[0])
+			if frame.Network != NetworkTCP && frame.Network != NetworkUDP {
+				return decodedFrame{}, protocolError("decode target", fmt.Errorf("invalid network %d", frame.Network))
+			}
+			if frame.Status == StatusKeep && frame.Network != NetworkUDP {
+				return decodedFrame{}, protocolError("decode target", errors.New("follow-up target is only valid for UDP"))
+			}
+			frame.Port = binary.BigEndian.Uint16(targetBytes[1:3])
+			host, consumed, err := readAddress(targetBytes[3:])
+			if err != nil {
+				return decodedFrame{}, protocolError("decode target", err)
+			}
+			frame.Destination = host
+			targetBytes = targetBytes[3+consumed:]
+			if frame.Status == StatusNew && frame.Network == NetworkUDP && frame.Option&OptionData != 0 {
+				if len(targetBytes) != len(frame.GlobalID) {
+					return decodedFrame{}, protocolError("decode GlobalID", fmt.Errorf("invalid length %d", len(targetBytes)))
+				}
+				copy(frame.GlobalID[:], targetBytes)
+				targetBytes = nil
+			}
+			if len(targetBytes) != 0 {
+				return decodedFrame{}, protocolError("decode target", fmt.Errorf("unexpected trailing metadata: %d bytes", len(targetBytes)))
+			}
 		}
 	}
 
 	if frame.Option&OptionData != 0 {
-		if _, err := io.ReadFull(r, lengthBytes[:]); err != nil {
-			return Frame{}, protocolError("read payload length", err)
+		if _, err := io.ReadFull(r, lengthBytes); err != nil {
+			return decodedFrame{}, protocolError("read payload length", err)
 		}
-		payloadLen := int(binary.BigEndian.Uint16(lengthBytes[:]))
-		frame.Payload = make([]byte, payloadLen)
+		payloadLen := int(binary.BigEndian.Uint16(lengthBytes))
+		payloadPooled := false
+		if poolPayload && payloadLen > 0 {
+			frame.Payload = pool.Get(payloadLen)[:payloadLen]
+			payloadPooled = true
+		} else {
+			frame.Payload = make([]byte, payloadLen)
+		}
 		if _, err := io.ReadFull(r, frame.Payload); err != nil {
-			return Frame{}, protocolError("read payload", err)
+			decoded := decodedFrame{Frame: frame, payloadPooled: payloadPooled}
+			decoded.releasePayload()
+			return decodedFrame{}, protocolError("read payload", err)
 		}
+		return decodedFrame{Frame: frame, payloadPooled: payloadPooled}, nil
 	}
-	return frame, nil
+	return decodedFrame{Frame: frame}, nil
+}
+
+func (f *decodedFrame) releasePayload() {
+	if !f.payloadPooled {
+		return
+	}
+	_ = pool.Put(f.Payload)
+	f.Payload = nil
+	f.payloadPooled = false
 }
 
 func validateFrame(frame Frame) error {

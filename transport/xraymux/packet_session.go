@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/net/deadline"
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 var ErrPacketTooLarge = fmt.Errorf("xray mux packet exceeds %d bytes", MaxPayloadSize)
@@ -19,6 +20,12 @@ var ErrPacketTooLarge = fmt.Errorf("xray mux packet exceeds %d bytes", MaxPayloa
 type packetMessage struct {
 	payload []byte
 	addr    net.Addr
+}
+
+func consumePacketMessage(p []byte, message packetMessage) (int, net.Addr, error) {
+	n := copy(p, message.payload)
+	_ = pool.Put(message.payload)
+	return n, message.addr, nil
 }
 
 type packetSession struct {
@@ -75,9 +82,13 @@ func makePacketSession(
 }
 
 func (s *packetSession) start(ctx context.Context) {
+	ctxDone := ctx.Done()
+	if ctxDone == nil {
+		return
+	}
 	go func() {
 		select {
-		case <-ctx.Done():
+		case <-ctxDone:
 			s.finish(context.Cause(ctx), true)
 		case <-s.done:
 		}
@@ -85,19 +96,39 @@ func (s *packetSession) start(ctx context.Context) {
 }
 
 func (s *packetSession) ReadFrom(p []byte) (int, net.Addr, error) {
+	message, err := s.readPacketMessage()
+	if err != nil {
+		return 0, nil, err
+	}
+	return consumePacketMessage(p, message)
+}
+
+func (s *packetSession) WaitReadFrom() ([]byte, func(), net.Addr, error) {
+	message, err := s.readPacketMessage()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	payload := message.payload
+	put := func() {
+		_ = pool.Put(payload)
+	}
+	return payload, put, message.addr, nil
+}
+
+func (s *packetSession) readPacketMessage() (packetMessage, error) {
 	if message, ok := s.nextQueued(); ok {
-		return copy(p, message.payload), message.addr, nil
+		return message, nil
 	}
 	select {
 	case message := <-s.input:
-		return copy(p, message.payload), message.addr, nil
+		return message, nil
 	case <-s.done:
 		if message, ok := s.nextQueued(); ok {
-			return copy(p, message.payload), message.addr, nil
+			return message, nil
 		}
-		return 0, nil, s.terminalCause()
+		return packetMessage{}, s.terminalCause()
 	case <-s.readDeadline.Wait():
-		return 0, nil, os.ErrDeadlineExceeded
+		return packetMessage{}, os.ErrDeadlineExceeded
 	}
 }
 
@@ -188,19 +219,35 @@ func (s *packetSession) SetWriteDeadline(t time.Time) error {
 }
 
 func (s *packetSession) deliverFrame(frame Frame) error {
+	decoded := decodedFrame{Frame: frame}
+	if len(frame.Payload) > 0 {
+		decoded.Payload = pool.Get(len(frame.Payload))[:len(frame.Payload)]
+		copy(decoded.Payload, frame.Payload)
+		decoded.payloadPooled = true
+	}
+	return s.deliverDecodedFrame(decoded)
+}
+
+func (s *packetSession) deliverDecodedFrame(decoded decodedFrame) error {
+	frame := decoded.Frame
 	if frame.Option&OptionData != 0 {
 		if frame.Network != NetworkUDP || frame.Destination == "" {
+			decoded.releasePayload()
 			return protocolError("deliver UDP", errors.New("response frame is missing a UDP target"))
 		}
 		addr, err := makePacketAddr(frame.Destination, frame.Port)
 		if err != nil {
+			decoded.releasePayload()
 			return protocolError("deliver UDP", err)
 		}
 		select {
 		case s.input <- packetMessage{payload: frame.Payload, addr: addr}:
 		case <-s.done:
+			decoded.releasePayload()
 			return net.ErrClosed
 		}
+	} else {
+		decoded.releasePayload()
 	}
 	if frame.Status == StatusEnd || frame.Option&OptionError != 0 {
 		var cause error
