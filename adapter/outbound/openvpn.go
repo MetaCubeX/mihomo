@@ -420,17 +420,6 @@ func (o *OpenVPN) startPacketLoops() {
 		}
 	}()
 
-	go func() {
-		defer stop()
-		if err := client.WaitForSoftReset(runCtx); err != nil {
-			if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, os.ErrClosed) {
-				log.Warnln("[OpenVPN](%s) error waiting for server soft reset: %v", o.name, err)
-			}
-			return
-		}
-		log.Warnln("[OpenVPN](%s) server requested soft reset; closing session", o.name)
-	}()
-
 	if o.config.PingInterval > 0 {
 		go func() {
 			defer stop()

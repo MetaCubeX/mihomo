@@ -29,6 +29,7 @@ type Client struct {
 	data    *DataChannel
 	push    *PushReply
 
+	runCtx context.Context
 	cancel context.CancelFunc
 
 	writeSem *semaphore.Weighted
@@ -69,6 +70,7 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		config:   config,
 		mux:      mux,
 		control:  NewControlChannel(mux, crypt, local),
+		runCtx:   runCtx,
 		cancel:   cancel,
 		writeSem: semaphore.NewWeighted(1),
 	}
@@ -143,6 +145,8 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	}
 	c.markSend()
 	c.markReceive()
+	_ = c.tlsConn.SetDeadline(time.Time{})
+	go c.watchControl()
 	return push, nil
 }
 
@@ -205,33 +209,12 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 	}
 }
 
-// WaitForSoftReset watches raw control packets because a soft reset starts a new key epoch.
-func (c *Client) WaitForSoftReset(ctx context.Context) error {
-	for {
-		raw, err := c.mux.ReadPacket(ctx)
-		if err != nil {
-			return err
-		}
-		if c.isCurrentSoftReset(raw) {
-			return nil
-		}
-	}
-}
-
-func (c *Client) isCurrentSoftReset(raw []byte) bool {
-	if len(raw) == 0 {
-		return false
-	}
-	opcode, _ := parseOpcodeKeyID(raw[0])
-	if opcode != PControlSoftResetV1 {
-		return false
-	}
-	packet, _, _, err := DecodeControlPacket(c.control.crypt, raw)
-	if err != nil {
-		return false
-	}
-	remote := c.control.RemoteSessionID()
-	return remote != (SessionID{}) && packet.LocalSession == remote && packet.KeyID != 0
+// watchControl terminates the client when the established control channel
+// starts a new key epoch or otherwise stops.
+func (c *Client) watchControl() {
+	_ = c.control.waitForSoftReset(c.runCtx)
+	c.cancel()
+	_ = c.mux.Close()
 }
 
 func (c *Client) SinceSend() time.Duration {

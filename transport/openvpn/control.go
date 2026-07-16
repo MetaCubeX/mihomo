@@ -117,9 +117,41 @@ func (c *ControlChannel) SendAck(ctx context.Context) error {
 }
 
 func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
+	return c.read(ctx, false)
+}
+
+func (c *ControlChannel) waitForSoftReset(ctx context.Context) error {
+	for {
+		packet, err := c.read(ctx, true)
+		if err != nil {
+			return err
+		}
+		if packet.Opcode == PControlSoftResetV1 {
+			return nil
+		}
+		if err := c.SendAck(ctx); err != nil {
+			return err
+		}
+	}
+}
+
+func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*ControlPacket, error) {
 	for {
 		c.mu.Lock()
 		if packet, ok := c.recvPending[c.recvMessage]; ok {
+			if watchSoftReset {
+				softReset, valid := c.classifyWatchPacketLocked(packet)
+				if !valid {
+					delete(c.recvPending, c.recvMessage)
+					c.mu.Unlock()
+					continue
+				}
+				if softReset {
+					delete(c.recvPending, c.recvMessage)
+					c.mu.Unlock()
+					return packet, nil
+				}
+			}
 			delete(c.recvPending, c.recvMessage)
 			c.recvMessage++
 			c.mu.Unlock()
@@ -127,9 +159,28 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 		}
 		c.mu.Unlock()
 
-		packet, err := c.readControlPacket(ctx)
+		raw, err := c.readRawControlPacket(ctx)
 		if err != nil {
 			return nil, err
+		}
+		packet, _, _, err := DecodeControlPacket(c.crypt, raw)
+		if err != nil {
+			if watchSoftReset {
+				continue
+			}
+			return nil, err
+		}
+
+		if watchSoftReset {
+			c.mu.Lock()
+			softReset, valid := c.classifyWatchPacketLocked(packet)
+			c.mu.Unlock()
+			if !valid {
+				continue
+			}
+			if softReset {
+				return packet, nil
+			}
 		}
 
 		var deliver *ControlPacket
@@ -173,6 +224,18 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 			}
 		}
 	}
+}
+
+// classifyWatchPacketLocked keeps packets from another session or key epoch
+// out of the established control channel. c.mu must be held by the caller.
+func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softReset bool, valid bool) {
+	if c.remote == (SessionID{}) || packet.LocalSession != c.remote {
+		return false, false
+	}
+	if packet.Opcode == PControlSoftResetV1 {
+		return packet.KeyID != 0, packet.KeyID != 0
+	}
+	return false, packet.KeyID == c.keyID
 }
 
 func (c *ControlChannel) PendingMessages() int {
@@ -222,7 +285,7 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 	return c.io.WritePacket(ctx, encoded)
 }
 
-func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket, error) {
+func (c *ControlChannel) readRawControlPacket(ctx context.Context) ([]byte, error) {
 	c.mu.Lock()
 	deadline := c.readDeadline
 	c.mu.Unlock()
@@ -233,12 +296,7 @@ func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket,
 		defer cancel()
 	}
 
-	raw, err := c.io.ReadPacket(ctx)
-	if err != nil {
-		return nil, err
-	}
-	packet, _, _, err := DecodeControlPacket(c.crypt, raw)
-	return packet, err
+	return c.io.ReadPacket(ctx)
 }
 
 func (c *ControlChannel) SetDeadline(t time.Time) error {
