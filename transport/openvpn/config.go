@@ -48,6 +48,27 @@ type ClientConfig struct {
 	// AllowCompression controls the compression policy (no/asym/yes).
 	AllowCompression string
 
+	// TLS verification options (matching OpenVPN remote-cert-tls etc.)
+
+	// ServerName is the expected server certificate name.
+	ServerName string
+	// ServerNameType is the type of name verification: "subject", "name", or "name-prefix".
+	ServerNameType string
+	// PeerFingerprint is a list of allowed SHA-256 fingerprints (hex, lowercase, 64 chars).
+	PeerFingerprint []string
+	// RemoteCertKU is a list of required key usage masks (hex strings).
+	RemoteCertKU []string
+	// RemoteCertEKU is the required extended key usage: "server" or "client".
+	RemoteCertEKU string
+	// TLSVersionMin is the minimum TLS version ("1.0", "1.1", "1.2", "1.3").
+	TLSVersionMin string
+	// TLSVersionMax is the maximum TLS version.
+	TLSVersionMax string
+	// TLSCipher is a colon-separated list of OpenSSL cipher suite names.
+	TLSCipher string
+	// TLSGroups is a colon-separated list of TLS key exchange groups.
+	TLSGroups string
+
 	CA       []byte
 	Cert     []byte
 	Key      []byte

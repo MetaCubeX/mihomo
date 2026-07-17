@@ -53,6 +53,17 @@ type OpenVPNOption struct {
 	CompLZO          string            `proxy:"comp-lzo,omitempty"`
 	Compression      string            `proxy:"compress,omitempty"`
 	AllowCompression string            `proxy:"allow-compression,omitempty"`
+
+	// TLS verification options
+	ServerName         string   `proxy:"server-name,omitempty"`
+	ServerNameType     string   `proxy:"server-name-type,omitempty"`
+	PeerFingerprint    []string `proxy:"peer-fingerprint,omitempty"`
+	RemoteCertKU       []string `proxy:"remote-cert-ku,omitempty"`
+	RemoteCertEKU      string   `proxy:"remote-cert-eku,omitempty"`
+	TLSVersionMin      string   `proxy:"tls-version-min,omitempty"`
+	TLSVersionMax      string   `proxy:"tls-version-max,omitempty"`
+	TLSCipher          string   `proxy:"tls-cipher,omitempty"`
+	TLSGroups          string   `proxy:"tls-groups,omitempty"`
 	CA               string            `proxy:"ca"`
 	Cert             string            `proxy:"cert,omitempty"`
 	Key              string            `proxy:"key,omitempty"`
@@ -90,6 +101,17 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		CompLZO:          option.CompLZO,
 		Compression:      option.Compression,
 		AllowCompression: option.AllowCompression,
+
+		// TLS verification
+		ServerName:     option.ServerName,
+		ServerNameType: option.ServerNameType,
+		PeerFingerprint: option.PeerFingerprint,
+		RemoteCertKU:   option.RemoteCertKU,
+		RemoteCertEKU:  option.RemoteCertEKU,
+		TLSVersionMin:  option.TLSVersionMin,
+		TLSVersionMax:  option.TLSVersionMax,
+		TLSCipher:      option.TLSCipher,
+		TLSGroups:      option.TLSGroups,
 		CA:             []byte(option.CA),
 		Cert:           []byte(option.Cert),
 		Key:            []byte(option.Key),

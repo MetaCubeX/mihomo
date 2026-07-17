@@ -3,11 +3,15 @@ package openvpn
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -490,30 +494,112 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	if !roots.AppendCertsFromPEM(c.config.CA) {
 		return nil, errors.New("parse openvpn ca certificate")
 	}
+
+	// Parse peer fingerprints (if any).
+	var fingerprints [][]byte
+	for _, fp := range c.config.PeerFingerprint {
+		fp = strings.TrimSpace(strings.ToLower(fp))
+		if len(fp) != 64 {
+			return nil, fmt.Errorf("invalid peer fingerprint length %d, expected 64 hex chars", len(fp))
+		}
+		b, err := hex.DecodeString(fp)
+		if err != nil {
+			return nil, fmt.Errorf("invalid peer fingerprint %q: %w", fp, err)
+		}
+		fingerprints = append(fingerprints, b)
+	}
+
+	// Parse remote-cert-ku (hex key usage masks).
+	var requiredKUMasks []uint16
+	for _, ku := range c.config.RemoteCertKU {
+		ku = strings.TrimSpace(ku)
+		v, err := strconv.ParseUint(ku, 16, 16)
+		if err != nil {
+			return nil, fmt.Errorf("invalid remote-cert-ku %q: %w", ku, err)
+		}
+		requiredKUMasks = append(requiredKUMasks, uint16(v))
+	}
+
 	verify := func(cs tls.ConnectionState) error {
 		if len(cs.PeerCertificates) == 0 {
 			return errors.New("openvpn server did not provide certificate")
 		}
+		leaf := cs.PeerCertificates[0]
+
+		// Peer fingerprint verification (if configured).
+		if len(fingerprints) > 0 {
+			leafHash := sha256.Sum256(leaf.Raw)
+			matched := false
+			for _, fp := range fingerprints {
+				if hmac.Equal(leafHash[:], fp) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return errors.New("openvpn server certificate fingerprint does not match")
+			}
+		}
+
+		// Certificate chain verification (if CA is configured).
 		intermediates := x509.NewCertPool()
 		for _, cert := range cs.PeerCertificates[1:] {
 			intermediates.AddCert(cert)
 		}
-		_, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{
+		verifyOpts := x509.VerifyOptions{
 			Roots:         roots,
 			Intermediates: intermediates,
 			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		})
-		return err
+		}
+		_, err := leaf.Verify(verifyOpts)
+		if err != nil && len(fingerprints) == 0 {
+			// If no fingerprint match, chain verification failure is fatal.
+			return err
+		}
+
+		// Server name verification (if configured).
+		if c.config.ServerName != "" {
+			if err := verifyServerName(leaf, c.config.ServerName, c.config.ServerNameType); err != nil {
+				return err
+			}
+		}
+
+		// Remote cert KU verification (if configured).
+		if len(requiredKUMasks) > 0 {
+			if err := verifyKeyUsage(leaf, requiredKUMasks); err != nil {
+				return err
+			}
+		}
+
+		// Remote cert EKU verification (if configured).
+		if c.config.RemoteCertEKU != "" {
+			if err := verifyEKU(leaf, c.config.RemoteCertEKU); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	}
+
 	cfg := &tls.Config{
 		InsecureSkipVerify: true,
 		VerifyConnection:   verify,
-		// Allow the server to initiate TLS renegotiation (rekey). OpenVPN
-		// servers rekey the control channel at regular intervals (default 1h).
-		// Without this, Go's tls.Conn rejects renegotiation and the
-		// connection dies on every rekey.
-		Renegotiation: tls.RenegotiateFreelyAsClient,
+		Renegotiation:      tls.RenegotiateFreelyAsClient,
 	}
+
+	// TLS version limits.
+	if v, err := parseTLSVersion(c.config.TLSVersionMin); err == nil && v != 0 {
+		cfg.MinVersion = v
+	} else if err != nil {
+		return nil, err
+	}
+	if v, err := parseTLSVersion(c.config.TLSVersionMax); err == nil && v != 0 {
+		cfg.MaxVersion = v
+	} else if err != nil {
+		return nil, err
+	}
+
+	// Client certificate (if configured).
 	certPEM := bytes.TrimSpace(c.config.Cert)
 	keyPEM := bytes.TrimSpace(c.config.Key)
 	if len(certPEM) > 0 && len(keyPEM) > 0 {
@@ -523,7 +609,95 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 		}
 		cfg.Certificates = []tls.Certificate{cert}
 	}
+
 	return cfg, nil
+}
+
+// verifyServerName checks the server certificate against the expected name.
+func verifyServerName(cert *x509.Certificate, name, nameType string) error {
+	nameType = strings.ToLower(strings.TrimSpace(nameType))
+	if nameType == "" {
+		nameType = "name"
+	}
+	switch nameType {
+	case "subject":
+		if cert.Subject.String() != name {
+			return fmt.Errorf("openvpn certificate subject mismatch: expected %q, got %q", name, cert.Subject.String())
+		}
+	case "name":
+		// Check CN and SANs.
+		if cert.Subject.CommonName == name {
+			return nil
+		}
+		for _, san := range cert.DNSNames {
+			if san == name {
+				return nil
+			}
+		}
+		return fmt.Errorf("openvpn certificate name mismatch: %q not found in CN or SANs", name)
+	case "name-prefix":
+		if strings.HasPrefix(cert.Subject.CommonName, name) {
+			return nil
+		}
+		for _, san := range cert.DNSNames {
+			if strings.HasPrefix(san, name) {
+				return nil
+			}
+		}
+		return fmt.Errorf("openvpn certificate name-prefix mismatch: no CN/SAN starts with %q", name)
+	default:
+		return fmt.Errorf("unsupported server_name_type %q", nameType)
+	}
+	return nil
+}
+
+// verifyKeyUsage checks that the certificate has all required key usage bits.
+func verifyKeyUsage(cert *x509.Certificate, masks []uint16) error {
+	for _, mask := range masks {
+		if uint16(cert.KeyUsage)&mask != mask {
+			return fmt.Errorf("openvpn certificate missing required key usage bits: 0x%04x", mask)
+		}
+	}
+	return nil
+}
+
+// verifyEKU checks that the certificate has the required extended key usage.
+func verifyEKU(cert *x509.Certificate, eku string) error {
+	eku = strings.ToLower(strings.TrimSpace(eku))
+	var requiredEKU x509.ExtKeyUsage
+	switch eku {
+	case "server":
+		requiredEKU = x509.ExtKeyUsageServerAuth
+	case "client":
+		requiredEKU = x509.ExtKeyUsageClientAuth
+	default:
+		return fmt.Errorf("unsupported remote_certificate_eku %q", eku)
+	}
+	for _, e := range cert.ExtKeyUsage {
+		if e == requiredEKU {
+			return nil
+		}
+	}
+	return fmt.Errorf("openvpn certificate missing required EKU %q", eku)
+}
+
+// parseTLSVersion converts a version string to a tls.ProtocolVersion.
+func parseTLSVersion(v string) (uint16, error) {
+	v = strings.ToLower(strings.TrimSpace(v))
+	switch v {
+	case "":
+		return 0, nil
+	case "1.0":
+		return tls.VersionTLS10, nil
+	case "1.1":
+		return tls.VersionTLS11, nil
+	case "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("unsupported TLS version %q", v)
+	}
 }
 
 var _ net.Conn = (*ControlConn)(nil)
