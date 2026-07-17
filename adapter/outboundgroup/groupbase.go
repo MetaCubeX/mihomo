@@ -34,6 +34,7 @@ type GroupBase struct {
 	lastForcedCheck   atomic.TypedValue[time.Time]
 	testTimeout       int
 	maxFailedTimes    int
+	interval          time.Duration
 	emptyFallback     C.Proxy
 
 	// for GetProxies
@@ -52,6 +53,7 @@ type GroupBaseOption struct {
 	ExcludeType    string
 	TestTimeout    int
 	MaxFailedTimes int
+	Interval       int
 	EmptyFallback  C.Proxy
 	Providers      []P.ProxyProvider
 }
@@ -89,6 +91,7 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		failedTesting:     atomic.NewBool(false),
 		testTimeout:       opt.TestTimeout,
 		maxFailedTimes:    opt.MaxFailedTimes,
+		interval:          time.Duration(opt.Interval) * time.Second,
 		emptyFallback:     opt.EmptyFallback,
 	}
 
@@ -301,17 +304,29 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 	}()
 }
 
-// forcedHealthCheckCooldown limits how often failure-triggered health checks
-// may run: rescanning every provider node on each burst of failed dials
-// floods the network when a group holds hundreds of proxies.
-const forcedHealthCheckCooldown = 30 * time.Second
+// minForcedHealthCheckCooldown is the floor applied when a group has no
+// configured interval: rescanning every provider node on each burst of
+// failed dials floods the network when a group holds hundreds of proxies.
+const minForcedHealthCheckCooldown = 30 * time.Second
+
+// forcedHealthCheckCooldown limits how often a failure-triggered health
+// check may run: it must never rescan the group's providers more often than
+// the group's own configured interval, otherwise a persistently failing
+// group gets rescanned in full every ~30s regardless of what interval the
+// user configured.
+func (gb *GroupBase) forcedHealthCheckCooldown() time.Duration {
+	if gb.interval > 0 {
+		return gb.interval
+	}
+	return minForcedHealthCheckCooldown
+}
 
 func (gb *GroupBase) healthCheck() {
 	if gb.failedTesting.Load() {
 		return
 	}
 
-	if time.Since(gb.lastForcedCheck.Load()) < forcedHealthCheckCooldown {
+	if time.Since(gb.lastForcedCheck.Load()) < gb.forcedHealthCheckCooldown() {
 		return
 	}
 	gb.lastForcedCheck.Store(time.Now())
@@ -346,11 +361,14 @@ func resolvesToReject(proxy C.Proxy) bool {
 }
 
 // forcedHealthCheckNeeded reports whether traffic is being served by a proxy
-// that cannot actually carry it: a member marked dead, or an empty group
-// resolved to its empty-fallback REJECT, whose dials "succeed" on a nop
-// connection and therefore never reach onDialFailed.
+// that resolves to REJECT: an empty group resolved to its empty-fallback,
+// whose dials "succeed" on a nop connection and therefore never reach
+// onDialFailed. A plain dead member is deliberately excluded here - it
+// already fails dials naturally and is handled by onDialFailed's
+// failedTimes/maxFailedTimes/cooldown gate; triggering here too would bypass
+// that gate on every single dial and storm the group's health check.
 func forcedHealthCheckNeeded(proxy C.Proxy, testUrl string) bool {
-	return !proxy.AliveForTestUrl(testUrl) || resolvesToReject(proxy)
+	return resolvesToReject(proxy)
 }
 
 func (gb *GroupBase) onDialSuccess() {

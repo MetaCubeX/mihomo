@@ -68,6 +68,35 @@ func TestForcedHealthCheckCooldown(t *testing.T) {
 	}
 }
 
+// A group with a configured interval must use that interval as its
+// failure-triggered cooldown, not the fixed 30s floor - otherwise a group
+// configured for e.g. interval: 900 gets fully rescanned every ~30s as long
+// as dial failures keep recurring, ignoring what the user configured.
+func TestForcedHealthCheckCooldownUsesConfiguredInterval(t *testing.T) {
+	gb := NewGroupBase(GroupBaseOption{
+		Name:     "group-under-test",
+		Type:     C.URLTest,
+		Interval: 900,
+	})
+
+	if got := gb.forcedHealthCheckCooldown(); got != 900*time.Second {
+		t.Fatalf("expected cooldown to match configured interval (900s), got %s", got)
+	}
+}
+
+// A group without a configured interval must fall back to the minimum
+// cooldown floor, preserving prior behavior for groups that never set one.
+func TestForcedHealthCheckCooldownFallsBackWithoutInterval(t *testing.T) {
+	gb := NewGroupBase(GroupBaseOption{
+		Name: "group-under-test",
+		Type: C.URLTest,
+	})
+
+	if got := gb.forcedHealthCheckCooldown(); got != minForcedHealthCheckCooldown {
+		t.Fatalf("expected fallback cooldown of %s, got %s", minForcedHealthCheckCooldown, got)
+	}
+}
+
 func newURLTestMember(t *testing.T, name string, reject C.Proxy, provider P.ProxyProvider) C.Proxy {
 	t.Helper()
 	u, err := NewURLTest(
@@ -142,6 +171,27 @@ func TestFallbackPrefersStaleDeadMemberOverReject(t *testing.T) {
 
 	if got := f.Now(); got != "live-member" {
 		t.Fatalf("fallback should prefer a stale-dead member over REJECT, now: %s", got)
+	}
+}
+
+// A plain dead member (not resolving to REJECT) must not force a health
+// check on every dial: dead proxies already fail dials naturally and are
+// handled by onDialFailed's failedTimes/maxFailedTimes/cooldown gate.
+// Triggering here too bypasses that gate and reruns a full group health
+// check on every single dial as long as the picked member stays dead,
+// storming the network regardless of the group's configured interval.
+func TestForcedHealthCheckNotNeededForPlainDeadProxy(t *testing.T) {
+	direct := adapter.NewProxy(outbound.NewDirect())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = direct.URLTest(ctx, stubTestURL, nil)
+	if direct.AliveForTestUrl(stubTestURL) {
+		t.Fatal("precondition failed: proxy should be flagged dead")
+	}
+
+	if forcedHealthCheckNeeded(direct, stubTestURL) {
+		t.Fatal("a plain dead proxy (not resolving to REJECT) must not force a health check on every dial")
 	}
 }
 

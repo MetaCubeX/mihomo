@@ -213,6 +213,7 @@ func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFall
 			ExcludeType:    option.ExcludeType,
 			TestTimeout:    option.TestTimeout,
 			MaxFailedTimes: option.MaxFailedTimes,
+			Interval:       option.Interval,
 			EmptyFallback:  emptyFallback,
 			Providers:      providers,
 		}),
