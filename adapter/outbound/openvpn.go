@@ -51,6 +51,8 @@ type OpenVPNOption struct {
 	DataCipherFallback string          `proxy:"data-ciphers-fallback,omitempty"`
 	Auth             string            `proxy:"auth,omitempty"`
 	CompLZO          string            `proxy:"comp-lzo,omitempty"`
+	Compression      string            `proxy:"compress,omitempty"`
+	AllowCompression string            `proxy:"allow-compression,omitempty"`
 	CA               string            `proxy:"ca"`
 	Cert             string            `proxy:"cert,omitempty"`
 	Key              string            `proxy:"key,omitempty"`
@@ -85,7 +87,9 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		DataCiphers:    option.DataCiphers,
 		FallbackCipher: option.DataCipherFallback,
 		Auth:           option.Auth,
-		CompLZO:        option.CompLZO,
+		CompLZO:          option.CompLZO,
+		Compression:      option.Compression,
+		AllowCompression: option.AllowCompression,
 		CA:             []byte(option.CA),
 		Cert:           []byte(option.Cert),
 		Key:            []byte(option.Key),

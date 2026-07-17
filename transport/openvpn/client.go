@@ -40,6 +40,9 @@ type Client struct {
 	// DataCiphers list with the server's pushed cipher list.
 	negotiatedCipher string
 
+	// compressor handles data channel compression framing.
+	compressor *Compressor
+
 	// dataLock protects c.data during TLS renegotiation (rekey), where the
 	// DataChannel is atomically replaced. Read and write paths acquire a
 	// read lock before touching c.data.
@@ -92,12 +95,13 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	mux := NewPacketMux(io)
 	go mux.Run(runCtx)
 	client := &Client{
-		config:   config,
-		mux:      mux,
-		control:  NewControlChannel(mux, crypt, local),
-		runCtx:   runCtx,
-		cancel:   cancel,
-		writeSem: semaphore.NewWeighted(1),
+		config:     config,
+		mux:        mux,
+		control:    NewControlChannel(mux, crypt, local),
+		runCtx:     runCtx,
+		cancel:     cancel,
+		writeSem:   semaphore.NewWeighted(1),
+		compressor: config.buildCompressor(),
 	}
 	client.markSend()
 	client.markReceive()
@@ -152,7 +156,7 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 
 	clientRecord, err := NewClientKeyMethod2Record(
 		InstallScriptOptionsString(c.config.Proto, primaryCipher, c.config.Auth, c.config.CompLZO),
-		InstallScriptPeerInfo(primaryCipher, c.config.DataCiphers, c.config.CompLZO, c.config.PeerInfo),
+		InstallScriptPeerInfo(primaryCipher, c.config.DataCiphers, c.config.CompLZO, c.config.Compression, c.config.PeerInfo),
 		strings.TrimSpace(c.config.Username),
 		c.config.Password,
 	)
@@ -239,13 +243,25 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		return err
 	}
 	defer c.writeSem.Release(1)
-	if compress && c.config.CompLZO == CompLzoYes {
-		compressed, err := lzo1xCompressSafe(packet)
-		if err != nil {
-			return err
+
+	// Apply compression framing if configured.
+	if compress {
+		if c.compressor != nil {
+			framed, err := c.compressor.CompressFrame(packet)
+			if err != nil {
+				return err
+			}
+			packet = framed
+		} else if c.config.CompLZO == CompLzoYes {
+			// Legacy comp-lzo path (no compress directive).
+			compressed, err := lzo1xCompressSafe(packet)
+			if err != nil {
+				return err
+			}
+			packet = compressed
 		}
-		packet = compressed
 	}
+
 	encrypted, err := data.Encrypt(packet)
 	if err != nil {
 		return err
@@ -278,8 +294,21 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 		if IsPingPacket(plain) {
 			continue
 		}
-		if c.config.CompLZO == CompLzoYes && len(plain) > 0 {
-			return lzo1xDecompressSafe(plain)
+
+		// Remove compression framing if configured.
+		if c.compressor != nil {
+			decompressed, err := c.compressor.DecompressFrame(plain)
+			if err != nil {
+				continue
+			}
+			plain = decompressed
+		} else if c.config.CompLZO == CompLzoYes && len(plain) > 0 {
+			// Legacy comp-lzo path (no compress directive).
+			decompressed, err := lzo1xDecompressSafe(plain)
+			if err != nil {
+				continue
+			}
+			plain = decompressed
 		}
 		return plain, nil
 	}

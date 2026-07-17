@@ -173,7 +173,7 @@ func InstallScriptOptionsString(proto, cipher, auth string, compLZO string) stri
 	return fmt.Sprintf("V4,dev-type tun,link-mtu %s,tun-mtu 1500,proto %s,%scipher %s,auth %s,keysize %s,key-method 2,tls-client", mtu, protoName, comp, cipher, auth, keysize)
 }
 
-func InstallScriptPeerInfo(cipher string, dataCiphers []string, compLZO string, peerInfo map[string]string) string {
+func InstallScriptPeerInfo(cipher string, dataCiphers []string, compLZO string, compression string, peerInfo map[string]string) string {
 	lzo := ""
 	if compLZO == CompLzoYes {
 		lzo = "IV_LZO=1\n"
@@ -188,7 +188,15 @@ func InstallScriptPeerInfo(cipher string, dataCiphers []string, compLZO string, 
 		}
 		ivCiphers = strings.Join(normalized, ":")
 	}
-	info := fmt.Sprintf("IV_VER=mihomo-openvpn\nIV_PROTO=6\n%sIV_CIPHERS=%s\n", lzo, ivCiphers)
+	// Compression capability advertisement.
+	compInfo := ""
+	switch normalizeLower(compression) {
+	case "stub":
+		compInfo = "IV_COMP_STUB=1\n"
+	case "stub-v2":
+		compInfo = "IV_COMP_STUB=1\nIV_COMP_STUBv2=1\n"
+	}
+	info := fmt.Sprintf("IV_VER=mihomo-openvpn\nIV_PROTO=6\n%s%sIV_CIPHERS=%s\n", lzo, compInfo, ivCiphers)
 	// Append user-defined peer-info entries (e.g. IV_HWADDR, UV_*) after the
 	// built-in fields. Keys are sorted so the output is deterministic.
 	keys := make([]string, 0, len(peerInfo))

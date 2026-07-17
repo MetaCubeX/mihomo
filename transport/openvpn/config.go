@@ -43,6 +43,11 @@ type ClientConfig struct {
 	Auth       string
 	CompLZO    string
 
+	// Compression is the OpenVPN "compress" directive mode (none/stub/stub-v2/lz4/lz4-v2).
+	Compression string
+	// AllowCompression controls the compression policy (no/asym/yes).
+	AllowCompression string
+
 	CA       []byte
 	Cert     []byte
 	Key      []byte
@@ -185,6 +190,35 @@ func isSupportedCipher(cipher string) bool {
 	}
 }
 
+// buildCompressor creates a Compressor from the config's compression settings.
+// Returns nil if no compression framing is configured.
+func (c ClientConfig) buildCompressor() *Compressor {
+	// Priority: compress directive > comp-lzo.
+	if c.Compression != "" && c.Compression != "off" && c.Compression != "disabled" && c.Compression != "none" {
+		mode, err := ParseCompressionMode(c.Compression)
+		if err != nil {
+			return nil
+		}
+		if mode == CompressionNone {
+			return nil
+		}
+		policy, _ := ParseAllowCompression(c.AllowCompression)
+		return NewCompressor(mode, policy)
+	}
+
+	// Legacy comp-lzo.
+	if c.CompLZO == CompLzoYes {
+		policy, _ := ParseAllowCompression(c.AllowCompression)
+		// If allow-compression is explicitly "no", don't create a compressor.
+		if policy == AllowCompressionNo && c.AllowCompression != "" {
+			return nil
+		}
+		return NewCompressor(CompressionLZO, AllowCompressionYes)
+	}
+
+	return nil
+}
+
 func (c ClientConfig) RemoteAddress() string {
 	return net.JoinHostPort(c.RemoteHost, strconv.Itoa(int(c.RemotePort)))
 }
@@ -246,6 +280,8 @@ func (c *ClientConfig) Prepare() error {
 	c.Cipher = normalizeCipher(c.Cipher)
 	c.Auth = normalizeAuth(c.Auth)
 	c.CompLZO = normalizeCompLZO(c.CompLZO)
+	c.Compression = normalizeLower(c.Compression)
+	c.AllowCompression = normalizeLower(c.AllowCompression)
 
 	if err := c.ValidateInstallScriptSubset(); err != nil {
 		return err
