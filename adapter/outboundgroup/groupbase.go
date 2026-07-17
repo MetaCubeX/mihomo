@@ -31,6 +31,7 @@ type GroupBase struct {
 	failedTimes       int
 	failedTime        time.Time
 	failedTesting     atomic.Bool
+	lastForcedCheck   atomic.TypedValue[time.Time]
 	testTimeout       int
 	maxFailedTimes    int
 	emptyFallback     C.Proxy
@@ -294,15 +295,26 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 			if gb.failedTimes >= gb.maxFailedTimes {
 				log.Warnln("because %s failed multiple times, activate health check", gb.Name())
 				fn()
+				gb.failedTimes = 0
 			}
 		}
 	}()
 }
 
+// forcedHealthCheckCooldown limits how often failure-triggered health checks
+// may run: rescanning every provider node on each burst of failed dials
+// floods the network when a group holds hundreds of proxies.
+const forcedHealthCheckCooldown = 30 * time.Second
+
 func (gb *GroupBase) healthCheck() {
 	if gb.failedTesting.Load() {
 		return
 	}
+
+	if time.Since(gb.lastForcedCheck.Load()) < forcedHealthCheckCooldown {
+		return
+	}
+	gb.lastForcedCheck.Store(time.Now())
 
 	gb.failedTesting.Store(true)
 	wg := sync.WaitGroup{}
@@ -318,6 +330,27 @@ func (gb *GroupBase) healthCheck() {
 	wg.Wait()
 	gb.failedTesting.Store(false)
 	gb.failedTimes = 0
+}
+
+// resolvesToReject reports whether traffic sent to proxy would currently be
+// blackholed: the proxy itself is a REJECT, or it is a group (e.g. an empty
+// url-test serving its empty-fallback) whose current pick unwraps to one.
+func resolvesToReject(proxy C.Proxy) bool {
+	for p := proxy; p != nil; p = p.Unwrap(nil, false) {
+		switch p.Type() {
+		case C.Reject, C.RejectDrop:
+			return true
+		}
+	}
+	return false
+}
+
+// forcedHealthCheckNeeded reports whether traffic is being served by a proxy
+// that cannot actually carry it: a member marked dead, or an empty group
+// resolved to its empty-fallback REJECT, whose dials "succeed" on a nop
+// connection and therefore never reach onDialFailed.
+func forcedHealthCheckNeeded(proxy C.Proxy, testUrl string) bool {
+	return !proxy.AliveForTestUrl(testUrl) || resolvesToReject(proxy)
 }
 
 func (gb *GroupBase) onDialSuccess() {

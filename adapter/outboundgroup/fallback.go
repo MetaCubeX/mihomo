@@ -31,6 +31,9 @@ func (f *Fallback) Now() string {
 // DialContext implements C.ProxyAdapter
 func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	proxy := f.findAliveProxy(true)
+	if forcedHealthCheckNeeded(proxy, f.testUrl) {
+		go f.healthCheck()
+	}
 	c, err := proxy.DialContext(ctx, metadata)
 	if err == nil {
 		c.AppendToChains(f)
@@ -54,6 +57,9 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 // ListenPacketContext implements C.ProxyAdapter
 func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	proxy := f.findAliveProxy(true)
+	if forcedHealthCheckNeeded(proxy, f.testUrl) {
+		go f.healthCheck()
+	}
 	pc, err := proxy.ListenPacketContext(ctx, metadata)
 	if err == nil {
 		pc.AppendToChains(f)
@@ -106,12 +112,12 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
-			if proxy.AliveForTestUrl(f.testUrl) {
+			if f.proxyUsable(proxy) {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				if proxy.AliveForTestUrl(f.testUrl) {
+				if f.proxyUsable(proxy) {
 					return proxy
 				} else {
 					f.selected = ""
@@ -120,7 +126,25 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 		}
 	}
 
+	// No member has a live test result. A member whose alive flag is merely
+	// stale (e.g. it was checked before its provider finished loading) is
+	// still a better bet than one currently resolving to REJECT, which would
+	// silently blackhole traffic.
+	for _, proxy := range proxies {
+		if !resolvesToReject(proxy) {
+			return proxy
+		}
+	}
+
 	return proxies[0]
+}
+
+// proxyUsable reports whether a member can serve traffic right now: it must
+// have passed the health check and not resolve to REJECT - an empty group
+// serving its empty-fallback must be skipped immediately, without waiting
+// for a health check to flag it dead.
+func (f *Fallback) proxyUsable(proxy C.Proxy) bool {
+	return proxy.AliveForTestUrl(f.testUrl) && !resolvesToReject(proxy)
 }
 
 func (f *Fallback) Set(name string) error {
