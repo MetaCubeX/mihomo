@@ -2,10 +2,12 @@ package openvpn
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"strconv"
 	"strings"
@@ -42,6 +44,13 @@ type ClientConfig struct {
 	Cipher     string
 	Auth       string
 	CompLZO    string
+
+	// Servers is an alternative list of remote servers. If non-empty,
+	// the client tries each server in order (or shuffled if RemoteRandom is true).
+	// RemoteHost/RemotePort are used as a fallback when Servers is empty.
+	Servers []RemoteEntry
+	// RemoteRandom shuffles the Servers list before connecting.
+	RemoteRandom bool
 
 	// Compression is the OpenVPN "compress" directive mode (none/stub/stub-v2/lz4/lz4-v2).
 	Compression string
@@ -240,6 +249,42 @@ func (c ClientConfig) buildCompressor() *Compressor {
 	return nil
 }
 
+// RemoteEntry represents a single OpenVPN remote server.
+type RemoteEntry struct {
+	Host  string
+	Port  uint16
+	Proto string // "udp" or "tcp", empty means use the config-level Proto
+}
+
+// RemoteServers returns the ordered (or shuffled) list of remote servers.
+// If Servers is empty, it returns a single entry from RemoteHost/RemotePort.
+func (c ClientConfig) RemoteServers() []RemoteEntry {
+	if len(c.Servers) == 0 {
+		return []RemoteEntry{{Host: c.RemoteHost, Port: c.RemotePort, Proto: c.Proto}}
+	}
+	servers := make([]RemoteEntry, len(c.Servers))
+	copy(servers, c.Servers)
+	if c.RemoteRandom {
+		cryptoShuffle(len(servers), func(i, j int) {
+			servers[i], servers[j] = servers[j], servers[i]
+		})
+	}
+	return servers
+}
+
+// cryptoShuffle shuffles indices using crypto/rand for unpredictability.
+func cryptoShuffle(n int, swap func(i, j int)) {
+	for i := n - 1; i > 0; i-- {
+		j, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			// Fallback to no shuffle on error.
+			return
+		}
+		swap(i, int(j.Int64()))
+	}
+}
+
+// RemoteAddress returns the address of the first remote server.
 func (c ClientConfig) RemoteAddress() string {
 	return net.JoinHostPort(c.RemoteHost, strconv.Itoa(int(c.RemotePort)))
 }

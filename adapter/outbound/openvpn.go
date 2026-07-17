@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -44,6 +45,8 @@ type OpenVPNOption struct {
 	Name             string            `proxy:"name"`
 	Server           string            `proxy:"server"`
 	Port             int               `proxy:"port"`
+	Servers          []OpenVPNRemote   `proxy:"servers,omitempty"`
+	RemoteRandom     bool              `proxy:"remote-random,omitempty"`
 	Proto            string            `proxy:"proto,omitempty"`
 	Dev              string            `proxy:"dev,omitempty"`
 	Cipher           string            `proxy:"cipher,omitempty"`
@@ -83,6 +86,13 @@ type OpenVPNOption struct {
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
+}
+
+// OpenVPNRemote represents a single remote server entry.
+type OpenVPNRemote struct {
+	Server string `proxy:"server"`
+	Port   int    `proxy:"port"`
+	Proto  string `proxy:"proto,omitempty"`
 }
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
@@ -125,6 +135,18 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		PeerInfo:       option.PeerInfo,
 		PingInterval:   time.Duration(option.Ping) * time.Second,
 		PingRestart:    time.Duration(option.PingRestart) * time.Second,
+	}
+	// Populate multi-server list.
+	if len(option.Servers) > 0 {
+		cfg.Servers = make([]ovpn.RemoteEntry, len(option.Servers))
+		for i, s := range option.Servers {
+			cfg.Servers[i] = ovpn.RemoteEntry{
+				Host:  s.Server,
+				Port:  uint16(s.Port),
+				Proto: s.Proto,
+			}
+		}
+		cfg.RemoteRandom = option.RemoteRandom
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
@@ -374,22 +396,37 @@ func openVPNPrefixesHas6(prefixes []netip.Prefix) bool {
 }
 
 func (o *OpenVPN) openPacketIO(ctx context.Context) (ovpn.PacketIO, error) {
-	switch o.config.Proto {
-	case ovpn.ProtoUDP:
-		conn, err := o.dialer.DialContext(ctx, "udp", o.addr)
-		if err != nil {
-			return nil, err
+	servers := o.config.RemoteServers()
+	var lastErr error
+	for _, srv := range servers {
+		proto := srv.Proto
+		if proto == "" {
+			proto = o.config.Proto
 		}
-		return ovpn.NewDatagramPacketIO(conn), nil
-	case ovpn.ProtoTCP:
-		conn, err := o.dialer.DialContext(ctx, "tcp", o.addr)
-		if err != nil {
-			return nil, err
+		addr := net.JoinHostPort(srv.Host, strconv.Itoa(int(srv.Port)))
+		switch proto {
+		case ovpn.ProtoUDP:
+			conn, err := o.dialer.DialContext(ctx, "udp", addr)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			return ovpn.NewDatagramPacketIO(conn), nil
+		case ovpn.ProtoTCP:
+			conn, err := o.dialer.DialContext(ctx, "tcp", addr)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			return ovpn.NewTCPPacketIO(conn), nil
+		default:
+			return nil, fmt.Errorf("unsupported openvpn proto %q", proto)
 		}
-		return ovpn.NewTCPPacketIO(conn), nil
-	default:
-		return nil, fmt.Errorf("unsupported openvpn proto %q", o.config.Proto)
 	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("all OpenVPN servers failed: %w", lastErr)
+	}
+	return nil, fmt.Errorf("no OpenVPN servers configured")
 }
 
 func (o *OpenVPN) startPacketLoops() {
