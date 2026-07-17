@@ -200,6 +200,17 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 	}
 	c.push = push
 
+	// Apply pull filters to the push reply.
+	if err := push.ApplyPullFilters(c.config.PullFilters); err != nil {
+		return nil, fmt.Errorf("apply pull filters: %w", err)
+	}
+
+	// Apply route-no-pull if configured.
+	push.ApplyRouteNoPull(c.config.RouteNoPull)
+
+	// Merge locally configured routes.
+	push.MergeLocalRoutes(c.config.Routes)
+
 	// Negotiate the data channel cipher based on the push reply.
 	negotiatedCipher, err := c.config.NegotiateCipher(push.DataCiphers, push.Cipher)
 	if err != nil {

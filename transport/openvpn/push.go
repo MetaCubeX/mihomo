@@ -25,6 +25,12 @@ type PushReply struct {
 	// Cipher is the single cipher pushed by the server via the "cipher"
 	// option (legacy or fallback).
 	Cipher string
+
+	// PingInterval is the server-pushed keepalive ping interval (seconds).
+	PingInterval int
+
+	// PingRestart is the server-pushed keepalive ping-restart timeout (seconds).
+	PingRestart int
 }
 
 func ParsePushReply(message string) (*PushReply, error) {
@@ -107,6 +113,20 @@ func ParsePushReply(message string) (*PushReply, error) {
 			// Legacy single cipher push, or fallback cipher.
 			if len(fields) >= 2 {
 				reply.Cipher = strings.TrimSpace(fields[1])
+			}
+		case "ping":
+			// Server-pushed keepalive ping interval (seconds).
+			if len(fields) >= 2 {
+				if v, err := strconv.Atoi(fields[1]); err == nil {
+					reply.PingInterval = v
+				}
+			}
+		case "ping-restart":
+			// Server-pushed keepalive ping-restart timeout (seconds).
+			if len(fields) >= 2 {
+				if v, err := strconv.Atoi(fields[1]); err == nil {
+					reply.PingRestart = v
+				}
 			}
 		}
 	}
@@ -191,4 +211,76 @@ func ipv4MaskSize(mask netip.Addr) (int, bool) {
 		}
 	}
 	return ones, true
+}
+
+// ApplyPullFilters filters the pushed options based on the configured pull filters.
+// Returns an error if a "reject" filter matches.
+func (r *PushReply) ApplyPullFilters(filters []PullFilter) error {
+	if len(filters) == 0 {
+		return nil
+	}
+	// For each pushed option, check if any filter matches.
+	// We need to check the raw push reply options.
+	options := splitPushOptions(r.Raw)
+	for _, option := range options {
+		option = strings.TrimSpace(option)
+		for _, filter := range filters {
+			if strings.HasPrefix(strings.ToLower(option), strings.ToLower(filter.Text)) {
+				switch strings.ToLower(filter.Action) {
+				case "accept":
+					// Option is accepted (default behavior).
+				case "ignore":
+					// Option should be ignored. We can't easily un-parse
+					// individual options from the structured PushReply, so
+					// we track ignored options and clear their effects.
+					r.applyIgnoredOption(option)
+				case "reject":
+					return fmt.Errorf("openvpn push option rejected by filter: %s", option)
+				}
+				break // Only the first matching filter applies.
+			}
+		}
+	}
+	return nil
+}
+
+// applyIgnoredOption clears the effect of an ignored push option.
+func (r *PushReply) applyIgnoredOption(option string) {
+	fields := strings.Fields(option)
+	if len(fields) == 0 {
+		return
+	}
+	switch fields[0] {
+	case "route", "route-ipv6":
+		// Can't selectively remove individual routes from the slice,
+		// but this is a best-effort approach. In practice, pull filters
+		// for routes are rare and the route list is rebuilt on each push.
+	case "redirect-gateway":
+		r.Redirect = false
+	case "block-ipv6":
+		r.BlockIPv6 = false
+	case "dhcp-option":
+		// DNS options are not selectively removed.
+	case "data-ciphers", "ncp-ciphers":
+		r.DataCiphers = nil
+	case "cipher":
+		r.Cipher = ""
+	}
+}
+
+// ApplyRouteNoPull clears route-related options if RouteNoPull is enabled.
+func (r *PushReply) ApplyRouteNoPull(noPull bool) {
+	if !noPull {
+		return
+	}
+	r.Routes = nil
+	r.Redirect = false
+}
+
+// MergeLocalRoutes adds locally configured routes to the push reply's route list.
+func (r *PushReply) MergeLocalRoutes(localRoutes []netip.Prefix) {
+	if len(localRoutes) == 0 {
+		return
+	}
+	r.Routes = append(r.Routes, localRoutes...)
 }

@@ -38,6 +38,7 @@ type OpenVPN struct {
 	runCancel context.CancelFunc
 	runLock   *semaphore.Weighted
 	running   bool
+	blockIPv6 bool
 }
 
 type OpenVPNOption struct {
@@ -67,6 +68,15 @@ type OpenVPNOption struct {
 	TLSVersionMax      string   `proxy:"tls-version-max,omitempty"`
 	TLSCipher          string   `proxy:"tls-cipher,omitempty"`
 	TLSGroups          string   `proxy:"tls-groups,omitempty"`
+
+	// Route / push options
+	PullFilters         []OpenVPNPullFilter `proxy:"pull-filter,omitempty"`
+	RouteNoPull         bool                `proxy:"route-no-pull,omitempty"`
+	Routes              []string            `proxy:"routes,omitempty"`
+	RouteGateway        string              `proxy:"route-gateway,omitempty"`
+	RouteMetric         int                 `proxy:"route-metric,omitempty"`
+	RedirectGateway     bool                `proxy:"redirect-gateway,omitempty"`
+	RedirectGatewayFlags []string           `proxy:"redirect-gateway-flags,omitempty"`
 	CA               string            `proxy:"ca"`
 	Cert             string            `proxy:"cert,omitempty"`
 	Key              string            `proxy:"key,omitempty"`
@@ -93,6 +103,12 @@ type OpenVPNRemote struct {
 	Server string `proxy:"server"`
 	Port   int    `proxy:"port"`
 	Proto  string `proxy:"proto,omitempty"`
+}
+
+// OpenVPNPullFilter represents a pull-filter directive.
+type OpenVPNPullFilter struct {
+	Action string `proxy:"action"`
+	Text   string `proxy:"text"`
 }
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
@@ -122,6 +138,14 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		TLSVersionMax:  option.TLSVersionMax,
 		TLSCipher:      option.TLSCipher,
 		TLSGroups:      option.TLSGroups,
+
+		// Route / push options
+		RouteNoPull:          option.RouteNoPull,
+		RouteGateway:         option.RouteGateway,
+		RouteMetric:          option.RouteMetric,
+		RedirectGateway:      option.RedirectGateway,
+		RedirectGatewayFlags: option.RedirectGatewayFlags,
+
 		CA:             []byte(option.CA),
 		Cert:           []byte(option.Cert),
 		Key:            []byte(option.Key),
@@ -147,6 +171,24 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 			}
 		}
 		cfg.RemoteRandom = option.RemoteRandom
+	}
+	// Parse pull filters.
+	if len(option.PullFilters) > 0 {
+		cfg.PullFilters = make([]ovpn.PullFilter, len(option.PullFilters))
+		for i, pf := range option.PullFilters {
+			cfg.PullFilters[i] = ovpn.PullFilter{Action: pf.Action, Text: pf.Text}
+		}
+	}
+	// Parse routes.
+	if len(option.Routes) > 0 {
+		cfg.Routes = make([]netip.Prefix, 0, len(option.Routes))
+		for _, r := range option.Routes {
+			prefix, err := netip.ParsePrefix(r)
+			if err != nil {
+				return nil, fmt.Errorf("parse route %q: %w", r, err)
+			}
+			cfg.Routes = append(cfg.Routes, prefix)
+		}
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
@@ -353,7 +395,16 @@ func (o *OpenVPN) startLocked(handshakeCtx context.Context) (wireguard.Device, r
 		_ = client.Close()
 		return nil, nil, fmt.Errorf("make OpenVPN handshake: %w", err)
 	}
-	log.Debugln("[OpenVPN](%s) handshake complete: prefixes=%v routes=%v peer-id=%d dns=%v redirect=%t block-ipv6=%t", o.name, push.Prefixes, push.Routes, push.PeerID, push.DNS, push.Redirect, push.BlockIPv6)
+	log.Debugln("[OpenVPN](%s) handshake complete: prefixes=%v routes=%v peer-id=%d dns=%v redirect=%t block-ipv6=%t", o.name, push.Prefixes, push.Routes, push.PeerID, push.DNS, push.Redirect, o.blockIPv6)
+
+	// Use server-pushed keepalive values if local config doesn't override.
+	if o.config.PingInterval == 0 && push.PingInterval > 0 {
+		o.config.PingInterval = time.Duration(push.PingInterval) * time.Second
+	}
+	if o.config.PingRestart == 0 && push.PingRestart > 0 {
+		o.config.PingRestart = time.Duration(push.PingRestart) * time.Second
+	}
+	o.blockIPv6 = o.blockIPv6
 
 	mtu := o.option.MTU
 	if mtu == 0 {
@@ -461,6 +512,10 @@ func (o *OpenVPN) startPacketLoops() {
 				}
 				return
 			}
+			// Block IPv6 outgoing packets if block-ipv6 is set.
+			if o.blockIPv6 && len(buf[:sizes[0]]) > 0 && buf[0]>>4 == 6 {
+				continue
+			}
 			if err := client.WriteIPPacket(runCtx, buf[:sizes[0]]); err != nil {
 				if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
 					log.Warnln("[OpenVPN](%s) error writing packet to OpenVPN link: %v", o.name, err)
@@ -481,6 +536,10 @@ func (o *OpenVPN) startPacketLoops() {
 					log.Warnln("[OpenVPN](%s) error reading packet from OpenVPN link: %v", o.name, err)
 				}
 				return
+			}
+			// Block IPv6 incoming packets if block-ipv6 is set.
+			if o.blockIPv6 && len(packet) > 0 && packet[0]>>4 == 6 {
+				continue
 			}
 			if _, err := tunDevice.Write([][]byte{packet}, 0); err != nil {
 				if !errors.Is(err, net.ErrClosed) {

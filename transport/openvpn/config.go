@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -78,6 +79,33 @@ type ClientConfig struct {
 	// TLSGroups is a colon-separated list of TLS key exchange groups.
 	TLSGroups string
 
+	// PullFilters are ordered filters for options pushed by the server.
+	// The first filter whose Text is a case-insensitive prefix of the pushed
+	// option is applied. Actions: "accept", "ignore", "reject".
+	PullFilters []PullFilter
+
+	// RouteNoPull ignores routes, route-gateway, and redirect-gateway options
+	// pushed by the server. Other pushed options are still accepted.
+	RouteNoPull bool
+
+	// Routes are locally configured routes to add through the VPN endpoint.
+	// These are used in addition to (or instead of, if RouteNoPull is true)
+	// routes received from the server.
+	Routes []netip.Prefix
+
+	// RouteGateway is the IPv4 gateway for routes through the endpoint.
+	// When empty, the VPN gateway received from the server is used.
+	RouteGateway string
+
+	// RouteMetric is the default metric for routes through the endpoint.
+	RouteMetric int
+
+	// RedirectGateway routes all IPv4 traffic through the endpoint.
+	RedirectGateway bool
+
+	// RedirectGatewayFlags are OpenVPN redirect-gateway flags (e.g. "ipv6", "!ipv4").
+	RedirectGatewayFlags []string
+
 	CA       []byte
 	Cert     []byte
 	Key      []byte
@@ -116,6 +144,12 @@ type ClientConfig struct {
 	// FallbackCipher is used when the server does not support cipher
 	// negotiation (OpenVPN --data-ciphers-fallback).
 	FallbackCipher string
+}
+
+// PullFilter represents an OpenVPN pull-filter directive.
+type PullFilter struct {
+	Action string // "accept", "ignore", or "reject"
+	Text   string // case-insensitive prefix to match
 }
 
 // DataCipherKeyLength returns the key size for the negotiated data cipher.
