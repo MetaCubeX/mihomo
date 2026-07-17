@@ -71,6 +71,24 @@ func (c *ControlChannel) SendReset(ctx context.Context) error {
 	return err
 }
 
+// SendSoftReset sends a P_CONTROL_SOFT_RESET_V1 and rotates the key ID.
+// Called during TLS renegotiation (rekey) to transition to a new key epoch.
+// The old pending/recvPending maps are cleared because they belong to the
+// previous key epoch; the message counters are reset for the new epoch.
+func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
+	c.mu.Lock()
+	newKeyID := c.keyID ^ 1 // toggle 0<->1
+	c.keyID = newKeyID
+	c.sendMessage = 0
+	c.recvMessage = 0
+	c.ackPending = nil
+	c.pending = make(map[uint32]*ControlPacket)
+	c.recvPending = make(map[uint32]*ControlPacket)
+	c.mu.Unlock()
+	_, err := c.Send(ctx, PControlSoftResetV1, nil)
+	return err
+}
+
 func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte) (uint32, error) {
 	if !opcode.HasMessageID() {
 		return 0, fmt.Errorf("opcode %s cannot carry a reliable message", opcode)
@@ -233,7 +251,10 @@ func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softR
 		return false, false
 	}
 	if packet.Opcode == PControlSoftResetV1 {
-		return packet.KeyID != 0, packet.KeyID != 0
+		// Accept soft resets that carry a different key ID than the current
+		// active key epoch. This handles both server-initiated rekeys (new
+		// key ID) and the symmetric toggle between key ID 0 and 1.
+		return packet.KeyID != c.keyID, packet.KeyID != c.keyID
 	}
 	return false, packet.KeyID == c.keyID
 }

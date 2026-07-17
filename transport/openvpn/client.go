@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +19,11 @@ import (
 
 const (
 	ControlRetransmitDelay = time.Second
+
+	// renegotiateTimeout is the maximum time allowed for a TLS renegotiation
+	// (rekey) cycle. OpenVPN servers typically rekey every hour; the
+	// renegotiation itself should complete in seconds.
+	renegotiateTimeout = 30 * time.Second
 )
 
 type Client struct {
@@ -28,6 +34,16 @@ type Client struct {
 	tlsConn *tls.Conn
 	data    *DataChannel
 	push    *PushReply
+
+	// negotiatedCipher is the data channel cipher selected during the most
+	// recent key exchange. It is determined by intersecting the client's
+	// DataCiphers list with the server's pushed cipher list.
+	negotiatedCipher string
+
+	// dataLock protects c.data during TLS renegotiation (rekey), where the
+	// DataChannel is atomically replaced. Read and write paths acquire a
+	// read lock before touching c.data.
+	dataLock sync.RWMutex
 
 	runCtx context.Context
 	cancel context.CancelFunc
@@ -46,7 +62,16 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		return nil, errors.New("nil openvpn packet io")
 	}
 	var crypt ControlCryptor
-	if len(config.TLSCryptKey) > 0 {
+	if len(config.TLSCryptV2ClientKey) > 0 || len(config.TLSCryptV2ServerKey) > 0 {
+		if len(config.TLSCryptV2ClientKey) == 0 || len(config.TLSCryptV2ServerKey) == 0 {
+			return nil, errors.New("tls-crypt-v2 requires both client and server keys")
+		}
+		var err error
+		crypt, err = NewTLSCryptV2(config.TLSCryptV2ClientKey, config.TLSCryptV2ServerKey, true)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(config.TLSCryptKey) > 0 {
 		var err error
 		crypt, err = NewTLSCrypt(config.TLSCryptKey, true)
 		if err != nil {
@@ -103,9 +128,31 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, fmt.Errorf("openvpn tls handshake: %w", err)
 	}
 
+	push, err := c.doKeyExchange(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_ = c.tlsConn.SetDeadline(time.Time{})
+	go c.watchControl()
+	return push, nil
+}
+
+// doKeyExchange performs the OpenVPN key method 2 exchange over the TLS
+// control channel and creates a fresh data channel. It is used both for the
+// initial handshake and for subsequent TLS renegotiations (rekeys).
+// On success, c.data is atomically replaced with the new DataChannel.
+func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
+	// Determine the cipher for the options string. If DataCiphers is
+	// configured, the first entry is advertised as the primary cipher.
+	// The actual negotiated cipher is resolved after receiving the push reply.
+	primaryCipher := c.config.Cipher
+	if len(c.config.DataCiphers) > 0 {
+		primaryCipher = normalizeCipher(c.config.DataCiphers[0])
+	}
+
 	clientRecord, err := NewClientKeyMethod2Record(
-		InstallScriptOptionsString(c.config.Proto, c.config.Cipher, c.config.Auth, c.config.CompLZO),
-		InstallScriptPeerInfo(c.config.Cipher, c.config.CompLZO, c.config.PeerInfo),
+		InstallScriptOptionsString(c.config.Proto, primaryCipher, c.config.Auth, c.config.CompLZO),
+		InstallScriptPeerInfo(primaryCipher, c.config.DataCiphers, c.config.CompLZO, c.config.PeerInfo),
 		strings.TrimSpace(c.config.Username),
 		c.config.Password,
 	)
@@ -124,9 +171,14 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, err
 	}
 
+	// Derive keys using the maximum cipher key length (32 bytes). The actual
+	// cipher is determined after the push reply, and keys are sliced to the
+	// correct length at that point. This works because OpenVPN's key
+	// expansion always produces a full key block of 2*(64+64) bytes, and each
+	// cipher only uses the first N bytes of its 64-byte slot.
 	sources := clientRecord.Sources
 	sources.Server = serverRecord.Sources.Server
-	keys, err := DeriveClientKeyMaterial(sources, c.control.LocalSessionID(), c.control.RemoteSessionID(), c.config.DataCipherKeyLength())
+	keys, err := DeriveClientKeyMaterial(sources, c.control.LocalSessionID(), c.control.RemoteSessionID(), 32)
 	if err != nil {
 		return nil, fmt.Errorf("derive data channel keys: %w", err)
 	}
@@ -139,14 +191,32 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, err
 	}
 	c.push = push
-	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID)
+
+	// Negotiate the data channel cipher based on the push reply.
+	negotiatedCipher, err := c.config.NegotiateCipher(push.DataCiphers, push.Cipher)
+	if err != nil {
+		return nil, fmt.Errorf("negotiate data cipher: %w", err)
+	}
+	c.negotiatedCipher = negotiatedCipher
+
+	// Slice the derived keys to the negotiated cipher's key length.
+	cipherKeyLen := CipherKeyLength(negotiatedCipher)
+	keys.SendCipherKey = keys.SendCipherKey[:cipherKeyLen]
+	keys.RecvCipherKey = keys.RecvCipherKey[:cipherKeyLen]
+
+	newData, err := NewDataChannel(keys, negotiatedCipher, c.config.Auth, push.PeerID)
 	if err != nil {
 		return nil, err
 	}
+	c.dataLock.Lock()
+	oldData := c.data
+	c.data = newData
+	c.dataLock.Unlock()
+	// oldData is simply dropped; the GC will reclaim it once in-flight
+	// read/write operations that captured the old pointer finish.
+	_ = oldData
 	c.markSend()
 	c.markReceive()
-	_ = c.tlsConn.SetDeadline(time.Time{})
-	go c.watchControl()
 	return push, nil
 }
 
@@ -159,7 +229,10 @@ func (c *Client) WritePing(ctx context.Context) error {
 }
 
 func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bool) error {
-	if c.data == nil {
+	c.dataLock.RLock()
+	data := c.data
+	c.dataLock.RUnlock()
+	if data == nil {
 		return errors.New("openvpn data channel is not ready")
 	}
 	if err := c.writeSem.Acquire(ctx, 1); err != nil {
@@ -173,7 +246,7 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		}
 		packet = compressed
 	}
-	encrypted, err := c.data.Encrypt(packet)
+	encrypted, err := data.Encrypt(packet)
 	if err != nil {
 		return err
 	}
@@ -186,15 +259,18 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 }
 
 func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
-	if c.data == nil {
-		return nil, errors.New("openvpn data channel is not ready")
-	}
 	for {
+		c.dataLock.RLock()
+		data := c.data
+		c.dataLock.RUnlock()
+		if data == nil {
+			return nil, errors.New("openvpn data channel is not ready")
+		}
 		packet, err := c.mux.ReadDataPacket(ctx)
 		if err != nil {
 			return nil, err
 		}
-		plain, err := c.data.Decrypt(packet)
+		plain, err := data.Decrypt(packet)
 		if err != nil {
 			continue
 		}
@@ -209,12 +285,62 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 	}
 }
 
-// watchControl terminates the client when the established control channel
-// starts a new key epoch or otherwise stops.
+// watchControl monitors the control channel for TLS renegotiation requests
+// (soft resets / rekeys). When the server initiates a rekey, the client
+// performs a full TLS renegotiation followed by a new key method 2 exchange,
+// then atomically swaps in a fresh DataChannel. If renegotiation fails or
+// the control channel stops, the client is terminated.
 func (c *Client) watchControl() {
-	_ = c.control.waitForSoftReset(c.runCtx)
-	c.cancel()
-	_ = c.mux.Close()
+	for {
+		err := c.control.waitForSoftReset(c.runCtx)
+		if err != nil {
+			c.cancel()
+			_ = c.mux.Close()
+			return
+		}
+		// Server initiated a rekey. Perform renegotiation.
+		if err := c.renegotiate(); err != nil {
+			c.cancel()
+			_ = c.mux.Close()
+			return
+		}
+	}
+}
+
+// errRenegotiateNoTLS is returned when renegotiate() is called before a TLS
+// connection has been established (e.g. in unit tests without a real server).
+var errRenegotiateNoTLS = errors.New("cannot renegotiate: tls connection not established")
+
+// renegotiate performs a single TLS renegotiation cycle:
+// 1. Send our own soft reset to acknowledge the server's rekey request
+// 2. Renegotiate the TLS session on the existing tlsConn
+// 3. Exchange fresh key method 2 records and derive new data channel keys
+// 4. Atomically replace c.data with the new DataChannel
+func (c *Client) renegotiate() error {
+	if c.tlsConn == nil {
+		return errRenegotiateNoTLS
+	}
+	renegCtx, cancel := context.WithTimeout(c.runCtx, renegotiateTimeout)
+	defer cancel()
+
+	// Acknowledge the server's soft reset by sending our own.
+	if err := c.control.SendSoftReset(renegCtx); err != nil {
+		return fmt.Errorf("send soft reset: %w", err)
+	}
+
+	// Perform TLS renegotiation. The tlsConn was configured with
+	// RenegotiateFreelyAsClient, so this re-enters the TLS handshake on
+	// the existing connection.
+	if err := c.tlsConn.HandshakeContext(renegCtx); err != nil {
+		return fmt.Errorf("tls renegotiation: %w", err)
+	}
+
+	// Exchange fresh key material and swap the data channel.
+	_, err := c.doKeyExchange(renegCtx)
+	if err != nil {
+		return fmt.Errorf("rekey exchange: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) SinceSend() time.Duration {
@@ -353,6 +479,11 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	cfg := &tls.Config{
 		InsecureSkipVerify: true,
 		VerifyConnection:   verify,
+		// Allow the server to initiate TLS renegotiation (rekey). OpenVPN
+		// servers rekey the control channel at regular intervals (default 1h).
+		// Without this, Go's tls.Conn rejects renegotiation and the
+		// connection dies on every rekey.
+		Renegotiation: tls.RenegotiateFreelyAsClient,
 	}
 	certPEM := bytes.TrimSpace(c.config.Cert)
 	keyPEM := bytes.TrimSpace(c.config.Key)

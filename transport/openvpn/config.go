@@ -61,17 +61,127 @@ type ClientConfig struct {
 
 	TLSCryptKey []byte
 	TLSAuthKey  []byte
+
+	// TLSCryptV2ClientKey is the client-side key for tls-crypt-v2 (256 bytes).
+	TLSCryptV2ClientKey []byte
+	// TLSCryptV2ServerKey is the server-side key for tls-crypt-v2 (256 bytes).
+	TLSCryptV2ServerKey []byte
+
+	// TLSCryptV2Client is the raw PEM-encoded tls-crypt-v2 client key.
+	TLSCryptV2Client []byte
+	// TLSCryptV2Server is the raw PEM-encoded tls-crypt-v2 server key.
+	TLSCryptV2Server []byte
+
+	// DataCiphers is the list of data channel ciphers the client offers to
+	// the server for negotiation (OpenVPN --data-ciphers). If non-empty, the
+	// negotiated cipher is the first entry in the server's pushed cipher list
+	// that also appears here. If empty, the single Cipher field is used.
+	DataCiphers []string
+
+	// FallbackCipher is used when the server does not support cipher
+	// negotiation (OpenVPN --data-ciphers-fallback).
+	FallbackCipher string
 }
 
 // DataCipherKeyLength returns the key size for the negotiated data cipher.
 func (c ClientConfig) DataCipherKeyLength() int {
-	switch c.Cipher {
+	return CipherKeyLength(c.Cipher)
+}
+
+// CipherKeyLength returns the key size for a given cipher name.
+func CipherKeyLength(cipher string) int {
+	switch cipher {
 	case CipherAES256GCM, CipherAES256CBC, CipherChaCha20Poly1305:
 		return 32
 	case CipherAES192GCM, CipherAES192CBC:
 		return 24
 	default:
 		return 16
+	}
+}
+
+// NegotiateCipher selects the data channel cipher based on the server-pushed
+// cipher list and the locally configured DataCiphers list.
+//
+// If the server pushed a cipher list (via "data-ciphers" or "cipher" push
+// options), the result is the first cipher in the server's list that also
+// appears in the local DataCiphers list. If no intersection exists and a
+// FallbackCipher is configured, it is used. If no fallback is configured but
+// the server pushed a single cipher that matches the local Cipher, that is
+// used.
+//
+// If the server did not push any cipher options, the local Cipher is used
+// as-is (legacy behavior for servers without cipher negotiation).
+func (c ClientConfig) NegotiateCipher(pushedCiphers []string, pushedCipher string) (string, error) {
+	if len(pushedCiphers) == 0 && pushedCipher == "" {
+		// Server did not negotiate; use the configured cipher.
+		return c.Cipher, nil
+	}
+
+	if len(c.DataCiphers) > 0 {
+		// Try to find a cipher in the server's list that we also support.
+		serverList := pushedCiphers
+		if len(serverList) == 0 && pushedCipher != "" {
+			serverList = []string{pushedCipher}
+		}
+		for _, serverCipher := range serverList {
+			normalized := normalizeCipher(serverCipher)
+			for _, localCipher := range c.DataCiphers {
+				if normalizeCipher(localCipher) == normalized {
+					return normalized, nil
+				}
+			}
+		}
+		// No intersection. Try fallback.
+		if c.FallbackCipher != "" {
+			return normalizeCipher(c.FallbackCipher), nil
+		}
+		return "", fmt.Errorf("no common data cipher between client %v and server %v", c.DataCiphers, serverList)
+	}
+
+	// No local DataCiphers list. Use the pushed cipher if it matches our
+	// configured cipher, or if we have a fallback.
+	if pushedCipher != "" {
+		normalized := normalizeCipher(pushedCipher)
+		if normalized == c.Cipher {
+			return normalized, nil
+		}
+		if c.FallbackCipher != "" {
+			return normalizeCipher(c.FallbackCipher), nil
+		}
+		// Accept the server's cipher even if it differs from our default,
+		// as long as it's a supported cipher.
+		if isSupportedCipher(normalized) {
+			return normalized, nil
+		}
+		return "", fmt.Errorf("server pushed unsupported cipher %q", pushedCipher)
+	}
+
+	// Server pushed a data-ciphers list but no single cipher.
+	if len(pushedCiphers) > 0 {
+		for _, sc := range pushedCiphers {
+			normalized := normalizeCipher(sc)
+			if isSupportedCipher(normalized) {
+				if c.FallbackCipher != "" {
+					return normalizeCipher(c.FallbackCipher), nil
+				}
+				return normalized, nil
+			}
+		}
+	}
+
+	return c.Cipher, nil
+}
+
+// isSupportedCipher returns true if the cipher name is recognized.
+func isSupportedCipher(cipher string) bool {
+	switch cipher {
+	case CipherAES128GCM, CipherAES192GCM, CipherAES256GCM,
+		CipherAES128CBC, CipherAES192CBC, CipherAES256CBC,
+		CipherChaCha20Poly1305:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -154,6 +264,20 @@ func (c *ClientConfig) Prepare() error {
 		}
 		c.TLSCryptKey = key
 	}
+	if len(bytes.TrimSpace(c.TLSCryptV2Client)) > 0 {
+		key, err := DecodeTLSCryptV2ClientKey(c.TLSCryptV2Client)
+		if err != nil {
+			return fmt.Errorf("parse tls-crypt-v2 client key: %w", err)
+		}
+		c.TLSCryptV2ClientKey = key
+	}
+	if len(bytes.TrimSpace(c.TLSCryptV2Server)) > 0 {
+		key, err := DecodeTLSCryptV2ServerKey(c.TLSCryptV2Server)
+		if err != nil {
+			return fmt.Errorf("parse tls-crypt-v2 server key: %w", err)
+		}
+		c.TLSCryptV2ServerKey = key
+	}
 	return nil
 }
 
@@ -181,6 +305,15 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	}
 	if len(bytes.TrimSpace(c.TLSAuth)) > 0 && len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
 		return errors.New("openvpn tls-auth and tls-crypt are mutually exclusive")
+	}
+	hasTLSCryptV2 := len(bytes.TrimSpace(c.TLSCryptV2Client)) > 0 || len(bytes.TrimSpace(c.TLSCryptV2Server)) > 0
+	if hasTLSCryptV2 {
+		if len(bytes.TrimSpace(c.TLSAuth)) > 0 || len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
+			return errors.New("openvpn tls-crypt-v2 is mutually exclusive with tls-auth and tls-crypt")
+		}
+		if len(bytes.TrimSpace(c.TLSCryptV2Client)) == 0 || len(bytes.TrimSpace(c.TLSCryptV2Server)) == 0 {
+			return errors.New("openvpn tls-crypt-v2 requires both client and server keys")
+		}
 	}
 	for name, value := range map[string][]byte{
 		"ca": c.CA,
@@ -216,13 +349,21 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 }
 
 func DecodeStaticKey(block []byte) ([]byte, error) {
+	return decodeStaticKeyWithType(block, "OpenVPN Static key V1")
+}
+
+// decodeStaticKeyWithType decodes a static key from a PEM-like block with a
+// specified type string (e.g. "OpenVPN Static key V1" or
+// "OpenVPN tls-crypt-v2 client key"). The raw key is hex-encoded in the
+// block body, matching OpenVPN's key file format.
+func decodeStaticKeyWithType(block []byte, keyType string) ([]byte, error) {
 	var hexLines []string
 	for _, raw := range strings.Split(string(block), "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if strings.HasPrefix(line, "-----BEGIN OpenVPN Static key") || strings.HasPrefix(line, "-----END OpenVPN Static key") {
+		if strings.HasPrefix(line, "-----BEGIN ") || strings.HasPrefix(line, "-----END ") {
 			continue
 		}
 		hexLines = append(hexLines, line)
