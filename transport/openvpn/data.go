@@ -195,6 +195,40 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 	return d.encryptCBC(packet, packetID)
 }
 
+// MaxPayloadForPacketSize returns the largest plaintext payload whose encoded
+// data-channel packet does not exceed packetSize. fixedPlaintext accounts for
+// framing/IP/TCP bytes that must fit alongside the returned payload.
+func (d *DataChannel) MaxPayloadForPacketSize(packetSize, fixedPlaintext int) (int, error) {
+	if d == nil || packetSize <= 0 || fixedPlaintext < 0 {
+		return 0, errors.New("invalid data packet budget")
+	}
+	encodedLength := func(plain int) int {
+		if d.sendAEAD != nil {
+			return len(d.header) + 4 + DataChannelTagSize + plain
+		}
+		blockSize := d.sendBlock.BlockSize()
+		padded := 4 + plain
+		padding := blockSize - padded%blockSize
+		if padding == 0 {
+			padding = blockSize
+		}
+		return len(d.header) + d.authSize + DataChannelCBCIVSize + padded + padding
+	}
+	if encodedLength(fixedPlaintext) >= packetSize {
+		return 0, errors.New("packet size too small for data channel overhead")
+	}
+	lo, hi := 1, packetSize
+	for lo < hi {
+		mid := lo + (hi-lo+1)/2
+		if encodedLength(fixedPlaintext+mid) <= packetSize {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return lo, nil
+}
+
 func (d *DataChannel) encryptAEAD(packet []byte, packetID uint32) ([]byte, error) {
 	header := d.header
 	var packetIDBytes [4]byte

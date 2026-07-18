@@ -67,7 +67,11 @@ func (c *ControlChannel) SetRemoteSessionID(id SessionID) {
 }
 
 func (c *ControlChannel) SendReset(ctx context.Context) error {
-	_, err := c.Send(ctx, PControlHardResetClientV2, nil)
+	opcode := PControlHardResetClientV2
+	if _, isTLSCryptV2 := c.crypt.(*TLSCryptV2); isTLSCryptV2 {
+		opcode = PControlHardResetClientV3
+	}
+	_, err := c.Send(ctx, opcode, nil)
 	return err
 }
 
@@ -302,6 +306,10 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 	encoded, err := packet.Encode(c.crypt, packetID, unixTime)
 	if err != nil {
 		return err
+	}
+	if tlsCryptV2, ok := c.crypt.(*TLSCryptV2); ok &&
+		packet.Opcode == PControlHardResetClientV3 && packet.MessageID == 0 {
+		encoded = append(encoded, tlsCryptV2.WrappedClientKey()...)
 	}
 	return c.io.WritePacket(ctx, encoded)
 }

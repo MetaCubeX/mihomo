@@ -1,77 +1,49 @@
 package openvpn
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/rasky/go-lzo"
+	"github.com/pierrec/lz4/v4"
 )
 
-// OpenVPN compression framing modes (compress directive, OpenVPN 2.4+).
-//
-// The "compress" directive uses a 1-byte compression byte prefix on each
-// data channel packet:
-//
-//   0x00  - uncompressed (plain)
-//   0x40  - LZO compressed (comp-lzo)
-//   0x50  - compression stub (no actual compression, just framing)
-//   0x69  - LZ4 compressed
-//   0x6A  - LZ4-v2 compressed
-//
-// "stub-v2" uses a slightly different encoding: the byte is 0x50, and if
-// the first byte of the plaintext is 0x00, it is doubled to distinguish
-// from the "uncompressed" case.
 const (
-	compressByteUncompressed = 0x00
-	compressByteLZO          = 0x40
-	compressByteStub         = 0x50
-	compressByteLZ4          = 0x69
-	compressByteLZ4v2        = 0x6A
+	openVPNLZOCompressByte    = 0x66
+	openVPNLZ4CompressByte    = 0x69
+	openVPNNoCompressByte     = 0xfa
+	openVPNNoCompressByteSwap = 0xfb
+	openVPNCompressV2Byte     = 0x50
+	openVPNCompressV2None     = 0x00
+	openVPNCompressV2LZ4      = 0x01
+	openVPNLZ4MaxOutput       = 1 << 16
+	openVPNCompressThreshold  = 100
 )
 
-// CompressionMode represents the OpenVPN compression framing mode.
 type CompressionMode int
 
 const (
-	// CompressionNone means no compression framing at all.
 	CompressionNone CompressionMode = iota
-	// CompressionLZO is the legacy comp-lzo mode.
 	CompressionLZO
-	// CompressionStub adds a stub byte without actual compression.
 	CompressionStub
-	// CompressionStubV2 adds a stub-v2 byte without actual compression.
 	CompressionStubV2
-	// CompressionLZ4 uses LZ4 compression with compress framing.
 	CompressionLZ4
-	// CompressionLZ4v2 uses LZ4-v2 compression.
 	CompressionLZ4v2
 )
 
-// AllowCompressionPolicy controls how the client handles compression.
 type AllowCompressionPolicy int
 
 const (
-	// AllowCompressionNo permits only stub framing; no actual compression.
 	AllowCompressionNo AllowCompressionPolicy = iota
-	// AllowCompressionAsym accepts compressed packets from the server but
-	// does not compress outgoing packets.
 	AllowCompressionAsym
-	// AllowCompressionYes permits compression in both directions.
 	AllowCompressionYes
 )
 
-// ParseCompressionMode parses the "compress" directive value.
 func ParseCompressionMode(mode string) (CompressionMode, error) {
 	switch normalizeLower(mode) {
-	case "", "off", "disabled":
+	case "", "none", "off", "disabled":
 		return CompressionNone, nil
-	case "none":
-		return CompressionNone, nil
-	case "no":
-		return CompressionStub, nil
-	case "stub":
+	case "no", "stub":
 		return CompressionStub, nil
 	case "stub-v2":
 		return CompressionStubV2, nil
@@ -84,7 +56,6 @@ func ParseCompressionMode(mode string) (CompressionMode, error) {
 	}
 }
 
-// ParseAllowCompression parses the "allow-compression" directive value.
 func ParseAllowCompression(policy string) (AllowCompressionPolicy, error) {
 	switch normalizeLower(policy) {
 	case "", "no":
@@ -98,190 +69,204 @@ func ParseAllowCompression(policy string) (AllowCompressionPolicy, error) {
 	}
 }
 
-// Compressor handles OpenVPN data channel compression framing.
 type Compressor struct {
 	mode            CompressionMode
 	allowCompressed AllowCompressionPolicy
 }
 
-// NewCompressor creates a compressor with the given mode and policy.
 func NewCompressor(mode CompressionMode, policy AllowCompressionPolicy) *Compressor {
-	return &Compressor{
-		mode:            mode,
-		allowCompressed: policy,
-	}
+	return &Compressor{mode: mode, allowCompressed: policy}
 }
 
-// Mode returns the compression mode.
 func (c *Compressor) Mode() CompressionMode { return c.mode }
 
-// ShouldCompress returns true if outgoing packets should be compressed.
-func (c *Compressor) ShouldCompress() bool {
+func (c *Compressor) PayloadOverhead() int {
 	if c == nil {
-		return false
+		return 0
 	}
 	switch c.mode {
-	case CompressionLZO, CompressionLZ4, CompressionLZ4v2:
-		return c.allowCompressed == AllowCompressionYes
+	case CompressionLZO, CompressionStub, CompressionLZ4:
+		return 1
+	case CompressionStubV2, CompressionLZ4v2:
+		return 2
 	default:
-		return false
+		return 0
 	}
 }
 
-// CompressFrame adds compression framing to an outgoing packet.
-// Even for stub modes, the framing byte is prepended.
-func (c *Compressor) CompressFrame(packet []byte) ([]byte, error) {
+func (c *Compressor) ShouldCompress() bool {
+	return c != nil && c.allowCompressed == AllowCompressionYes &&
+		(c.mode == CompressionLZO || c.mode == CompressionLZ4 || c.mode == CompressionLZ4v2)
+}
+
+func (c *Compressor) CompressFrame(payload []byte) ([]byte, error) {
 	if c == nil || c.mode == CompressionNone {
-		return packet, nil
+		return append([]byte(nil), payload...), nil
 	}
-
 	switch c.mode {
 	case CompressionStub:
-		// Stub: prepend 0x50 byte.
-		out := make([]byte, 1+len(packet))
-		out[0] = compressByteStub
-		copy(out[1:], packet)
-		return out, nil
-
+		return applyV1SwapFrame(payload), nil
 	case CompressionStubV2:
-		// Stub-v2: prepend 0x50 byte. If the first byte of the payload
-		// is 0x00, prepend an extra 0x00 to disambiguate from uncompressed.
-		if len(packet) > 0 && packet[0] == 0x00 {
-			out := make([]byte, 2+len(packet))
-			out[0] = compressByteStub
-			out[1] = 0x00
-			copy(out[2:], packet)
-			return out, nil
-		}
-		out := make([]byte, 1+len(packet))
-		out[0] = compressByteStub
-		copy(out[1:], packet)
-		return out, nil
-
+		return escapeV2Stub(payload), nil
 	case CompressionLZ4:
-		if c.allowCompressed != AllowCompressionYes {
-			// Not compressing, but still need stub framing.
-			out := make([]byte, 1+len(packet))
-			out[0] = compressByteStub
-			copy(out[1:], packet)
-			return out, nil
+		if c.allowCompressed == AllowCompressionYes && len(payload) >= openVPNCompressThreshold {
+			if block, ok, err := compressLZ4Block(payload); err != nil {
+				return nil, err
+			} else if ok && len(block) < len(payload) {
+				return applyV1LZ4Frame(block), nil
+			}
 		}
-		// LZ4 compression would require a LZ4 library.
-		// For now, send uncompressed with LZ4 framing marker.
-		out := make([]byte, 1+len(packet))
-		out[0] = compressByteUncompressed
-		copy(out[1:], packet)
-		return out, nil
-
+		return applyV1SwapFrame(payload), nil
 	case CompressionLZ4v2:
-		if c.allowCompressed != AllowCompressionYes {
-			out := make([]byte, 1+len(packet))
-			out[0] = compressByteStub
-			copy(out[1:], packet)
-			return out, nil
+		if c.allowCompressed == AllowCompressionYes && len(payload) >= openVPNCompressThreshold {
+			if block, ok, err := compressLZ4Block(payload); err != nil {
+				return nil, err
+			} else if ok && len(block)+2 < len(payload) {
+				out := make([]byte, 2+len(block))
+				out[0], out[1] = openVPNCompressV2Byte, openVPNCompressV2LZ4
+				copy(out[2:], block)
+				return out, nil
+			}
 		}
-		out := make([]byte, 1+len(packet))
-		out[0] = compressByteUncompressed
-		copy(out[1:], packet)
-		return out, nil
-
+		return escapeV2Stub(payload), nil
 	case CompressionLZO:
-		// LZO compression via comp-lzo is handled separately by the legacy
-		// comp-lzo path in the client. This path should not be reached.
-		return packet, nil
-
+		return lzo1xCompressSafe(payload)
 	default:
-		return packet, nil
+		return nil, errors.New("invalid compression mode")
 	}
 }
 
-// DecompressFrame removes compression framing from an incoming packet.
-func (c *Compressor) DecompressFrame(packet []byte) ([]byte, error) {
-	if c == nil || c.mode == CompressionNone || len(packet) == 0 {
-		return packet, nil
+func (c *Compressor) DecompressFrame(payload []byte) ([]byte, error) {
+	if c == nil || c.mode == CompressionNone {
+		return append([]byte(nil), payload...), nil
 	}
-
+	if len(payload) == 0 {
+		return nil, errors.New("missing compression marker")
+	}
 	switch c.mode {
 	case CompressionStub:
-		if packet[0] != compressByteStub {
-			return nil, fmt.Errorf("unexpected compression byte 0x%02x for stub mode", packet[0])
+		if payload[0] != openVPNNoCompressByteSwap {
+			return nil, fmt.Errorf("invalid compression stub marker 0x%02x", payload[0])
 		}
-		return packet[1:], nil
-
+		return unswapV1Frame(payload), nil
 	case CompressionStubV2:
-		if packet[0] != compressByteStub {
-			return nil, fmt.Errorf("unexpected compression byte 0x%02x for stub-v2 mode", packet[0])
-		}
-		// In stub-v2, if the payload started with 0x00, an extra 0x00 was
-		// inserted after the stub byte. We need to remove it.
-		if len(packet) > 1 && packet[1] == 0x00 {
-			// Remove the stub byte AND the disambiguation byte.
-			return packet[2:], nil
-		}
-		// No disambiguation byte; just remove the stub byte.
-		return packet[1:], nil
-
-	case CompressionLZ4, CompressionLZ4v2:
-		if len(packet) < 1 {
-			return nil, errors.New("empty compressed packet")
-		}
-		switch packet[0] {
-		case compressByteUncompressed:
-			return packet[1:], nil
-		case compressByteLZ4, compressByteLZ4v2:
+		return unwrapV2Frame(payload, false, c.allowCompressed)
+	case CompressionLZ4:
+		switch payload[0] {
+		case openVPNNoCompressByte:
+			return append([]byte(nil), payload[1:]...), nil
+		case openVPNNoCompressByteSwap:
+			return unswapV1Frame(payload), nil
+		case openVPNLZ4CompressByte:
 			if c.allowCompressed == AllowCompressionNo {
-				return nil, errors.New("received LZ4 compressed packet but allow-compression is no")
+				return nil, errors.New("received LZ4 packet while compression is forbidden")
 			}
-			// LZ4 decompression would require a LZ4 library.
-			// For now, return an error.
-			return nil, errors.New("LZ4 decompression not yet supported")
-		case compressByteStub:
-			return packet[1:], nil
+			return decompressLZ4Block(restoreV1LZ4Block(payload))
 		default:
-			return nil, fmt.Errorf("unexpected compression byte 0x%02x", packet[0])
+			return nil, fmt.Errorf("invalid LZ4 v1 marker 0x%02x", payload[0])
 		}
-
+	case CompressionLZ4v2:
+		return unwrapV2Frame(payload, true, c.allowCompressed)
 	case CompressionLZO:
-		// LZO via compress framing.
-		if len(packet) < 1 {
-			return nil, errors.New("empty LZO packet")
-		}
-		switch packet[0] {
-		case compressByteUncompressed:
-			return packet[1:], nil
-		case compressByteLZO:
-			if c.allowCompressed == AllowCompressionNo {
-				return nil, errors.New("received LZO compressed packet but allow-compression is no")
-			}
-			if len(packet) < 2 {
-				return nil, nil
-			}
-			out, err := lzoDecompress(packet[1:])
-			if err != nil {
-				return nil, fmt.Errorf("LZO decompression: %w", err)
-			}
-			return out, nil
-		case compressByteStub:
-			return packet[1:], nil
-		default:
-			return nil, fmt.Errorf("unexpected compression byte 0x%02x for LZO mode", packet[0])
-		}
-
+		return lzo1xDecompressSafe(payload)
 	default:
-		return packet, nil
+		return nil, errors.New("invalid compression mode")
 	}
 }
 
-// lzoDecompress decompresses LZO1X data.
-func lzoDecompress(src []byte) ([]byte, error) {
-	r := bytes.NewReader(src)
-	out, err := lzo.Decompress1X(r, len(src), 0)
+func applyV1SwapFrame(payload []byte) []byte {
+	if len(payload) == 0 {
+		return []byte{openVPNNoCompressByteSwap}
+	}
+	out := make([]byte, len(payload)+1)
+	out[0] = openVPNNoCompressByteSwap
+	copy(out[1:], payload[1:])
+	out[len(payload)] = payload[0]
+	return out
+}
+
+func unswapV1Frame(frame []byte) []byte {
+	if len(frame) <= 1 {
+		return []byte{}
+	}
+	n := len(frame) - 1
+	out := make([]byte, n)
+	out[0] = frame[n]
+	copy(out[1:], frame[1:n])
+	return out
+}
+
+func applyV1LZ4Frame(block []byte) []byte {
+	out := make([]byte, len(block)+1)
+	out[0] = openVPNLZ4CompressByte
+	copy(out[1:], block[1:])
+	out[len(block)] = block[0]
+	return out
+}
+
+func restoreV1LZ4Block(frame []byte) []byte {
+	if len(frame) <= 1 {
+		return nil
+	}
+	n := len(frame) - 1
+	out := make([]byte, n)
+	out[0] = frame[n]
+	copy(out[1:], frame[1:n])
+	return out
+}
+
+func escapeV2Stub(payload []byte) []byte {
+	if len(payload) == 0 || payload[0] != openVPNCompressV2Byte {
+		return append([]byte(nil), payload...)
+	}
+	out := make([]byte, len(payload)+2)
+	out[0], out[1] = openVPNCompressV2Byte, openVPNCompressV2None
+	copy(out[2:], payload)
+	return out
+}
+
+func unwrapV2Frame(payload []byte, allowLZ4 bool, policy AllowCompressionPolicy) ([]byte, error) {
+	if len(payload) == 0 || payload[0] != openVPNCompressV2Byte {
+		return append([]byte(nil), payload...), nil
+	}
+	if len(payload) < 2 {
+		return nil, errors.New("truncated compression v2 header")
+	}
+	switch payload[1] {
+	case openVPNCompressV2None:
+		return append([]byte(nil), payload[2:]...), nil
+	case openVPNCompressV2LZ4:
+		if !allowLZ4 || policy == AllowCompressionNo {
+			return nil, errors.New("received unsupported LZ4 v2 payload")
+		}
+		return decompressLZ4Block(payload[2:])
+	default:
+		return nil, fmt.Errorf("invalid compression v2 subtype 0x%02x", payload[1])
+	}
+}
+
+func compressLZ4Block(payload []byte) ([]byte, bool, error) {
+	out := make([]byte, lz4.CompressBlockBound(len(payload)))
+	n, err := lz4.CompressBlock(payload, out, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return out, nil
+	if n == 0 {
+		return nil, false, nil
+	}
+	return out[:n], true, nil
 }
 
-func normalizeLower(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
+func decompressLZ4Block(block []byte) ([]byte, error) {
+	if len(block) == 0 {
+		return nil, errors.New("empty LZ4 block")
+	}
+	out := make([]byte, openVPNLZ4MaxOutput)
+	n, err := lz4.UncompressBlock(block, out)
+	if err != nil || n <= 0 {
+		return nil, errors.New("LZ4 block decompression failed")
+	}
+	return out[:n], nil
 }
+
+func normalizeLower(s string) string { return strings.ToLower(strings.TrimSpace(s)) }

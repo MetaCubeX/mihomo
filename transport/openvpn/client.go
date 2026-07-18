@@ -46,6 +46,8 @@ type Client struct {
 
 	// compressor handles data channel compression framing.
 	compressor *Compressor
+	// fragmenter handles OpenVPN fragment v1 framing and bounded reassembly.
+	fragmenter *Fragmenter
 
 	// dataLock protects c.data during TLS renegotiation (rekey), where the
 	// DataChannel is atomically replaced. Read and write paths acquire a
@@ -69,12 +71,9 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		return nil, errors.New("nil openvpn packet io")
 	}
 	var crypt ControlCryptor
-	if len(config.TLSCryptV2ClientKey) > 0 || len(config.TLSCryptV2ServerKey) > 0 {
-		if len(config.TLSCryptV2ClientKey) == 0 || len(config.TLSCryptV2ServerKey) == 0 {
-			return nil, errors.New("tls-crypt-v2 requires both client and server keys")
-		}
+	if len(config.TLSCryptV2Key) > 0 || len(config.TLSCryptV2WrappedKey) > 0 {
 		var err error
-		crypt, err = NewTLSCryptV2(config.TLSCryptV2ClientKey, config.TLSCryptV2ServerKey, true)
+		crypt, err = NewTLSCryptV2(config.TLSCryptV2Key, config.TLSCryptV2WrappedKey)
 		if err != nil {
 			return nil, err
 		}
@@ -106,6 +105,9 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		cancel:     cancel,
 		writeSem:   semaphore.NewWeighted(1),
 		compressor: config.buildCompressor(),
+	}
+	if config.Fragment > 0 {
+		client.fragmenter = NewFragmenter()
 	}
 	client.markSend()
 	client.markReceive()
@@ -247,7 +249,7 @@ func (c *Client) WritePing(ctx context.Context) error {
 	return c.writeDataPacket(ctx, openVPNPingPacket, false)
 }
 
-func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bool) error {
+func (c *Client) writeDataPacket(ctx context.Context, packet []byte, frameIP bool) error {
 	c.dataLock.RLock()
 	data := c.data
 	c.dataLock.RUnlock()
@@ -259,8 +261,25 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	}
 	defer c.writeSem.Release(1)
 
-	// Apply compression framing if configured.
-	if compress {
+	if frameIP && c.config.MSSFix > 0 {
+		fixed := ipv4MinHeader + tcpMinHeader
+		if c.compressor != nil {
+			fixed += c.compressor.PayloadOverhead()
+		}
+		if c.fragmenter != nil {
+			fixed += 4
+		}
+		maximum, err := data.MaxPayloadForPacketSize(int(c.config.MSSFix), fixed)
+		if err != nil {
+			return fmt.Errorf("calculate mss-fix: %w", err)
+		}
+		if maximum > 0xffff {
+			maximum = 0xffff
+		}
+		packet = clampTCPSegmentMSS(packet, uint16(maximum))
+	}
+
+	if frameIP {
 		if c.compressor != nil {
 			framed, err := c.compressor.CompressFrame(packet)
 			if err != nil {
@@ -268,22 +287,33 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 			}
 			packet = framed
 		} else if c.config.CompLZO == CompLzoYes {
-			// Legacy comp-lzo path (no compress directive).
-			compressed, err := lzo1xCompressSafe(packet)
+			framed, err := lzo1xCompressSafe(packet)
 			if err != nil {
 				return err
 			}
-			packet = compressed
+			packet = framed
 		}
 	}
 
-	encrypted, err := data.Encrypt(packet)
-	if err != nil {
-		return err
+	payloads := [][]byte{packet}
+	if frameIP && c.fragmenter != nil {
+		fragmentSize, err := data.MaxPayloadForPacketSize(int(c.config.Fragment), 4)
+		if err != nil {
+			return fmt.Errorf("calculate fragment size: %w", err)
+		}
+		payloads, err = c.fragmenter.Encode(packet, fragmentSize)
+		if err != nil {
+			return err
+		}
 	}
-	err = c.mux.WritePacket(ctx, encrypted)
-	if err != nil {
-		return err
+	for _, payload := range payloads {
+		encrypted, err := data.Encrypt(payload)
+		if err != nil {
+			return err
+		}
+		if err = c.mux.WritePacket(ctx, encrypted); err != nil {
+			return err
+		}
 	}
 	c.markSend()
 	return nil
@@ -308,6 +338,14 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 		c.markReceive()
 		if IsPingPacket(plain) {
 			continue
+		}
+
+		if c.fragmenter != nil {
+			reassembled, complete, err := c.fragmenter.Decode(plain)
+			if err != nil || !complete {
+				continue
+			}
+			plain = reassembled
 		}
 
 		// Remove compression framing if configured.

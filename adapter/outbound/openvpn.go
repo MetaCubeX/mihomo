@@ -43,56 +43,57 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name             string            `proxy:"name"`
-	Server           string            `proxy:"server"`
-	Port             int               `proxy:"port"`
-	Servers          []OpenVPNRemote   `proxy:"servers,omitempty"`
-	RemoteRandom     bool              `proxy:"remote-random,omitempty"`
-	Proto            string            `proxy:"proto,omitempty"`
-	Dev              string            `proxy:"dev,omitempty"`
-	Cipher           string            `proxy:"cipher,omitempty"`
-	DataCiphers      []string          `proxy:"data-ciphers,omitempty"`
+	Name               string          `proxy:"name"`
+	Server             string          `proxy:"server"`
+	Port               int             `proxy:"port"`
+	Servers            []OpenVPNRemote `proxy:"servers,omitempty"`
+	RemoteRandom       bool            `proxy:"remote-random,omitempty"`
+	Proto              string          `proxy:"proto,omitempty"`
+	Dev                string          `proxy:"dev,omitempty"`
+	Cipher             string          `proxy:"cipher,omitempty"`
+	DataCiphers        []string        `proxy:"data-ciphers,omitempty"`
 	DataCipherFallback string          `proxy:"data-ciphers-fallback,omitempty"`
-	Auth             string            `proxy:"auth,omitempty"`
-	CompLZO          string            `proxy:"comp-lzo,omitempty"`
-	Compression      string            `proxy:"compress,omitempty"`
-	AllowCompression string            `proxy:"allow-compression,omitempty"`
+	Auth               string          `proxy:"auth,omitempty"`
+	CompLZO            string          `proxy:"comp-lzo,omitempty"`
+	Compression        string          `proxy:"compress,omitempty"`
+	AllowCompression   string          `proxy:"allow-compression,omitempty"`
+	MSSFix             uint32          `proxy:"mss-fix,omitempty"`
+	Fragment           uint32          `proxy:"fragment,omitempty"`
 
 	// TLS verification options
-	ServerName         string   `proxy:"server-name,omitempty"`
-	ServerNameType     string   `proxy:"server-name-type,omitempty"`
-	PeerFingerprint    []string `proxy:"peer-fingerprint,omitempty"`
-	RemoteCertKU       []string `proxy:"remote-cert-ku,omitempty"`
-	RemoteCertEKU      string   `proxy:"remote-cert-eku,omitempty"`
-	TLSVersionMin      string   `proxy:"tls-version-min,omitempty"`
-	TLSVersionMax      string   `proxy:"tls-version-max,omitempty"`
-	TLSCipher          string   `proxy:"tls-cipher,omitempty"`
-	TLSGroups          string   `proxy:"tls-groups,omitempty"`
+	ServerName      string   `proxy:"server-name,omitempty"`
+	ServerNameType  string   `proxy:"server-name-type,omitempty"`
+	PeerFingerprint []string `proxy:"peer-fingerprint,omitempty"`
+	RemoteCertKU    []string `proxy:"remote-cert-ku,omitempty"`
+	RemoteCertEKU   string   `proxy:"remote-cert-eku,omitempty"`
+	TLSVersionMin   string   `proxy:"tls-version-min,omitempty"`
+	TLSVersionMax   string   `proxy:"tls-version-max,omitempty"`
+	TLSCipher       string   `proxy:"tls-cipher,omitempty"`
+	TLSGroups       string   `proxy:"tls-groups,omitempty"`
 
 	// Route / push options
-	PullFilters         []OpenVPNPullFilter `proxy:"pull-filter,omitempty"`
-	RouteNoPull         bool                `proxy:"route-no-pull,omitempty"`
-	Routes              []string            `proxy:"routes,omitempty"`
-	RouteGateway        string              `proxy:"route-gateway,omitempty"`
-	RouteMetric         int                 `proxy:"route-metric,omitempty"`
-	RedirectGateway     bool                `proxy:"redirect-gateway,omitempty"`
-	RedirectGatewayFlags []string           `proxy:"redirect-gateway-flags,omitempty"`
-	CA               string            `proxy:"ca"`
-	Cert             string            `proxy:"cert,omitempty"`
-	Key              string            `proxy:"key,omitempty"`
-	TLSAuth          string            `proxy:"tls-auth,omitempty"`
-	KeyDirection     string            `proxy:"key-direction,omitempty"`
-	TLSCrypt         string            `proxy:"tls-crypt,omitempty"`
-	TLSCryptV2Client string            `proxy:"tls-crypt-v2-client,omitempty"`
-	TLSCryptV2Server string            `proxy:"tls-crypt-v2-server,omitempty"`
-	Username         string            `proxy:"username,omitempty"`
-	Password         string            `proxy:"password,omitempty"`
-	PeerInfo         map[string]string `proxy:"peer-info,omitempty"`
-	Ping             int               `proxy:"ping,omitempty"`
-	PingRestart      int               `proxy:"ping-restart,omitempty"`
-	HandshakeTimeout int               `proxy:"handshake-timeout,omitempty"`
-	MTU              int               `proxy:"mtu,omitempty"`
-	UDP              bool              `proxy:"udp,omitempty"`
+	PullFilters          []OpenVPNPullFilter `proxy:"pull-filter,omitempty"`
+	RouteNoPull          bool                `proxy:"route-no-pull,omitempty"`
+	Routes               []string            `proxy:"routes,omitempty"`
+	RouteGateway         string              `proxy:"route-gateway,omitempty"`
+	RouteMetric          int                 `proxy:"route-metric,omitempty"`
+	RedirectGateway      bool                `proxy:"redirect-gateway,omitempty"`
+	RedirectGatewayFlags []string            `proxy:"redirect-gateway-flags,omitempty"`
+	CA                   string              `proxy:"ca"`
+	Cert                 string              `proxy:"cert,omitempty"`
+	Key                  string              `proxy:"key,omitempty"`
+	TLSAuth              string              `proxy:"tls-auth,omitempty"`
+	KeyDirection         string              `proxy:"key-direction,omitempty"`
+	TLSCrypt             string              `proxy:"tls-crypt,omitempty"`
+	TLSCryptV2           string              `proxy:"tls-crypt-v2,omitempty"`
+	Username             string              `proxy:"username,omitempty"`
+	Password             string              `proxy:"password,omitempty"`
+	PeerInfo             map[string]string   `proxy:"peer-info,omitempty"`
+	Ping                 int                 `proxy:"ping,omitempty"`
+	PingRestart          int                 `proxy:"ping-restart,omitempty"`
+	HandshakeTimeout     int                 `proxy:"handshake-timeout,omitempty"`
+	MTU                  int                 `proxy:"mtu,omitempty"`
+	UDP                  bool                `proxy:"udp,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -116,28 +117,30 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		return nil, errors.New("openvpn handshake timeout must be non-negative")
 	}
 	cfg := &ovpn.ClientConfig{
-		RemoteHost:     option.Server,
-		RemotePort:     uint16(option.Port),
-		Proto:          option.Proto,
-		Dev:            option.Dev,
-		Cipher:         option.Cipher,
-		DataCiphers:    option.DataCiphers,
-		FallbackCipher: option.DataCipherFallback,
-		Auth:           option.Auth,
+		RemoteHost:       option.Server,
+		RemotePort:       uint16(option.Port),
+		Proto:            option.Proto,
+		Dev:              option.Dev,
+		Cipher:           option.Cipher,
+		DataCiphers:      option.DataCiphers,
+		FallbackCipher:   option.DataCipherFallback,
+		Auth:             option.Auth,
 		CompLZO:          option.CompLZO,
 		Compression:      option.Compression,
 		AllowCompression: option.AllowCompression,
+		MSSFix:           option.MSSFix,
+		Fragment:         option.Fragment,
 
 		// TLS verification
-		ServerName:     option.ServerName,
-		ServerNameType: option.ServerNameType,
+		ServerName:      option.ServerName,
+		ServerNameType:  option.ServerNameType,
 		PeerFingerprint: option.PeerFingerprint,
-		RemoteCertKU:   option.RemoteCertKU,
-		RemoteCertEKU:  option.RemoteCertEKU,
-		TLSVersionMin:  option.TLSVersionMin,
-		TLSVersionMax:  option.TLSVersionMax,
-		TLSCipher:      option.TLSCipher,
-		TLSGroups:      option.TLSGroups,
+		RemoteCertKU:    option.RemoteCertKU,
+		RemoteCertEKU:   option.RemoteCertEKU,
+		TLSVersionMin:   option.TLSVersionMin,
+		TLSVersionMax:   option.TLSVersionMax,
+		TLSCipher:       option.TLSCipher,
+		TLSGroups:       option.TLSGroups,
 
 		// Route / push options
 		RouteNoPull:          option.RouteNoPull,
@@ -146,19 +149,18 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		RedirectGateway:      option.RedirectGateway,
 		RedirectGatewayFlags: option.RedirectGatewayFlags,
 
-		CA:             []byte(option.CA),
-		Cert:           []byte(option.Cert),
-		Key:            []byte(option.Key),
-		TLSAuth:          []byte(option.TLSAuth),
-		KeyDirection:     option.KeyDirection,
-		TLSCrypt:         []byte(option.TLSCrypt),
-		TLSCryptV2Client: []byte(option.TLSCryptV2Client),
-		TLSCryptV2Server: []byte(option.TLSCryptV2Server),
-		Username:       option.Username,
-		Password:       option.Password,
-		PeerInfo:       option.PeerInfo,
-		PingInterval:   time.Duration(option.Ping) * time.Second,
-		PingRestart:    time.Duration(option.PingRestart) * time.Second,
+		CA:           []byte(option.CA),
+		Cert:         []byte(option.Cert),
+		Key:          []byte(option.Key),
+		TLSAuth:      []byte(option.TLSAuth),
+		KeyDirection: option.KeyDirection,
+		TLSCrypt:     []byte(option.TLSCrypt),
+		TLSCryptV2:   []byte(option.TLSCryptV2),
+		Username:     option.Username,
+		Password:     option.Password,
+		PeerInfo:     option.PeerInfo,
+		PingInterval: time.Duration(option.Ping) * time.Second,
+		PingRestart:  time.Duration(option.PingRestart) * time.Second,
 	}
 	// Populate multi-server list.
 	if len(option.Servers) > 0 {

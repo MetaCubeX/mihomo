@@ -57,6 +57,12 @@ type ClientConfig struct {
 	Compression string
 	// AllowCompression controls the compression policy (no/asym/yes).
 	AllowCompression string
+	// MSSFix is the maximum encapsulated UDP packet size used to derive the
+	// TCP MSS clamp. Zero disables MSS clamping.
+	MSSFix uint32
+	// Fragment is the maximum encapsulated UDP packet size for OpenVPN's
+	// data-channel fragmentation. Zero disables fragmentation.
+	Fragment uint32
 
 	// TLS verification options (matching OpenVPN remote-cert-tls etc.)
 
@@ -125,15 +131,12 @@ type ClientConfig struct {
 	TLSCryptKey []byte
 	TLSAuthKey  []byte
 
-	// TLSCryptV2ClientKey is the client-side key for tls-crypt-v2 (256 bytes).
-	TLSCryptV2ClientKey []byte
-	// TLSCryptV2ServerKey is the server-side key for tls-crypt-v2 (256 bytes).
-	TLSCryptV2ServerKey []byte
-
-	// TLSCryptV2Client is the raw PEM-encoded tls-crypt-v2 client key.
-	TLSCryptV2Client []byte
-	// TLSCryptV2Server is the raw PEM-encoded tls-crypt-v2 server key.
-	TLSCryptV2Server []byte
+	// TLSCryptV2Key is the first 256 bytes of tls-crypt-v2 client key material.
+	TLSCryptV2Key []byte
+	// TLSCryptV2WrappedKey is appended to the initial V3 hard-reset packet.
+	TLSCryptV2WrappedKey []byte
+	// TLSCryptV2 is the raw PEM-encoded OpenVPN tls-crypt-v2 client key.
+	TLSCryptV2 []byte
 
 	// DataCiphers is the list of data channel ciphers the client offers to
 	// the server for negotiation (OpenVPN --data-ciphers). If non-empty, the
@@ -400,19 +403,13 @@ func (c *ClientConfig) Prepare() error {
 		}
 		c.TLSCryptKey = key
 	}
-	if len(bytes.TrimSpace(c.TLSCryptV2Client)) > 0 {
-		key, err := DecodeTLSCryptV2ClientKey(c.TLSCryptV2Client)
+	if len(bytes.TrimSpace(c.TLSCryptV2)) > 0 {
+		keyMaterial, wrappedKey, err := DecodeTLSCryptV2ClientKey(c.TLSCryptV2)
 		if err != nil {
 			return fmt.Errorf("parse tls-crypt-v2 client key: %w", err)
 		}
-		c.TLSCryptV2ClientKey = key
-	}
-	if len(bytes.TrimSpace(c.TLSCryptV2Server)) > 0 {
-		key, err := DecodeTLSCryptV2ServerKey(c.TLSCryptV2Server)
-		if err != nil {
-			return fmt.Errorf("parse tls-crypt-v2 server key: %w", err)
-		}
-		c.TLSCryptV2ServerKey = key
+		c.TLSCryptV2Key = keyMaterial
+		c.TLSCryptV2WrappedKey = wrappedKey
 	}
 	return nil
 }
@@ -442,13 +439,9 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	if len(bytes.TrimSpace(c.TLSAuth)) > 0 && len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
 		return errors.New("openvpn tls-auth and tls-crypt are mutually exclusive")
 	}
-	hasTLSCryptV2 := len(bytes.TrimSpace(c.TLSCryptV2Client)) > 0 || len(bytes.TrimSpace(c.TLSCryptV2Server)) > 0
-	if hasTLSCryptV2 {
+	if len(bytes.TrimSpace(c.TLSCryptV2)) > 0 {
 		if len(bytes.TrimSpace(c.TLSAuth)) > 0 || len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
 			return errors.New("openvpn tls-crypt-v2 is mutually exclusive with tls-auth and tls-crypt")
-		}
-		if len(bytes.TrimSpace(c.TLSCryptV2Client)) == 0 || len(bytes.TrimSpace(c.TLSCryptV2Server)) == 0 {
-			return errors.New("openvpn tls-crypt-v2 requires both client and server keys")
 		}
 	}
 	for name, value := range map[string][]byte{
