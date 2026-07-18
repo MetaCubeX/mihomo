@@ -248,15 +248,17 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 
 func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 	for {
+		packet, err := c.mux.ReadDataPacket(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// Re-acquire the data channel after reading, since a rekey may have
+		// swapped c.data while ReadDataPacket was blocked.
 		c.dataLock.RLock()
 		data := c.data
 		c.dataLock.RUnlock()
 		if data == nil {
 			return nil, errors.New("openvpn data channel is not ready")
-		}
-		packet, err := c.mux.ReadDataPacket(ctx)
-		if err != nil {
-			return nil, err
 		}
 		plain, err := data.Decrypt(packet)
 		if err != nil {
