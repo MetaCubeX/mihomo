@@ -446,7 +446,14 @@ func (c *Client) markReceive() {
 // even on systems with low timer resolutions (e.g. Windows).
 var start = time.Now().Add(-time.Hour)
 
+// ExplicitExitNotifyCount is the default number of EXIT notifications sent.
+const ExplicitExitNotifyCount = 1
+
 func (c *Client) Close() error {
+	// Send explicit exit notify if configured (UDP only).
+	if c.config.ExplicitExitNotify > 0 && c.config.Proto == ProtoUDP && c.tlsConn != nil {
+		c.sendExitNotify(int(c.config.ExplicitExitNotify))
+	}
 	if c.cancel != nil {
 		c.cancel()
 	}
@@ -457,6 +464,26 @@ func (c *Client) Close() error {
 		return c.mux.Close()
 	}
 	return nil
+}
+
+// sendExitNotify sends N EXIT control messages over the TLS control channel.
+// This tells the server to immediately close the session rather than waiting
+// for a keepalive timeout. Only effective on UDP transport.
+func (c *Client) sendExitNotify(count int) {
+	if count > 10 {
+		count = 10
+	}
+	if count < 1 {
+		count = 1
+	}
+	exitPayload := append([]byte("EXIT"), 0)
+	for i := 0; i < count; i++ {
+		_ = c.tlsConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		if _, err := c.tlsConn.Write(exitPayload); err != nil {
+			break
+		}
+	}
+	_ = c.tlsConn.SetWriteDeadline(time.Time{})
 }
 
 func (c *Client) waitServerReset(ctx context.Context) error {

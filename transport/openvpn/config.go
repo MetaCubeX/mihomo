@@ -63,6 +63,9 @@ type ClientConfig struct {
 	// Fragment is the maximum encapsulated UDP packet size for OpenVPN's
 	// data-channel fragmentation. Zero disables fragmentation.
 	Fragment uint32
+	// ExplicitExitNotify is the number of EXIT notifications to send on
+	// UDP close (0=disabled, max 10).
+	ExplicitExitNotify uint32
 
 	// TLS verification options (matching OpenVPN remote-cert-tls etc.)
 

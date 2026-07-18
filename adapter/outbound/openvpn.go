@@ -59,6 +59,7 @@ type OpenVPNOption struct {
 	AllowCompression   string          `proxy:"allow-compression,omitempty"`
 	MSSFix             uint32          `proxy:"mss-fix,omitempty"`
 	Fragment           uint32          `proxy:"fragment,omitempty"`
+	ExplicitExitNotify uint32          `proxy:"explicit-exit-notify,omitempty"`
 
 	// TLS verification options
 	ServerName      string   `proxy:"server-name,omitempty"`
@@ -117,19 +118,20 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		return nil, errors.New("openvpn handshake timeout must be non-negative")
 	}
 	cfg := &ovpn.ClientConfig{
-		RemoteHost:       option.Server,
-		RemotePort:       uint16(option.Port),
-		Proto:            option.Proto,
-		Dev:              option.Dev,
-		Cipher:           option.Cipher,
-		DataCiphers:      option.DataCiphers,
-		FallbackCipher:   option.DataCipherFallback,
-		Auth:             option.Auth,
-		CompLZO:          option.CompLZO,
-		Compression:      option.Compression,
-		AllowCompression: option.AllowCompression,
-		MSSFix:           option.MSSFix,
-		Fragment:         option.Fragment,
+		RemoteHost:         option.Server,
+		RemotePort:         uint16(option.Port),
+		Proto:              option.Proto,
+		Dev:                option.Dev,
+		Cipher:             option.Cipher,
+		DataCiphers:        option.DataCiphers,
+		FallbackCipher:     option.DataCipherFallback,
+		Auth:               option.Auth,
+		CompLZO:            option.CompLZO,
+		Compression:        option.Compression,
+		AllowCompression:   option.AllowCompression,
+		MSSFix:             option.MSSFix,
+		Fragment:           option.Fragment,
+		ExplicitExitNotify: option.ExplicitExitNotify,
 
 		// TLS verification
 		ServerName:      option.ServerName,
