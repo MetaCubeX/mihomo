@@ -43,23 +43,26 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name               string          `proxy:"name"`
-	Server             string          `proxy:"server"`
-	Port               int             `proxy:"port"`
-	Servers            []OpenVPNRemote `proxy:"servers,omitempty"`
-	RemoteRandom       bool            `proxy:"remote-random,omitempty"`
-	Proto              string          `proxy:"proto,omitempty"`
-	Dev                string          `proxy:"dev,omitempty"`
-	Cipher             string          `proxy:"cipher,omitempty"`
-	DataCiphers        []string        `proxy:"data-ciphers,omitempty"`
-	DataCipherFallback string          `proxy:"data-ciphers-fallback,omitempty"`
-	Auth               string          `proxy:"auth,omitempty"`
-	CompLZO            string          `proxy:"comp-lzo,omitempty"`
-	Compression        string          `proxy:"compress,omitempty"`
-	AllowCompression   string          `proxy:"allow-compression,omitempty"`
-	MSSFix             uint32          `proxy:"mss-fix,omitempty"`
-	Fragment           uint32          `proxy:"fragment,omitempty"`
-	ExplicitExitNotify uint32          `proxy:"explicit-exit-notify,omitempty"`
+	Name                string          `proxy:"name"`
+	Server              string          `proxy:"server"`
+	Port                int             `proxy:"port"`
+	Servers             []OpenVPNRemote `proxy:"servers,omitempty"`
+	RemoteRandom        bool            `proxy:"remote-random,omitempty"`
+	Proto               string          `proxy:"proto,omitempty"`
+	Dev                 string          `proxy:"dev,omitempty"`
+	Cipher              string          `proxy:"cipher,omitempty"`
+	DataCiphers         []string        `proxy:"data-ciphers,omitempty"`
+	DataCipherFallback  string          `proxy:"data-ciphers-fallback,omitempty"`
+	Auth                string          `proxy:"auth,omitempty"`
+	CompLZO             string          `proxy:"comp-lzo,omitempty"`
+	Compression         string          `proxy:"compress,omitempty"`
+	AllowCompression    string          `proxy:"allow-compression,omitempty"`
+	MSSFix              uint32          `proxy:"mss-fix,omitempty"`
+	Fragment            uint32          `proxy:"fragment,omitempty"`
+	ExplicitExitNotify  uint32          `proxy:"explicit-exit-notify,omitempty"`
+	AuthRetry           string          `proxy:"auth-retry,omitempty"`
+	StaticChallenge     string          `proxy:"static-challenge,omitempty"`
+	StaticChallengeEcho bool            `proxy:"static-challenge-echo,omitempty"`
 
 	// TLS verification options
 	ServerName      string   `proxy:"server-name,omitempty"`
@@ -118,20 +121,23 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		return nil, errors.New("openvpn handshake timeout must be non-negative")
 	}
 	cfg := &ovpn.ClientConfig{
-		RemoteHost:         option.Server,
-		RemotePort:         uint16(option.Port),
-		Proto:              option.Proto,
-		Dev:                option.Dev,
-		Cipher:             option.Cipher,
-		DataCiphers:        option.DataCiphers,
-		FallbackCipher:     option.DataCipherFallback,
-		Auth:               option.Auth,
-		CompLZO:            option.CompLZO,
-		Compression:        option.Compression,
-		AllowCompression:   option.AllowCompression,
-		MSSFix:             option.MSSFix,
-		Fragment:           option.Fragment,
-		ExplicitExitNotify: option.ExplicitExitNotify,
+		RemoteHost:          option.Server,
+		RemotePort:          uint16(option.Port),
+		Proto:               option.Proto,
+		Dev:                 option.Dev,
+		Cipher:              option.Cipher,
+		DataCiphers:         option.DataCiphers,
+		FallbackCipher:      option.DataCipherFallback,
+		Auth:                option.Auth,
+		CompLZO:             option.CompLZO,
+		Compression:         option.Compression,
+		AllowCompression:    option.AllowCompression,
+		MSSFix:              option.MSSFix,
+		Fragment:            option.Fragment,
+		ExplicitExitNotify:  option.ExplicitExitNotify,
+		AuthRetry:           option.AuthRetry,
+		StaticChallenge:     option.StaticChallenge,
+		StaticChallengeEcho: option.StaticChallengeEcho,
 
 		// TLS verification
 		ServerName:      option.ServerName,

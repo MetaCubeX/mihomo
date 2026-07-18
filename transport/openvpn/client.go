@@ -552,11 +552,16 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 			return nil, fmt.Errorf("read push reply: %w", err)
 		}
 		buf = append(buf, tmp[:n]...)
+		msg := string(buf)
+		if idx := strings.IndexByte(msg, 0); idx >= 0 {
+			msg = msg[:idx]
+		}
+		// Check for AUTH_FAILED before PUSH_REPLY.
+		upperMsg := strings.ToUpper(strings.TrimSpace(msg))
+		if strings.HasPrefix(upperMsg, "AUTH_FAILED") {
+			return nil, ParseAuthFailed(msg, ParseAuthRetryMode(c.config.AuthRetry))
+		}
 		if bytes.Contains(buf, []byte("\x00")) || strings.Contains(string(buf), "PUSH_REPLY") {
-			msg := string(buf)
-			if idx := strings.IndexByte(msg, 0); idx >= 0 {
-				msg = msg[:idx]
-			}
 			if reply, err := ParsePushReply(msg); err == nil {
 				return reply, nil
 			}

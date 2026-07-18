@@ -67,6 +67,17 @@ type ClientConfig struct {
 	// UDP close (0=disabled, max 10).
 	ExplicitExitNotify uint32
 
+	// AuthRetry controls behavior after username/password authentication
+	// fails. Values: "none" (default, terminal), "nointeract" (retry with
+	// same credentials), "interact" (retry, allow new credentials).
+	AuthRetry string
+
+	// StaticChallenge is a static challenge string sent during authentication.
+	StaticChallenge string
+	// StaticChallengeEcho controls whether the static challenge response
+	// is echoed as plain text.
+	StaticChallengeEcho bool
+
 	// TLS verification options (matching OpenVPN remote-cert-tls etc.)
 
 	// ServerName is the expected server certificate name.
