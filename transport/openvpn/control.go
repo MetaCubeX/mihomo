@@ -67,7 +67,29 @@ func (c *ControlChannel) SetRemoteSessionID(id SessionID) {
 }
 
 func (c *ControlChannel) SendReset(ctx context.Context) error {
-	_, err := c.Send(ctx, PControlHardResetClientV2, nil)
+	opcode := PControlHardResetClientV2
+	if _, isTLSCryptV2 := c.crypt.(*TLSCryptV2); isTLSCryptV2 {
+		opcode = PControlHardResetClientV3
+	}
+	_, err := c.Send(ctx, opcode, nil)
+	return err
+}
+
+// SendSoftReset sends a P_CONTROL_SOFT_RESET_V1 and rotates the key ID.
+// Called during TLS renegotiation (rekey) to transition to a new key epoch.
+// The old pending/recvPending maps are cleared because they belong to the
+// previous key epoch; the message counters are reset for the new epoch.
+func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
+	c.mu.Lock()
+	newKeyID := c.keyID ^ 1 // toggle 0<->1
+	c.keyID = newKeyID
+	c.sendMessage = 0
+	c.recvMessage = 0
+	c.ackPending = nil
+	c.pending = make(map[uint32]*ControlPacket)
+	c.recvPending = make(map[uint32]*ControlPacket)
+	c.mu.Unlock()
+	_, err := c.Send(ctx, PControlSoftResetV1, nil)
 	return err
 }
 
@@ -233,7 +255,10 @@ func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softR
 		return false, false
 	}
 	if packet.Opcode == PControlSoftResetV1 {
-		return packet.KeyID != 0, packet.KeyID != 0
+		// Accept soft resets that carry a different key ID than the current
+		// active key epoch. This handles both server-initiated rekeys (new
+		// key ID) and the symmetric toggle between key ID 0 and 1.
+		return packet.KeyID != c.keyID, packet.KeyID != c.keyID
 	}
 	return false, packet.KeyID == c.keyID
 }
@@ -281,6 +306,10 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 	encoded, err := packet.Encode(c.crypt, packetID, unixTime)
 	if err != nil {
 		return err
+	}
+	if tlsCryptV2, ok := c.crypt.(*TLSCryptV2); ok &&
+		packet.Opcode == PControlHardResetClientV3 && packet.MessageID == 0 {
+		encoded = append(encoded, tlsCryptV2.WrappedClientKey()...)
 	}
 	return c.io.WritePacket(ctx, encoded)
 }

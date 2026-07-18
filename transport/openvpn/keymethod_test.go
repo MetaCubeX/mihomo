@@ -9,7 +9,7 @@ import (
 func TestKeyMethod2ClientMarshalAndDerive(t *testing.T) {
 	record := &KeyMethod2Record{
 		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES128GCM, AuthSHA256, ""),
-		PeerInfo: InstallScriptPeerInfo(CipherAES128GCM, "", nil),
+		PeerInfo: InstallScriptPeerInfo(CipherAES128GCM, nil, "", nil),
 	}
 	for i := range record.Sources.Client.PreMaster {
 		record.Sources.Client.PreMaster[i] = byte(i + 1)
@@ -53,7 +53,7 @@ func TestKeyMethod2ClientMarshalAndDerive(t *testing.T) {
 func TestKeyMethod2DeriveAES256(t *testing.T) {
 	record := &KeyMethod2Record{
 		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES256GCM, AuthSHA256, ""),
-		PeerInfo: InstallScriptPeerInfo(CipherAES256GCM, "", nil),
+		PeerInfo: InstallScriptPeerInfo(CipherAES256GCM, nil, "", nil),
 	}
 	for i := range record.Sources.Client.PreMaster {
 		record.Sources.Client.PreMaster[i] = byte(i + 1)
@@ -93,13 +93,13 @@ func TestInstallScriptOptionsCBCSHA1(t *testing.T) {
 
 func TestInstallScriptPeerInfo(t *testing.T) {
 	// Without user-defined peer-info the output is unchanged (backward compatible).
-	base := InstallScriptPeerInfo(CipherAES128GCM, "", nil)
+	base := InstallScriptPeerInfo(CipherAES128GCM, nil, "", nil)
 	if base != "IV_VER=mihomo-openvpn\nIV_PROTO=6\nIV_CIPHERS=AES-128-GCM\n" {
 		t.Fatalf("unexpected default peer-info: %q", base)
 	}
 
 	// User-defined entries are appended after the built-in fields, sorted by key.
-	info := InstallScriptPeerInfo(CipherAES128GCM, "", map[string]string{
+	info := InstallScriptPeerInfo(CipherAES128GCM, nil, "", map[string]string{
 		"UV_DEVICE_ID": "laptop-001",
 		"IV_HWADDR":    "52:54:00:ff:72:87",
 	})

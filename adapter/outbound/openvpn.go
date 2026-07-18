@@ -46,8 +46,10 @@ type OpenVPNOption struct {
 	Port             int               `proxy:"port"`
 	Proto            string            `proxy:"proto,omitempty"`
 	Dev              string            `proxy:"dev,omitempty"`
-	Cipher           string            `proxy:"cipher,omitempty"`
-	Auth             string            `proxy:"auth,omitempty"`
+	Cipher             string            `proxy:"cipher,omitempty"`
+	DataCiphers        []string          `proxy:"data-ciphers,omitempty"`
+	DataCipherFallback string            `proxy:"data-ciphers-fallback,omitempty"`
+	Auth               string            `proxy:"auth,omitempty"`
 	CompLZO          string            `proxy:"comp-lzo,omitempty"`
 	CA               string            `proxy:"ca"`
 	Cert             string            `proxy:"cert,omitempty"`
@@ -55,6 +57,7 @@ type OpenVPNOption struct {
 	TLSAuth          string            `proxy:"tls-auth,omitempty"`
 	KeyDirection     string            `proxy:"key-direction,omitempty"`
 	TLSCrypt         string            `proxy:"tls-crypt,omitempty"`
+	TLSCryptV2       string            `proxy:"tls-crypt-v2,omitempty"`
 	Username         string            `proxy:"username,omitempty"`
 	Password         string            `proxy:"password,omitempty"`
 	PeerInfo         map[string]string `proxy:"peer-info,omitempty"`
@@ -77,7 +80,9 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		RemotePort:   uint16(option.Port),
 		Proto:        option.Proto,
 		Dev:          option.Dev,
-		Cipher:       option.Cipher,
+		Cipher:         option.Cipher,
+		DataCiphers:    option.DataCiphers,
+		FallbackCipher: option.DataCipherFallback,
 		Auth:         option.Auth,
 		CompLZO:      option.CompLZO,
 		CA:           []byte(option.CA),
@@ -86,6 +91,7 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		TLSAuth:      []byte(option.TLSAuth),
 		KeyDirection: option.KeyDirection,
 		TLSCrypt:     []byte(option.TLSCrypt),
+		TLSCryptV2:   []byte(option.TLSCryptV2),
 		Username:     option.Username,
 		Password:     option.Password,
 		PeerInfo:     option.PeerInfo,
