@@ -1359,8 +1359,12 @@ proxies: # socks5
     proto: udp # udp/tcp，默认 udp
     # dev: tun # 目前仅支持 tun，默认 tun
     # cipher: AES-128-GCM # 支持 AES-128-GCM / AES-192-GCM / AES-256-GCM / AES-128-CBC / AES-192-CBC / AES-256-CBC / CHACHA20-POLY1305，默认 AES-128-GCM；AES-CBC 会按 AES-128-CBC 处理
+    # data-ciphers: [AES-256-GCM, AES-128-GCM] # 数据通道 cipher 协商列表，发送 IV_CIPHERS 给服务端；服务端 push 的 cipher 列表与本地列表取交集，取第一个匹配项
+    # data-ciphers-fallback: AES-128-CBC # 协商失败时的回退 cipher（对应 --data-ciphers-fallback）
     # auth: SHA256 # 支持 MD5 / SHA1 / SHA256 / SHA384 / SHA512，默认 SHA256；AEAD cipher 会忽略 auth
     # comp-lzo: "no" # 可选值："yes", "no", "adaptive"
+    # compress: stub-v2 # OpenVPN 2.4+ 压缩指令，可选值：none / stub / stub-v2 / lz4 / lz4-v2；与 comp-lzo 独立
+    # allow-compression: "no" # 压缩策略：no（仅接受 stub framing）/ asym（接收压缩但不发送）/ yes（双向压缩），默认 no
     # username / password: auth-user-pass 模式（与下方 cert+key 二选一，不能都不填）
     # username: "user"
     # password: "pass"
@@ -1379,24 +1383,64 @@ proxies: # socks5
       -----BEGIN PRIVATE KEY-----
       MIIE...example
       -----END PRIVATE KEY-----
-    # 从 .ovpn 中复制 <tls-auth></tls-auth> 内的内容，不需要保留 <tls-auth> 标签；与 tls-crypt 互斥
+    # 从 .ovpn 中复制 <tls-auth></tls-auth> 内的内容，不需要保留 <tls-auth> 标签；与 tls-crypt / tls-crypt-v2 互斥
     # tls-auth: |
     #   -----BEGIN OpenVPN Static key V1-----
     #   00000000000000000000000000000000
     #   ...
     #   -----END OpenVPN Static key V1-----
     # key-direction: "1" # tls-auth 使用，支持 "1" 或 "0"；如果不填或为空字符串，则为双向模式（bidirectional）
-    # 从 .ovpn 中复制 <tls-crypt></tls-crypt> 内的内容，不需要保留 <tls-crypt> 标签；没有 tls-crypt 的配置可省略
+    # 从 .ovpn 中复制 <tls-crypt></tls-crypt> 内的内容，不需要保留 <tls-crypt> 标签；没有 tls-crypt 的配置可省略；与 tls-auth / tls-crypt-v2 互斥
     # tls-crypt: |
     #   -----BEGIN OpenVPN Static key V1-----
     #   00000000000000000000000000000000
     #   ...
     #   -----END OpenVPN Static key V1-----
-    # peer-info: # 透传给服务端的 peer-info 键值对，追加在内置 IV_VER/IV_PROTO/IV_CIPHERS 之后；用于服务端基于 peer-info 做准入决策
+    # 从 .ovpn 中复制 <tls-crypt-v2></tls-crypt-v2> 内的内容；tls-crypt-v2 使用独立客户端密钥（PEM 内含 256 字节密钥 + wrapped key）；与 tls-auth / tls-crypt 互斥
+    # tls-crypt-v2: |
+    #   -----BEGIN OpenVPN tls-crypt-v2 client key-----
+    #   AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8...
+    #   -----END OpenVPN tls-crypt-v2 client key-----
+    # TLS 证书验证选项
+    # server-name: vpn.example.com # 期望的服务端证书名称
+    # server-name-type: name # 匹配方式：name（CN/SAN 精确匹配，默认）/ subject（完整 Subject 匹配）/ name-prefix（CN/SAN 前缀匹配）
+    # peer-fingerprint: ["ab:cd:ef:..."] # 服务端叶子证书 SHA-256 指纹列表（64 位十六进制，无分隔符）；配置后即使 CA 验证失败也允许通过指纹匹配
+    # remote-cert-ku: ["80"] # 要求服务端证书包含的 key usage 位掩码（十六进制）
+    # remote-cert-eku: server # 要求服务端证书的 EKU：server（TLS Web Server Authentication）/ client（TLS Web Client Authentication）
+    # tls-version-min: "1.2" # 最低 TLS 版本：1.0 / 1.1 / 1.2 / 1.3
+    # tls-version-max: "1.3" # 最高 TLS 版本
+    # 多服务器 + 故障切换
+    # servers: # 多服务器列表，与 server/port 二选一；连接时按顺序尝试，失败则切换下一个
+    #   - server: vpn1.example.com
+    #     port: 1194
+    #     proto: udp
+    #   - server: vpn2.example.com
+    #     port: 443
+    #     proto: tcp
+    # remote-random: false # true 时使用 crypto/rand 随机打乱 servers 列表顺序
+    # 路由 / push 处理
+    # pull-filter: # 按前缀过滤服务端 push 的选项；第一个匹配的 filter 生效
+    #   - action: ignore # accept（接受，默认）/ ignore（忽略）/ reject（拒绝并断开）
+    #     text: "route "
+    # route-no-pull: false # true 时忽略服务端 push 的 routes / route-gateway / redirect-gateway；其他 push 选项仍接受
+    # routes: ["10.8.0.0/24", "192.168.1.0/24"] # 本地配置的路由，追加到 push 的路由列表中（或 route-no-pull 时替代）
+    # route-gateway: "10.8.0.1" # 路由网关地址，不填则使用服务端 push 的网关
+    # route-metric: 100 # 路由 metric 值
+    # redirect-gateway: false # true 时将所有 IPv4 流量路由通过 VPN
+    # redirect-gateway-flags: ["def1", "!ipv6"] # redirect-gateway 标志：def1 / bypass-dhcp / bypass-dns / ipv6 / !ipv4 等
+    # 传输优化
+    # mss-fix: 1400 # TCP MSS 钳制值；根据加密包开销反算有效 MSS，而非直接使用配置值
+    # fragment: 1200 # OpenVPN 数据通道分片大小（仅 UDP 有效）；超过此大小的包会被分片发送、接收端重组
+    # explicit-exit-notify: 1 # UDP 关闭时发送 EXIT 控制消息的次数（0=禁用，最大 10）；让服务端立即释放会话而非等待 keepalive 超时
+    # 认证交互
+    # auth-retry: none # 认证失败后的行为：none（默认，终止连接）/ nointeract（用相同凭据重试）/ interact（允许交互重试）
+    # static-challenge: "Enter OTP" # 静态挑战文本，认证时随 username/password 一起发送
+    # static-challenge-echo: false # true 时挑战响应以明文显示
+    # peer-info: # 透传给服务端的 peer-info 键值对，追加在内置 IV_VER/IV_PROTO/IV_CIPHERS/IV_COMP_STUB 之后；用于服务端基于 peer-info 做准入决策
     #   IV_HWADDR: "52:54:00:ff:72:87"
     #   UV_DEVICE_ID: "laptop-001"
-    # ping: 10 # 默认值为 0
-    # ping-restart: 60 # 默认值为 0
+    # ping: 10 # 默认值为 0；如果本地未配置且服务端 push 了 ping，则使用服务端值
+    # ping-restart: 60 # 默认值为 0；如果本地未配置且服务端 push 了 ping-restart，则使用服务端值
     # handshake-timeout: 30 # 单位为秒；配置后握手时不受外层连接超时影响；默认值为 0，表示仅使用外层连接超时
     # mtu: 1500
     udp: true
