@@ -32,6 +32,7 @@ geox-url:
   geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
   geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
   mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb"
+  asn: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb"
 
 geo-auto-update: false # 是否自动更新 geodata
 geo-update-interval: 24 # 更新间隔，单位：小时
@@ -114,6 +115,8 @@ experimental:
   # This field will be removed when quic-go fixes all their issues in GSO.
   # This equivalent to the environment variable QUIC_GO_DISABLE_GSO=1.
   #quic-go-disable-gso: true
+  # quic-go-disable-ecn: true
+  # dialer-ip4p-convert: false
 
 # 类似于 /etc/hosts, 仅支持配置单个 IP
 hosts:
@@ -133,7 +136,7 @@ profile: # 存储 select 选择记录
 # Tun 配置
 tun:
   enable: false
-  stack: system # gvisor/mixed
+  stack: system # system/gvisor/mixed
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
   # auto-detect-interface: true # 自动识别出口网卡
@@ -236,20 +239,22 @@ sniffer:
     # - 8000-9999
 
 tunnels: # one line config
-  - tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy
-  - tcp,127.0.0.1:6666,rds.mysql.com:3306,vpn
+  - tcp/udp,127.0.0.1:6553,114.114.114.114:53,Proxy
+  - tcp,127.0.0.1:6666,rds.mysql.com:3306,DIRECT
   # full yaml config
   - network: [tcp, udp]
     address: 127.0.0.1:7777
-    target: target.com
-    proxy: proxy
+    target: target.com:80
+    proxy: Proxy
 
 # DNS 配置
 dns:
-  cache-algorithm: arc
+  cache-algorithm: arc # 缓存算法：lru（默认）或 arc
+  # cache-max-size: 4096 # 缓存条目上限，0 使用默认值 4096
   enable: false # 关闭将使用系统 DNS
   prefer-h3: false # 是否开启 DoH 支持 HTTP/3，将并发尝试
   listen: 0.0.0.0:53 # 开启 DNS 服务器监听
+  # listen-routing-mark: 0 # 为 DNS 监听 socket 设置 routing-mark（仅支持 Linux）
   # ipv6: false # false 将返回 AAAA 的空结果
   # ipv6-timeout: 300 # 单位：ms，内部双栈并发时，向上游查询 AAAA 时，等待 AAAA 的时间，默认 100ms
   # 用于解析 nameserver，fallback 以及其他 DNS 服务器配置的，DNS 服务域名
@@ -260,7 +265,7 @@ dns:
     - tls://1.12.12.12:853
     - tls://223.5.5.5:853
     - system # append DNS server from system configuration. If not found, it would print an error log and skip.
-  enhanced-mode: fake-ip # or redir-host
+  enhanced-mode: fake-ip # 可选 normal/redir-host/fake-ip，默认 redir-host
 
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
   # fake-ip-range6: fdfe:dcba:9876::1/64 # fake-ip6 池设置
@@ -293,6 +298,7 @@ dns:
   fake-ip-ttl: 1
 
   # use-hosts: true # 查询 hosts
+  # use-system-hosts: true # 查询系统 hosts，默认 true
 
   # 配置后面的nameserver、fallback和nameserver-policy向dns服务器的连接过程是否遵守遵守rules规则
   # 如果为false（默认值）则这三部分的dns服务器在未特别指定的情况下会直连
@@ -305,8 +311,8 @@ dns:
   # 支持 UDP，TCP，DoT，DoH，DoQ
   # 这部分为主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS
   nameserver:
-    - 114.114.114.114 # default value
-    - 8.8.8.8 # default value
+    - 114.114.114.114
+    - 8.8.8.8
     - tls://223.5.5.5:853 # DNS over TLS
     - https://doh.pub/dns-query # DNS over HTTPS
     - https://dns.alidns.com/dns-query#h3=true # 强制 HTTP/3，与 perfer-h3 无关，强制开启 DoH 的 HTTP/3 支持，若不支持将无法使用
@@ -455,7 +461,7 @@ proxies: # socks5
       password: "jls_password"
 
   # Shadowsocks
-  # cipher支持:
+  # 常用 cipher 示例（完整列表以实现注册表为准）:
   #   aes-128-gcm aes-192-gcm aes-256-gcm
   #   aes-128-cfb aes-192-cfb aes-256-cfb
   #   aes-128-ctr aes-192-ctr aes-256-ctr
@@ -633,19 +639,17 @@ proxies: # socks5
 
   - name: "ss-restls-tls13"
     type: ss
-    server: [YOUR_SERVER_IP]
+    server: "YOUR_SERVER_IP"
     port: 443
     cipher: chacha20-ietf-poly1305
-    password: [YOUR_SS_PASSWORD]
-    client-fingerprint:
-      chrome # One of: chrome, ios, firefox or safari
-      # 可以是 chrome, ios, firefox, safari 中的一个
+    password: "YOUR_SS_PASSWORD"
+    client-fingerprint: chrome
     plugin: restls
     plugin-opts:
       host:
         "www.microsoft.com" # Must be a TLS 1.3 server
         # 应当是一个 TLS 1.3 服务器
-      password: [YOUR_RESTLS_PASSWORD]
+      password: "YOUR_RESTLS_PASSWORD"
       version-hint: "tls13"
       # Control your post-handshake traffic through restls-script
       # Hide proxy behaviors like "tls in tls".
@@ -656,28 +660,26 @@ proxies: # socks5
 
   - name: "ss-restls-tls12"
     type: ss
-    server: [YOUR_SERVER_IP]
+    server: "YOUR_SERVER_IP"
     port: 443
     cipher: chacha20-ietf-poly1305
-    password: [YOUR_SS_PASSWORD]
-    client-fingerprint:
-      chrome # One of: chrome, ios, firefox or safari
-      # 可以是 chrome, ios, firefox, safari 中的一个
+    password: "YOUR_SS_PASSWORD"
+    client-fingerprint: chrome
     plugin: restls
     plugin-opts:
       host:
         "vscode.dev" # Must be a TLS 1.2 server
         # 应当是一个 TLS 1.2 服务器
-      password: [YOUR_RESTLS_PASSWORD]
+      password: "YOUR_RESTLS_PASSWORD"
       version-hint: "tls12"
       restls-script: "1000?100<1,500~100,350~100,600~100,400~200"
 
   - name: "ss-kcptun"
     type: ss
-    server: [YOUR_SERVER_IP]
+    server: "YOUR_SERVER_IP"
     port: 443
     cipher: chacha20-ietf-poly1305
-    password: [YOUR_SS_PASSWORD]
+    password: "YOUR_SS_PASSWORD"
     plugin: kcptun
     plugin-opts:
       key: it's a secrect # pre-shared secret between client and server
@@ -695,9 +697,11 @@ proxies: # socks5
       dscp: 0 # set DSCP(6bit)
       nocomp: false # disable compression
       acknodelay: false # flush ack immediately when a packet is received
-      nodelay: 0
-      interval: 50
-      resend: 0
+      # 下列四项仅在 mode: manual 时用于自定义 KCP 参数，其他 profile 会覆盖它们
+      # nodelay: 0
+      # interval: 50
+      # resend: 0
+      # nc: 0
       sockbuf: 4194304 # per-socket buffer in bytes
       smuxver: 1 # specify smux version, available 1,2
       smuxbuf: 4194304 # the overall de-mux buffer in bytes
@@ -706,7 +710,7 @@ proxies: # socks5
       keepalive: 10 # seconds between heartbeats
 
   # vmess
-  # cipher 支持 auto/aes-128-gcm/chacha20-poly1305/none
+  # cipher 支持 auto/aes-128-gcm/chacha20-poly1305/aes-128-cfb/none/zero
   - name: "vmess"
     type: vmess
     server: server
@@ -720,7 +724,7 @@ proxies: # socks5
     # 下面两项如果填写则开启 mTLS（需要同时填写）
     # certificate: ./client.crt # 证书 PEM 格式，或者 证书的路径
     # private-key: ./client.key # 证书对应的私钥 PEM 格式，或者私钥路径
-    # client-fingerprint: chrome    # Available: "chrome","firefox","safari","ios","random", currently only support TLS transport in TCP/GRPC/WS/HTTP for VLESS/Vmess and trojan.
+    # client-fingerprint: chrome # 常用值：chrome/firefox/safari/ios/android/edge/360/qq/random/none
     # skip-cert-verify: true
     # name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
     # servername: example.com # priority over wss host
@@ -897,7 +901,7 @@ proxies: # socks5
     # certificate: ./client.crt # 证书 PEM 格式，或者 证书的路径
     # private-key: ./client.key # 证书对应的私钥 PEM 格式，或者私钥路径
     # fingerprint: xxxx # 配置指纹将实现 SSL Pining 效果, 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
-    # client-fingerprint: random # Available: "chrome","firefox","safari","random","none"
+    # client-fingerprint: random # 常用值：chrome/firefox/safari/ios/android/edge/360/qq/random/none
     # ech-opts:
     #   enable: true # 必须手动开启
     #   # 如果config为空则通过dns解析，不为空则通过该值指定，格式为经过base64编码的ech参数（dig +short TYPE65 tls-ech.dev）
@@ -1003,7 +1007,7 @@ proxies: # socks5
     udp: true
     tls: true
     network: ws
-    # client-fingerprint: random # Available: "chrome","firefox","safari","random","none"
+    # client-fingerprint: random # 常用值：chrome/firefox/safari/ios/android/edge/360/qq/random/none
     servername: example.com # priority over wss host
     # skip-cert-verify: true
     # name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
@@ -1040,7 +1044,7 @@ proxies: # socks5
     xhttp-opts:
       path: "/"
       host: xxx.com
-      # mode: "stream-one" # Available: "stream-one", "stream-up" or "packet-up"
+      # mode: "auto" # Available: "auto", "stream-one", "stream-up" or "packet-up"; default: "auto"
       # headers:
       #   X-Forwarded-For: ""
       # no-grpc-header: false
@@ -1053,9 +1057,11 @@ proxies: # socks5
       # uplink-http-method: POST # Available: POST, PUT, PATCH, DELETE
       # session-placement: path # Available: path, query, cookie, header
       # session-key: ""
+      # session-table: "" # Available: "", "uuid", "ALPHABET", "Alphabet", "BASE36", "Base62", "HEX", "alphabet", "base36", "hex", "number"，或自定义 ASCII 字符表
+      # session-length: "16-32" # 仅当 session-table 非空且不为 uuid 时生效；起始值须大于 0，ID 空间须至少为 2^31
       # seq-placement: path # Available: path, query, cookie, header
       # seq-key: ""
-      # uplink-data-placement: body # Available: body, cookie, header
+      # uplink-data-placement: body # Available: auto, body, cookie, header
       # uplink-data-key: ""
       # uplink-chunk-size: 0 # only applicable when uplink-data-placement is not body
       # sc-max-each-post-bytes: 1000000
@@ -1105,7 +1111,7 @@ proxies: # socks5
     server: server
     port: 443
     password: yourpsk
-    # client-fingerprint: random # Available: "chrome","firefox","safari","random","none"
+    # client-fingerprint: random # 常用值：chrome/firefox/safari/ios/android/edge/360/qq/random/none
     # fingerprint: xxxx # 配置指纹将实现 SSL Pining 效果, 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
     # 下面两项如果填写则开启 mTLS（需要同时填写）
     # certificate: ./client.crt # 证书 PEM 格式，或者 证书的路径
@@ -1181,28 +1187,13 @@ proxies: # socks5
     #   v2ray-http-upgrade: false
     #   v2ray-http-upgrade-fast-open: false
 
-  - name: "trojan-xtls"
-    type: trojan
-    server: server
-    port: 443
-    password: yourpsk
-    flow: "xtls-rprx-direct" # xtls-rprx-origin xtls-rprx-direct
-    flow-show: true
-    # udp: true
-    # sni: example.com # aka server name
-    # skip-cert-verify: true
-    # name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
-    # fingerprint: xxxx # 配置指纹将实现 SSL Pining 效果, 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
-    # 下面两项如果填写则开启 mTLS（需要同时填写）
-    # certificate: ./client.crt # 证书 PEM 格式，或者 证书的路径
-    # private-key: ./client.key # 证书对应的私钥 PEM 格式，或者私钥路径
-
   #hysteria
   - name: "hysteria"
     type: hysteria
     server: server.com
     port: 443
-    # ports: 1000,2000-3000,5000 # port 不可省略
+    # ports: 1000,2000-3000,5000 # 与 port 至少填写一个；填写后启用端口跳跃
+    # hop-interval: 10 # 端口跳跃间隔，单位秒，默认 10
     auth-str: yourpassword
     # obfs: obfs_str
     # alpn:
@@ -1232,12 +1223,14 @@ proxies: # socks5
     type: hysteria2
     server: server.com
     port: 443
-    # ports: 1000,2000-3000,5000 # port 不可省略
-    # hop-interval: 15 # 支持填写"15-30"会每次随机选取其中一个值作为切换间隔，仅支持写一个范围（即不允许出现逗号）
+    # ports: 1000,2000-3000,5000 # 与 port 至少填写一个；填写后启用端口跳跃
+    # hop-interval: 15 # 支持单值或单个范围（如 "15-30"），不允许逗号；默认 30 秒，最小 5 秒
     #  up 和 down 均不写或为 0 则使用 BBR 流控
     # up: "30 Mbps" # 若不写单位，默认为 Mbps
     # down: "200 Mbps" # 若不写单位，默认为 Mbps
     # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
+    # cwnd: 0 # 0 使用默认值 32
+    # udp-mtu: 1197 # 默认 1197
     password: yourpassword
     # obfs: salamander # 默认为空，如果填写则开启 obfs，目前支持 salamander 和 gecko
     # obfs-password: yourpassword
@@ -1267,14 +1260,14 @@ proxies: # socks5
     #     - stun.sip.us:3478
     #     - global.stun.twilio.com:3478
     #   # 下面支持填写针对server-url的TLS配置(sni, skip-cert-verify, name-cert-verify, fingerprint, certificate, private-key, alpn)
-    #   # skip-cert-verify： false
+    #   # skip-cert-verify: false
     #   # name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
     #   # ......
     ###quic-go特殊配置项，不要随意修改除非你知道你在干什么###
-    # initial-stream-receive-window： 8388608
-    # max-stream-receive-window： 8388608
-    # initial-connection-receive-window： 20971520
-    # max-connection-receive-window： 20971520
+    # initial-stream-receive-window: 8388608
+    # max-stream-receive-window: 8388608
+    # initial-connection-receive-window: 20971520
+    # max-connection-receive-window: 20971520
 
   # wireguard
   - name: "wg"
@@ -1472,20 +1465,20 @@ proxies: # socks5
     # tuicV4 必须填写 token（不可同时填写 uuid 和 password）
     token: TOKEN
     # tuicV5 必须填写 uuid 和 password（不可同时填写 token）
-    uuid: 00000000-0000-0000-0000-000000000001
-    password: PASSWORD_1
+    # uuid: 00000000-0000-0000-0000-000000000001
+    # password: PASSWORD_1
     # ip: 127.0.0.1 # for overwriting the DNS lookup result of the server address set in option 'server'
     # heartbeat-interval: 10000
     # alpn: [h3]
     disable-sni: true
     reduce-rtt: true
-    request-timeout: 8000
+    request-timeout: 8000 # 仅 TUIC v4，单位毫秒
     udp-relay-mode: native # Available: "native", "quic". Default: "native"
     # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
     # cwnd: 10 # default: 32
     # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
-    # max-udp-relay-packet-size: 1500
-    # fast-open: true
+    # max-udp-relay-packet-size: 1252 # 默认 1252，并受 1400 字节 datagram frame 与 TUIC v5 上限约束
+    # fast-open: true # 仅 TUIC v4
     # skip-cert-verify: true
     # name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
     # max-open-streams: 20 # default 100, too many open streams may hurt performance
@@ -1552,7 +1545,7 @@ proxies: # socks5
     port: 22
     username: root
     password: password
-    privateKey: path
+    # private-key: path
 
   # mieru
   - name: mieru
@@ -1605,6 +1598,7 @@ proxies: # socks5
     # idle-session-check-interval: 30 # seconds
     # idle-session-timeout: 30 # seconds
     # min-idle-session: 0
+    # disable-reuse: false # 禁用会话复用，每个流使用独立的 TLS 连接
     # sni: "example.com"
     # alpn:
     #   - h2
@@ -1667,7 +1661,7 @@ proxy-groups:
     proxies:
       - ss1
       - ss2
-      - vmess1
+      - vmess
     # tolerance: 150
     # lazy: true
     # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
@@ -1680,20 +1674,20 @@ proxy-groups:
     proxies:
       - ss1
       - ss2
-      - vmess1
+      - vmess
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 
-  # load-balance 将按照算法随机选择节点
+  # load-balance 将按照 strategy 指定的算法选择节点
   - name: "load-balance"
     type: load-balance
     proxies:
       - ss1
       - ss2
-      - vmess1
+      - vmess
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
-  # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
+    # strategy: consistent-hashing # 可选 consistent-hashing（默认）、round-robin 和 sticky-sessions
 
   # select 用户自行选择节点
   - name: Proxy
@@ -1702,7 +1696,7 @@ proxy-groups:
     proxies:
       - ss1
       - ss2
-      - vmess1
+      - vmess
       - auto
     # default-selected: ss1 # 默认选择的节点（该项为空或者设置的节点名不存在时，默认选择组中第一个节点）
 
@@ -1726,7 +1720,7 @@ proxy-providers:
     proxy: DIRECT
     # size-limit: 10240 # 限制下载文件最大为10kb，默认为0即不限制文件大小
     # #
-    # # 如果设置会age-secret-key尝试通过此secret解密age armor格式加密的配置文件
+    # # 如果设置 age-secret-key，会尝试通过此 secret 解密 age armor 格式加密的配置文件
     # #
     # # 注意：
     # #   对于加密内容，目前仅支持 age-encryption.org/v1 的 official ASCII "armor" format
@@ -1763,7 +1757,7 @@ proxy-providers:
       udp: true
       # down: "50 Mbps"
       # up: "10 Mbps"
-      # dialer-proxy: proxy
+      # dialer-proxy: Proxy
       # interface-name: tailscale0
       # routing-mark: 233
       # ip-version: ipv4-prefer
@@ -1826,7 +1820,7 @@ proxy-providers:
 
   provider2:
     type: inline
-    dialer-proxy: proxy
+    dialer-proxy: Proxy
     payload:
       - name: "ss1"
         type: ss
@@ -1853,7 +1847,6 @@ rule-providers:
     # size-limit: 10240 # 限制下载文件最大为10kb，默认为0即不限制文件大小
   rule2:
     behavior: classical
-    interval: 259200
     path: /path/to/save/file.yaml
     type: file
   rule3:
@@ -1874,7 +1867,7 @@ rule-providers:
     format: mrs
     behavior: domain
     path: /path/to/save/file.mrs
-    # path-in-bundle: "geo/geosite/cn.mrs" # 当设置该选项时，如果本地文件不存在，会优先从 Home Dir的 BundleMRS.7z 中解压该文件，此项的值用于指定在 BundleMRS.7z 中的路径
+    # path-in-bundle: "geo/geosite/cn.mrs" # 当设置该选项时，如果本地文件不存在或解析失败，会从 Home Dir 的 BundleMRS.7z 中解压该文件；此值用于指定归档内路径
   rule4:
     type: inline
     behavior: domain # classical / ipcidr
@@ -1885,7 +1878,7 @@ rule-providers:
 
 rules:
   - RULE-SET,rule1,REJECT
-  - IP-ASN,1,PROXY
+  - IP-ASN,1,Proxy
   - DOMAIN-REGEX,^abc,DIRECT
   - DOMAIN-SUFFIX,baidu.com,DIRECT
   - DOMAIN-KEYWORD,google,ss1
@@ -1921,6 +1914,7 @@ sub-rules:
     - DOMAIN,dns.alidns.com,REJECT
 
 # 流量入站
+# socks/http/mixed 也支持 reality-config，字段格式见下方 VMess/VLESS/Trojan 示例；不可与 certificate/private-key 或 client-auth-* 同时配置
 listeners:
   - name: socks5-in-1
     type: socks
@@ -1928,7 +1922,7 @@ listeners:
     #listen: 0.0.0.0 # 默认监听 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理
     # udp: false # 默认 true
     # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
     #   - username: aaa
@@ -1953,7 +1947,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
     #   - username: aaa
     #     password: aaa
@@ -1977,7 +1971,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # udp: false # 默认 true
     # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
     #   - username: aaa
@@ -2001,14 +1995,14 @@ listeners:
     port: 10811 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
 
   - name: tproxy-in-1
     type: tproxy
     port: 10812 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # udp: false # 默认 true
 
   - name: shadowsocks-in-1
@@ -2017,7 +2011,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
     cipher: 2022-blake3-aes-256-gcm
     # simple-obfs:
@@ -2108,7 +2102,7 @@ listeners:
     #   dest: test.com:443
     ## shadow-tls, res-tls and jls-config are mutually exclusive
     # rule: sub-rule-name1
-    # proxy: proxy
+    # proxy: Proxy
 
   - name: vmess-in-1
     type: vmess
@@ -2116,7 +2110,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
       - username: 1
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
@@ -2200,6 +2194,8 @@ listeners:
     #     - 0123456789abcdef
     #   server-names:
     #     - test.com
+    #   max-time-difference: 0 # 允许的最大时间差，单位微秒，0 表示不限制
+    #   proxy: "" # Reality 回落连接使用的代理
     #   #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
     #   #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
     #   limit-fallback-upload:
@@ -2223,6 +2219,7 @@ listeners:
     #     enabled: false
     #   connection-enrolment: # 启用 v2ray 兼容的连接登记确认
     #     primary-ingress-outbound: "" # v2ray 兼容字段，建议和对端路由中的控制出站 tag 一致
+    #     primary-egress-outbound: "" # v2ray 兼容字段
     #   sequence-watermarking-enabled: false # 启用序列水印
 
   - name: tuic-in-1
@@ -2231,7 +2228,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # token:    # tuicV4 填写（可以同时填写 users）
     #   - TOKEN
     # users:    # tuicV5 填写（可以同时填写 token）
@@ -2251,6 +2248,7 @@ listeners:
     #    -----END ECH KEYS-----
     #  congestion-controller: bbr
     #  bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
+    #  cwnd: 32
     #  max-idle-time: 15000
     #  authentication-timeout: 1000
     #  alpn:
@@ -2263,21 +2261,21 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
       - username: username
         password: password
     jls-upstream:
       addr: www.example.com:443 # 未通过 JLS 认证的连接将转发到该 QUIC 伪装上游
       # sni: example.com # JLS 伪装目标 SNI，留空时从 addr 推导
-      # proxy: proxy # 伪装上游使用的代理
+      # proxy: Proxy # 伪装上游使用的代理
       # rate-limit: 0 # 转发限速，单位 bit/s，0 表示不限速
       # quic-version-probe: false # 在首次连接时探测伪装上游版本
     # alpn:
     #   - h3
     # quic-versions: [v1] # 本机手动配置及探测失败时的版本；支持 v1/v2
     # zero-rtt: true
-    # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
+    # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "bbr"
     # up: 100 Mbps # enables brutal negotiation via a mihomo private extension; server upload/client download speed cap; falls back to congestion-controller when unsupported
     # down: 100 Mbps # enables brutal negotiation via a mihomo private extension; requested server download/client upload speed; falls back to congestion-controller when unsupported
     # ignore-client-bandwidth: false # for brutal; ignore outbound down and use listener down/auto instead
@@ -2295,9 +2293,9 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     network: [tcp, udp]
-    target: target.com
+    target: target.com:80
 
   - name: vless-in-1
     type: vless
@@ -2305,7 +2303,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
       - username: 1
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
@@ -2315,7 +2313,7 @@ listeners:
     # xhttp-config: # 如果不为空则开启 xhttp 传输层
     #   path: "/"
     #   host: ""
-    #   mode: auto # Available: "stream-one", "stream-up" or "packet-up"
+    #   mode: auto # Available: "auto", "stream-one", "stream-up" or "packet-up"; default: "auto"
     #   no-sse-header: false
     #   x-padding-bytes: "100-1000"
     #   x-padding-obfs-mode: false
@@ -2326,11 +2324,9 @@ listeners:
     #   uplink-http-method: POST # Available: POST, PUT, PATCH, DELETE
     #   session-placement: path # Available: path, query, cookie, header
     #   session-key: ""
-    #   session-table: "" # Available: "", "uuid", "ALPHABET", "Alphabet", "BASE36", "Base62", "HEX", "alphabet", "base36", "hex", "number"
-    #   session-length: "16-32" # 起始值不可为 0，总的 id 空间必须大于 21 亿，仅当session-table不为空或uuid时生效
     #   seq-placement: path # Available: path, query, cookie, header
     #   seq-key: ""
-    #   uplink-data-placement: body # Available: body, cookie, header
+    #   uplink-data-placement: body # Available: auto, body, cookie, header
     #   uplink-data-key: ""
     #   uplink-chunk-size: 0 # only applicable when uplink-data-placement is not body
     #   sc-max-buffered-posts: 30
@@ -2380,6 +2376,8 @@ listeners:
         - 0123456789abcdef
       server-names:
         - test.com
+      max-time-difference: 0 # 允许的最大时间差，单位微秒，0 表示不限制
+      proxy: "" # Reality 回落连接使用的代理
       #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
       #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
       limit-fallback-upload:
@@ -2478,7 +2476,7 @@ listeners:
 
   - name: sudoku-in-1
     type: sudoku
-    port: 8443 # 仅支持单端口
+    port: 8443 # 支持 ports 格式，例如 200,204,401-429,501-503
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     key: "<server_key>" # 如果你使用sudoku生成的ED25519密钥对，此处是密钥对中的公钥，当然，你也可以仅仅使用任意uuid充当key
@@ -2506,7 +2504,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
       - username: 1
         password: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
@@ -2560,6 +2558,8 @@ listeners:
     #     - 0123456789abcdef
     #   server-names:
     #     - test.com
+    #   max-time-difference: 0 # 允许的最大时间差，单位微秒，0 表示不限制
+    #   proxy: "" # Reality 回落连接使用的代理
     #   #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
     #   #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
     #   limit-fallback-upload:
@@ -2583,7 +2583,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
       00000000-0000-0000-0000-000000000000: PASSWORD_0
       00000000-0000-0000-0000-000000000001: PASSWORD_1
@@ -2607,9 +2607,15 @@ listeners:
     #  obfs-min-packet-size: 512 # 最小线上数据包大小（字节）。仅限 Gecko。
     #  obfs-max-packet-size: 1200 # 最大线上数据包大小（字节）。仅限 Gecko。
     #  bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
-    #  max-idle-time: 15000
+    #  cwnd: 0 # 0 使用默认值 32
+    #  udp-mtu: 1197 # 默认 1197
     #  alpn:
     #    - h3
+    ###quic-go特殊配置项，不要随意修改除非你知道你在干什么###
+    #  initial-stream-receive-window: 8388608
+    #  max-stream-receive-window: 8388608
+    #  initial-connection-receive-window: 20971520
+    #  max-connection-receive-window: 20971520
     #  ignore-client-bandwidth: false
     # HTTP3 服务器认证失败时的行为 （URL 字符串配置）,如果 masquerade 未配置，则返回 404 页
     #  masquerade: file:///var/www # 作为文件服务器
@@ -2626,7 +2632,7 @@ listeners:
     #      - global.stun.twilio.com:3478
     #    # proxy: DIRECT # 设置server-url通过哪个代理进行连接
     #    # 下面支持填写针对server-url的TLS配置(sni, skip-cert-verify, name-cert-verify, fingerprint, certificate, private-key, alpn)
-    #    # skip-cert-verify： false
+    #    # skip-cert-verify: false
     #    # name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
     #    # ......
 
@@ -2662,7 +2668,7 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
       - username: 1
         password: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
@@ -2670,6 +2676,7 @@ listeners:
     private-key: ./server.key # 证书对应的私钥 PEM 格式，或者私钥路径
     network: ["tcp", "udp"] # http2+http3
     congestion-controller: bbr
+    # cwnd: 0 # 0 使用默认值 32
     # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
     # 下面两项为mTLS配置项，如果client-auth-type设置为 "verify-if-given" 或 "require-and-verify" 则client-auth-cert必须不为空
     # client-auth-type: "" # 可选值：""、"request"、"require-any"、"verify-if-given"、"require-and-verify"
@@ -2686,8 +2693,8 @@ listeners:
   - name: tun-in-1
     type: tun
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
-    stack: system # gvisor / mixed
+    # proxy: Proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    stack: system # system/gvisor/mixed
     dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
@@ -2746,7 +2753,7 @@ listeners:
 #  certificate: ./server.crt
 #  private-key: ./server.key
 #  congestion-controller: bbr
-#  bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
+#  cwnd: 32
 #  max-idle-time: 15000
 #  authentication-timeout: 1000
 #  alpn:
