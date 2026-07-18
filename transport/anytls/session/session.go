@@ -109,6 +109,7 @@ func (s *Session) IsClosed() bool {
 func (s *Session) Close() error {
 	var once bool
 	s.dieOnce.Do(func() {
+		_ = s.conn.SetDeadline(time.Now())
 		close(s.die)
 		once = true
 	})
@@ -368,20 +369,52 @@ func (s *Session) streamClosed(sid uint32) error {
 	return err
 }
 
+// maxFrameDataLen is the maximum payload bytes per data frame. The wire
+// format encodes payload length as a uint16, so a single frame cannot
+// carry more than 65535 bytes. writeDataFrame splits larger writes into
+// multiple frames and sends the whole frame sequence in one writeConn call.
+// That keeps one Stream.Write contiguous relative to other stream/control
+// frame writes.
+const maxFrameDataLen = 0xFFFF
+
 func (s *Session) writeDataFrame(sid uint32, data []byte) (int, error) {
 	dataLen := len(data)
-
-	buffer := buf.NewSize(dataLen + headerOverHeadSize)
-	buffer.WriteByte(cmdPSH)
-	binary.BigEndian.PutUint32(buffer.Extend(4), sid)
-	binary.BigEndian.PutUint16(buffer.Extend(2), uint16(dataLen))
-	buffer.Write(data)
-	_, err := s.writeConn(buffer.Bytes())
-	buffer.Release()
-	if err != nil {
-		return 0, err
+	if dataLen == 0 {
+		return 0, nil
+	}
+	if dataLen <= maxFrameDataLen {
+		buffer := buf.NewSize(dataLen + headerOverHeadSize)
+		buffer.WriteByte(cmdPSH)
+		binary.BigEndian.PutUint32(buffer.Extend(4), sid)
+		binary.BigEndian.PutUint16(buffer.Extend(2), uint16(dataLen))
+		buffer.Write(data)
+		_, err := s.writeConn(buffer.Bytes())
+		buffer.Release()
+		if err != nil {
+			return 0, err
+		}
+		return dataLen, nil
 	}
 
+	frameCount := (dataLen + maxFrameDataLen - 1) / maxFrameDataLen
+	buffer := buf.NewSize(dataLen + frameCount*headerOverHeadSize)
+	defer buffer.Release()
+
+	for written := 0; written < dataLen; {
+		chunk := dataLen - written
+		if chunk > maxFrameDataLen {
+			chunk = maxFrameDataLen
+		}
+		buffer.WriteByte(cmdPSH)
+		binary.BigEndian.PutUint32(buffer.Extend(4), sid)
+		binary.BigEndian.PutUint16(buffer.Extend(2), uint16(chunk))
+		buffer.Write(data[written : written+chunk])
+		written += chunk
+	}
+
+	if _, err := s.writeConn(buffer.Bytes()); err != nil {
+		return 0, err
+	}
 	return dataLen, nil
 }
 
