@@ -217,16 +217,18 @@ func (c *Client) WritePing(ctx context.Context) error {
 }
 
 func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bool) error {
+	if err := c.writeSem.Acquire(ctx, 1); err != nil {
+		return err
+	}
+	defer c.writeSem.Release(1)
+	// Acquire the data channel after securing the write semaphore, since a
+	// rekey may swap c.data while Acquire is blocked.
 	c.dataLock.RLock()
 	data := c.data
 	c.dataLock.RUnlock()
 	if data == nil {
 		return errors.New("openvpn data channel is not ready")
 	}
-	if err := c.writeSem.Acquire(ctx, 1); err != nil {
-		return err
-	}
-	defer c.writeSem.Release(1)
 	if compress && c.config.CompLZO == CompLzoYes {
 		compressed, err := lzo1xCompressSafe(packet)
 		if err != nil {
