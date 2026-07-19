@@ -195,5 +195,6 @@ func (c *realityVerifier) VerifyConnection(state utls.ConnectionState) error {
 	if _, err := certs[0].Verify(opts); err != nil {
 		return err
 	}
+	c.verified = true
 	return nil
 }
