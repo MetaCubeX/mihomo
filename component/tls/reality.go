@@ -183,19 +183,6 @@ func (c *realityVerifier) VerifyConnection(state utls.ConnectionState) error {
 			c.verified = true
 			return nil
 		}
-
-		if c.HandshakeState.ServerHello != nil &&
-			c.HandshakeState.ServerHello.Certificate != nil &&
-			len(c.HandshakeState.ServerHello.Certificate.Certificate) > 0 {
-			rawCert := c.HandshakeState.ServerHello.Certificate.Certificate[0]
-			if len(rawCert) >= 64 {
-				actualMAC := rawCert[len(rawCert)-64:]
-				if bytes.Equal(expectedMAC, actualMAC) {
-					c.verified = true
-					return nil
-				}
-			}
-		}
 	}
 	opts := x509.VerifyOptions{
 		DNSName:       c.serverName,
