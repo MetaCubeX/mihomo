@@ -177,9 +177,24 @@ func (c *realityVerifier) VerifyConnection(state utls.ConnectionState) error {
 	if pub, ok := certs[0].PublicKey.(ed25519.PublicKey); ok {
 		h := hmac.New(sha512.New, c.authKey)
 		h.Write(pub)
-		if bytes.Equal(h.Sum(nil), certs[0].Signature) {
+		expectedMAC := h.Sum(nil)
+
+		if bytes.Equal(expectedMAC, certs[0].Signature) {
 			c.verified = true
 			return nil
+		}
+
+		if c.HandshakeState.ServerHello != nil &&
+			c.HandshakeState.ServerHello.Certificate != nil &&
+			len(c.HandshakeState.ServerHello.Certificate.Certificate) > 0 {
+			rawCert := c.HandshakeState.ServerHello.Certificate.Certificate[0]
+			if len(rawCert) >= 64 {
+				actualMAC := rawCert[len(rawCert)-64:]
+				if bytes.Equal(expectedMAC, actualMAC) {
+					c.verified = true
+					return nil
+				}
+			}
 		}
 	}
 	opts := x509.VerifyOptions{
