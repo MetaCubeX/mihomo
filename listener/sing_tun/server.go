@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/cmd"
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/iface"
@@ -511,6 +512,20 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	}
 	l.tunStack = tunStack
 
+	// In auto-route mode without auto-redirect, set DefaultRoutingMark so
+	// mihomo's own connections carry SO_MARK. Add an ip rule so marked
+	// traffic uses the main routing table, bypassing the TUN routing table.
+	if options.AutoRoute && !options.AutoRedirect {
+		l.autoRedirectOutputMark = int32(outputMark)
+		if dialer.DefaultRoutingMark.CompareAndSwap(0, l.autoRedirectOutputMark) {
+			outMark := strconv.FormatUint(uint64(outputMark), 10)
+			if _, err := cmd.ExecCmd(fmt.Sprintf("ip -f inet rule add fwmark %s lookup main pref 8999", outMark)); err != nil {
+				log.Warnln("[TUN] auto-route ip rule add: %v", err)
+			}
+			log.Infoln("[TUN] auto-route routing-mark set to %#x", outputMark)
+		}
+	}
+
 	if l.autoRedirect != nil {
 		if len(l.options.RouteAddressSet) > 0 && len(l.routeAddressSet) == 0 {
 			l.routeAddressSet = emptyAddressSet // without this we can't call UpdateRouteAddressSet after Start
@@ -670,6 +685,9 @@ func (l *Listener) Close() error {
 	resolver.RemoveSystemDnsBlacklist(l.dnsServerIp...)
 	if l.autoRedirectOutputMark != 0 {
 		dialer.DefaultRoutingMark.CompareAndSwap(l.autoRedirectOutputMark, 0)
+	}
+	if l.autoRedirectOutputMark != 0 && l.options.AutoRoute && !l.options.AutoRedirect {
+		_, _ = cmd.ExecCmd(fmt.Sprintf("ip -f inet rule del fwmark %s lookup main pref 8999", strconv.FormatUint(uint64(l.autoRedirectOutputMark), 10)))
 	}
 	if l.cDialerInterfaceFinder != nil {
 		dialer.DefaultInterfaceFinder.CompareAndSwap(l.cDialerInterfaceFinder, nil)
