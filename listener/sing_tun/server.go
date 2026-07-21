@@ -519,6 +519,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		l.autoRedirectOutputMark = int32(outputMark)
 		if dialer.DefaultRoutingMark.CompareAndSwap(0, l.autoRedirectOutputMark) {
 			outMark := strconv.FormatUint(uint64(outputMark), 10)
+			_, _ = cmd.ExecCmd(fmt.Sprintf("ip -f inet rule del fwmark %s lookup main pref 8999", outMark))
 			if _, err := cmd.ExecCmd(fmt.Sprintf("ip -f inet rule add fwmark %s lookup main pref 8999", outMark)); err != nil {
 				log.Warnln("[TUN] auto-route ip rule add: %v", err)
 			}
