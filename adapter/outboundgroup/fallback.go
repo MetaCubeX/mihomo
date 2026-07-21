@@ -120,7 +120,7 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 		}
 	}
 
-	return proxies[0]
+	return f.EmptyFallback()
 }
 
 func (f *Fallback) Set(name string) error {

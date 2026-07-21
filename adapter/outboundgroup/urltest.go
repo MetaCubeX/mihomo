@@ -118,6 +118,7 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 		fast := proxies[0]
 		minDelay := fast.LastDelayForTestUrl(u.testUrl)
 		fastNotExist := true
+		hasAlive := false
 
 		for _, proxy := range proxies[1:] {
 			if u.fastNode != nil && proxy.Name() == u.fastNode.Name() {
@@ -128,12 +129,17 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				continue
 			}
 
+			hasAlive = true
 			delay := proxy.LastDelayForTestUrl(u.testUrl)
 			if delay < minDelay {
 				fast = proxy
 				minDelay = delay
 			}
 
+		}
+		if !hasAlive {
+			u.fastNode = u.EmptyFallback()
+			return u.fastNode, nil
 		}
 		// tolerance
 		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {

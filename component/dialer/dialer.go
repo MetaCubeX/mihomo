@@ -98,7 +98,13 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 			// avoid "The requested address is not valid in its context."
 			opt.interfaceName = ""
 		}
-		if opt.interfaceName != "" {
+		if opt.routingMark == 0 {
+			opt.routingMark = int(DefaultRoutingMark.Load())
+		}
+		if opt.routingMark != 0 {
+			bindMarkToListenConfig(opt.routingMark, lc, network, address)
+		}
+		if opt.interfaceName != "" && opt.routingMark == 0 {
 			bind := bindIfaceToListenConfig
 			if opt.fallbackBind {
 				bind = fallbackBindIfaceToListenConfig
@@ -108,12 +114,6 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 				return nil, err
 			}
 			address = addr
-		}
-		if opt.routingMark == 0 {
-			opt.routingMark = int(DefaultRoutingMark.Load())
-		}
-		if opt.routingMark != 0 {
-			bindMarkToListenConfig(opt.routingMark, lc, network, address)
 		}
 	}
 
@@ -151,7 +151,13 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 				opt.interfaceName = finder.FindInterfaceName(destination)
 			}
 		}
-		if opt.interfaceName != "" {
+		if opt.routingMark == 0 {
+			opt.routingMark = int(DefaultRoutingMark.Load())
+		}
+		if opt.routingMark != 0 {
+			bindMarkToDialer(opt.routingMark, dialer, network, destination)
+		}
+		if opt.interfaceName != "" && opt.routingMark == 0 {
 			bind := bindIfaceToDialer
 			if opt.fallbackBind {
 				bind = fallbackBindIfaceToDialer
@@ -159,12 +165,6 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 			if err := bind(opt.interfaceName, dialer, network, destination); err != nil {
 				return nil, err
 			}
-		}
-		if opt.routingMark == 0 {
-			opt.routingMark = int(DefaultRoutingMark.Load())
-		}
-		if opt.routingMark != 0 {
-			bindMarkToDialer(opt.routingMark, dialer, network, destination)
 		}
 		if opt.tfo && !DisableTFO {
 			return dialTFO(ctx, *dialer, network, address)
@@ -186,14 +186,14 @@ func ICMPControl(destination netip.Addr) func(network, address string, conn sysc
 				interfaceName = finder.FindInterfaceName(destination)
 			}
 		}
-		if interfaceName != "" {
-			if err := bindIfaceToDialer(interfaceName, dialer, network, destination); err != nil {
-				return err
-			}
-		}
 		routingMark := int(DefaultRoutingMark.Load())
 		if routingMark != 0 {
 			bindMarkToDialer(routingMark, dialer, network, destination)
+		}
+		if interfaceName != "" && routingMark == 0 {
+			if err := bindIfaceToDialer(interfaceName, dialer, network, destination); err != nil {
+				return err
+			}
 		}
 		if dialer.ControlContext != nil {
 			return dialer.ControlContext(context.TODO(), network, address, conn)
