@@ -428,7 +428,6 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		if !options.AutoRoute {
 			return nil, E.New("`auto-route` is required by `auto-redirect`")
 		}
-		disableNFTables, dErr := strconv.ParseBool(os.Getenv("DISABLE_NFTABLES"))
 		l.autoRedirect, err = tun.NewAutoRedirect(tun.AutoRedirectOptions{
 			TunOptions:             &tunOptions,
 			Context:                ctx,
@@ -437,7 +436,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 			NetworkMonitor:         l.networkUpdateMonitor,
 			InterfaceFinder:        interfaceFinder,
 			TableName:              "mihomo",
-			DisableNFTables:        dErr == nil && disableNFTables,
+			DisableNFTables:        true,
 			RouteAddressSet:        &l.routeAddressSet,
 			RouteExcludeAddressSet: &l.routeExcludeAddressSet,
 		})
@@ -511,15 +510,27 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		return
 	}
 	l.tunStack = tunStack
+	// After TUN is up, systemd-resolved registers Meta as DNS server
+	// with DefaultRoute=yes, creating a deadlock. Clear it here.
+	if options.AutoRoute {
+		go func() {
+			time.Sleep(time.Second)
+			_, _ = cmd.ExecCmd(fmt.Sprintf("resolvectl default-route %s false", tunName))
+			_, _ = cmd.ExecShell(fmt.Sprintf("resolvectl domain %s ''", tunName))
+			_, _ = cmd.ExecShell(fmt.Sprintf("resolvectl dns %s ''", tunName))
+		}()
+	}
+
 
 	// In auto-route mode without auto-redirect, set DefaultRoutingMark so
 	// mihomo's own connections carry SO_MARK. Add an ip rule so marked
 	// traffic uses the main routing table, bypassing the TUN routing table.
-	if options.AutoRoute && !options.AutoRedirect {
+	if options.AutoRoute {
 		l.autoRedirectOutputMark = int32(outputMark)
 		if dialer.DefaultRoutingMark.CompareAndSwap(0, l.autoRedirectOutputMark) {
 			outMark := strconv.FormatUint(uint64(outputMark), 10)
-			if _, err := cmd.ExecCmd(fmt.Sprintf("ip -f inet rule add fwmark %s lookup main pref 8999", outMark)); err != nil {
+			_, _ = cmd.ExecCmd(fmt.Sprintf("ip -f inet rule del fwmark %s lookup main pref 8999", outMark))
+if _, err := cmd.ExecCmd(fmt.Sprintf("ip -f inet rule add fwmark %s lookup main pref 8999", outMark)); err != nil {
 				log.Warnln("[TUN] auto-route ip rule add: %v", err)
 			}
 			log.Infoln("[TUN] auto-route routing-mark set to %#x", outputMark)
@@ -538,6 +549,18 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 			err = E.Cause(err, "auto redirect")
 			return
 		}
+		// Add iptables (nft) mark RETURN rules so mihomo's marked
+		// traffic bypasses the auto-redirect OUTPUT REDIRECT chain.
+		if dialer.DefaultRoutingMark.Load() != 0 {
+			outMark := strconv.FormatUint(uint64(dialer.DefaultRoutingMark.Load()), 10)
+			if _, err := cmd.ExecCmd(fmt.Sprintf("iptables -t mangle -I OUTPUT -m mark --mark %s -j RETURN", outMark)); err != nil {
+				log.Warnln("[TUN] iptables mark RETURN mangle: %v", err)
+			}
+			if _, err := cmd.ExecCmd(fmt.Sprintf("iptables -t nat -I OUTPUT -m mark --mark %#x -j RETURN", dialer.DefaultRoutingMark.Load())); err != nil {
+				log.Warnln("[TUN] iptables mark RETURN nat: %v", err)
+			}
+		}
+
 		if tunOptions.AutoRedirectMarkMode {
 			l.autoRedirectOutputMark = int32(outputMark)
 			if !dialer.DefaultRoutingMark.CompareAndSwap(0, l.autoRedirectOutputMark) {
@@ -688,6 +711,11 @@ func (l *Listener) Close() error {
 	}
 	if l.autoRedirectOutputMark != 0 && l.options.AutoRoute && !l.options.AutoRedirect {
 		_, _ = cmd.ExecCmd(fmt.Sprintf("ip -f inet rule del fwmark %s lookup main pref 8999", strconv.FormatUint(uint64(l.autoRedirectOutputMark), 10)))
+	// Clean up iptables (nft) mark RETURN rules
+	if l.autoRedirectOutputMark != 0 && l.options.AutoRedirect {
+		_, _ = cmd.ExecCmd(fmt.Sprintf("iptables -t mangle -D OUTPUT -m mark --mark %s -j RETURN", strconv.FormatUint(uint64(l.autoRedirectOutputMark), 10)))
+		_, _ = cmd.ExecCmd(fmt.Sprintf("iptables -t nat -D OUTPUT -m mark --mark %#x -j RETURN", l.autoRedirectOutputMark))
+	}
 	}
 	if l.cDialerInterfaceFinder != nil {
 		dialer.DefaultInterfaceFinder.CompareAndSwap(l.cDialerInterfaceFinder, nil)
