@@ -53,6 +53,9 @@ const (
 	OpenVPN
 	Tailscale
 	GostRelay
+	// Speedcat = speedcat(速猫)outbound(docs/17 §4 4-switch fork 第 1 件:iota)。
+	// 须在 String() 加对应 case,否则 AdapterType 渲染 "Unknown"。
+	Speedcat
 )
 
 const (
@@ -236,6 +239,9 @@ func (at AdapterType) String() string {
 		return "Tailscale"
 	case GostRelay:
 		return "GostRelay"
+	// speedcat(4-switch 第 1 件:String case)。漏加 → "Unknown"。
+	case Speedcat:
+		return "Speedcat"
 	case Relay:
 		return "Relay"
 	case Selector:

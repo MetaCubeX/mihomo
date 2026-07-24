@@ -174,6 +174,15 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewAnyTLS(*anytlsOption)
+	case "speedcat":
+		// speedcat(速猫)outbound —— 经 Rust speedcat server 代理(docs/17 §4 4-switch fork 第 3 件)。
+		// 照 anytls:decode SpeedcatOption(proxy: tag,内嵌 BasicOption)+ NewSpeedcat。
+		speedcatOption := &outbound.SpeedcatOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, speedcatOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewSpeedcat(*speedcatOption)
 	case "sudoku":
 		sudokuOption := &outbound.SudokuOption{BasicOption: basicOption}
 		err = decoder.Decode(mapping, sudokuOption)

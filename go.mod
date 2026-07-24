@@ -1,6 +1,8 @@
 module github.com/metacubex/mihomo
 
-go 1.20
+// go 1.25.0(对齐 adapter/mihomo;speedcat fork 落地,docs/17 §4 C1)。
+// 原 upstream go 1.20 升至 1.25.0 —— go.work 用 max(go 版本),lib 是 go 1.25.0。
+go 1.25.0
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0

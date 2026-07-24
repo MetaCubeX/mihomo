@@ -638,6 +638,78 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			proxies = append(proxies, anytls)
 
+		case "speedcat":
+			// speedcat://<base64url("chacha20-poly1305:<psk_hex>")>@<host>:<port>?transport=&sni=&alpn=&insecure=#<name>
+			// docs/08 §4。userinfo base64url 解码后 "method:psk" split(§4 解析规则);method 恒 chacha20-poly1305
+			// (MVP 唯一)→ password=psk_hex。未知 query 参数静默忽略(§4);transport 缺省 tcp。
+			link, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+			server := link.Hostname()
+			portStr := link.Port()
+			if server == "" || portStr == "" {
+				continue
+			}
+			// userinfo = base64url("chacha20-poly1305:<psk_hex>")。base64url 无 padding;有则剥后用 RawURLEncoding 解。
+			userinfo := link.User.Username()
+			decoded := decodeUrlSafe(strings.TrimRight(userinfo, "="))
+			if decoded == "" {
+				decoded = string(DecodeBase64([]byte(userinfo))) // fallback raw-std(兼容 std base64 写法)
+			}
+			parts := strings.SplitN(decoded, ":", 2)
+			if len(parts) != 2 {
+				continue // 格式非法 → 静默丢(§4)
+			}
+			method, psk := parts[0], parts[1]
+			if method != "chacha20-poly1305" || psk == "" {
+				continue // method 不在支持列表 → 0x01 不支持(§4);psk 空 → 丢。静默。
+			}
+			query := link.Query()
+			transport := query.Get("transport")
+			if transport == "" {
+				transport = "tcp"
+			}
+			// disguise=reality 时把 transport 提升为 reality(URI 用 disguise 标识伪装路,fork option 用
+			// transport=kind;两者语义错位在此单点对齐 —— 兼容「只写 disguise=reality 不写 transport」的订阅)。
+			// 对照 Rust config.rs parse_speedcat_uri 的 disguise/transport 双字段。
+			if query.Get("disguise") == "reality" {
+				transport = "reality"
+			}
+			sni := query.Get("sni")
+			if sni == "" {
+				sni = server
+			}
+			remarks := link.Fragment
+			if remarks == "" {
+				remarks = fmt.Sprintf("%s:%s", server, portStr)
+			}
+			name := uniqueName(names, remarks)
+			speedcat := make(map[string]any, 10)
+			speedcat["name"] = name
+			speedcat["type"] = "speedcat"
+			speedcat["server"] = server
+			speedcat["port"] = portStr
+			speedcat["password"] = psk
+			speedcat["sni"] = sni
+			speedcat["transport"] = transport
+			speedcat["udp"] = true
+			speedcat["skip-cert-verify"] = query.Get("insecure") == "1" // 1 → 接受任意证书(dev/受控网络)
+			if alpn := query.Get("alpn"); alpn != "" {
+				speedcat["alpn"] = alpn
+			}
+			// Reality(阶段三):spub=server X25519 静态公钥 / sid=short_id,均 base64url(两端同款,ADR-013)。
+			// 多 sid 全发为列表(fork SpeedcatOption.RealityShortIDs []string;client 取首算 AuthKey,余供轮换)。
+			// dest 不 emit(客户端拨号用不到,ADR-013 Q1)。
+			if spub := query.Get("spub"); spub != "" {
+				speedcat["reality-pubkey"] = spub
+			}
+			// query["sid"] 取全值(可多条 sid=a&sid=b);emit 为 []string 适配 fork 切片字段。
+			if sids := query["sid"]; len(sids) > 0 {
+				speedcat["reality-short-id"] = sids
+			}
+			proxies = append(proxies, speedcat)
+
 		case "mierus":
 			urlMieru, err := url.Parse(line)
 			if err != nil {
