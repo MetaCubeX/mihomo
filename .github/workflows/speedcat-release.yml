@@ -1,0 +1,179 @@
+name: Speedcat Mihomo Release
+
+# 预编 speedcat-enabled mihomo fork 内核(路线 A:用户下载替换内置内核,免编译)。
+#
+# **设计(承重,执行期验已闭合):**
+# - speedcat 是自研协议,通用客户端内置的 stock mihomo 不认 → 用户须换本 fork 内核(下载替换,非编译)。
+#   本 workflow 把 fork 预编成各平台二进制,挂到 fork Release,用户挑对应平台下载替换即可。
+# - **fork standalone 可编**:speedcat 协议以一方代码 `transport/speedcat/`(client/crypto/handshake/transport/wire)
+#   vendor 进 fork(非外部 module 依赖)→ CI checkout 后直接 `go build`,**无需 parent 仓 go.work / adapter/mihomo**。
+#   本地已实证(go1.26.5 编出 60M 二进制,strings 含 speedcat adapter / speedcat-v1 exporter / speedcat-udp-v1 等符号)。
+# - **复用 mihomo build.yml 模式**(而非重造):Go setup(MetaCubeX go fork 1.26)+ `go build -tags with_gvisor -trimpath`
+#   + GOOS/GOARCH env + ldflags 注入 constant.Version/BuildTime + .gz/.zip 命名 + upload-artifact + checksums + softprops release。
+#
+# **桌面内核(本 workflow 产出):** linux/darwin/windows × amd64+arm64 → Clash Verge / mihomo Party / FlClash PC / Clash Meta / Stash 换内核。
+#
+# **⚠ Android(FlClash)不在本 Release(承重边界):** FlClash Android 内核 = `libcore.so`(gomobile bind,**非** `go build` 二进制);
+#   该形态由 **FlClash / ClashMetaForAndroid 客户端仓**用 gomobile bind 构建(消费 mihomo 为 Go module 依赖),**本 mihomo fork 仓无 gobind 入口包,产不出**。
+#   如需 FlClash Android 内核:fork FlClash core 构建 → 指向本 fork `transport/speedcat` → gomobile bind(单独工程,见 docs/18 §6.1)。
+#   (mihomo 自身 Makefile `android-arm64` 目标 = 普通二进制,非 libcore.so;故不并入本桌面矩阵,免用户误以为是 FlClash 内核。)
+
+on:
+  push:
+    tags:
+      - 'speedcat-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本标签(如 speedcat-v0.1.0);留空用触发 tag 推导'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  # 桌面内核无 cgo(纯 Go + 静态 dep);CGO_ENABLED=0 产静态二进制。
+  # (mihomo build.yml 的 android 分支才 CGO_ENABLED=1 + NDK;本桌面矩阵不含 android。)
+  CGO_ENABLED: '0'
+  GOTOOLCHAIN: local
+
+jobs:
+  build:
+    name: ${{ matrix.jobs.goos }}/${{ matrix.jobs.output }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 桌面内核矩阵(amd64 取 goamd64 v3 = 2013+ 现代 CPU,覆盖绝大多数设备;arm64 含 Apple Silicon / 树莓派 / WinARM)。
+        # 命名 output 段对齐 mihomo build.yml 习惯;产物文件名 speedcat-mihomo-<goos>-<output>-<VERSION>。
+        jobs:
+          - { goos: linux,   goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: linux,   goarch: arm64,              output: arm64 }
+          - { goos: darwin,  goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: darwin,  goarch: arm64,              output: arm64 }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: windows, goarch: arm64,              output: arm64 }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # 复用 mihomo build.yml 的 Go setup(MetaCubeX go fork 1.26,proven 编 mihomo)。
+      # fork = mihomo + transport/speedcat,同一 Go 工具链编得出(本地 go1.26.5 已实证)。
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-download-base-url: 'https://github.com/MetaCubeX/go/releases/download/build'
+          go-version: '1.26'
+
+      - name: Verify Go
+        run: go version
+
+      - name: Set VERSION
+        run: |
+          # tag(speedcat-v0.1.0)+ 短 sha;workflow_dispatch 可用 inputs.version 覆盖。
+          VERSION="${GITHUB_REF_NAME,,}-$(git rev-parse --short HEAD)"
+          VERSION="${VERSION//\//-}"
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "BUILDTIME=$(date)" >> "$GITHUB_ENV"
+
+      - name: Build core
+        env:
+          GOOS: ${{ matrix.jobs.goos }}
+          GOARCH: ${{ matrix.jobs.goarch }}
+          GOAMD64: ${{ matrix.jobs.goamd64 }}
+        run: |
+          # go build 产物默认名 mihomo(无后缀)/ mihomo.exe(win);编完改名 speedcat-mihomo-<os>-<arch>-<ver>。
+          # -tags with_gvisor:mihomo 标准 build tag(同 build.yml);-trimpath 去绝对路径;-w -s 去 DWARF/symtab 瘦身;-buildid= 去可重现性指纹。
+          # ldflags 注入 constant.Version/BuildTime → 用户 `mihomo -v` 见 speedcat 版本,易核验装的是 fork 内核。
+          go build -v -tags "with_gvisor" -trimpath \
+            -ldflags "-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
+
+          OUT="speedcat-mihomo-${{ matrix.jobs.goos }}-${{ matrix.jobs.output }}-${VERSION}"
+          if [ "${{ matrix.jobs.goos }}" = "windows" ]; then
+            mv mihomo.exe "${OUT}.exe"
+            zip -j "${OUT}.zip" "${OUT}.exe"
+          else
+            mv mihomo "${OUT}"
+            gzip -c "${OUT}" > "${OUT}.gz"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.jobs.goos }}-${{ matrix.jobs.output }}
+          path: |
+            speedcat-mihomo-*.gz
+            speedcat-mihomo-*.zip
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Calculate checksums
+        run: |
+          cd dist/
+          # sha256 全产物 → checksums.txt(用户校验下载完整性)。
+          find . -type f -not -name "checksums.txt" | sort | xargs sha256sum > checksums.txt
+          cat checksums.txt
+          echo "---" >&2
+          ls -1
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/*
+          generate_release_notes: true
+          body: |
+            ## speedcat-enabled mihomo fork 内核(路线 A)
+
+            下载对应平台内核,**替换你的 mihomo 系客户端内置内核**,即可消费 `speedcat://` 订阅(speedcat 自研协议,stock mihomo 不认 → 须换本 fork 内核)。
+
+            ### 文件
+
+            | 文件 | 平台 / 用途 |
+            |---|---|
+            | `speedcat-mihomo-linux-amd64-*.gz` | Linux PC / 桌面客户端 |
+            | `speedcat-mihomo-linux-arm64-*.gz` | Linux ARM(树莓派 / ARM 小主机) |
+            | `speedcat-mihomo-darwin-amd64-*.gz` | macOS Intel |
+            | `speedcat-mihomo-darwin-arm64-*.gz` | macOS Apple Silicon |
+            | `speedcat-mihomo-windows-amd64-*.zip` | Windows x64 |
+            | `speedcat-mihomo-windows-arm64-*.zip` | Windows ARM |
+            | `checksums.txt` | sha256 校验 |
+
+            ### 换内核步骤(各客户端)
+
+            1. 下载对应平台 `.gz` / `.zip`,解压出 `speedcat-mihomo-*` 二进制(可重命名为客户端期望的内核名,如 `mihomo` / `clash-meta`)。
+            2. 定位客户端内置 mihomo core 路径并替换:
+               - **Clash Verge:** `Settings → Clash Core` 切换,或自定义 core 路径指向本二进制。
+               - **mihomo Party / Clash Meta / Stash:** 定位其内置 core 二进制替换(路径见各客户端文档)。
+               - **FlClash(PC):** 替换内置 mihomo core 二进制。
+            3. 换后客户端支持 `type: speedcat` outbound + `speedcat://` 订阅。
+            4. 验:导入订阅 → 选 speedcat 节点 → 浏览器开 `https://ifconfig.me` → 出口 = 节点 IP。
+
+            完整流程见 speedcat 文档 [docs/18 · L1 生产 runbook §6](https://github.com/miuiadmin/speedcat/blob/main/docs/18-l1-production-runbook.md)(换内核路径表 + 导订阅)。
+
+            ### ⚠ Android(FlClash)—— 不在此 Release
+
+            FlClash Android 内核 = `libcore.so`(**gomobile bind,非 `go build` 二进制**)。该形态由 **FlClash / ClashMetaForAndroid 客户端仓**用 gomobile bind 构建(消费 mihomo 为 Go module 依赖),**本 mihomo fork 仓无 gobind 入口包,产不出** `libcore.so`。
+
+            如需 FlClash Android 内核:fork FlClash 的 core 构建 → 把 mihomo 依赖指向本 fork(`transport/speedcat`)→ gomobile bind(单独工程,见 [docs/18 §6.1](https://github.com/miuiadmin/speedcat/blob/main/docs/18-l1-production-runbook.md))。
+
+            ---
+
+            **核验:** 解压后 `speedcat-mihomo-* -v` 应显含 `speedcat-v` 版本串(本 fork 注入 `constant.Version`),确认装的是 speedcat 内核而非 stock mihomo。
