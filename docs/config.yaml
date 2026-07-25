@@ -302,7 +302,7 @@ dns:
   respect-rules: false
 
   # DNS 主要域名配置
-  # 支持 UDP，TCP，DoT，DoH，DoQ
+  # 支持 UDP，TCP，DoT，DoH，DoQ，mDNS
   # 这部分为主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS
   nameserver:
     - 114.114.114.114 # default value
@@ -313,6 +313,7 @@ dns:
     - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用 HTTP/3
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
+    # - mdns:// # Multicast DNS，仅在显式配置时使用；macOS 使用系统 mDNSResponder
     # - ts://tailscale # 使用指定 Tailscale 出站的 DNS 配置查询
     # - '8.8.8.8#RULES' # 效果同respect-rules，但仅对该服务器生效
     # - '8.8.8.8#en0' # 兼容指定 DNS 出口网卡
@@ -357,6 +358,7 @@ dns:
   nameserver-policy:
     #   'www.baidu.com': '114.114.114.114'
     #   '+.internal.crop.com': '10.0.0.1'
+    #   '+.local': 'mdns://'
     "geosite:cn,private,apple":
       - https://doh.pub/dns-query
       - https://dns.alidns.com/dns-query
