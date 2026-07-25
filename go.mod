@@ -22,7 +22,7 @@ require (
 	github.com/metacubex/edwards25519 v1.2.0
 	github.com/metacubex/fswatch v0.1.1
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/http v0.1.6
+	github.com/metacubex/http v0.1.7
 	github.com/metacubex/jls-quic-go v0.0.0-20260723162623-1cc413101174
 	github.com/metacubex/jls-tls v0.0.0-20260723084315-67adc0e2f796
 	github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604
