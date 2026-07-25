@@ -223,6 +223,15 @@ func (m *Metadata) RemoteAddress() string {
 	return net.JoinHostPort(m.String(), strconv.FormatUint(uint64(m.DstPort), 10))
 }
 
+// LogAddress is like RemoteAddress but shows the domain used for rule matching,
+// so a sniffed domain is also logged when the destination isn't overridden
+func (m *Metadata) LogAddress() string {
+	if host := m.RuleHost(); host != "" {
+		return net.JoinHostPort(host, strconv.FormatUint(uint64(m.DstPort), 10))
+	}
+	return m.RemoteAddress()
+}
+
 func (m *Metadata) SourceAddress() string {
 	return net.JoinHostPort(m.SrcIP.String(), strconv.FormatUint(uint64(m.SrcPort), 10))
 }
