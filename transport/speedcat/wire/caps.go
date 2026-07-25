@@ -51,6 +51,20 @@ func (c *Caps) SetNoInnerAEAD(v bool) {
 	}
 }
 
+// Padding 报告 PADDING(bit 2)是否置位(对照 Rust padding,caps.rs:45-47;ADR-016)。21 单栈伪装路默认 offer;
+// encode 塑形落 pumpEncodeFast(快路 + caps PADDING),decode 两侧无条件消费 Padding(不门控 caps)。
+func (c Caps) Padding() bool { return c&CapPadding != 0 }
+
+// SetPadding 置/清 PADDING(bit 2,对照 Rust set_padding,caps.rs:66-69;ADR-016)。指针 receiver(与 SetNoInnerAEAD
+// 同款,原地改)。client 侧按 transport kind gate(TCP/raw-tcp offer / QUIC 不 offer,见 client.NewClient)。
+func (c *Caps) SetPadding(v bool) {
+	if v {
+		*c |= CapPadding
+	} else {
+		*c &^= CapPadding
+	}
+}
+
 // Valid 报告 reserved 位(bit 9-15)是否全 0(02 §1.2「reserved 须置 0」)。
 func (c Caps) Valid() bool { return c&reservedMask == 0 }
 

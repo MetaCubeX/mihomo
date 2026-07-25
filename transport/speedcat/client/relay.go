@@ -130,11 +130,24 @@ func pumpEncode(tx *SessionTx, local io.Reader, conn io.Writer) error {
 // pumpEncodeFast 快路批量合帧 + 零拷贝(对照 Rust pump_encode fast 分支,relay.rs:106-145)。一次性满容 alloc
 // batch(cap 容 relayEncodeBatch + 一帧余量)→ body 直读进头后位置、头就地覆写,0 per-frame alloc / 0 memcpy。
 // 延迟启发式:满批 OR 短读 → Write(bulk 全读攒批;交互短读立即 flush 保实时)。
+//
+// **ADR-016 PADDING 塑形(快路 + caps PADDING):** 前 [stopN] 条 record 按分布带 target 早 flush + 交互短读补
+// 一帧 PADDING 凑 target(消灭「代理发 tiny record」指纹);stopN 后稳态直出(零开销,ADR-005)。镜像 Rust
+// relay.rs:102-199 逐段。塑形仅连接冷段(前 8 record);稳态 bulk pump 逐字不变。
 func pumpEncodeFast(tx *SessionTx, local io.Reader, conn io.Writer) error {
 	// cap 须容 relayEncodeBatch + 一帧余量(头 + chunk + tag),顶 check 据此防越界(对照 Rust relay.rs:85)。
 	capBytes := relayEncodeBatch + wire.FrameHeaderLen + relayChunk + wire.AEADTagLen
 	batch := make([]byte, capBytes)
 	n := 0 // batch 逻辑长度(已攒字节数)。
+	// ADR-016 塑形冷路径状态:scheme 近零成本构造;prng 仅 padActive 时 1 次 OS 熵冷 seed(~µs,per-conn)。
+	// pumpEncodeFast 仅快路调用 → NoInnerAEAD 恒真,padActive = Padding()(快路 + 协商 PADDING)。
+	padActive := tx.Padding()
+	scheme := defaultPaddingScheme()
+	var prngState *prng
+	if padActive {
+		prngState = newPrngFromEntropy()
+	}
+	shapedRecords := 0
 	for {
 		// 顶 check:剩余容不下头 + 最大 body(+tag)→ 先 flush(防越界,safety 兜底)。
 		if n+wire.FrameHeaderLen+relayChunk+wire.AEADTagLen > capBytes {
@@ -152,10 +165,38 @@ func pumpEncodeFast(tx *SessionTx, local io.Reader, conn io.Writer) error {
 			if e := tx.sealFrameHeaderFast(wire.FrameTCPData, rn, batch[n:n+wire.FrameHeaderLen]); e != nil {
 				return e
 			}
-			bodyLen := rn
 			n += wire.FrameHeaderLen + rn
-			// 延迟启发式(模块头):满批 OR 短读(bodyLen < relayChunk)→ flush。
-			if n >= relayEncodeBatch || bodyLen < relayChunk {
+			shortRead := rn < relayChunk
+			// 延迟启发式(模块头)+ ADR-016 PADDING 塑形。
+			if padActive && shapedRecords < stopN {
+				// 塑形(快路 + caps PADDING,前 stopN record):按分布带 target 早 flush + 短读补 PADDING 凑 target。
+				// stopN 后整段退原启发式(稳态 bulk 逐字不变,ADR-005 零稳态开销)。
+				target := scheme.target(shapedRecords, prngState)
+				// bulk(n 已 >> target)→ 直接早 flush 造 ~target 量级 record;短读 → 进 flush 块(可能补 padding)。
+				if n >= target || shortRead {
+					// 交互短读且攒的明文 < target → 补一帧 PADDING(随机明文 body,快路无 tag)凑到 target,
+					// 消灭「代理发 tiny record」指纹。n+7 >= target(bulk)时不补。pad = target-n-7。
+					// **slice 安全不变量(对照 Rust debug_assert):** 补 padding 仅当 n+7 < target ≤ 1630,
+					// 故 n+7+pad = target ≤ capBytes(顶 check 保 n 余量;target 量级远小于 256KiB batch)。
+					if n+wire.FrameHeaderLen < target {
+						pad := target - n - wire.FrameHeaderLen
+						prngState.fill(batch[n+wire.FrameHeaderLen : n+wire.FrameHeaderLen+pad])
+						// PADDING 帧头进 headroom [n..n+7](advance ctr + 7B AAD,ctr 单一真源)。
+						if e := tx.sealFrameHeaderFast(wire.FramePadding, pad, batch[n:n+wire.FrameHeaderLen]); e != nil {
+							return e
+						}
+						n += wire.FrameHeaderLen + pad
+					}
+					if _, we := conn.Write(batch[:n]); we != nil {
+						return we
+					}
+					n = 0
+					shapedRecords++
+				}
+				// else(n < target 且非短读 = bulk 攒批中):不 flush,续读攒到 target → 下轮早 flush。
+			} else if n >= relayEncodeBatch || shortRead {
+				// 原启发式(stopN 后 / caps 未协商):满批 OR 短读 flush。
+				// bulk 全读(=relayChunk)继续攒降 flush 密度;交互短读立即 flush 保 proxy 实时性。
 				if _, we := conn.Write(batch[:n]); we != nil {
 					return we
 				}
@@ -330,8 +371,14 @@ func pumpDecodeFast(rx *SessionRx, conn io.Reader, local io.Writer) error {
 					return e
 				}
 				return fmt.Errorf("%w: %s", ErrPeer, string(payload))
+			case wire.FramePadding:
+				// ADR-016:Padding 塑形帧 —— 无条件消费(盲丢 payload)。不入 ranges(不进 writev)、不 break,
+				// 续读同批下帧;ctr 已由 DecryptFrame 推进,此处零额外动作。
+				// decode 不门控 caps:Padding 语义即「可丢」,永远非错(反 Ping/Pong/MuxOpen 仍走 default fail-loud)。
+				// Go 语义:switch 内裸 `continue` 指 enclosing `for readBatch`(非退 switch)→ 正确续读下帧。
+				continue
 			default:
-				// Ping/Pong/Padding/MuxOpen 等出现在数据泵 = 协议违规,fail-loud(对照 Rust Error::Wire)。
+				// Ping/Pong/MuxOpen 等出现在数据泵 = 协议违规,fail-loud(对照 Rust Error::Wire)。
 				return fmt.Errorf("%w: 0x%02x", ErrUnexpectedFrame, byte(ftype))
 			}
 		}
@@ -371,8 +418,12 @@ func pumpDecodeAead(rx *SessionRx, conn io.Reader, local io.Writer) error {
 		case wire.FrameError:
 			// 对端 Error 帧:透出 payload 文本(对照 Rust Error::Peer,MED-1)。
 			return fmt.Errorf("%w: %s", ErrPeer, string(payload))
+		case wire.FramePadding:
+			// ADR-016:Padding 塑形帧 —— 无条件消费(盲丢 payload)。不 Write、不 return,续读下帧。
+			// decode 不门控 caps(语义即「可丢」);raw-tcp AEAD 是 dev/test 路,对端若 pad 须对称消费防 Wire error。
+			continue
 		default:
-			// Ping/Pong/Padding/MuxOpen 等出现在数据泵 = 协议违规,fail-loud(对照 Rust Error::Wire)。
+			// Ping/Pong/MuxOpen 等出现在数据泵 = 协议违规,fail-loud(对照 Rust Error::Wire)。
 			return fmt.Errorf("%w: 0x%02x", ErrUnexpectedFrame, byte(ftype))
 		}
 	}

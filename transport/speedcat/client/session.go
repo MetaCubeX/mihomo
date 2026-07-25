@@ -56,6 +56,7 @@ type SessionTx struct {
 	nonceBase   [crypto.NonceLen]byte // BuildNonce 的 base(低 4B 随 ctr XOR)
 	ctr         uint32                // 单调帧计数器;首帧(TCPConnect/UDPAssociate)占 0
 	noInnerAEAD bool                  // 快路标志(从 Caps.NoInnerAEAD() 派生,单一真相源)
+	padding     bool                  // PADDING 塑形(从 Caps.Padding() 派生,对照 Rust SessionTx.padding;ADR-016)
 }
 
 // SessionRx 接收半部:解密向密钥 + nonce base + 重放滑窗(highest 已见 ctr;对照 Rust SessionRx)。
@@ -70,6 +71,10 @@ type SessionRx struct {
 // NoInnerAEAD 快路标志(relay pump 据此分支;对照 Rust SessionTx::no_inner_aead)。
 func (tx *SessionTx) NoInnerAEAD() bool { return tx.noInnerAEAD }
 
+// Padding 报告是否协商 PADDING 塑形(对照 Rust SessionTx::padding,ADR-016)。pumpEncodeFast 据此
+// 注入 PADDING 帧(快路 + caps PADDING);decode 两侧无条件消费(不门控)。
+func (tx *SessionTx) Padding() bool { return tx.padding }
+
 // NoInnerAEAD 快路标志(对照 Rust SessionRx::no_inner_aead)。
 func (rx *SessionRx) NoInnerAEAD() bool { return rx.noInnerAEAD }
 
@@ -78,11 +83,13 @@ func (rx *SessionRx) NoInnerAEAD() bool { return rx.noInnerAEAD }
 // NoInnerAEAD 从 Caps.NoInnerAEAD() 派生(单一真相源:快路 force 置位 / 伪装路 force 清位,见 handshake)。
 func NewClientHalves(s *handshake.Session) (SessionTx, SessionRx) {
 	noInner := s.Caps.NoInnerAEAD()
+	pad := s.Caps.Padding() // ADR-016:PADDING 塑形(快路 + caps PADDING → pumpEncodeFast 注 PADDING)
 	return SessionTx{
 			key:         s.Keys.C2SKey,
 			nonceBase:   s.Keys.C2SNonce,
 			ctr:         0,
 			noInnerAEAD: noInner,
+			padding:     pad,
 		},
 		SessionRx{
 			key:         s.Keys.S2CKey,
