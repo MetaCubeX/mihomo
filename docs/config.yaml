@@ -313,7 +313,10 @@ dns:
     - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用 HTTP/3
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
-    # - mdns:// # Multicast DNS，仅在显式配置时使用；macOS 使用系统 mDNSResponder
+    # - mdns:// # Multicast DNS，仅在显式配置时使用；macOS 优先使用系统 mDNSResponder
+    # mDNS 无响应会返回超时，使同组中其他成功的 nameserver 可以胜出；有效 NSEC 返回 NODATA
+    # macOS mDNSResponder 的明确否定响应保留 NODATA/NXDOMAIN 语义
+    # 多接口上的 CNAME 链分别解析，最终合并各接口的不同地址
     # - ts://tailscale # 使用指定 Tailscale 出站的 DNS 配置查询
     # - '8.8.8.8#RULES' # 效果同respect-rules，但仅对该服务器生效
     # - '8.8.8.8#en0' # 兼容指定 DNS 出口网卡

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/log"
+
 	D "github.com/miekg/dns"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -22,6 +24,7 @@ const (
 	mdnsCacheFlush      = uint16(1 << 15)
 	mdnsClassMask       = ^mdnsCacheFlush
 	mdnsMaxDatagramSize = 65535
+	mdnsMaxResponses    = 256
 )
 
 var (
@@ -43,20 +46,33 @@ type mdnsTarget struct {
 }
 
 type mdnsEvent struct {
-	msg    *D.Msg
-	err    error
-	packet bool
-	done   bool
+	response *mdnsResponse
+	err      error
+	packet   bool
+	done     bool
+}
+
+type mdnsResponse struct {
+	msg *D.Msg
+	// ifIndex identifies the ingress interface. Records from different
+	// interfaces are never linked into one CNAME chain.
+	ifIndex     int
+	source      *net.UDPAddr
+	destination net.IP
+	// hopLimit is retained for diagnostics and policy decisions. RFC 6762
+	// recommends 255, but does not require receivers to reject other values.
+	hopLimit int
 }
 
 type mdnsClient struct {
-	timeout  time.Duration
-	settle   time.Duration
-	platform func(context.Context, *D.Msg) (*D.Msg, bool, error)
-	targets  func() ([]mdnsTarget, error)
-	socketMu sync.Mutex
-	sockets  map[net.Conn]struct{}
-	closed   bool
+	timeout             time.Duration
+	settle              time.Duration
+	platform            func(context.Context, *D.Msg) (*D.Msg, bool, error)
+	targets             func() ([]mdnsTarget, error)
+	platformFallbackLog sync.Once
+	socketMu            sync.Mutex
+	sockets             map[net.Conn]struct{}
+	closed              bool
 }
 
 var _ dnsClient = (*mdnsClient)(nil)
@@ -76,7 +92,7 @@ func (c *mdnsClient) Address() string {
 	return "mdns://"
 }
 
-func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Msg, error) {
+func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (response *D.Msg, err error) {
 	if len(request.Question) == 0 {
 		return nil, errors.New("mDNS query should have one question at least")
 	}
@@ -86,11 +102,26 @@ func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Ms
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	var platformErr error
 	if c.platform != nil {
-		if response, handled, err := c.platform(ctx, request); handled {
+		if response, handled, err := c.platform(queryCtx, request); handled {
 			return response, err
+		} else if err != nil {
+			platformErr = err
+			c.platformFallbackLog.Do(func() {
+				log.Warnln("[DNS] %v; falling back to portable multicast", err)
+			})
 		}
 	}
+	defer func() {
+		if err != nil && platformErr != nil {
+			err = fmt.Errorf("mDNS platform resolver and multicast fallback failed: %w", errors.Join(platformErr, err))
+		}
+	}()
 
 	targets, err := c.targets()
 	if err != nil {
@@ -108,9 +139,6 @@ func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Ms
 	if err != nil {
 		return nil, fmt.Errorf("pack mDNS query: %w", err)
 	}
-
-	queryCtx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
 
 	events := make(chan mdnsEvent, len(targets)*2)
 	connections := make([]*net.UDPConn, 0, len(targets))
@@ -149,10 +177,11 @@ func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Ms
 		}
 
 		connections = append(connections, conn)
+		target := target
 		readers.Add(1)
 		go func() {
 			defer readers.Done()
-			readMDNSResponses(queryCtx, conn, query, events)
+			readMDNSResponses(queryCtx, conn, target, events)
 		}()
 	}
 
@@ -164,7 +193,9 @@ func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Ms
 	}
 
 	var (
-		responses     []*D.Msg
+		responses     []mdnsResponse
+		merged        *D.Msg
+		mergedKey     string
 		firstError    error
 		activeReaders = len(connections)
 		packetCount   int
@@ -183,8 +214,8 @@ func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Ms
 			if event.done {
 				activeReaders--
 				if activeReaders == 0 {
-					if len(responses) > 0 {
-						return mergeMDNSResponses(request, responses), nil
+					if merged != nil {
+						return merged, nil
 					}
 					if c.isClosed() {
 						return nil, errMDNSClientClosed
@@ -212,10 +243,25 @@ func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Ms
 			if event.packet {
 				packetCount++
 			}
-			if event.msg == nil {
+			if event.response == nil {
 				continue
 			}
-			responses = append(responses, event.msg)
+			if len(responses) == mdnsMaxResponses {
+				copy(responses, responses[1:])
+				responses[len(responses)-1] = *event.response
+			} else {
+				responses = append(responses, *event.response)
+			}
+			candidate, available := mergeMDNSResponses(request, responses)
+			if !available {
+				continue
+			}
+			candidateKey := candidate.String()
+			merged = candidate
+			if candidateKey == mergedKey {
+				continue
+			}
+			mergedKey = candidateKey
 			if settleTimer == nil {
 				settleTimer = time.NewTimer(c.settle)
 			} else {
@@ -229,10 +275,10 @@ func (c *mdnsClient) ExchangeContext(ctx context.Context, request *D.Msg) (*D.Ms
 			}
 			settleC = settleTimer.C
 		case <-settleC:
-			return mergeMDNSResponses(request, responses), nil
+			return merged, nil
 		case <-queryCtx.Done():
-			if len(responses) > 0 {
-				return mergeMDNSResponses(request, responses), nil
+			if merged != nil {
+				return merged, nil
 			}
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -416,7 +462,10 @@ func openMDNSSocket(target mdnsTarget) (*net.UDPConn, error) {
 	switch target.network {
 	case "udp4":
 		packetConn := ipv4.NewPacketConn(conn)
-		if err = packetConn.SetMulticastInterface(target.iface); err == nil {
+		if err = packetConn.SetControlMessage(ipv4.FlagTTL|ipv4.FlagDst|ipv4.FlagInterface, true); err == nil {
+			err = packetConn.SetMulticastInterface(target.iface)
+		}
+		if err == nil {
 			err = packetConn.SetMulticastTTL(mdnsMulticastTTL)
 		}
 		if err == nil {
@@ -424,7 +473,10 @@ func openMDNSSocket(target mdnsTarget) (*net.UDPConn, error) {
 		}
 	case "udp6":
 		packetConn := ipv6.NewPacketConn(conn)
-		if err = packetConn.SetMulticastInterface(target.iface); err == nil {
+		if err = packetConn.SetControlMessage(ipv6.FlagHopLimit|ipv6.FlagDst|ipv6.FlagInterface, true); err == nil {
+			err = packetConn.SetMulticastInterface(target.iface)
+		}
+		if err == nil {
 			err = packetConn.SetMulticastHopLimit(mdnsMulticastTTL)
 		}
 		if err == nil {
@@ -438,16 +490,18 @@ func openMDNSSocket(target mdnsTarget) (*net.UDPConn, error) {
 	return conn, nil
 }
 
-func readMDNSResponses(ctx context.Context, conn *net.UDPConn, query *D.Msg, events chan<- mdnsEvent) {
+func readMDNSResponses(ctx context.Context, conn *net.UDPConn, target mdnsTarget, events chan<- mdnsEvent) {
 	defer func() {
 		select {
 		case events <- mdnsEvent{done: true}:
 		case <-ctx.Done():
 		}
 	}()
+
+	readPacket := mdnsPacketReader(conn, target)
 	buffer := make([]byte, mdnsMaxDatagramSize)
 	for {
-		n, _, err := conn.ReadFromUDP(buffer)
+		n, response, err := readPacket(buffer)
 		if err != nil {
 			if ctx.Err() == nil {
 				select {
@@ -457,15 +511,21 @@ func readMDNSResponses(ctx context.Context, conn *net.UDPConn, query *D.Msg, eve
 			}
 			return
 		}
-
-		response := &D.Msg{}
-		if err = response.Unpack(buffer[:n]); err != nil {
+		event := mdnsEvent{packet: true}
+		if !validMDNSTransport(response, target) {
+			select {
+			case events <- event:
+			case <-ctx.Done():
+				return
+			}
 			continue
 		}
-		event := mdnsEvent{packet: true}
-		if isMDNSResponseForQuery(response, query) {
-			event.msg = response
+
+		response.msg = &D.Msg{}
+		if err = response.msg.Unpack(buffer[:n]); err != nil || !validMDNSMessage(response.msg) {
+			continue
 		}
+		event.response = response
 		select {
 		case events <- event:
 		case <-ctx.Done():
@@ -474,98 +534,218 @@ func readMDNSResponses(ctx context.Context, conn *net.UDPConn, query *D.Msg, eve
 	}
 }
 
-func isMDNSResponseForQuery(response, query *D.Msg) bool {
-	if !response.Response || response.Rcode != D.RcodeSuccess {
-		return false
-	}
-	if response.Id != 0 && response.Id != query.Id {
-		return false
+func mdnsPacketReader(conn *net.UDPConn, target mdnsTarget) func([]byte) (int, *mdnsResponse, error) {
+	if target.iface == nil || !target.addr.IP.IsMulticast() {
+		return func(buffer []byte) (int, *mdnsResponse, error) {
+			n, source, err := conn.ReadFromUDP(buffer)
+			return n, &mdnsResponse{source: source}, err
+		}
 	}
 
-	wanted := query.Question[0]
-	for _, question := range response.Question {
-		if strings.EqualFold(question.Name, wanted.Name) &&
-			question.Qtype == wanted.Qtype &&
-			question.Qclass&mdnsClassMask == wanted.Qclass&mdnsClassMask {
-			return true
+	switch target.network {
+	case "udp4":
+		packetConn := ipv4.NewPacketConn(conn)
+		return func(buffer []byte) (int, *mdnsResponse, error) {
+			n, control, source, err := packetConn.ReadFrom(buffer)
+			response := &mdnsResponse{source: asUDPAddr(source)}
+			if control != nil {
+				response.ifIndex = control.IfIndex
+				response.destination = append(net.IP(nil), control.Dst...)
+				response.hopLimit = control.TTL
+			}
+			return n, response, err
+		}
+	case "udp6":
+		packetConn := ipv6.NewPacketConn(conn)
+		return func(buffer []byte) (int, *mdnsResponse, error) {
+			n, control, source, err := packetConn.ReadFrom(buffer)
+			response := &mdnsResponse{source: asUDPAddr(source)}
+			if control != nil {
+				response.ifIndex = control.IfIndex
+				response.destination = append(net.IP(nil), control.Dst...)
+				response.hopLimit = control.HopLimit
+			}
+			return n, response, err
+		}
+	default:
+		return func([]byte) (int, *mdnsResponse, error) {
+			return 0, nil, fmt.Errorf("unsupported mDNS network %q", target.network)
 		}
 	}
-	for _, record := range append(response.Answer, response.Extra...) {
-		header := record.Header()
-		if !strings.EqualFold(header.Name, wanted.Name) ||
-			header.Class&mdnsClassMask != wanted.Qclass&mdnsClassMask {
-			continue
-		}
-		if header.Rrtype == wanted.Qtype || header.Rrtype == D.TypeCNAME || wanted.Qtype == D.TypeANY {
-			return true
-		}
-	}
-	return false
 }
 
-func mergeMDNSResponses(request *D.Msg, responses []*D.Msg) *D.Msg {
+func asUDPAddr(addr net.Addr) *net.UDPAddr {
+	if addr == nil {
+		return nil
+	}
+	udpAddr, _ := addr.(*net.UDPAddr)
+	return udpAddr
+}
+
+func validMDNSTransport(response *mdnsResponse, target mdnsTarget) bool {
+	if response == nil {
+		return false
+	}
+	if target.iface == nil || !target.addr.IP.IsMulticast() {
+		return true
+	}
+	return response.source != nil &&
+		response.source.Port == mdnsPort &&
+		response.ifIndex == target.iface.Index &&
+		response.destination.Equal(target.addr.IP)
+}
+
+func validMDNSMessage(response *D.Msg) bool {
+	return response.Response &&
+		response.Opcode == D.OpcodeQuery &&
+		response.Rcode == D.RcodeSuccess
+}
+
+// mergeMDNSResponses resolves CNAME chains independently on each ingress
+// interface, then returns the union of interfaces with a positive answer.
+// Identical records are collapsed using the greatest observed TTL. This keeps
+// same-named hosts on different links independent while allowing all distinct
+// addresses to be returned to Mihomo's interface-agnostic DNS layer.
+func mergeMDNSResponses(request *D.Msg, responses []mdnsResponse) (*D.Msg, bool) {
 	response := &D.Msg{}
 	response.SetReply(request)
 	response.Authoritative = true
 	response.RecursionAvailable = false
 
 	question := request.Question[0]
-	names := map[string]struct{}{canonicalMDNSName(question.Name): {}}
-	records := make([]D.RR, 0)
-	for _, message := range responses {
-		records = append(records, message.Answer...)
-		records = append(records, message.Extra...)
+	interfaceOrder := make([]int, 0)
+	interfaceRecords := map[int][]D.RR{}
+	for _, item := range responses {
+		if item.msg == nil {
+			continue
+		}
+		if _, exists := interfaceRecords[item.ifIndex]; !exists {
+			interfaceOrder = append(interfaceOrder, item.ifIndex)
+		}
+		interfaceRecords[item.ifIndex] = append(interfaceRecords[item.ifIndex], item.msg.Answer...)
+		interfaceRecords[item.ifIndex] = append(interfaceRecords[item.ifIndex], item.msg.Ns...)
+		interfaceRecords[item.ifIndex] = append(interfaceRecords[item.ifIndex], item.msg.Extra...)
 	}
 
-	for {
-		changed := false
-		for _, record := range records {
-			cname, ok := record.(*D.CNAME)
-			if !ok {
+	type interfaceResult struct {
+		answers  []D.RR
+		negative []D.RR
+		positive bool
+	}
+	results := make([]interfaceResult, 0, len(interfaceOrder))
+	hasPositive := false
+	hasNegative := false
+	for _, ifIndex := range interfaceOrder {
+		records := interfaceRecords[ifIndex]
+		rootName := canonicalMDNSName(question.Name)
+		names := map[string]struct{}{rootName: {}}
+		orderedNames := []string{rootName}
+		cnameOwners := map[string]struct{}{}
+		cnameAnswers := make([]D.RR, 0)
+		for nameIndex := 0; nameIndex < len(orderedNames); nameIndex++ {
+			name := orderedNames[nameIndex]
+			for _, record := range records {
+				cname, ok := record.(*D.CNAME)
+				if !ok || cname.Hdr.Class&mdnsClassMask != D.ClassINET {
+					continue
+				}
+				owner := canonicalMDNSName(cname.Hdr.Name)
+				if owner != name {
+					continue
+				}
+				cnameOwners[owner] = struct{}{}
+				cnameAnswers = append(cnameAnswers, record)
+				target := canonicalMDNSName(cname.Target)
+				if _, ok = names[target]; !ok {
+					names[target] = struct{}{}
+					orderedNames = append(orderedNames, target)
+				}
+			}
+		}
+
+		result := interfaceResult{answers: cnameAnswers}
+		if (question.Qtype == D.TypeCNAME || question.Qtype == D.TypeANY) && len(cnameAnswers) > 0 {
+			result.positive = true
+		}
+		for _, name := range orderedNames {
+			for _, record := range records {
+				header := record.Header()
+				if header.Class&mdnsClassMask != D.ClassINET ||
+					canonicalMDNSName(header.Name) != name {
+					continue
+				}
+				switch {
+				case header.Rrtype == D.TypeCNAME:
+					// CNAMEs were appended above in chain order.
+				case (header.Rrtype == question.Qtype || question.Qtype == D.TypeANY) &&
+					header.Rrtype != D.TypeNSEC:
+					result.answers = append(result.answers, record)
+					result.positive = true
+				case header.Rrtype == D.TypeNSEC:
+					if _, hasCNAME := cnameOwners[name]; !hasCNAME {
+						if nsec, ok := record.(*D.NSEC); ok && mdnsNSECExcludes(nsec, question.Qtype) {
+							result.negative = append(result.negative, record)
+						}
+					}
+				}
+			}
+		}
+		if result.positive {
+			hasPositive = true
+		} else if len(result.negative) > 0 {
+			hasNegative = true
+		}
+		results = append(results, result)
+	}
+
+	answerSeen := map[string]int{}
+	negativeSeen := map[string]int{}
+	for _, result := range results {
+		if hasPositive {
+			if !result.positive {
 				continue
 			}
-			if _, ok = names[canonicalMDNSName(cname.Hdr.Name)]; !ok {
-				continue
+			for _, record := range result.answers {
+				appendMDNSRecord(&response.Answer, answerSeen, record)
 			}
-			target := canonicalMDNSName(cname.Target)
-			if _, ok = names[target]; !ok {
-				names[target] = struct{}{}
-				changed = true
+		} else if hasNegative && len(result.negative) > 0 {
+			for _, record := range result.answers {
+				appendMDNSRecord(&response.Answer, answerSeen, record)
 			}
-		}
-		if !changed {
-			break
+			for _, record := range result.negative {
+				appendMDNSRecord(&response.Ns, negativeSeen, record)
+			}
 		}
 	}
+	return response, hasPositive || hasNegative
+}
 
-	seen := map[string]int{}
-	for _, record := range records {
-		header := record.Header()
-		if header.Class&mdnsClassMask != D.ClassINET {
-			continue
-		}
-		if _, ok := names[canonicalMDNSName(header.Name)]; !ok {
-			continue
-		}
-		if header.Rrtype != question.Qtype && header.Rrtype != D.TypeCNAME && question.Qtype != D.TypeANY {
-			continue
-		}
-
-		record = D.Copy(record)
-		record.Header().Class &= mdnsClassMask
-		keyRecord := D.Copy(record)
-		keyRecord.Header().Ttl = 0
-		key := strings.ToLower(keyRecord.String())
-		if index, ok := seen[key]; ok {
-			if response.Answer[index].Header().Ttl < record.Header().Ttl {
-				response.Answer[index].Header().Ttl = record.Header().Ttl
-			}
-			continue
-		}
-		seen[key] = len(response.Answer)
-		response.Answer = append(response.Answer, record)
+func mdnsNSECExcludes(nsec *D.NSEC, qtype uint16) bool {
+	if qtype == D.TypeANY {
+		return false
 	}
-	return response
+	for _, existingType := range nsec.TypeBitMap {
+		if existingType == qtype {
+			return false
+		}
+	}
+	return true
+}
+
+func appendMDNSRecord(records *[]D.RR, seen map[string]int, record D.RR) {
+	record = D.Copy(record)
+	record.Header().Class &= mdnsClassMask
+	keyRecord := D.Copy(record)
+	keyRecord.Header().Ttl = 0
+	key := strings.ToLower(keyRecord.String())
+	if index, ok := seen[key]; ok {
+		if (*records)[index].Header().Ttl < record.Header().Ttl {
+			(*records)[index].Header().Ttl = record.Header().Ttl
+		}
+		return
+	}
+	seen[key] = len(*records)
+	*records = append(*records, record)
 }
 
 func canonicalMDNSName(name string) string {

@@ -111,6 +111,8 @@ func mdnsReply(query *D.Msg, answers ...D.RR) *D.Msg {
 	response := &D.Msg{}
 	response.SetReply(query)
 	response.Authoritative = true
+	// Multicast DNS responses normally omit the Question section.
+	response.Question = nil
 	response.Answer = answers
 	return response
 }
@@ -232,7 +234,13 @@ func TestMDNSClientContextAlreadyCanceled(t *testing.T) {
 
 func TestMDNSClientNoRecords(t *testing.T) {
 	responder := startMDNSTestResponder(t, "udp4", func(query *D.Msg) []*D.Msg {
-		return []*D.Msg{mdnsReply(query)}
+		response := mdnsReply(query)
+		response.Ns = []D.RR{&D.NSEC{
+			Hdr:        D.RR_Header{Name: "missing.local.", Rrtype: D.TypeNSEC, Class: D.ClassINET | mdnsCacheFlush, Ttl: 120},
+			NextDomain: "missing.local.",
+			TypeBitMap: []uint16{D.TypeAAAA},
+		}}
+		return []*D.Msg{response}
 	})
 	client := newTestMDNSClient(responder)
 
@@ -240,6 +248,178 @@ func TestMDNSClientNoRecords(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, D.RcodeSuccess, response.Rcode)
 	assert.Empty(t, response.Answer)
+	require.Len(t, response.Ns, 1)
+	assert.Equal(t, uint16(D.ClassINET), response.Ns[0].Header().Class)
+	assert.Equal(t, uint32(120), response.Ns[0].Header().Ttl)
+}
+
+func TestMDNSClientEmptyResponseDoesNotProveNoData(t *testing.T) {
+	responder := startMDNSTestResponder(t, "udp4", func(query *D.Msg) []*D.Msg {
+		return []*D.Msg{mdnsReply(query)}
+	})
+	client := newTestMDNSClient(responder)
+	client.timeout = 50 * time.Millisecond
+
+	_, err := client.ExchangeContext(context.Background(), mdnsQuery("missing.local", D.TypeA))
+	assert.ErrorIs(t, err, errMDNSTimeout)
+}
+
+func TestMDNSClientCNAMEAcrossPackets(t *testing.T) {
+	tests := []struct {
+		name          string
+		targetFirst   bool
+		threePacket   bool
+		expectedNames []string
+	}{
+		{name: "target before CNAME", targetFirst: true, expectedNames: []string{"alias.local.", "target.local."}},
+		{name: "CNAME before target", expectedNames: []string{"alias.local.", "target.local."}},
+		{name: "three packet chain", threePacket: true, expectedNames: []string{"alias.local.", "middle.local.", "target.local."}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			responder := startMDNSTestResponder(t, "udp4", func(query *D.Msg) []*D.Msg {
+				firstCNAME := mdnsReply(query, &D.CNAME{
+					Hdr:    D.RR_Header{Name: "alias.local.", Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 120},
+					Target: "target.local.",
+				})
+				targetA := mdnsReply(query, &D.A{
+					Hdr: D.RR_Header{Name: "target.local.", Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 60},
+					A:   net.IPv4(192, 0, 2, 40),
+				})
+				if test.threePacket {
+					firstCNAME.Answer[0].(*D.CNAME).Target = "middle.local."
+					secondCNAME := mdnsReply(query, &D.CNAME{
+						Hdr:    D.RR_Header{Name: "middle.local.", Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 90},
+						Target: "target.local.",
+					})
+					return []*D.Msg{targetA, secondCNAME, firstCNAME}
+				}
+				if test.targetFirst {
+					return []*D.Msg{targetA, firstCNAME}
+				}
+				return []*D.Msg{firstCNAME, targetA}
+			})
+			client := newTestMDNSClient(responder)
+
+			response, err := client.ExchangeContext(context.Background(), mdnsQuery("alias.local", D.TypeA))
+			require.NoError(t, err)
+			require.Len(t, response.Answer, len(test.expectedNames))
+			actualNames := make([]string, 0, len(response.Answer))
+			for _, answer := range response.Answer {
+				actualNames = append(actualNames, answer.Header().Name)
+			}
+			assert.Equal(t, test.expectedNames, actualNames)
+			assert.Equal(t, "192.0.2.40", response.Answer[len(response.Answer)-1].(*D.A).A.String())
+		})
+	}
+}
+
+func TestMergeMDNSResponsesKeepsInterfacesIndependent(t *testing.T) {
+	request := mdnsQuery("alias.local", D.TypeA)
+	responses := []mdnsResponse{
+		{
+			ifIndex: 2,
+			msg: mdnsReply(request, &D.CNAME{
+				Hdr:    D.RR_Header{Name: "alias.local.", Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 120},
+				Target: "target.local.",
+			}),
+		},
+		{
+			ifIndex: 3,
+			msg: mdnsReply(request, &D.A{
+				Hdr: D.RR_Header{Name: "target.local.", Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 60},
+				A:   net.IPv4(192, 0, 2, 50),
+			}),
+		},
+	}
+
+	response, available := mergeMDNSResponses(request, responses)
+	assert.False(t, available)
+	assert.Empty(t, response.Answer)
+}
+
+func TestMergeMDNSResponsesUnionsInterfacesAndMaxTTL(t *testing.T) {
+	request := mdnsQuery("host.local", D.TypeA)
+	responses := []mdnsResponse{
+		{
+			ifIndex: 2,
+			msg: mdnsReply(request, &D.A{
+				Hdr: D.RR_Header{Name: "host.local.", Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 60},
+				A:   net.IPv4(192, 0, 2, 60),
+			}),
+		},
+		{
+			ifIndex: 3,
+			msg: mdnsReply(request,
+				&D.A{
+					Hdr: D.RR_Header{Name: "host.local.", Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 120},
+					A:   net.IPv4(192, 0, 2, 60),
+				},
+				&D.A{
+					Hdr: D.RR_Header{Name: "host.local.", Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 90},
+					A:   net.IPv4(198, 51, 100, 60),
+				},
+			),
+		},
+	}
+
+	response, available := mergeMDNSResponses(request, responses)
+	require.True(t, available)
+	require.Len(t, response.Answer, 2)
+	assert.Equal(t, uint32(120), response.Answer[0].Header().Ttl)
+	assert.Equal(t, "192.0.2.60", response.Answer[0].(*D.A).A.String())
+	assert.Equal(t, "198.51.100.60", response.Answer[1].(*D.A).A.String())
+}
+
+func TestValidMDNSTransport(t *testing.T) {
+	iface := &net.Interface{Index: 7, Name: "en7"}
+	target := mdnsTarget{
+		network: "udp4",
+		iface:   iface,
+		addr:    &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251), Port: mdnsPort},
+	}
+	valid := &mdnsResponse{
+		source:      &net.UDPAddr{IP: net.IPv4(192, 0, 2, 70), Port: mdnsPort},
+		ifIndex:     iface.Index,
+		destination: net.IPv4(224, 0, 0, 251),
+		hopLimit:    64,
+	}
+
+	// RFC 6762 requires source port 5353 and recommends, but does not require,
+	// an IP TTL/hop limit of 255. Retain the latter without rejecting it.
+	assert.True(t, validMDNSTransport(valid, target))
+
+	wrongPort := *valid
+	wrongPort.source = &net.UDPAddr{IP: valid.source.IP, Port: 12345}
+	assert.False(t, validMDNSTransport(&wrongPort, target))
+
+	wrongInterface := *valid
+	wrongInterface.ifIndex++
+	assert.False(t, validMDNSTransport(&wrongInterface, target))
+
+	wrongDestination := *valid
+	wrongDestination.destination = net.IPv4(224, 0, 0, 252)
+	assert.False(t, validMDNSTransport(&wrongDestination, target))
+}
+
+func TestValidMDNSMessageIgnoresQuestionAndID(t *testing.T) {
+	response := mdnsReply(mdnsQuery("host.local", D.TypeA))
+	response.Id = 1234
+	response.Question = []D.Question{{Name: "other.local.", Qtype: D.TypeAAAA, Qclass: D.ClassINET}}
+	assert.True(t, validMDNSMessage(response))
+
+	query := response.Copy()
+	query.Response = false
+	assert.False(t, validMDNSMessage(query))
+
+	badOpcode := response.Copy()
+	badOpcode.Opcode = D.OpcodeStatus
+	assert.False(t, validMDNSMessage(badOpcode))
+
+	badRcode := response.Copy()
+	badRcode.Rcode = D.RcodeServerFailure
+	assert.False(t, validMDNSMessage(badRcode))
 }
 
 func TestMDNSClientIgnoresUnrelatedResponseWithoutQuestion(t *testing.T) {

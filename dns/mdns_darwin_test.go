@@ -3,6 +3,7 @@
 package dns
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -76,14 +77,14 @@ func readMDNSResponderTestRequest(t *testing.T, conn net.Conn) mdnsResponderTest
 	}
 }
 
-func writeMDNSResponderTestInitialError(t *testing.T, conn net.Conn, code int32) {
+func writeMDNSResponderTestInitialError(t *testing.T, writer io.Writer, code int32) {
 	t.Helper()
 	var data [4]byte
 	binary.BigEndian.PutUint32(data[:], uint32(code))
-	require.NoError(t, writeAll(conn, data[:]))
+	require.NoError(t, writeAll(writer, data[:]))
 }
 
-func writeMDNSResponderTestReply(t *testing.T, conn net.Conn, name string, rrType uint16, rdata net.IP, ttl uint32) {
+func writeMDNSResponderTestReply(t *testing.T, writer io.Writer, name string, rrType uint16, rdata net.IP, ttl uint32) {
 	t.Helper()
 
 	if rrType == D.TypeA {
@@ -109,7 +110,31 @@ func writeMDNSResponderTestReply(t *testing.T, conn net.Conn, name string, rrTyp
 	copy(body[offset:], rdata)
 	offset += len(rdata)
 	binary.BigEndian.PutUint32(body[offset:offset+4], ttl)
-	require.NoError(t, writeAll(conn, message))
+	require.NoError(t, writeAll(writer, message))
+}
+
+func writeMDNSResponderTestErrorReply(t *testing.T, writer io.Writer, code int32) {
+	t.Helper()
+
+	message := make([]byte, mdnsResponderHeaderSize+mdnsResponderReplyHeader)
+	binary.BigEndian.PutUint32(message[0:4], mdnsResponderIPCVersion)
+	binary.BigEndian.PutUint32(message[4:8], mdnsResponderReplyHeader)
+	binary.BigEndian.PutUint32(message[12:16], mdnsResponderAddrInfoReply)
+	body := message[mdnsResponderHeaderSize:]
+	binary.BigEndian.PutUint32(body[0:4], mdnsResponderFlagAdd)
+	binary.BigEndian.PutUint32(body[4:8], 25)
+	binary.BigEndian.PutUint32(body[8:12], uint32(code))
+	require.NoError(t, writeAll(writer, message))
+}
+
+func writeMDNSResponderTestUnsupportedVersion(t *testing.T, writer io.Writer) {
+	t.Helper()
+
+	message := make([]byte, mdnsResponderHeaderSize)
+	binary.BigEndian.PutUint32(message[0:4], mdnsResponderIPCVersion+1)
+	binary.BigEndian.PutUint32(message[4:8], mdnsResponderReplyHeader)
+	binary.BigEndian.PutUint32(message[12:16], mdnsResponderAddrInfoReply)
+	require.NoError(t, writeAll(writer, message))
 }
 
 func newMDNSResponderTestClient(t *testing.T, socketPath string) *mdnsClient {
@@ -124,13 +149,99 @@ func newMDNSResponderTestClient(t *testing.T, socketPath string) *mdnsClient {
 	return client
 }
 
-func TestMDNSResponderUnavailableFallsBack(t *testing.T) {
+func TestMDNSResponderUnavailableIsFallbackEligible(t *testing.T) {
 	client := newMDNSResponderTestClient(t, filepath.Join(t.TempDir(), "missing"))
 
 	response, handled, err := client.exchangeMDNSPlatform(context.Background(), mdnsQuery("host.local", D.TypeA))
 	assert.Nil(t, response)
 	assert.False(t, handled)
-	assert.NoError(t, err)
+	assert.ErrorContains(t, err, "mDNSResponder unavailable")
+}
+
+func TestMDNSResponderProtocolErrorFallsBackToMulticast(t *testing.T) {
+	socketPath := startMDNSResponderTestServer(t, func(conn net.Conn) {
+		_ = readMDNSResponderTestRequest(t, conn)
+		writeMDNSResponderTestInitialError(t, conn, 0)
+		writeMDNSResponderTestUnsupportedVersion(t, conn)
+	})
+	responder := startMDNSTestResponder(t, "udp4", func(query *D.Msg) []*D.Msg {
+		return []*D.Msg{mdnsReply(query, &D.A{
+			Hdr: D.RR_Header{Name: "fallback.local.", Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 60},
+			A:   net.IPv4(192, 0, 2, 80),
+		})}
+	})
+	t.Setenv("DNSSD_UDS_PATH", socketPath)
+	client := newMDNSClient()
+	client.timeout = 300 * time.Millisecond
+	client.settle = 20 * time.Millisecond
+	client.targets = func() ([]mdnsTarget, error) {
+		return []mdnsTarget{responder.target()}, nil
+	}
+
+	response, err := client.ExchangeContext(context.Background(), mdnsQuery("fallback.local", D.TypeA))
+	require.NoError(t, err)
+	require.Len(t, response.Answer, 1)
+	assert.Equal(t, "192.0.2.80", response.Answer[0].(*D.A).A.String())
+}
+
+func TestMDNSResponderProtocolAndFallbackErrorsAreBothReported(t *testing.T) {
+	socketPath := startMDNSResponderTestServer(t, func(conn net.Conn) {
+		_ = readMDNSResponderTestRequest(t, conn)
+		writeMDNSResponderTestInitialError(t, conn, 0)
+		writeMDNSResponderTestUnsupportedVersion(t, conn)
+	})
+	t.Setenv("DNSSD_UDS_PATH", socketPath)
+	client := newMDNSClient()
+	client.targets = func() ([]mdnsTarget, error) {
+		return nil, errors.New("portable target discovery failed")
+	}
+
+	_, err := client.ExchangeContext(context.Background(), mdnsQuery("failure.local", D.TypeA))
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "mDNS platform resolver and multicast fallback failed")
+	assert.ErrorContains(t, err, "unsupported mDNSResponder IPC version")
+	assert.ErrorContains(t, err, "portable target discovery failed")
+}
+
+func TestReadMDNSResponderReplyKeepsInterface(t *testing.T) {
+	var wire bytes.Buffer
+	writeMDNSResponderTestReply(t, &wire, "host.local.", D.TypeA, net.IPv4(192, 0, 2, 81), 300)
+
+	response, flags, code, err := readMDNSResponderReply(&wire, mdnsQuery("host.local", D.TypeA))
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	assert.Equal(t, uint32(mdnsResponderFlagAdd), flags)
+	assert.Zero(t, code)
+	assert.Equal(t, 25, response.ifIndex)
+	require.Len(t, response.msg.Answer, 1)
+	assert.Equal(t, uint32(300), response.msg.Answer[0].Header().Ttl)
+}
+
+func TestMDNSResponderExplicitNegativeResults(t *testing.T) {
+	tests := []struct {
+		name          string
+		code          int32
+		expectedRcode int
+	}{
+		{name: "no record is NODATA", code: mdnsResponderNoSuchRecord, expectedRcode: D.RcodeSuccess},
+		{name: "no name is NXDOMAIN", code: mdnsResponderNoSuchName, expectedRcode: D.RcodeNameError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			socketPath := startMDNSResponderTestServer(t, func(conn net.Conn) {
+				_ = readMDNSResponderTestRequest(t, conn)
+				writeMDNSResponderTestInitialError(t, conn, 0)
+				writeMDNSResponderTestErrorReply(t, conn, test.code)
+			})
+			client := newMDNSResponderTestClient(t, socketPath)
+
+			response, err := client.ExchangeContext(context.Background(), mdnsQuery("missing.local", D.TypeA))
+			require.NoError(t, err)
+			assert.Equal(t, test.expectedRcode, response.Rcode)
+			assert.Empty(t, response.Answer)
+		})
+	}
 }
 
 func TestMDNSResponderAAndAAAA(t *testing.T) {

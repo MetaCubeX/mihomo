@@ -32,6 +32,8 @@ const (
 	mdnsResponderFlagAdd        = 0x2
 	mdnsResponderProtocolIPv4   = 0x1
 	mdnsResponderProtocolIPv6   = 0x2
+	mdnsResponderNoSuchName     = -65538
+	mdnsResponderNoSuchRecord   = -65554
 	mdnsResponderTimeoutError   = -65568
 )
 
@@ -47,19 +49,16 @@ func (c *mdnsClient) exchangeMDNSPlatform(ctx context.Context, request *D.Msg) (
 		return nil, false, nil
 	}
 
-	queryCtx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-
 	socketPath := os.Getenv("DNSSD_UDS_PATH")
 	if socketPath == "" {
 		socketPath = mdnsResponderDefaultSocket
 	}
-	conn, err := (&net.Dialer{}).DialContext(queryCtx, "unix", socketPath)
+	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, true, ctxErr
 		}
-		return nil, false, nil // Let the portable multicast transport try.
+		return nil, false, fmt.Errorf("mDNSResponder unavailable: %w", err)
 	}
 	if !c.registerSocket(conn) {
 		_ = conn.Close()
@@ -74,50 +73,68 @@ func (c *mdnsClient) exchangeMDNSPlatform(ctx context.Context, request *D.Msg) (
 	defer close(stopCancellation)
 	go func() {
 		select {
-		case <-queryCtx.Done():
+		case <-ctx.Done():
 			_ = conn.Close()
 		case <-stopCancellation:
 		}
 	}()
 
-	if deadline, ok := queryCtx.Deadline(); ok {
+	if deadline, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(deadline)
 	}
 	if err = writeMDNSResponderRequest(conn, question.Name, protocol); err != nil {
-		return nil, true, c.mdnsResponderError(queryCtx, err)
+		return c.mdnsResponderFailure(ctx, err)
 	}
 
 	var initialError [4]byte
 	if _, err = io.ReadFull(conn, initialError[:]); err != nil {
-		return nil, true, c.mdnsResponderError(queryCtx, err)
+		return c.mdnsResponderFailure(ctx, err)
 	}
 	if code := int32(binary.BigEndian.Uint32(initialError[:])); code != 0 {
 		return nil, true, fmt.Errorf("mDNSResponder rejected query: error %d", code)
 	}
 
-	var responses []*D.Msg
+	var responses []mdnsResponse
 	for {
-		message, flags, code, err := readMDNSResponderReply(conn, request)
+		response, flags, code, err := readMDNSResponderReply(conn, request)
 		if err != nil {
-			if len(responses) > 0 && isTimeoutError(err) {
-				return mergeMDNSResponses(request, responses), true, nil
+			if len(responses) > 0 {
+				if merged, available := mergeMDNSResponses(request, responses); available {
+					return merged, true, nil
+				}
 			}
-			return nil, true, c.mdnsResponderError(queryCtx, err)
+			return c.mdnsResponderFailure(ctx, err)
 		}
 		if code != 0 {
-			if code == mdnsResponderTimeoutError {
+			switch code {
+			case mdnsResponderTimeoutError:
 				if len(responses) > 0 {
-					return mergeMDNSResponses(request, responses), true, nil
+					if merged, available := mergeMDNSResponses(request, responses); available {
+						return merged, true, nil
+					}
 				}
 				return nil, true, fmt.Errorf("%w: mDNSResponder error %d", errMDNSTimeout, code)
+			case mdnsResponderNoSuchRecord:
+				return mdnsNegativeReply(request, D.RcodeSuccess), true, nil
+			case mdnsResponderNoSuchName:
+				return mdnsNegativeReply(request, D.RcodeNameError), true, nil
+			default:
+				return nil, true, fmt.Errorf("mDNSResponder query failed: error %d", code)
 			}
-			return nil, true, fmt.Errorf("mDNSResponder query failed: error %d", code)
 		}
-		if flags&mdnsResponderFlagAdd != 0 && message != nil {
-			responses = append(responses, message)
+		if flags&mdnsResponderFlagAdd != 0 && response != nil {
+			responses = append(responses, *response)
 			_ = conn.SetReadDeadline(time.Now().Add(c.settle))
 		}
 	}
+}
+
+func (c *mdnsClient) mdnsResponderFailure(ctx context.Context, err error) (*D.Msg, bool, error) {
+	mappedErr := c.mdnsResponderError(ctx, err)
+	if ctx.Err() != nil || c.isClosed() || isTimeoutError(err) {
+		return nil, true, mappedErr
+	}
+	return nil, false, mappedErr
 }
 
 func (c *mdnsClient) mdnsResponderError(ctx context.Context, err error) error {
@@ -150,7 +167,7 @@ func writeMDNSResponderRequest(writer io.Writer, hostname string, protocol uint3
 	return writeAll(writer, message)
 }
 
-func readMDNSResponderReply(reader io.Reader, request *D.Msg) (*D.Msg, uint32, int32, error) {
+func readMDNSResponderReply(reader io.Reader, request *D.Msg) (*mdnsResponse, uint32, int32, error) {
 	header := make([]byte, mdnsResponderHeaderSize)
 	if _, err := io.ReadFull(reader, header); err != nil {
 		return nil, 0, 0, err
@@ -171,6 +188,7 @@ func readMDNSResponderReply(reader io.Reader, request *D.Msg) (*D.Msg, uint32, i
 		return nil, 0, 0, err
 	}
 	flags := binary.BigEndian.Uint32(body[0:4])
+	ifIndex := int(binary.BigEndian.Uint32(body[4:8]))
 	code := int32(binary.BigEndian.Uint32(body[8:12]))
 	if code != 0 {
 		return nil, flags, code, nil
@@ -206,7 +224,7 @@ func readMDNSResponderReply(reader io.Reader, request *D.Msg) (*D.Msg, uint32, i
 	default:
 		return nil, flags, code, nil
 	}
-	return mdnsReplyForRequest(request, answer), flags, code, nil
+	return &mdnsResponse{msg: mdnsReplyForRequest(request, answer), ifIndex: ifIndex}, flags, code, nil
 }
 
 func mdnsReplyForRequest(request *D.Msg, answer D.RR) *D.Msg {
@@ -214,6 +232,15 @@ func mdnsReplyForRequest(request *D.Msg, answer D.RR) *D.Msg {
 	response.SetReply(request)
 	response.Authoritative = true
 	response.Answer = []D.RR{answer}
+	return response
+}
+
+func mdnsNegativeReply(request *D.Msg, rcode int) *D.Msg {
+	response := &D.Msg{}
+	response.SetReply(request)
+	response.Authoritative = true
+	response.RecursionAvailable = false
+	response.Rcode = rcode
 	return response
 }
 
