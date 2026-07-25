@@ -19,7 +19,6 @@ package outbound
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net"
 	"strconv"
@@ -43,21 +42,18 @@ type Speedcat struct {
 
 // SpeedcatOption 是 speedcat outbound 的配置(proxy: tag,内嵌 BasicOption 白拿
 // dialer-proxy/tfo/mptcp/interface-name/routing-mark/ip-version)。
-// password = PSK(64 hex,speedcat genkey 生成);transport = tcp|quic(快路)|raw-tcp(伪装路,双层 AEAD)|reality
-// (阶段三 Reality 伪装路,两层 auth:外层 REALITY 门卫接管 + 内层 disguise PSK)。
+// password = PSK(64 hex,speedcat genkey 生成);transport = tcp|quic(快路)|raw-tcp(伪装路,双层 AEAD)。
 type SpeedcatOption struct {
 	BasicOption
-	Name            string   `proxy:"name"`
-	Server          string   `proxy:"server"`
-	Port            int      `proxy:"port"`
-	Password        string   `proxy:"password"`                   // PSK(64 hex)
-	SNI             string   `proxy:"sni,omitempty"`              // TLS SNI(缺省=server;reality 时应=dest host 段,匹配服务端 forge cert SAN)
-	SkipCertVerify  bool     `proxy:"skip-cert-verify,omitempty"` // dev 自签证书旁路(fail-safe:默认 false = 校验)
-	ALPN            string   `proxy:"alpn,omitempty"`             // 单 ALPN(缺省空;QUIC 强制时两端固定 speedcat/1)
-	UDP             bool     `proxy:"udp,omitempty"`              // 声明支持 UDP(routing 决策用)
-	Transport       string   `proxy:"transport,omitempty"`        // tcp|quic|raw-tcp|reality(缺省 tcp)
-	RealityPubKey   string   `proxy:"reality-pubkey,omitempty"`   // Reality server X25519 静态公钥(base64url 43 字符;仅 transport=reality)
-	RealityShortIDs []string `proxy:"reality-short-id,omitempty"` // Reality short_id 白名单项(base64url 11 字符 = 8B;多 sid 列表 —— client 取首个算 AuthKey,余供轮换/逐用户撤销,ADR-013;仅 transport=reality)
+	Name           string `proxy:"name"`
+	Server         string `proxy:"server"`
+	Port           int    `proxy:"port"`
+	Password       string `proxy:"password"`                   // PSK(64 hex)
+	SNI            string `proxy:"sni,omitempty"`              // TLS SNI(缺省=server)
+	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"` // dev 自签证书旁路(fail-safe:默认 false = 校验)
+	ALPN           string `proxy:"alpn,omitempty"`             // 单 ALPN(缺省空;QUIC 强制时两端固定 speedcat/1)
+	UDP            bool   `proxy:"udp,omitempty"`              // 声明支持 UDP(routing 决策用)
+	Transport      string `proxy:"transport,omitempty"`        // tcp|quic|raw-tcp(缺省 tcp)
 }
 
 // DialContext 实现 C.ProxyAdapter —— TCP CONNECT 经 speedcat server 代理。
@@ -151,27 +147,6 @@ func NewSpeedcat(option SpeedcatOption) (*Speedcat, error) {
 		ALPN:     option.ALPN,
 		Insecure: option.SkipCertVerify,
 	}
-	// Reality arm:解 base64url 注入 server 静态公钥 + short_id(dialReality 据此算 AuthKey 注入 ClientHello)。
-	// fail-loud:reality 缺 pubkey/short-id / 解码错 → 返 error(无法注入 auth,握手必被转发 dest;非 panic,§6.1)。
-	// 对照 sidecar cmd/speedcat-socks5/main.go:81-96。bridge(net.Pipe+Relay / speedcatPacketConn)kind-agnostic,
-	// 无需改 —— client.NewClient(KindReality) 已全活(transport.dialReality + handshake 两层 auth)。
-	if kind == transport.KindReality {
-		pub, err := decodeRealityPubKey(option.RealityPubKey)
-		if err != nil {
-			return nil, err
-		}
-		// fail-loud:reality 须至少一个 short_id(client 算 AuthKey 需一个;列表供轮换/逐用户撤销,ADR-013)。
-		if len(option.RealityShortIDs) == 0 {
-			return nil, fmt.Errorf("speedcat reality 缺 reality-short-id(至少一个,base64url 11 字符)")
-		}
-		// client 只用首个 sid 算 AuthKey(server 白名单含其余;轮换时改数组首项即可,无需改 client)。
-		sid, err := decodeRealityShortID(option.RealityShortIDs[0])
-		if err != nil {
-			return nil, err
-		}
-		cfg.RealityPubKey = pub
-		cfg.RealityShortID = sid
-	}
 	cl := client.NewClient(cfg, kind, psk, handshake.Params{Caps: caps})
 
 	return &Speedcat{
@@ -193,8 +168,7 @@ func NewSpeedcat(option SpeedcatOption) (*Speedcat, error) {
 }
 
 // parseSpeedcatKind 把配置字符串映射到 transport.Kind(缺省 tcp;对照 sidecar main.go:108 parseTransport
-// 单点同款映射)。raw-tcp = 伪装路(裸 TCP 无 exporter → disguiseClient 双层 AEAD);reality = 阶段三 Reality
-// 伪装路(两层 auth:外层 REALITY 门卫接管 + 内层 disguise)。
+// 单点同款映射)。raw-tcp = 伪装路(裸 TCP 无 exporter → disguiseClient 双层 AEAD)。
 func parseSpeedcatKind(s string) (transport.Kind, error) {
 	switch s {
 	case "", "tcp":
@@ -203,49 +177,9 @@ func parseSpeedcatKind(s string) (transport.Kind, error) {
 		return transport.KindQUIC, nil
 	case "raw-tcp":
 		return transport.KindRawTCP, nil
-	case "reality":
-		return transport.KindReality, nil
 	default:
-		return 0, fmt.Errorf("未知 transport %q(支持:tcp | quic | raw-tcp | reality)", s)
+		return 0, fmt.Errorf("未知 transport %q(支持:tcp | quic | raw-tcp)", s)
 	}
-}
-
-// decodeRealityPubKey base64url 解码 server X25519 静态公钥(32B)。对照 `speedcat x25519 --json` 的 public 字段
-// + sidecar cmd/speedcat-socks5/main.go:155 decodeRealityKey。fail-loud:空/解码错/长度非 32 → error(非 panic,§6.1)。
-// 拷自 sidecar(独立 module,fork outbound 不便 import 其 main 包)。
-func decodeRealityPubKey(b64 string) ([crypto.KeyLen]byte, error) {
-	var out [crypto.KeyLen]byte
-	if b64 == "" {
-		return out, fmt.Errorf("reality-pubkey 为空(server X25519 静态公钥,base64url 43 字符)")
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(b64)
-	if err != nil {
-		return out, fmt.Errorf("reality-pubkey base64url 解码: %w", err)
-	}
-	if len(raw) != crypto.KeyLen {
-		return out, fmt.Errorf("reality-pubkey 长度 %d ≠ %d(X25519 公钥 32B)", len(raw), crypto.KeyLen)
-	}
-	copy(out[:], raw)
-	return out, nil
-}
-
-// decodeRealityShortID base64url 解码 short_id 白名单项(8B)。对照 sidecar cmd/speedcat-socks5/main.go:172。
-// 注:speedcat 两端 short_id 用 **base64url**(非 mihomo 原生 REALITY 的 hex),故不复用 fork reality.go
-// 的 RealityOptions(它 hex.Decode 会损坏)—— 见 ADR-013。
-func decodeRealityShortID(b64 string) ([crypto.ShortIDLen]byte, error) {
-	var out [crypto.ShortIDLen]byte
-	if b64 == "" {
-		return out, fmt.Errorf("reality-short-id 为空(8B,base64url 11 字符)")
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(b64)
-	if err != nil {
-		return out, fmt.Errorf("reality-short-id base64url 解码: %w", err)
-	}
-	if len(raw) != crypto.ShortIDLen {
-		return out, fmt.Errorf("reality-short-id 长度 %d ≠ %d(short_id 8B)", len(raw), crypto.ShortIDLen)
-	}
-	copy(out[:], raw)
-	return out, nil
 }
 
 // metadataToSpeedcatAddr mihomo Metadata → speedcat wire.Addr。atype 映射:domain→0x02 / IPv4→0x01 /

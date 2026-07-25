@@ -670,12 +670,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if transport == "" {
 				transport = "tcp"
 			}
-			// disguise=reality 时把 transport 提升为 reality(URI 用 disguise 标识伪装路,fork option 用
-			// transport=kind;两者语义错位在此单点对齐 —— 兼容「只写 disguise=reality 不写 transport」的订阅)。
-			// 对照 Rust config.rs parse_speedcat_uri 的 disguise/transport 双字段。
-			if query.Get("disguise") == "reality" {
-				transport = "reality"
-			}
 			sni := query.Get("sni")
 			if sni == "" {
 				sni = server
@@ -697,16 +691,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			speedcat["skip-cert-verify"] = query.Get("insecure") == "1" // 1 → 接受任意证书(dev/受控网络)
 			if alpn := query.Get("alpn"); alpn != "" {
 				speedcat["alpn"] = alpn
-			}
-			// Reality(阶段三):spub=server X25519 静态公钥 / sid=short_id,均 base64url(两端同款,ADR-013)。
-			// 多 sid 全发为列表(fork SpeedcatOption.RealityShortIDs []string;client 取首算 AuthKey,余供轮换)。
-			// dest 不 emit(客户端拨号用不到,ADR-013 Q1)。
-			if spub := query.Get("spub"); spub != "" {
-				speedcat["reality-pubkey"] = spub
-			}
-			// query["sid"] 取全值(可多条 sid=a&sid=b);emit 为 []string 适配 fork 切片字段。
-			if sids := query["sid"]; len(sids) > 0 {
-				speedcat["reality-short-id"] = sids
 			}
 			proxies = append(proxies, speedcat)
 

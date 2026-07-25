@@ -40,13 +40,8 @@ const (
 	// KindRawTCP = 裸 TCP(**无 TLS exporter**;L4 新增)。exporter 不可用 → handshake.Client 路由
 	// disguiseClient(eph DH ClientHello/ServerHello,双层 AEAD)→ 拨 Rust `server run --transport raw-tcp`
 	// 的 disguise_server。**fail-safe:裸 TCP 无传输层加密/混淆**,仅 dev/测试/受控网络(伪装路双层 AEAD
-	// 仍加密);生产用 Reality(docs/05)。对照 Rust AnyConn::Raw + Transport::RawTcp。
+	// 仍加密);生产伪装用 21 单栈(tls_cert/forge_consistent)。对照 Rust AnyConn::Raw + Transport::RawTcp。
 	KindRawTCP
-	// KindReality = Reality 伪装路(C7b 新增;utls Chrome 指纹 + auth 注入 ClientHello;**TCP-only**)。
-	// exporter 不可用(RealityConn 返 ErrRealityNoExporter)→ handshake.Client 路由 disguiseClient(内层
-	// disguise 跑在 Reality TLS 隧道里,两层 auth 分域 D2)。对照 Rust disguise=reality + AnyConn::Reality。
-	// 外层 REALITY auth = 门卫(决定 Rust 服务端接管 vs 转发 dest);内层 disguise 产会话密钥。
-	KindReality
 )
 
 // Config 是 dial 配置(对齐 Rust TransportAddr:Host/Port/SNI/ALPN + client TLS 三分支)。
@@ -57,15 +52,6 @@ type Config struct {
 	ALPN     string // ALPN;缺省 空(QUIC 可能强制非空 → SpeedcatALPN 兜底,决策 5)
 	Insecure bool   // dev 旁路:接受任意证书(对应 Rust --insecure;fail-safe 危险默认拒)
 	CAFile   string // pin CA PEM 文件(对应 Rust --ca;空 = 默认系统 roots)
-
-	// —— Reality 伪装路(C7b 新增;仅 KindReality 用)——
-	// RealityPubKey = server X25519 静态公钥(base64url 解码 32B);AuthKey = X25519(ephPriv, RealityPubKey)。
-	// 对照 Rust reality_auth + docs/05 §3.2 组件 1(server 持私钥 client 持公钥,两端对称派生 AuthKey)。
-	// 零值(全 0)= 未配 → dialReality fail-loud 拒(无 server 公钥无法算 AuthKey,也无法校 cert HMAC)。
-	RealityPubKey [crypto.KeyLen]byte
-	// RealityShortID = REALITY 短 ID 白名单之一(8B;命中服务端 short_ids 白名单任一即放行)。
-	// 对照 Rust reality_auth::AuthPayload::ShortID / Rust config short_ids(8B × N)。
-	RealityShortID [crypto.ShortIDLen]byte
 }
 
 // Conn 是 speedcat 传输层连接:字节流 + 快路 exporter 探针。
@@ -112,8 +98,6 @@ func Dial(ctx context.Context, cfg Config, kind Kind) (Conn, error) {
 		return dialQUIC(ctx, cfg)
 	case KindRawTCP:
 		return dialRawTCP(ctx, cfg)
-	case KindReality:
-		return dialReality(ctx, cfg)
 	default:
 		return nil, errors.New("transport: 未知 Kind")
 	}
