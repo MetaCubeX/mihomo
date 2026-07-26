@@ -17,6 +17,15 @@ const DefaultDnsRelayTimeout = time.Second * 5
 
 const SafeDnsPacketSize = 2 * 1024 // safe size which is 1232 from https://dnsflagday.net/2020/, so 2048 is enough
 
+// RequestUDPSize returns the UDP payload size a reply to msg may occupy:
+// the client's advertised EDNS0 buffer size, or 512 (D.MinMsgSize) without an OPT record.
+func RequestUDPSize(msg *D.Msg) int {
+	if opt := msg.IsEdns0(); opt != nil {
+		return int(opt.UDPSize())
+	}
+	return D.MinMsgSize
+}
+
 func RelayDnsConn(ctx context.Context, conn net.Conn, readTimeout time.Duration) error {
 	buff := pool.Get(pool.UDPBufferSize)
 	defer func() {
@@ -90,7 +99,10 @@ func relayDnsPacket(ctx context.Context, payload []byte, target []byte, maxSize 
 	}
 
 	r.SetRcode(msg, r.Rcode)
-	if maxSize > 0 {
+	if maxSize > 0 { // udp
+		if size := RequestUDPSize(msg); size < maxSize {
+			maxSize = size
+		}
 		r.Truncate(maxSize)
 	}
 	r.Compress = true
