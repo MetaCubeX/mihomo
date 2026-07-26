@@ -92,8 +92,8 @@ github.com/mdlayher/socket v0.5.1 h1:VZaqt6RkGkt2OE9l3GcC6nZkqD3xKeQLyfleW/uBcos
 github.com/mdlayher/socket v0.5.1/go.mod h1:TjPLHI1UgwEv5J1B5q0zTZq12A/6H7nKmtTanQE37IQ=
 github.com/metacubex/age v0.0.0-20260603010618-28d156b4ea78 h1:LqWr0vb9zDNuQS+jJd4fnRYk/SEI7KJ7TDe/L4WFK48=
 github.com/metacubex/age v0.0.0-20260603010618-28d156b4ea78/go.mod h1:BTBG/iVY7rg3qq5WdVCg0GFk58CSvCDSbjy8I7kEx/c=
-github.com/metacubex/amneziawg-go v0.0.0-20260612143004-19b4f1cdd5ec h1:nRHevF7PmvDKjkYPjQCU7NUfVrr3Sry4QOPxpqoyo8U=
-github.com/metacubex/amneziawg-go v0.0.0-20260612143004-19b4f1cdd5ec/go.mod h1:MsM/5czONyXMJ3PRr5DbQ4O/BxzAnJWOIcJdLzW6qHY=
+github.com/metacubex/amneziawg-go v0.0.0-20260726091836-16af3a7a9a29 h1:ArOD/vshXuXIvyYOrysVojADKQtGIq6UOABrXmaNcKU=
+github.com/metacubex/amneziawg-go v0.0.0-20260726091836-16af3a7a9a29/go.mod h1:MsM/5czONyXMJ3PRr5DbQ4O/BxzAnJWOIcJdLzW6qHY=
 github.com/metacubex/ascon v0.1.0 h1:6ZWxmXYszT1XXtwkf6nxfFhc/OTtQ9R3Vyj1jN32lGM=
 github.com/metacubex/ascon v0.1.0/go.mod h1:eV5oim4cVPPdEL8/EYaTZ0iIKARH9pnhAK/fcT5Kacc=
 github.com/metacubex/bart v0.29.0 h1:yVc/lLdDqn+7FShI0qUghStHl0/d3mn4EH/I5R5niKk=

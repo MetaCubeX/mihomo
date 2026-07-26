@@ -21,7 +21,8 @@ import (
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
 
-	amnezia "github.com/metacubex/amneziawg-go/device"
+	amneziav3 "github.com/metacubex/amneziawg-go/device"
+	amnezia "github.com/metacubex/amneziawg-go/device_v1"
 	wireguard "github.com/metacubex/sing-wireguard"
 	"github.com/metacubex/wireguard-go/device"
 
@@ -86,26 +87,42 @@ type WireGuardPeerOption struct {
 }
 
 type AmneziaWGOption struct {
-	JC    int    `proxy:"jc,omitempty"`
-	JMin  int    `proxy:"jmin,omitempty"`
-	JMax  int    `proxy:"jmax,omitempty"`
-	S1    int    `proxy:"s1,omitempty"`
-	S2    int    `proxy:"s2,omitempty"`
-	S3    int    `proxy:"s3,omitempty"`    // AmneziaWG v1.5 and v2
-	S4    int    `proxy:"s4,omitempty"`    // AmneziaWG v1.5 and v2
-	H1    string `proxy:"h1,omitempty"`    // In AmneziaWG v1.x, it was uint32, but our WeaklyTypedInput can handle this situation
-	H2    string `proxy:"h2,omitempty"`    // In AmneziaWG v1.x, it was uint32, but our WeaklyTypedInput can handle this situation
-	H3    string `proxy:"h3,omitempty"`    // In AmneziaWG v1.x, it was uint32, but our WeaklyTypedInput can handle this situation
-	H4    string `proxy:"h4,omitempty"`    // In AmneziaWG v1.x, it was uint32, but our WeaklyTypedInput can handle this situation
-	I1    string `proxy:"i1,omitempty"`    // AmneziaWG v1.5 and v2
-	I2    string `proxy:"i2,omitempty"`    // AmneziaWG v1.5 and v2
-	I3    string `proxy:"i3,omitempty"`    // AmneziaWG v1.5 and v2
-	I4    string `proxy:"i4,omitempty"`    // AmneziaWG v1.5 and v2
-	I5    string `proxy:"i5,omitempty"`    // AmneziaWG v1.5 and v2
-	J1    string `proxy:"j1,omitempty"`    // AmneziaWG v1.5 only (removed in v2)
-	J2    string `proxy:"j2,omitempty"`    // AmneziaWG v1.5 only (removed in v2)
-	J3    string `proxy:"j3,omitempty"`    // AmneziaWG v1.5 only (removed in v2)
-	Itime int64  `proxy:"itime,omitempty"` // AmneziaWG v1.5 only (removed in v2)
+	Version int `proxy:"version,omitempty"` // Only version 3 uses the v3 implementation; all other values use the legacy implementation.
+
+	JC   int `proxy:"jc,omitempty"`
+	JMin int `proxy:"jmin,omitempty"`
+	JMax int `proxy:"jmax,omitempty"`
+	S1   int `proxy:"s1,omitempty"`
+	S2   int `proxy:"s2,omitempty"`
+	S3   int `proxy:"s3,omitempty"` // AmneziaWG v1.5+
+	S4   int `proxy:"s4,omitempty"` // AmneziaWG v1.5+
+
+	// H1-H4 accept uint32 values in v1.x and uint32 values or ranges in v2+.
+	// WeaklyTypedInput accepts both numeric and string representations.
+	H1 string `proxy:"h1,omitempty"`
+	H2 string `proxy:"h2,omitempty"`
+	H3 string `proxy:"h3,omitempty"`
+	H4 string `proxy:"h4,omitempty"`
+
+	I1 string `proxy:"i1,omitempty"` // AmneziaWG v1.5+
+	I2 string `proxy:"i2,omitempty"` // AmneziaWG v1.5+
+	I3 string `proxy:"i3,omitempty"` // AmneziaWG v1.5+
+	I4 string `proxy:"i4,omitempty"` // AmneziaWG v1.5+
+	I5 string `proxy:"i5,omitempty"` // AmneziaWG v1.5+
+
+	J1    string `proxy:"j1,omitempty"`    // AmneziaWG v1.5 only (removed in v2+)
+	J2    string `proxy:"j2,omitempty"`    // AmneziaWG v1.5 only (removed in v2+)
+	J3    string `proxy:"j3,omitempty"`    // AmneziaWG v1.5 only (removed in v2+)
+	Itime int64  `proxy:"itime,omitempty"` // AmneziaWG v1.5 only (removed in v2+)
+
+	// AmneziaWG v3+ only. Version must be 3, and these options cannot be combined with the v1.5-only options above.
+	HeaderProtectionKey    string `proxy:"header-protection-key,omitempty"`
+	ContentPaddingAddition string `proxy:"content-padding-addition,omitempty"`
+	RekeyAfterTime         string `proxy:"rekey-after-time,omitempty"`
+	RekeyTimeout           string `proxy:"rekey-timeout,omitempty"`
+	RejectAfterTime        string `proxy:"reject-after-time,omitempty"`
+	KeepaliveTimeout       string `proxy:"keepalive-timeout,omitempty"`
+	MaxHandshakeAttempts   string `proxy:"max-handshake-attempts,omitempty"`
 }
 
 type wgSingErrorHandler struct {
@@ -255,6 +272,13 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			option.PreSharedKey = hex.EncodeToString(bytes)
 		}
 	}
+	if option.AmneziaWGOption != nil && option.AmneziaWGOption.HeaderProtectionKey != "" {
+		bytes, err := base64.StdEncoding.DecodeString(option.AmneziaWGOption.HeaderProtectionKey)
+		if err != nil {
+			return nil, E.Cause(err, "decode header protection key")
+		}
+		option.AmneziaWGOption.HeaderProtectionKey = hex.EncodeToString(bytes)
+	}
 	outbound.option = option
 
 	mtu := option.MTU
@@ -278,7 +302,11 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	if option.AmneziaWGOption != nil {
 		outbound.bind.SetParseReserved(false) // AmneziaWG don't need parse reserved
-		outbound.device = amnezia.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
+		if option.AmneziaWGOption.Version == 3 {
+			outbound.device = amneziav3.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
+		} else {
+			outbound.device = amnezia.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
+		}
 	} else {
 		outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
 	}
@@ -456,6 +484,27 @@ func (w *WireGuard) genIpcConf(ctx context.Context, updateOnly bool) (string, er
 			}
 			if w.option.AmneziaWGOption.Itime != 0 {
 				ipcConf += "itime=" + strconv.FormatInt(int64(w.option.AmneziaWGOption.Itime), 10) + "\n"
+			}
+			if w.option.AmneziaWGOption.HeaderProtectionKey != "" {
+				ipcConf += "header_protection_key=" + w.option.AmneziaWGOption.HeaderProtectionKey + "\n"
+			}
+			if w.option.AmneziaWGOption.ContentPaddingAddition != "" {
+				ipcConf += "content_padding_addition=" + w.option.AmneziaWGOption.ContentPaddingAddition + "\n"
+			}
+			if w.option.AmneziaWGOption.RekeyAfterTime != "" {
+				ipcConf += "rekey_after_time=" + w.option.AmneziaWGOption.RekeyAfterTime + "\n"
+			}
+			if w.option.AmneziaWGOption.RekeyTimeout != "" {
+				ipcConf += "rekey_timeout=" + w.option.AmneziaWGOption.RekeyTimeout + "\n"
+			}
+			if w.option.AmneziaWGOption.RejectAfterTime != "" {
+				ipcConf += "reject_after_time=" + w.option.AmneziaWGOption.RejectAfterTime + "\n"
+			}
+			if w.option.AmneziaWGOption.KeepaliveTimeout != "" {
+				ipcConf += "keepalive_timeout=" + w.option.AmneziaWGOption.KeepaliveTimeout + "\n"
+			}
+			if w.option.AmneziaWGOption.MaxHandshakeAttempts != "" {
+				ipcConf += "max_handshake_attempts=" + w.option.AmneziaWGOption.MaxHandshakeAttempts + "\n"
 			}
 		}
 	}
