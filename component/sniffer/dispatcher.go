@@ -295,7 +295,7 @@ func NewSniffer(name sniffer.Type, snifferConfig SnifferConfig) (sniffer.Sniffer
 	case sniffer.HTTP:
 		return NewHTTPSniffer(snifferConfig)
 	case sniffer.QUIC:
-		return NewQuicSniffer(snifferConfig)
+		return NewQUICSniffer(snifferConfig)
 	default:
 		return nil, ErrorUnsupportedSniffer
 	}
