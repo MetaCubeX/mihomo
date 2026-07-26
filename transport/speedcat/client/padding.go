@@ -25,6 +25,8 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	mrand "math/rand"
+	"os"
+	"sync"
 )
 
 // stopN 塑形的前 N 条 record 数(借 anytls stop=8 + naive NumFirstPaddings=8 两独立收敛点;§2 原则3;对照 Rust STOP_N)。
@@ -97,4 +99,48 @@ func (p *prng) genRange(lo, hi int) int {
 		return lo
 	}
 	return lo + p.r.Intn(hi-lo+1)
+}
+
+// ---- bulk 切片塑形 opt-in(ADR-016 §5 留后 · 落地;对照 Rust padding.rs bulk_shape_env)--------------
+//
+// `SPEEDCAT_BULK_SHAPE` 让 [pumpEncodeFast] 的 bulk 整段 Write 改为「按 target 切片循环 Write」—— 前 [stopN]
+// 条 record 各切 ~target 量级(独立 TLS record,反 ~16401B bulk 指纹);`stopN` 后退原启发式(整段 Write,稳态
+// 逐字不变)= **零稳态开销**(ADR-005)。**默认未设 → 不切片**(原 bulk 整段 Write,16401 = nginx/Apache 常见
+// `max_fragment=16384` 默认,非 speedcat 专属 → 弱指纹,[internal/24] §4 据实记);opt-in 显式置位 → 切片
+// (贴合 cloudflare ~1386 segment-aligned 基线;吞吐代价 box 权威门 defer)。
+//
+// **为何 env 而非 caps 位 / 非默认:** bulk-shape 是**服务端本地 emission 策略**,decode 盲丢 PADDING + 任意
+// record 大小(shape-agnostic)→ 无两端协商;ride PADDING cap 会 default-ON(`Padding()` 是协商交集,TCP server
+// 默认 offer)→ 与「opt-in default OFF」冲突。env 进程级 opt-in(systemd `Environment=` / launch script),
+// Rust+Go 通用(`os.Getenv`),与 Rust `bulk_shape_env` 同款 OnceLock 模式(镜像既有一致)。
+//
+// **flush-per-record 风险(Go crypto/tls,中):** Go 对 sub-max-fragment `Write` **可能 coalesce**(不像 rustls
+// `flush` 排空 plaintext buffer)→ 切片 record 可能被合并成一条大 record。但既有 Go 交互塑形(每 record 一次
+// `conn.Write`)已依赖 per-Write emission 并随 ADR-016 shipped —— 即此风险**非切片新引入,是 Go upload 方向既有
+// latent 问题**(Probe 2 测的是 server→client = Rust 方向)。处置:本轮 tee harness **加测 client→server(Go)
+// 方向**(V2),据实报;Go bulk 切片 upload 方向 best-effort + 文档诚实记(Rust 下载方向已实证是主目标)。
+//
+// **吞吐(ADR-005):** 切片仅前 `stopN` 条 record(冷段,~8 次 Write/连接);稳态 `stopN` 后整段 Write 逐字不变 →
+// 冷段有界、稳态零开销 = 按构造吞吐无损(box 门 defer 仅确认此构造结论)。
+
+// bulkShapeFrom 解析 env 值 → 是否启用 bulk 切片塑形(纯函数,便于无全局态单测;对照 Rust bulk_shape_from)。
+// 空串 / "0" → false(默认 OFF,原 bulk 整段 Write);其他非空 → true(按 target 切片循环 Write)。
+func bulkShapeFrom(value string) bool {
+	return !(value == "" || value == "0")
+}
+
+// bulkShapeCached / bulkShapeOnce 进程级缓存 env 读(对照 Rust OnceLock;ADR-005 env 读每进程一次)。
+// sync.Once.Do 首调读 os.Getenv 后缓存,后续零成本(原子读 cached 值)。harness ON/OFF 是独立进程各自缓存语义正确。
+var (
+	bulkShapeOnce   sync.Once
+	bulkShapeCached bool
+)
+
+// bulkShapeEnv 报告是否启用 bulk 切片塑形(opt-in SPEEDCAT_BULK_SHAPE;对照 Rust bulk_shape_env)。
+// 首调 sync.Once 读 env 缓存,后续零成本(ADR-005)。默认未设 → false。
+func bulkShapeEnv() bool {
+	bulkShapeOnce.Do(func() {
+		bulkShapeCached = bulkShapeFrom(os.Getenv("SPEEDCAT_BULK_SHAPE"))
+	})
+	return bulkShapeCached
 }

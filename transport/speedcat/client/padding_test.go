@@ -116,6 +116,27 @@ func TestPrngGenRangeEdges(t *testing.T) {
 	}
 }
 
+// TestBulkShapeFromParsesEnvValue 纯函数解析 SPEEDCAT_BULK_SHAPE 值(对照 Rust bulk_shape_from_parses_env_value)。
+// 不触全局 env / 不依赖 sync.Once 缓存(纯函数单测,免并发 flake;bulkShapeEnv 的进程级缓存语义同 padding_disabled_env 不单测)。
+func TestBulkShapeFromParsesEnvValue(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},  // 未设 / 空串 → 不切片(默认 OFF)。
+		{"0", false}, // 显式 "0" → 不切片。
+		{"1", true},  // 任意非空非 "0" → 启用切片。
+		{"yes", true},
+		{"true", true},
+		{"anything-nonzero", true},
+	}
+	for _, c := range cases {
+		if got := bulkShapeFrom(c.in); got != c.want {
+			t.Fatalf("bulkShapeFrom(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 // TestPaddingFrameDiscardedFast 快路:PADDING + TcpData 两帧 → pumpDecodeFast out 只收 TcpData body(PADDING 盲丢,无 Wire error)。
 // 对照 Rust padding_frame_discarded_fast。
 func TestPaddingFrameDiscardedFast(t *testing.T) {

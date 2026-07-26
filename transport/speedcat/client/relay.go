@@ -187,11 +187,41 @@ func pumpEncodeFast(tx *SessionTx, local io.Reader, conn io.Writer) error {
 						}
 						n += wire.FrameHeaderLen + pad
 					}
-					if _, we := conn.Write(batch[:n]); we != nil {
-						return we
+					// ADR-016 §5 留后 → 落地:bulk 切片塑形(opt-in SPEEDCAT_BULK_SHAPE,默认 OFF)。
+					// bulk 读(n >> target,非短读)+ opt-in → 按 target 切片循环 Write 造 N 条独立 ~target 量级 TLS
+					// record(反 ~16401B bulk 指纹);冷段 stopN 切完后续退整段 Write(零稳态开销,ADR-005)。
+					// **flush-per-record 风险(Go,中):** Go crypto/tls 对 sub-max-fragment Write 可能 coalesce(不像
+					// rustls flush 排空 buffer)→ 切片 record 可能被合并。既有 Go 交互塑形(每 record 一次 conn.Write)
+					// 已依赖 per-Write emission 并随 ADR-016 shipped —— 此风险非切片新引入,是 Go upload 方向既有 latent
+					// (Probe 2 测的是 server→client=Rust 方向)。处置:本轮 tee harness 加测 client→server(Go)方向据实报。
+					if bulkShapeEnv() && !shortRead && n > target {
+						offset := 0
+						// Phase 1:冷段切片 —— 前 stopN record 各 ~target(per-Write emission 造独立 TLS record)。
+						for offset+target <= n && shapedRecords < stopN {
+							if _, we := conn.Write(batch[offset : offset+target]); we != nil {
+								return we
+							}
+							offset += target
+							shapedRecords++
+							if shapedRecords < stopN {
+								target = scheme.target(shapedRecords, prngState)
+							}
+						}
+						// Phase 2:余量(stopN 命中或余 < target)→ 整段 Write(稳态路径 unshaped;不增 shapedRecords)。
+						if offset < n {
+							if _, we := conn.Write(batch[offset:n]); we != nil {
+								return we
+							}
+						}
+						n = 0
+					} else {
+						// 原整段 Write(n 接近 target / 短读补 padding 后 / bulk_shape 未开 bulk 整段)。
+						if _, we := conn.Write(batch[:n]); we != nil {
+							return we
+						}
+						n = 0
+						shapedRecords++
 					}
-					n = 0
-					shapedRecords++
 				}
 				// else(n < target 且非短读 = bulk 攒批中):不 flush,续读攒到 target → 下轮早 flush。
 			} else if n >= relayEncodeBatch || shortRead {
