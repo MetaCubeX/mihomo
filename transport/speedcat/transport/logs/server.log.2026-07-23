@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-23T07:44:59.660645Z","level":"WARN","fields":{"message":"⚠ DEV 模式:rcgen 自签证书(自定义 SAN);生产请用真证书 --cert/--key","sans":"[\"127.0.0.1\"]"},"target":"speedcat_cli::cmd::server_run"}
+{"timestamp":"2026-07-23T07:44:59.661040Z","level":"INFO","fields":{"message":"speedcat server 启动","listen":"127.0.0.1:18443","transport":"Tcp","max_conns":8192,"real_cert":false,"version":"0.1.0"},"target":"speedcat_cli::cmd::server_run"}
+{"timestamp":"2026-07-23T07:45:00.289381Z","level":"WARN","fields":{"message":"⚠ DEV 模式:rcgen 自签证书(自定义 SAN);生产请用真证书 --cert/--key","sans":"[\"127.0.0.1\"]"},"target":"speedcat_cli::cmd::server_run"}
+{"timestamp":"2026-07-23T07:45:00.290123Z","level":"INFO","fields":{"message":"speedcat server 启动","listen":"127.0.0.1:18444","transport":"Quic","max_conns":8192,"real_cert":false,"version":"0.1.0"},"target":"speedcat_cli::cmd::server_run"}

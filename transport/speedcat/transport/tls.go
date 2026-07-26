@@ -10,8 +10,8 @@ import (
 	"net"
 	"os"
 
-	utls "github.com/metacubex/utls"
 	"github.com/metacubex/mihomo/transport/speedcat/crypto"
+	utls "github.com/metacubex/utls"
 )
 
 // dialTCP 建立 TCP + TLS 1.3 连接;**ClientHello 用 uTLS Chrome 指纹**。握手完成后返回 conn(exporter 可取)。

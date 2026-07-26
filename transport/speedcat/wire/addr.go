@@ -8,14 +8,14 @@ import (
 	"net"
 )
 
-// AddrType —— 地址类型(02 §5)。atype 取值同 VLESS/v2ray(domain=0x02),字节序 addr-then-port(同 SOCKS5/Trojan)。
+// AddrType —— 地址类型。atype 取值同 VLESS/v2ray(domain=0x02),字节序 addr-then-port(同 SOCKS5/Trojan)。
 type AddrType byte
 
 const (
 	AddrTypeIPv4   AddrType = 0x01 // IPv4(后接 4 字节)
 	AddrTypeDomain AddrType = 0x02 // 域名(后接 1 字节长度 + N 字节)
 	AddrTypeIPv6   AddrType = 0x03 // IPv6(后接 16 字节)
-	// 0xff = ADDR_TYPE_NONE 仅用于 UDP datagram 非首片占位(02 §6.1,TUIC trick),不在通用 Addr;datagram 包处理。
+	// 0xff = ADDR_TYPE_NONE 仅用于 UDP datagram 非首片占位(TUIC trick),不在通用 Addr;datagram 包处理。
 )
 
 // Addr 编解码错误。
@@ -34,7 +34,7 @@ type Addr struct {
 	Port   uint16   // 大端序列化
 }
 
-// MarshalBinary 编码 Addr:atype(1) + addr(变长) + port(2,BE)。对照 02 §5。
+// MarshalBinary 编码 Addr:atype(1) + addr(变长) + port(2,BE)。
 func (a Addr) MarshalBinary() ([]byte, error) {
 	switch a.Type {
 	case AddrTypeIPv4:
@@ -74,7 +74,7 @@ func (a Addr) WriteTo(w io.Writer) (int64, error) {
 	return int64(n), err
 }
 
-// DecodeAddr 从 b 开头解码 Addr,返回 Addr 与消耗的字节数。对照 02 §5。
+// DecodeAddr 从 b 开头解码 Addr,返回 Addr 与消耗的字节数。
 func DecodeAddr(b []byte) (Addr, int, error) {
 	if len(b) < 1 {
 		return Addr{}, 0, ErrAddrTruncated
@@ -116,7 +116,7 @@ func DecodeAddr(b []byte) (Addr, int, error) {
 	}
 }
 
-// ReadAddr 从 r 流式读 Addr(先 atype 再按类型读定长/变长体)。对照 02 §5。
+// ReadAddr 从 r 流式读 Addr(先 atype 再按类型读定长/变长体)。
 func ReadAddr(r io.Reader) (Addr, error) {
 	var head [1]byte
 	if _, err := io.ReadFull(r, head[:]); err != nil {

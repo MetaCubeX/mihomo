@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 对照 docs/02 §5 + Rust Addr 编码,table-driven round-trip + 固定向量。
+// 对照 Rust Addr 编码,table-driven round-trip + 固定向量。
 func TestAddrMarshalRoundTrip(t *testing.T) {
 	cases := []struct {
 		name string
@@ -37,7 +37,7 @@ func TestAddrMarshalRoundTrip(t *testing.T) {
 	}
 }
 
-// 固定向量:atype 0x01 + IPv4(4) + port:BE(2)。1.2.3.4:443 = 01 01020304 01BB(02 §5)。
+// 固定向量:atype 0x01 + IPv4(4) + port:BE(2)。1.2.3.4:443 = 01 01020304 01BB。
 func TestAddrFixedVectorIPv4(t *testing.T) {
 	a := Addr{Type: AddrTypeIPv4, IPv4: [4]byte{1, 2, 3, 4}, Port: 443}
 	b, err := a.MarshalBinary()
@@ -50,7 +50,7 @@ func TestAddrFixedVectorIPv4(t *testing.T) {
 	}
 }
 
-// 固定向量:atype 0x02 + len(1) + domain + port:BE(2)。example.com:80(02 §5)。
+// 固定向量:atype 0x02 + len(1) + domain + port:BE(2)。example.com:80。
 func TestAddrFixedVectorDomain(t *testing.T) {
 	a := Addr{Type: AddrTypeDomain, Domain: "example.com", Port: 80}
 	b, err := a.MarshalBinary()

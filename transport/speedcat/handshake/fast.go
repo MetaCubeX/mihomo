@@ -1,16 +1,16 @@
-// fast.go —— 快路握手(transport-provided exporter,0-RTT,02 §2-fast / 03 §2.1)。
+// fast.go —— 快路握手(transport-provided exporter,0-RTT)。
 // 对照 Rust handshake.rs:200-267(fast_client + fast_server),帧字节布局逐位一致(全大端)。
 //
 // 帧布局:
 //
 //	FastHello (39B): ver:u8 caps_c:u16 max_bw_c:u32 auth_tag:32
 //
-// 无 ServerHello。auth_tag 绑客户端声明值(快路无回告,03 §2.1):
+// 无 ServerHello。auth_tag 绑客户端声明值(快路无回告):
 //
 //	auth_tag = BLAKE3-MAC(k_auth, "speedcat-v1 fast-auth" ‖ exporter ‖ ver ‖ caps_c:BE ‖ max_bw_c:BE)
 //
 // 其中 k_auth = DeriveKey("speedcat-v1 auth key", psk)。密钥从 exporter 派生。
-// NO_INNER_AEAD force **置位**(内层 AEAD 交 TLS record,splice 零拷贝成立,ADR-007)。
+// NO_INNER_AEAD force **置位**(内层 AEAD 交 TLS record,splice 零拷贝成立)。
 
 package handshake
 
@@ -26,7 +26,7 @@ import (
 //
 // 算 auth_tag → 发 FastHello(39B,搭 auth_tag 0-RTT)→ 从 exporter 派生密钥 → Session。
 // conn 取 io.Writer(快路 client 只发 FastHello,不读;握手后由 transport TLS record 承载)。
-// exporter 取自 transport.Conn.Exporter()(两端 TLS 1.3 + EMS 字节一致,ADR-007)。
+// exporter 取自 transport.Conn.Exporter()(两端 TLS 1.3 + EMS 字节一致)。
 func fastClient(conn io.Writer, psk crypto.Psk, params Params, exporter [crypto.KeyLen]byte) (*Session, error) {
 	kAuth := crypto.FastAuthKey(psk)
 	authTag := crypto.FastAuthTag(kAuth, crypto.Key(exporter), crypto.ProtocolVersion, uint16(params.Caps), params.MaxBandwidth)
@@ -43,9 +43,9 @@ func fastClient(conn io.Writer, psk crypto.Psk, params Params, exporter [crypto.
 	}
 
 	// 密钥从 exporter 派生(快路 IKM = exporter)。
-	keys := crypto.DeriveSessionKeys(crypto.Key(exporter))
+	keys := crypto.DeriveSessionKeys(crypto.Key(exporter), crypto.WholeConnection)
 
-	// 快路 ⇒ 内层 AEAD 由 TLS record 承担,force 置 NO_INNER_AEAD 位(架构不变量,ADR-007)。
+	// 快路 ⇒ 内层 AEAD 由 TLS record 承担,force 置 NO_INNER_AEAD 位(架构不变量)。
 	// 0-RTT:client 不知 server caps/max_bw 策略,记自身声明(乐观);server 按交集 honor(见 FastServer)。
 	caps := params.Caps
 	caps.SetNoInnerAEAD(true)
@@ -86,6 +86,6 @@ func FastServer(conn io.Reader, psk crypto.Psk, params Params, exporter [crypto.
 	caps := wire.Negotiate(capsC, params.Caps)
 	caps.SetNoInnerAEAD(true)
 	maxBw := clampMaxBW(maxBwC, params.MaxBandwidth)
-	keys := crypto.DeriveSessionKeys(crypto.Key(exporter))
+	keys := crypto.DeriveSessionKeys(crypto.Key(exporter), crypto.WholeConnection)
 	return &Session{Keys: keys, Caps: caps, MaxBandwidth: maxBw}, nil
 }

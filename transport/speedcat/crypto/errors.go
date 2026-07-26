@@ -10,7 +10,7 @@ var (
 	ErrPSKLen = errors.New("crypto: psk 须为 64 hex 字符")
 	// ErrPSKHex PSK hex 含非法字符(Rust from_str_radix 失败,crypto.rs:38)。
 	ErrPSKHex = errors.New("crypto: psk hex 解析失败")
-	// ErrDhNonContributory X25519 DH 输出全零(非贡献性,03 §3「DH 输出须校验全零」)。
+	// ErrDhNonContributory X25519 DH 输出全零(非贡献性,「DH 输出须校验全零」)。
 	// 对照 Rust `Error::DhNonContributory`(crypto.rs:79-88 was_contributory + 二次全零)。
 	// 全零 = 小子群/无效公钥攻击征兆,必须拒(防攻击者算出会话密钥)。
 	ErrDhNonContributory = errors.New("crypto: dh 输出全零(非贡献性,拒小子群攻击)")

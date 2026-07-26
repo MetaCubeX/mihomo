@@ -5,17 +5,40 @@ package crypto
 
 import "encoding/binary"
 
-// DeriveSessionKeys 从 IKM(伪装路=handshake_secret / 快路=exporter)派生四会话子密钥
-// (对照 Rust crypto.rs:213-220)。c2s/s2c 方向 + key/nonce 域分离,context 见 crypto.go 常量块。
+// KeyDiversifier 会话密钥的 IKM 分离器(RISK 1 结构化守卫;对照 Rust crypto.rs `KeyDiversifier`)。
 //
-// nonce 取 DeriveKey 输出(32B)的前 12B(Rust nonce12_from):BLAKE3 派生 32B 但 ChaCha20-Poly1305
-// nonce 仅 12B,截前 12B(不另派,省一次 DeriveKey;Rust 同此)。
-func DeriveSessionKeys(ikm Key) SessionKeys {
+// 强制调用方声明 stream 分离语义:WholeConnection 复现历史字节;StreamDiv(id) 把 id 揉进 IKM
+// (StreamDivCtx)再派生 → 跨流 (key,nonce) 天然分离。**今天快路恒 WholeConnection**(NO_INNER_AEAD 不用
+// 这些 key);未来给快路加内层 AEAD 时 pooled 流须改 StreamDiv(quic stream-id),须与 Rust 端同步。
+type KeyDiversifier struct {
+	stream bool
+	id     uint64
+}
+
+// WholeConnection 整连接一份密钥(identity:不经 StreamDivCtx,与历史逐字节一致)。
+var WholeConnection = KeyDiversifier{}
+
+// StreamDiv 按 stream-id 分离(QUIC stream-id 两端对称 → 零额外 wire 字节)。
+func StreamDiv(id uint64) KeyDiversifier { return KeyDiversifier{stream: true, id: id} }
+
+// DeriveSessionKeys 从 IKM(伪装路=handshake_secret / 快路=exporter)派生四会话子密钥
+// (对照 Rust crypto.rs `derive_session_keys`)。c2s/s2c 方向 + key/nonce 域分离,context 见 crypto.go 常量块。
+//
+// div 强制声明 stream 分离语义(见 KeyDiversifier):WholeConnection 复现历史字节;StreamDiv(id) 先把 id
+// 揉进 IKM 再派生。nonce 取 DeriveKey 输出(32B)的前 12B(Rust nonce12_from;省一次 DeriveKey)。
+func DeriveSessionKeys(ikm Key, div KeyDiversifier) SessionKeys {
+	eff := ikm
+	if div.stream {
+		buf := make([]byte, 0, KeyLen+8)
+		buf = append(buf, ikm[:]...)
+		buf = binary.BigEndian.AppendUint64(buf, div.id)
+		eff = DeriveKey(StreamDivCtx, buf)
+	}
 	return SessionKeys{
-		C2SKey:   DeriveKey(C2SKeyCtx, ikm[:]),
-		S2CKey:   DeriveKey(S2CKeyCtx, ikm[:]),
-		C2SNonce: nonce12From(DeriveKey(C2SNonceCtx, ikm[:])),
-		S2CNonce: nonce12From(DeriveKey(S2CNonceCtx, ikm[:])),
+		C2SKey:   DeriveKey(C2SKeyCtx, eff[:]),
+		S2CKey:   DeriveKey(S2CKeyCtx, eff[:]),
+		C2SNonce: nonce12From(DeriveKey(C2SNonceCtx, eff[:])),
+		S2CNonce: nonce12From(DeriveKey(S2CNonceCtx, eff[:])),
 	}
 }
 
@@ -27,12 +50,12 @@ func nonce12From(b Key) [NonceLen]byte {
 }
 
 // DisguiseHSInput 构造伪装路握手 MAC 的输入明文(8 字段 = 进 MAC 的全部 transcript 字段)。
-// 顺序严格(03 §3 SSOT),与 Rust disguise_hs_input(crypto.rs:228-249)逐字节一致:
+// 顺序严格(SSOT),与 Rust disguise_hs_input(crypto.rs:228-249)逐字节一致:
 //
 //	HS_CTX ‖ ver_lo ‖ ver_hi ‖ shared[32] ‖ nonce_c[16] ‖ nonce_s[16]
 //	         ‖ caps_neg:BE ‖ max_bw_c:BE ‖ max_bw_s:BE
 //
-// 返回的 []byte 进 Blake3Mac(psk, input) 得 handshake_secret(03 §3)。ver_lo/ver_hi 平铺:
+// 返回的 []byte 进 Blake3Mac(psk, input) 得 handshake_secret。ver_lo/ver_hi 平铺:
 // Rust 同款(预留版本区间协商,P1 阶段 lo==hi==PROTOCOL_VERSION)。
 func DisguiseHSInput(verLo, verHi byte, shared Key, nonceC, nonceS [HsNonceLen]byte, capsNeg uint16, maxBwC, maxBwS uint32) []byte {
 	v := make([]byte, 0, len(HSCtx)+2+KeyLen+2*HsNonceLen+2+8)

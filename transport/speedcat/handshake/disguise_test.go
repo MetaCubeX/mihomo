@@ -1,6 +1,6 @@
 // disguise_test.go —— 伪装路 Go↔Go self-test(net.Pipe 两端跑 disguise 握手,证 DH+MAC+derive+hs-input 链 Go 内自洽)。
 //
-// §5.4:导出密钥/exporter/auth_tag 是密钥 —— 测试只 bytes.Equal,**绝不打 raw**;失败消息也不带字节。
+// 导出密钥/exporter/auth_tag 是密钥 —— 测试只 bytes.Equal,**绝不打 raw**;失败消息也不带字节。
 // 共享 helper(testPsk/testPsk2/testExporter)本文件定义,fast_test.go 同包复用。
 
 package handshake
@@ -13,7 +13,7 @@ import (
 	"github.com/metacubex/mihomo/transport/speedcat/wire"
 )
 
-// testPsk 确定性 32B PSK(self-test 用;**非生产密钥**,永不复用到生产 —— §6.3)。
+// testPsk 确定性 32B PSK(self-test 用;**非生产密钥**,永不复用到生产)。
 func testPsk() crypto.Psk {
 	var p crypto.Psk
 	for i := range p {
@@ -77,7 +77,7 @@ func TestDisguise_BothEndsKeysEqual(t *testing.T) {
 	if !keysEqual(clientSess.Keys, serverSess.Keys) {
 		t.Fatal("两端 Session.Keys 不等(伪装路密钥派生分叉)")
 	}
-	// 伪装路 force 清 NO_INNER_AEAD(架构不变量,ADR-007)。
+	// 伪装路 force 清 NO_INNER_AEAD(架构不变量)。
 	if clientSess.Caps.NoInnerAEAD() || serverSess.Caps.NoInnerAEAD() {
 		t.Fatal("伪装路 NoInnerAEAD 应清位")
 	}

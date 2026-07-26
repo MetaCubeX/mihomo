@@ -8,7 +8,7 @@
 //   - [TestPumpDecodeMaxAeadBodyFrame]:max AEAD 帧(body = payload+TAG = 65535)round-trip(pumpDecodeAead + bodyBuf 复用)。
 //
 // 对照 Rust relay.rs ③ tests(pump_encode_batch_roundtrip / pump_decode_fast_writev_batch / pump_decode_max_aead_body_frame)。
-// §5.4:密钥确定性填充(非生产,§6.3 永不复用到生产);测试只 bytes.Equal / 计数,不打 raw 密钥。
+// 密钥确定性填充(非生产,永不复用到生产);测试只 bytes.Equal / 计数,不打 raw 密钥。
 
 package client
 

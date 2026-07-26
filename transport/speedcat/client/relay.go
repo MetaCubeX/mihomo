@@ -8,7 +8,7 @@
 //
 // # 批量 + writev + 零拷贝(L4 收尾 B,镜像 Rust relay.rs ③ issue #1)
 //
-// 对照 Rust relay.rs:59-67,78-160,173-408 逐段。三处显性收益(ADR-005 热路径):
+// 对照 Rust relay.rs:59-67,78-160,173-408 逐段。三处显性收益(热路径):
 //   - **encode 批量合帧**:攒 ≤ batchFrames 帧进大 batch buffer 一次 Write(减 conn 写 syscall 密度,③(a))。
 //     快路 body **直读进 batch 头后位置** + [SessionTx.sealFrameHeaderFast] 就地写头 → 免 EncryptFrameInto 的
 //     buf→out memcpy(③(c),零拷贝)。伪装路读进 buf + EncryptFrameInto 追加进 batch(1 拷贝;AEAD body 须 Seal
@@ -38,9 +38,9 @@
 // 每 active relay encode batch(~320 KiB)+ decode ct(~262 KiB)≈ ~580 KiB/conn。P2a 单连 / bench 无碍;P5
 // (<1 GB / 10 kconn)调小 batchFrames 或改共享 buffer 池(留 P5)。
 //
-// # 冷热路径(ADR-005)
+// # 冷热路径
 //
-// relay 是热路径。**panic-free**(被 mihomo import 的库:AEAD/decode 错返 error)。AEAD / 帧编解码内禁日志(§5.3)。
+// relay 是热路径。**panic-free**(被 mihomo import 的库:AEAD/decode 错返 error)。AEAD / 帧编解码内禁日志。
 
 package client
 

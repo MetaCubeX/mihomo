@@ -9,7 +9,7 @@ import (
 func TestFrameHeaderAADRoundTrip(t *testing.T) {
 	h := FrameHeader{Type: FrameTCPData, Len: 0x1234, Ctr: 0x56789abc}
 	aad := h.BuildAAD()
-	// 02 §3 + Rust 真值:type(02) len(12 34) ctr(56 78 9a bc)。
+	// + Rust 真值:type(02) len(12 34) ctr(56 78 9a bc)。
 	want := []byte{0x02, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}
 	if !bytes.Equal(aad[:], want) {
 		t.Fatalf("got %x want %x", aad[:], want)
@@ -23,7 +23,7 @@ func TestFrameHeaderAADRoundTrip(t *testing.T) {
 	}
 }
 
-// FRAME_HEADER_LEN 必须是 7(type 1 + len 2 + ctr 4;02 §3;对照 Rust FRAME_HEADER_LEN)。
+// FRAME_HEADER_LEN 必须是 7(type 1 + len 2 + ctr 4;对照 Rust FRAME_HEADER_LEN)。
 func TestFrameHeaderLen7(t *testing.T) {
 	if FrameHeaderLen != 7 {
 		t.Fatalf("FRAME_HEADER_LEN = %d, want 7", FrameHeaderLen)
@@ -41,7 +41,7 @@ func TestFrameHeaderRejectsShortAndBadType(t *testing.T) {
 	}
 }
 
-// MarshalHeader 与 BuildAAD 字节一致(零 alloc 版,02 §3)。
+// MarshalHeader 与 BuildAAD 字节一致(零 alloc 版)。
 func TestMarshalHeaderEqBuildAAD(t *testing.T) {
 	h := FrameHeader{Type: FramePing, Len: 0x10, Ctr: 0x20}
 	b := make([]byte, FrameHeaderLen)

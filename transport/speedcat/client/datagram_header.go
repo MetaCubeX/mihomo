@@ -1,8 +1,8 @@
-// datagram_header.go —— §6.1 datagram header + 分片/重组(镜像 Rust udp.rs:115-461;**仅 datagram 路**)。
+// datagram_header.go —— datagram header + 分片/重组(镜像 Rust udp.rs:115-461;**仅 datagram 路**)。
 //
 // **为何只在 datagram 路用:** QUIC datagram 有 max size 上限(~1.2K,含 QUIC framing overhead),大 UDP 报文须按
-// §6.1 切片逐 datagram 发,接收方 [ReassemblyBuffer] 重组。流内隧道(TCP fallback)走 stream 帧层(u16 len,
-// 单帧可达 64K),**不分片**(02 §4)。两分片域独立:SOCKS5 FRAG 恒 0(我们在 SOCKS5 层不分片)。
+// 切片逐 datagram 发,接收方 [ReassemblyBuffer] 重组。流内隧道(TCP fallback)走 stream 帧层(u16 len,
+// 单帧可达 64K),**不分片**。两分片域独立:SOCKS5 FRAG 恒 0(我们在 SOCKS5 层不分片)。
 //
 // # 线格式(DatagramHeader + frag_payload,整体经 DatagramCipher.Seal 加密)
 //
@@ -19,9 +19,9 @@
 //  3. addr 一致性:首片须 Some、非首片须 None。
 //  4. 集齐时拼接长度 == size(否则截断/错位)。
 //
-// 幂等:重复 frag_id / 重复首片覆盖(UDP 可重传 → 不报错,不累加)。GC:清超期未集齐包(§6.1 生命周期)。
+// 幂等:重复 frag_id / 重复首片覆盖(UDP 可重传 → 不报错,不累加)。GC:清超期未集齐包(生命周期)。
 //
-// **热路径(ADR-005):** Fragment/Insert 在每 UDP 报文同步段(MVP 每 frag 一次 alloc);零日志。零拷贝留收尾。
+// **热路径:** Fragment/Insert 在每 UDP 报文同步段(MVP 每 frag 一次 alloc);零日志。零拷贝留收尾。
 // **panic-free**(被 mihomo import 的库:校验错返 error)。
 
 package client
@@ -39,7 +39,7 @@ import (
 // 对照 Rust udp.rs:33 ADDR_TYPE_NONE)。
 const AddrTypeNone byte = 0xff
 
-// MVPMaxDatagramSize 单 datagram 上限 fallback(02 §6.1;对照 Rust MVP_MAX_DATAGRAM_SIZE=1200)。
+// MVPMaxDatagramSize 单 datagram 上限 fallback(对照 Rust MVP_MAX_DATAGRAM_SIZE=1200)。
 // quinn max_datagram_size() 已含 QUIC framing overhead(gotcha #2);quic-go 无直接 max-size 方法(仅 SendDatagram
 // 错误暴露),用此常量作 fallback:调用方再扣 AEAD nonce/tag 得每片 plaintext 上限。
 const MVPMaxDatagramSize = 1200
@@ -70,7 +70,7 @@ var (
 // 对照 Rust DatagramHeader::FIXED_LEN)。
 const DatagramHeaderFixedLen = 8
 
-// DatagramHeader 单 datagram 的 §6.1 header(仅 datagram 路;明文经 DatagramCipher.Seal 加密)。
+// DatagramHeader 单 datagram 的 header(仅 datagram 路;明文经 DatagramCipher.Seal 加密)。
 // 对照 Rust udp.rs:123 DatagramHeader。
 type DatagramHeader struct {
 	AssocID   uint16
@@ -148,8 +148,8 @@ func DecodeDatagramHeader(buf []byte) (DatagramHeader, []byte, error) {
 	return h, after[1:], nil
 }
 
-// Fragment 把一个 UDP 报文按 §6.1 切成若干 DatagramFrag(供 datagram 路逐片 seal+send)。
-// maxPlain = 单 datagram 明文上限(**含** §6.1 header,已由调用方扣 AEAD nonce/tag)。
+// Fragment 把一个 UDP 报文按 切成若干 DatagramFrag(供 datagram 路逐片 seal+send)。
+// maxPlain = 单 datagram 明文上限(**含** header,已由调用方扣 AEAD nonce/tag)。
 // 首片 header 较大(带 Addr),后续片 header 仅 FIXED_LEN+1(0xff)→ 两档预算分别计算。
 // 对照 Rust udp.rs:201 fragment。
 func Fragment(assocID, pktID uint16, addr *wire.Addr, payload []byte, maxPlain int) ([]DatagramFrag, error) {
@@ -240,7 +240,7 @@ type packetBuffer struct {
 	created   time.Time
 }
 
-// ReassemblyBuffer §6.1 重组缓冲:按 (assoc_id, pkt_id) 收集分片,集齐即还原 (addr, payload)。
+// ReassemblyBuffer 重组缓冲:按 (assoc_id, pkt_id) 收集分片,集齐即还原 (addr, payload)。
 // 对照 Rust udp.rs:333 ReassemblyBuffer。
 type ReassemblyBuffer struct {
 	m map[dgKey]packetBuffer

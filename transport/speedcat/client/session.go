@@ -1,6 +1,6 @@
-// Package client 实现 speedcat 协议客户端(L4 A2 docs/17 §3 五层 proto 库第 5 层):
+// Package client 实现 speedcat 协议客户端(L4 A2 五层 proto 库第 5 层):
 // 在 L2 transport.Conn + L3 handshake.Session 之上做 **relay / SOCKS5 入口 / UDP 隧道**,产出可独立
-// 跑的 SOCKS5 binary(经 Rust server 代理 TCP+UDP;docs/17 §3 阶段一完成定义:无需 fork mihomo)。
+// 跑的 SOCKS5 binary(经 Rust server 代理 TCP+UDP; 阶段一完成定义:无需 fork mihomo)。
 //
 // # 本文件:SessionTx / SessionRx —— 会话加解密半部(镜像 Rust session.rs:17-31,126-259,逐字节)
 //
@@ -8,18 +8,18 @@
 // 故拆成 [SessionTx](发:ctr 单调)与 [SessionRx](收:重放滑窗 highest)两半 —— 两半无共享可变状态,
 // 可各持一引用并发跑(relay pump 双 goroutine)。对照 Rust SessionTx/SessionRx(session.rs)。
 //
-// # 加密语义(03 §4 / §5;02 §3)
+// # 加密语义
 //
-// 每帧独立 AEAD + 单调 ctr;重放检查**在 AEAD 成功之后**(03 §5)。两路分支:
+// 每帧独立 AEAD + 单调 ctr;重放检查**在 AEAD 成功之后**。两路分支:
 //   - **快路**(NoInnerAEAD,exporter 取到):省内层 AEAD,完整性交 TLS record。帧 = [type][len=payload][ctr][plaintext],无 tag。
 //   - **伪装路**(NoInnerAEAD=false,exporter 不可取):双层 AEAD。帧 = [type][len=payload+tag][ctr][ciphertext][tag:16]。
 //
-// # 冷热路径(ADR-005)
+// # 冷热路径
 //
 // relay 是热路径(per-packet AEAD + 帧编解码)。本 MVP per-call frame(先正确,每帧各 alloc out)——
 // 批量合帧 / 零拷贝留收尾(对齐 Rust ③ issue #1;Go adapter 非 splice 热路径目标,先正确后优化)。
-// **AEAD seal/open 内禁日志**(每包日志 5G→1G 塌,§5.3)。**panic-free**(被 mihomo import 的库:
-// AEAD/ctr 错返 error 不 panic,§6.1 对 Go 库的等价约束)。
+// **AEAD seal/open 内禁日志**(每包日志 5G→1G 塌)。**panic-free**(被 mihomo import 的库:
+// AEAD/ctr 错返 error 不 panic,对 Go 库的等价约束)。
 package client
 
 import (
@@ -47,7 +47,7 @@ var (
 	ErrInvalidFrameHeader = errors.New("client/session: 帧头畸形")
 )
 
-// ctr 耗尽兜底阈值(03 §4.3,对照 Rust 0xF000_0000)。ctr > 此值 → ErrCtrExhaustion(防 nonce 空间耗尽)。
+// ctr 耗尽兜底阈值(对照 Rust 0xF000_0000)。ctr > 此值 → ErrCtrExhaustion(防 nonce 空间耗尽)。
 const ctrExhaustionBound uint32 = 0xF000_0000
 
 // SessionTx 发送半部:加密向密钥 + nonce base + 单调 ctr(对照 Rust SessionTx,session.rs:17-22)。
@@ -99,7 +99,7 @@ func NewClientHalves(s *handshake.Session) (SessionTx, SessionRx) {
 		}
 }
 
-// advanceCtr 推进 ctr + 超长/耗尽校验,返回本轮 ctr(03 §4.3;对照 Rust SessionTx::advance_ctr,
+// advanceCtr 推进 ctr + 超长/耗尽校验,返回本轮 ctr(对照 Rust SessionTx::advance_ctr,
 // 单一真源 —— EncryptFrameInto 与未来批量封帧共用)。超长 → ErrPayloadTooLong;ctr 近耗尽 → ErrCtrExhaustion。
 func (tx *SessionTx) advanceCtr(payloadLen int) (uint32, error) {
 	if payloadLen > wire.MaxPayloadLen {
@@ -163,7 +163,7 @@ func (tx *SessionTx) sealFrameHeaderFast(ftype wire.FrameType, payloadLen int, d
 // hdr = 已解析的帧头(ReadFrame 产出,免二次 parse);body = 帧头后已读入的字节(须 ≥ Len 声明长度,
 // 多余尾部忽略)。out 复用 buffer(伪装路明文写进 *out;调用方持 out 复用)。
 //
-// 重放检查在 AEAD 成功之后(03 §5):stream 保序 → ctr 须严格递增,hasHighest && ctr <= highest → ErrReplay。
+// 重放检查在 AEAD 成功之后:stream 保序 → ctr 须严格递增,hasHighest && ctr <= highest → ErrReplay。
 // 快路零拷贝(payload == body 切片);伪装路明文写进 out 返回 out 的切片。
 func (rx *SessionRx) DecryptFrame(hdr wire.FrameHeader, body []byte, out *[]byte) (wire.FrameType, []byte, error) {
 	bodyLen := int(hdr.Len)

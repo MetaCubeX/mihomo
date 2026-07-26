@@ -1,21 +1,21 @@
-// Package handshake 实现 speedcat 协议握手(L4 A2 docs/17 §3 五层 proto 库第 4 层):
+// Package handshake 实现 speedcat 协议握手(L4 A2 五层 proto 库第 4 层):
 // 在 L2 transport 产出的 [transport.Conn](字节流 + 快路 exporter 探针)上完成握手,产出 [Session]
 // (会话密钥 + 协商 caps + max_bw)供 L4 client relay 用。
 //
-// # 两条路(ADR-007,按 exporter 探针路由)
+// # 两条路(按 exporter 探针路由)
 //
-//   - **快路**(exporter = 可取):无 ServerHello;auth_tag 搭 FastHello 同发(0-RTT,02 §2-fast / 03 §2.1)。
+//   - **快路**(exporter = 可取):无 ServerHello;auth_tag 搭 FastHello 同发(0-RTT)。
 //     密钥从 exporter 派生;NO_INNER_AEAD **force 置位**(内层 AEAD 交 TLS record,splice 零拷贝成立)。
-//   - **伪装路**(exporter = 不可取):eph DH ClientHello/ServerHello(+1 RTT,02 §2 / 03 §3)。
+//   - **伪装路**(exporter = 不可取):eph DH ClientHello/ServerHello(+1 RTT)。
 //     handshake_secret = blake3_mac(psk, hs_input);密钥从 handshake_secret 派生;NO_INNER_AEAD **force 清位**
 //     (自带双层 AEAD)。**伪装路握手恒完成**(无显式 auth,密钥确认隐式于首帧 AEAD)—— 故仅「握手完成」
 //     不证 PSK 正确(确凿鉴权见 L4 真 relay 或 doctor step2 抓出口 IP)。
 //
-// # 架构不变量(ADR-007,docs/03 §2 表)
+// # 架构不变量(表)
 //
 // 路径 = exporter 探针,路径决定内层 AEAD,二者一对一绑定:
 //
-//	快路   (exporter 取到) ⇒ NO_INNER_AEAD 置位
+//	快路 (exporter 取到) ⇒ NO_INNER_AEAD 置位
 //	伪装路 (exporter 不可取) ⇒ NO_INNER_AEAD 清位
 //
 // 各 client 构造 caps 时 force 该位;[Session] 从 caps.NoInnerAEAD() 派生 crypto flag(单一真相源,
@@ -30,7 +30,7 @@
 // 本轮 Go 只做 **client 侧**(adapter 是 outbound,拨到 Rust server);DisguiseServer/FastServer 是
 // Rust server 侧的 Go 镜像,供 Go↔Go self-test 用,同时是 L4 client 的参考实现。
 //
-// # 冷热路径(ADR-005)
+// # 冷热路径
 //
 // 握手 = 冷路径(每连接生命周期事件,可打日志、可 alloc)。热路径 relay(relay pump / AEAD per-packet)
 // 留 L4,本包不触。帧编解码用定长 buffer + io.ReadFull/Write,无热路径铁律约束。
@@ -60,7 +60,7 @@ var (
 	// ErrVersionUnsupported 对端协议版本不在支持区间(对照 Rust Error::VersionUnsupported)。
 	ErrVersionUnsupported = errors.New("handshake: 协议版本不支持")
 	// ErrAuthTagMismatch 快路 auth_tag 常量时间比对不等(对照 Rust Error::AuthTagMismatch)。
-	// 跨实现 e2e 里 Rust fast_server 验失败即拆连 → Go client 见 EOF(反推 PSK 错,§dial 同款)。
+	// 跨实现 e2e 里 Rust fast_server 验失败即拆连 → Go client 见 EOF(反推 PSK 错, 同款)。
 	ErrAuthTagMismatch = errors.New("handshake: auth_tag 不匹配(快路鉴权失败)")
 	// ErrHandshakeIO 帧 read/write I/O 失败(对照 Rust Error::Io);用 fmt.Errorf 多 %w 包裹,
 	// 既可 errors.Is(_, ErrHandshakeIO) 又保留底层 io.EOF / ErrUnexpectedEOF 链(e2e 反推窗口用)。
@@ -94,7 +94,7 @@ type Session struct {
 //	exporter 取到 → fastClient(快路 0-RTT)
 //	exporter 不可取 → disguiseClient(伪装路 eph DH +1 RTT)
 //
-// 注意:exporter 探针语义 = 「TLS 1.3 exporter 可取」(快路成立前提,ADR-007);裸 TCP / net.Pipe
+// 注意:exporter 探针语义 = 「TLS 1.3 exporter 可取」(快路成立前提);裸 TCP / net.Pipe
 // 无 exporter → 走伪装路(Go↔Go self-test 用 net.Pipe 即此)。
 func Client(conn transport.Conn, psk crypto.Psk, params Params) (*Session, error) {
 	exporter, err := conn.Exporter()

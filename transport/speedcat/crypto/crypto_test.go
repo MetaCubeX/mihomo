@@ -42,7 +42,7 @@ var (
 	katPT        = []byte("plaintext-kat-payload")
 )
 
-// TestKAT_DeriveKey —— BLAKE3 derive_key(KDF 模式)与 Rust 逐字节一致(承重 head risk,docs/17 §6)。
+// TestKAT_DeriveKey —— BLAKE3 derive_key(KDF 模式)与 Rust 逐字节一致(承重 head risk)。
 func TestKAT_DeriveKey(t *testing.T) {
 	got := DeriveKey(C2SKeyCtx, katPSK)
 	want := mustHex(t, "929852758fc379927ca093443dfe0b0742a0a5e82ecb3d2d3bb960338470d0c1")
@@ -90,7 +90,7 @@ func TestKAT_FastAuthTag(t *testing.T) {
 func TestKAT_DeriveSessionKeys(t *testing.T) {
 	var ikm Key
 	copy(ikm[:], katExporter)
-	sk := DeriveSessionKeys(ikm)
+	sk := DeriveSessionKeys(ikm, WholeConnection)
 	cases := []struct {
 		name string
 		got  []byte
@@ -105,6 +105,30 @@ func TestKAT_DeriveSessionKeys(t *testing.T) {
 		want := mustHex(t, c.hex)
 		if !bytes.Equal(c.got, want) {
 			t.Fatalf("DeriveSessionKeys %s:\n got %x\nwant %x", c.name, c.got, want)
+		}
+	}
+}
+
+// TestKAT_DeriveSessionKeysStream1 —— Stream(1) 分离与 Rust 逐字节一致(方案 1A KDF diversifier 跨实现锁:
+// 未来给快路加内层 AEAD、pooled 流翻 StreamDiv(id) 时两端不分叉)。
+func TestKAT_DeriveSessionKeysStream1(t *testing.T) {
+	var ikm Key
+	copy(ikm[:], katExporter)
+	sk := DeriveSessionKeys(ikm, StreamDiv(1))
+	cases := []struct {
+		name string
+		got  []byte
+		hex  string
+	}{
+		{"c2s_key", sk.C2SKey[:], "f66b93dbfbd84c2e4eb2a7856256339ca4e3d30cc59e57efbdf90b59a6e81aa5"},
+		{"s2c_key", sk.S2CKey[:], "a93dc5bcd93d8a3308016a510403df9a6d86b96a9338b24fefb5c7a80fad0e9d"},
+		{"c2s_nonce", sk.C2SNonce[:], "d5573c92b86881c55b72a0d2"},
+		{"s2c_nonce", sk.S2CNonce[:], "19fd677795dc7eb5d504908e"},
+	}
+	for _, c := range cases {
+		want := mustHex(t, c.hex)
+		if !bytes.Equal(c.got, want) {
+			t.Fatalf("DeriveSessionKeys Stream(1) %s:\n got %x\nwant %x", c.name, c.got, want)
 		}
 	}
 }

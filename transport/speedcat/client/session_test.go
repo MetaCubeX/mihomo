@@ -1,6 +1,6 @@
 // session_test.go —— SessionTx/SessionRx self-test(快路/伪装路 round-trip + 重放拒 + ctr 耗尽 + 超长 + 篡改)。
 //
-// §5.4:密钥/auth_tag 是密钥 —— 测试只 bytes.Equal / errors.Is,**绝不打 raw**。密钥确定性填充(非生产)。
+// 密钥/auth_tag 是密钥 —— 测试只 bytes.Equal / errors.Is,**绝不打 raw**。密钥确定性填充(非生产)。
 // 对照 Rust session.rs 的同款不变量(stream 保序 → ctr 严格递增;重放检查在 AEAD 后)。
 
 package client
@@ -14,7 +14,7 @@ import (
 	"github.com/metacubex/mihomo/transport/speedcat/wire"
 )
 
-// testKeyNonce 确定性 32B key + 12B nonce base(self-test 用;**非生产密钥**,§6.3 永不复用到生产)。
+// testKeyNonce 确定性 32B key + 12B nonce base(self-test 用;**非生产密钥**,永不复用到生产)。
 func testKeyNonce(seed byte) (crypto.Key, [crypto.NonceLen]byte) {
 	var k crypto.Key
 	for i := range k {
@@ -103,7 +103,7 @@ func TestSessionReplay(t *testing.T) {
 	}
 }
 
-// TestSessionCtrExhaustion 证 tx ctr > 0xF000_0000 → ErrCtrExhaustion(防 nonce 空间耗尽,03 §4.3)。
+// TestSessionCtrExhaustion 证 tx ctr > 0xF000_0000 → ErrCtrExhaustion(防 nonce 空间耗尽)。
 func TestSessionCtrExhaustion(t *testing.T) {
 	k, n := testKeyNonce(0x44)
 	tx := SessionTx{key: k, nonceBase: n, ctr: ctrExhaustionBound + 1, noInnerAEAD: true}

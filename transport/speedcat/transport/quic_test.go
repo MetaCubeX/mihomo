@@ -1,6 +1,6 @@
 // quic_test.go —— QUIC arm self-test:Go 两端握手 → 两端 exporter 字节相等 + stream round-trip。
 // 不依赖 Rust(跨实现铁证留 e2e:Go client ↔ Rust server,决策 5 ALPN 命门实测)。
-// exporter 是密钥 → 只 bytes.Equal,绝不打印(§5.4)。
+// exporter 是密钥 → 只 bytes.Equal,绝不打印。
 
 package transport
 

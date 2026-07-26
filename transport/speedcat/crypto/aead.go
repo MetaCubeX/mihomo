@@ -29,7 +29,7 @@ func AEADDecrypt(key Key, nonce [NonceLen]byte, ciphertext, aad []byte) ([]byte,
 	return c.Open(nil, nonce[:], ciphertext, aad)
 }
 
-// BuildNonce 构造每包 nonce:`base[12]` 的低 4 字节(bytes 8..12)XOR `ctr` 大端(03 §4.2)。
+// BuildNonce 构造每包 nonce:`base[12]` 的低 4 字节(bytes 8..12)XOR `ctr` 大端。
 //
 // nonce = base ⊕ {0,0,0,0,0,0,0,0, ctr_be[0], ctr_be[1], ctr_be[2], ctr_be[3]}
 // —— base 高 8B 不变,低 4B 随 ctr 单调变化。每方向 base 独立(DeriveKey 派),ctr 单调递增

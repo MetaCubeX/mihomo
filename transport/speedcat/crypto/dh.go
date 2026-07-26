@@ -1,11 +1,11 @@
-// dh.go —— X25519 临时 DH 密钥对(伪装路 eph DH,02 §2 / 03 §3)+ 握手随机 nonce。
+// dh.go —— X25519 临时 DH 密钥对(伪装路 eph DH)+ 握手随机 nonce。
 // 对照 Rust crypto.rs:55-94(DhKeypair)+ :143-146(random_hs_nonce)。
 //
 // **仅伪装路用**(exporter=None 时跑 eph DH 换握手密钥;快路 exporter=Some 不经此)。
-// speedcat 用 X25519(RFC 7748),与 WireGuard / Noise / TLS 1.3 同族(03 §1「不发明新密码学」)。
-// 每会话新生成(EphemeralSecret 语义)→ 前向保密:PSK 泄露也解不开历史会话(eph 是短期的,03 §3)。
+// speedcat 用 X25519(RFC 7748),与 WireGuard / Noise / TLS 1.3 同族(「不发明新密码学」)。
+// 每会话新生成(EphemeralSecret 语义)→ 前向保密:PSK 泄露也解不开历史会话(eph 是短期的)。
 //
-// **安全铁律(03 §3 line 91):DH 输出全零必须拒。** 这里有两道互补防线(对照 Rust crypto.rs:75-89):
+// **安全铁律(line 91):DH 输出全零必须拒。** 这里有两道互补防线(对照 Rust crypto.rs:75-89):
 //  1. `curve25519.X25519` v0.54.0 内部委托 crypto/ecdh(curve25519.go:77-93),**计算期**即拒低序点
 //     —— 库自述(curve25519.go:25-26):「32B 输入下,error 当且仅当输出会全零」。与 x25519_dalek
 //     不同(dalek 先算出可能的全零再 `was_contributory()` 查),殊途同归都拦非贡献性 DH。本端把库错
@@ -14,7 +14,7 @@
 //  2. 防御性 **二次全零校验**(crypto.rs:80-86 同款):即便库放过,显式查 32B 全零 → ErrDhNonContributory。
 //
 // 漏 = 小子群/无效公钥攻击口子(恶意公钥使 DH 输出可预测 → 攻击者算出会话密钥)。对照 WireGuard
-// `noise-helpers.go:100`(精读 docs/12 §WireGuard)。
+// `noise-helpers.go:100`(精读)。
 
 package crypto
 
@@ -61,17 +61,17 @@ func (kp DhKeypair) PublicBytes() [KeyLen]byte { return kp.public }
 //
 //	shared = X25519(self.secret, peer)
 //
-// 返回前**校验全零**(03 §3 line 91):全零 → ErrDhNonContributory(拒小子群攻击)。
+// 返回前**校验全零**(line 91):全零 → ErrDhNonContributory(拒小子群攻击)。
 // 消费 kp.secret(值拷贝进来,原 kp 仍可用——Go 值语义,无 move 语义,与 Rust self-by-value 不同)。
 func (kp DhKeypair) DH(peer [KeyLen]byte) (Key, error) {
 	shared, err := curve25519.X25519(kp.secret[:], peer[:])
 	if err != nil {
-		// 库计算期拒低序点(low order point)→ 规约为 ErrDhNonContributory(03 §3 line 91;对齐 Rust
+		// 库计算期拒低序点(low order point)→ 规约为 ErrDhNonContributory(line 91;对齐 Rust
 		// Error::DhNonContributory:was_contributory=false 或全零都归此)。库自述(curve25519.go:25-26):
 		// 32B 输入下,error 当且仅当输出会全零 —— 即低序/无效公钥。实证见 TestDH_LowOrderPointsRejected。
 		return Key{}, ErrDhNonContributory
 	}
-	// 防御性二次全零校验(防小子群/无效公钥攻击,03 §3 line 91):即便库放过,显式查 32B 全零。
+	// 防御性二次全零校验(防小子群/无效公钥攻击, line 91):即便库放过,显式查 32B 全零。
 	// 对照 Rust was_contributory() + 二次全零(crypto.rs:80-86);belt-and-suspenders。
 	var allZero bool
 	{
@@ -90,7 +90,7 @@ func (kp DhKeypair) DH(peer [KeyLen]byte) (Key, error) {
 }
 
 // RandomHSNonce 生成 16B 握手随机 nonce(对照 Rust random_hs_nonce,crypto.rs:143-146)。
-// 进 ClientHello nonce_c / ServerHello nonce_s(02 §2);每会话新生 → 绑定本次握手(防重放/域分离)。
+// 进 ClientHello nonce_c / ServerHello nonce_s;每会话新生 → 绑定本次握手(防重放/域分离)。
 //
 // **返 error 不 panic**(review follow-up,同 NewDhKeypair 理由:库会被宿主 import,不替宿主 abort)。
 func RandomHSNonce() ([HsNonceLen]byte, error) {

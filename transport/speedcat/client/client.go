@@ -7,7 +7,7 @@
 // StreamConn 持 conn + tx + rx;[StreamConn.Relay] 把本地应用流(如 SOCKS5 客户端 TCP)与 speedcat conn
 // 双向桥接(委托 [Relay])。方向:tx=C2S(发向 server)/ rx=S2C(收自 server),client 侧。
 //
-// **panic-free / 错误走 error**(被 mihomo import 的库,§6.1 对 Go 的等价约束)。
+// **panic-free / 错误走 error**(被 mihomo import 的库,对 Go 的等价约束)。
 
 package client
 

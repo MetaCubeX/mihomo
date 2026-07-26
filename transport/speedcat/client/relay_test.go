@@ -5,7 +5,7 @@
 // EOF 级联(TcpClose)→ Relay 返 nil 良性。
 //
 // 密钥方向分离(对照真实 C2S/S2C 双向独立 key):txA/rxB 共享 k1(C2S),txB/rxA 共享 k2(S2C)→ 无 nonce 复用。
-// §5.4:密钥确定性填充(非生产),测试只 bytes.Equal / errors.Is,不打 raw。
+// 密钥确定性填充(非生产),测试只 bytes.Equal / errors.Is,不打 raw。
 
 package client
 

@@ -2,7 +2,7 @@ package wire
 
 import "testing"
 
-// 对照 docs/02 §1.2 能力位规则:位旗位与 + FEC_RATIO 等值匹配 + reserved 须 0。
+// 对照 能力位规则:位旗位与 + FEC_RATIO 等值匹配 + reserved 须 0。
 func TestCapsBits(t *testing.T) {
 	var c Caps
 	c |= CapHasDatagram | CapNoInnerAEAD
@@ -23,7 +23,7 @@ func TestCapsFECRatio(t *testing.T) {
 	if c.FECRatio() != 3 {
 		t.Fatalf("got %d want 3", c.FECRatio())
 	}
-	// FEC bit 5-7 = 0b011<<5 = 0x60(02 §1.2)。
+	// FEC bit 5-7 = 0b011<<5 = 0x60。
 	if c&0x00E0 != 0x60 {
 		t.Fatalf("fec bits = %02x, want 0x60", c&0x00E0)
 	}
@@ -33,7 +33,7 @@ func TestCapsFECRatio(t *testing.T) {
 	}
 }
 
-// Negotiate 位旗取交集(02 §1.2):交集 = 双方都置的位。
+// Negotiate 位旗取交集:交集 = 双方都置的位。
 func TestNegotiateBitwiseAND(t *testing.T) {
 	c := CapHasDatagram | CapUDPTunnelOK | CapMUX
 	s := CapHasDatagram | CapUDPTunnelOK | CapBrutalCC
@@ -44,7 +44,7 @@ func TestNegotiateBitwiseAND(t *testing.T) {
 	}
 }
 
-// Negotiate FEC_RATIO 等值匹配(02 §1.2:双方相同非零值才生效)。
+// Negotiate FEC_RATIO 等值匹配(双方相同非零值才生效)。
 func TestNegotiateFECEqualMatch(t *testing.T) {
 	var c, s Caps
 	c.SetFECRatio(2)
@@ -89,7 +89,7 @@ func TestNegotiateFECResidueCleared(t *testing.T) {
 	}
 }
 
-// Negotiate reserved 位强制清零(02 §1.2:reserved 须 0;防对端乱置 bit 9-15)。
+// Negotiate reserved 位强制清零(reserved 须 0;防对端乱置 bit 9-15)。
 func TestNegotiateReservedCleared(t *testing.T) {
 	bad := Caps(0xFE00) // bit 9-15
 	if n := Negotiate(bad, bad); n&0xFE00 != 0 {
@@ -97,7 +97,7 @@ func TestNegotiateReservedCleared(t *testing.T) {
 	}
 }
 
-// Valid 报告 reserved 位是否全 0(02 §1.2)。
+// Valid 报告 reserved 位是否全 0。
 func TestCapsValid(t *testing.T) {
 	if !Caps(0).Valid() {
 		t.Fatal("zero caps should be valid")

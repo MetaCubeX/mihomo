@@ -16,7 +16,7 @@ import (
 
 // testCert 生成临时自签证书(127.0.0.1 + localhost,ECDSA P256,1h 有效),返回 DER + 私钥原语。
 // 各测试自构 ctls.Certificate / mtls.Certificate(字段兼容:Certificate [][]byte + PrivateKey)。
-// 仅 test 用;不进生产(测试密钥永不复用到生产,§6.3)。
+// 仅 test 用;不进生产(测试密钥永不复用到生产)。
 func testCert(t *testing.T) (der []byte, key *ecdsa.PrivateKey) {
 	t.Helper()
 	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

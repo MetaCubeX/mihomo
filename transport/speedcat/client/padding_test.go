@@ -159,7 +159,7 @@ func TestPaddingFrameDiscardedFast(t *testing.T) {
 	frames = append(frames, dataOut...)
 
 	var out bytes.Buffer
-	// 帧后无 Tcpclose → 读完 frames 首字节 EOF → pumpDecodeFast 批边界干净 EOF 返 io.EOF。
+	// 帧后无 TcpClose → 读完 frames 首字节 EOF → pumpDecodeFast 批边界干净 EOF 返 io.EOF。
 	if err := pumpDecode(&rx, bytes.NewReader(frames), &out); !errors.Is(err, io.EOF) {
 		t.Fatalf("pumpDecode: got %v, want io.EOF(PADDING 应被消费不报错)", err)
 	}

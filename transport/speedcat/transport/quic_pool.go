@@ -2,7 +2,7 @@
 // QuicConnHandle / QuicPool / dial_or_reuse_quic —— proto-quic/src/transport.rs:136-188,619-690
 // + speedcat-client/src/lib.rs:161-269)。
 //
-// # 为什么(兑现 ADR-008 客户端侧前提)
+// # 为什么(兑现客户端侧前提)
 //
 // N 条 SOCKS5 CONNECT 复用 **1 条 QUIC conn**(各开 1 bidi stream):握手只付 1 次(省 N-1 RTT)、
 // 单拥塞控制器、跨核派发 N 流(门②拓扑前提)。对照 Rust:`Client` 持 `Arc<QuicPool>`(Clone 共享)
@@ -30,7 +30,7 @@
 // `NO_INNER_AEAD` **不用**此密钥(只写 AAD 头 + 明文,机密性靠 QUIC conn 级 AEAD)→ 无 nonce-reuse。
 // guardrail:未来若给快路加内层 AEAD,须按 quic stream-id diversify exporter context。
 //
-// # 冷热路径(ADR-005)
+// # 冷热路径
 //
 // dial/握手 = 冷路径(连接生命周期事件);池锁只在冷路径建连时持有,relay/AEAD/帧编解码热路径不触此锁。
 //
@@ -175,7 +175,7 @@ func dialQUICConn(ctx context.Context, cfg Config) (*quicConnHandle, error) {
 //
 // # 为何需要 conn 级句柄(非 QuicPool.Dial 出的 stream)
 //
-// UDP N-ASSOC/conn(L4 收尾 A,ADR-011)要 **1 QUIC conn 承 N ASSOC**:各 ASSOC 各开 1 bidi stream
+// UDP N-ASSOC/conn(L4 收尾 A)要 **1 QUIC conn 承 N ASSOC**:各 ASSOC 各开 1 bidi stream
 // (握手 + UdpAssociate 首帧),报文全走 conn 级 datagram(conn 级**单** reader 按 assoc_id demux)。
 // QuicPool.Dial 每次**开一条 stream**(stream 级),不暴露 conn 级 datagram 入口 → 不敷 UDP 池用。
 // 本句柄暴露:OpenStream(per-ASSOC 握手流)+ DatagramConn 面(conn 级 reader/sender)+ exporter
@@ -245,7 +245,7 @@ func (g *QuicHandle) SupportsDatagrams() bool {
 }
 
 // SendDatagram 发一个不可靠 datagram(父 conn 直委派;对照 quicConn.SendDatagram)。**线程安全**
-// (quic-go Conn.SendDatagram 可并发调)→ N ASSOC 并发 send 零协调(ADR-009)。
+// (quic-go Conn.SendDatagram 可并发调)→ N ASSOC 并发 send 零协调。
 func (g *QuicHandle) SendDatagram(p []byte) error {
 	return g.h.conn.SendDatagram(p)
 }
@@ -256,7 +256,7 @@ func (g *QuicHandle) ReceiveDatagram(ctx context.Context) ([]byte, error) {
 	return g.h.conn.ReceiveDatagram(ctx)
 }
 
-// MaxDatagramPayloadSize 单 datagram 明文上限(含 §6.1 header;对照 quicConn.MaxDatagramPayloadSize)。
+// MaxDatagramPayloadSize 单 datagram 明文上限(含 header;对照 quicConn.MaxDatagramPayloadSize)。
 // quic-go 无直接方法 → 返 fallback 常量(已含 QUIC framing overhead);真实值仅 SendDatagram 失败时暴露。
 func (g *QuicHandle) MaxDatagramPayloadSize() int {
 	return quicDatagramBudget

@@ -6,11 +6,11 @@
 //
 // # ATYP 映射(SOCKS5 ↔ speedcat,**易踩坑 #2**:两协议 atype 取值不同!)
 //
-//	SOCKS5 IPv4   0x01 → speedcat IPv4   0x01(相同)
+//	SOCKS5 IPv4 0x01 → speedcat IPv4 0x01(相同)
 //	SOCKS5 domain 0x03 → speedcat domain 0x02(不同!VLESS/v2ray 风格)
-//	SOCKS5 IPv6   0x04 → speedcat IPv6   0x03(不同!)
+//	SOCKS5 IPv6 0x04 → speedcat IPv6 0x03(不同!)
 //
-// 对照 Rust speedcat-client/src/socks5.rs(同款映射;speedcat Addr 域名=0x02 是 VLESS 习惯,docs/02 §5)。
+// 对照 Rust speedcat-client/src/socks5.rs(同款映射;speedcat Addr 域名=0x02 是 VLESS 习惯)。
 // UDP_ASSOCIATE 的 SOCKS5 UDP 头编解码见 [parseSocks5UDP] / [encodeSocks5UDP](RFC 1928 §7,FRAG 恒 0)。
 //
 // **panic-free**:解析/IO 错 → reply 失败码 + 返 error(被 mihomo import 的库不 panic)。
@@ -208,7 +208,7 @@ func socks5Reply(socks io.Writer, rep byte, bnd *wire.Addr) error {
 // (RFC 1928:UDP ASSOCIATE 与 TCP 控制连接生命周期绑定)。对照 Rust handle_socks5_udp。
 //
 // **SOCKS5 UDP 头(RFC 1928 §7):** `[RSV:2][FRAG:1][ATYP:1][DST.ADDR][DST.PORT][DATA]`。
-// 我们**不支持 SOCKS5 层分片**(FRAG 恒 0;收 FRAG≠0 丢 —— 分片在 QUIC datagram §6.1 层做,非 SOCKS5 层)。
+// 我们**不支持 SOCKS5 层分片**(FRAG 恒 0;收 FRAG≠0 丢 —— 分片在 QUIC datagram 层做,非 SOCKS5 层)。
 func handleUDP(ctx context.Context, socks net.Conn, c *Client, dst wire.Addr) error {
 	// bind 本地 UDP socket(SOCKS5 客户端把 UDP 报文发到此);BND = 此 socket 地址(RFC 1928 §6)。
 	udpSock, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
@@ -228,7 +228,7 @@ func handleUDP(ctx context.Context, socks net.Conn, c *Client, dst wire.Addr) er
 		return fmt.Errorf("%w: reply BND: %v", ErrSOCKS5, err)
 	}
 
-	// 经 speedcat 建 UDP 关联(dst 进 UdpAssociate 帧;客户端通常给 0.0.0.0:0,服务端按每报文 §6.1
+	// 经 speedcat 建 UDP 关联(dst 进 UdpAssociate 帧;客户端通常给 0.0.0.0:0,服务端按每报文
 	// header 自带目标路由,此 dst 仅元信息)。dial 失败 → 关连接(reply 已发成功,不重发失败码;对照 Rust)。
 	tunnel, err := c.DialUDP(ctx, dst)
 	if err != nil {

@@ -1,13 +1,13 @@
-// disguise.go —— 伪装路握手(eph DH ClientHello/ServerHello,+1 RTT,02 §2 / 03 §3)。
+// disguise.go —— 伪装路握手(eph DH ClientHello/ServerHello,+1 RTT)。
 // 对照 Rust handshake.rs:73-190(disguise_client + disguise_server),帧字节布局逐位一致(全大端)。
 //
 // 帧布局:
 //
 //	ClientHello (56B): ver_lo:u8 ver_hi:u8 caps_c:u16 eph_c:32 nonce_c:16 max_bw_c:u32
-//	ServerHello (55B): ver:u8     caps_s:u16 eph_s:32 nonce_s:16 max_bw_s:u32
+//	ServerHello (55B): ver:u8 caps_s:u16 eph_s:32 nonce_s:16 max_bw_s:u32
 //
 // 密钥流:DH shared → blake3_mac(psk, hs_input) → handshake_secret → DeriveSessionKeys。
-// NO_INNER_AEAD force **清位**(伪装路自带双层 AEAD,03 §3)。**握手恒完成**(无显式 auth)。
+// NO_INNER_AEAD force **清位**(伪装路自带双层 AEAD)。**握手恒完成**(无显式 auth)。
 
 package handshake
 
@@ -63,15 +63,15 @@ func disguiseClient(conn io.ReadWriter, psk crypto.Psk, params Params) (*Session
 	copy(nonceS[:], sh[35:51])
 	maxBwS := binary.BigEndian.Uint32(sh[51:55])
 
-	// DH + 密钥派生(03 §3)。
+	// DH + 密钥派生。
 	shared, err := kp.DH(ephS)
 	if err != nil {
-		return nil, err // crypto.ErrDhNonContributory(全零/低序点拒,03 §3 line 91)
+		return nil, err // crypto.ErrDhNonContributory(全零/低序点拒, line 91)
 	}
 	capsNeg := wire.Negotiate(params.Caps, capsS)
 	input := crypto.DisguiseHSInput(ver, ver, shared, nonceC, nonceS, uint16(capsNeg), params.MaxBandwidth, maxBwS)
 	hsSecret := crypto.Blake3Mac(crypto.Key(psk), input)
-	keys := crypto.DeriveSessionKeys(crypto.Key(hsSecret))
+	keys := crypto.DeriveSessionKeys(crypto.Key(hsSecret), crypto.WholeConnection)
 
 	// 伪装路 = 双层 AEAD,force 清 NO_INNER_AEAD 位;client max_bw 用自身声明(对照 Rust handshake.rs:124-130)。
 	caps := capsNeg
@@ -121,7 +121,7 @@ func DisguiseServer(conn io.ReadWriter, psk crypto.Psk, params Params) (*Session
 	}
 	input := crypto.DisguiseHSInput(verLo, verHi, shared, nonceC, nonceS, uint16(capsNeg), maxBwC, params.MaxBandwidth)
 	hsSecret := crypto.Blake3Mac(crypto.Key(psk), input)
-	keys := crypto.DeriveSessionKeys(crypto.Key(hsSecret))
+	keys := crypto.DeriveSessionKeys(crypto.Key(hsSecret), crypto.WholeConnection)
 
 	// [2] ServerHello(55B):声明本端 caps(params.Caps,非协商值)+ eph_s + nonce_s + max_bw_s。
 	var sh [shLen]byte

@@ -1,4 +1,4 @@
-// datagram_header_test.go —— §6.1 DatagramHeader + Fragment + ReassemblyBuffer self-test。
+// datagram_header_test.go —— DatagramHeader + Fragment + ReassemblyBuffer self-test。
 // 镜像 Rust udp.rs:517-748 测试,逐项对应(四校验 / 乱序 / 幂等 / GC / 路径决策)。
 
 package client

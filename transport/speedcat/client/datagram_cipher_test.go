@@ -1,5 +1,5 @@
 // datagram_cipher_test.go —— DatagramCipher self-test(seal/open round-trip + 随机 nonce + 篡改 + 错 key + 过短拒)。
-// 镜像 Rust datagram.rs:99-148 测试,逐项对应。§5.4:只 bytes.Equal / errors.Is,不打 raw。
+// 镜像 Rust datagram.rs:99-148 测试,逐项对应。只 bytes.Equal / errors.Is,不打 raw。
 
 package client
 
@@ -11,7 +11,7 @@ import (
 	"github.com/metacubex/mihomo/transport/speedcat/crypto"
 )
 
-// dgKeyA/dgKeyB 确定性 32B key(self-test;**非生产**,§6.3)。
+// dgKeyA/dgKeyB 确定性 32B key(self-test;**非生产**)。
 func dgKeyA() crypto.Key {
 	var k crypto.Key
 	for i := range k {

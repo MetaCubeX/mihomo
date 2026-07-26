@@ -11,9 +11,9 @@
 //   - **QUIC 臂**(pooled datagram,L4 收尾 A):`c.udpPool.get()` 取/建 **1 共享 QUIC conn**(N ASSOC 复用,
 //     省 N-1 握手 RTT)→ allocAssoc 分配单调 assoc_id → `handle.OpenStream` 开握手流 → handshake →
 //     发 `UdpAssociate(assocID, target)` → `runPooledDatagramRelay`(共享 conn 级 handle + dc,conn 级单 reader
-//     按 assoc_id demux;对照 Rust 服务端 ConnDgRouter)。**ADR-009 随机 nonce AEAD,无 ctr/无重放,dc 共享零协调**。
+//     按 assoc_id demux;对照 Rust 服务端 ConnDgRouter)。**随机 nonce AEAD,无 ctr/无重放,dc 共享零协调**。
 //   - **流隧道臂**(TCP / raw-tcp fallback):fresh `transport.Dial` → `UdpData`(0x05)帧复用 Session ctr AEAD
-//     (02 §3,与 TcpData 同层);TCP 可靠按序 + u16 len cap → 单帧一报文不分片。
+//     (与 TcpData 同层);TCP 可靠按序 + u16 len cap → 单帧一报文不分片。
 //
 // # UdpTunnel 并发(channel 解耦,非 Rust select!)
 //
@@ -24,11 +24,11 @@
 // **关闭语义:** UdpTunnel.Close 关 `done` → task 各 select 命中 done 退 → defer 关 conn + close(reply)。
 // RecvFrom 见 reply 关闭 → 返 ErrTunnelClosed(EOF 语义);SendTo 见 done → 返 ErrTunnelClosed。
 //
-// # 热路径(ADR-005)
+// # 热路径
 //
-// TCP relay pump 是 ADR-005 零成本约束区;UDP reassembly / datagram seal 属 per-UDP-packet 段(UDP 天然
+// TCP relay pump 是 零成本约束区;UDP reassembly / datagram seal 属 per-UDP-packet 段(UDP 天然
 // 较 TCP 低吞吐,reassembly 单 goroutine 持有,无锁)。MVP 先正确(per-packet alloc),零拷贝留收尾。
-// **AEAD/decode 内禁日志**(§5.3)。**panic-free**(被 mihomo import 的库:错返 error)。
+// **AEAD/decode 内禁日志**。**panic-free**(被 mihomo import 的库:错返 error)。
 //
 // **assoc_id:** QUIC 臂经 `udpConnState.allocAssoc` 单调分配(起点 1;L4 收尾 A,N ASSOC/conn);流隧道臂
 // 固定 1(单 ASSOC/fresh conn,无 demux 需要)。
@@ -110,7 +110,7 @@ func (t *UdpTunnel) Close() error {
 //
 // 两臂对外统一 UdpTunnel(调用方零分支)。conn/stream 所有权转 relay(续命 QUIC conn / TCP 流);relay 退则关。
 //
-// target 进 UdpAssociate 帧(服务端 datagram 路不据此路由 —— 每报文 §6.1 header 自带目标;仅元信息)。
+// target 进 UdpAssociate 帧(服务端 datagram 路不据此路由 —— 每报文 header 自带目标;仅元信息)。
 func (c *Client) DialUDP(ctx context.Context, target wire.Addr) (*UdpTunnel, error) {
 	cmd := make(chan UdpPacket, udpCmdBuf)
 	reply := make(chan UdpPacket, udpCmdBuf)
@@ -186,7 +186,7 @@ func (c *Client) DialUDP(ctx context.Context, target wire.Addr) (*UdpTunnel, err
 	return tun, nil
 }
 
-// runStreamTunnel 流隧道臂 relay(TCP fallback)。UdpData(0x05)帧复用 Session ctr AEAD(02 §3),
+// runStreamTunnel 流隧道臂 relay(TCP fallback)。UdpData(0x05)帧复用 Session ctr AEAD(),
 // 单帧一报文(TCP 可靠按序 + u16 len cap,不分片)。对照 Rust run_udp_stream_tunnel。
 //
 // writer goroutine(cmd → EncodeUDPData → EncryptFrameInto(UdpData)→ Write)+ reader goroutine

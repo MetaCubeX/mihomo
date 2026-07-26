@@ -2,7 +2,7 @@
 // 对照 Rust crypto.rs:43-53。**两模式 flag 不同**,Go 端 metacubex/blake3 经核验两模式齐备
 // (`New(size,key)` len(key)==32 → FlagKeyedHash;`DeriveKey(...)` → FlagDeriveKeyContext→FlagDeriveKeyMaterial;见包注释)。
 //
-// **依赖对齐(D3,docs/19 §7-①):** 用 `github.com/metacubex/blake3`(mihomo 自身 transport/vless/encryption
+// **依赖对齐(D3):** 用 `github.com/metacubex/blake3`(mihomo 自身 transport/vless/encryption
 // 同款)而非 zeebo/blake3 —— adapter 与 mihomo 依赖栈对齐,vendor 进 fork 时零新增外部依赖。metacubex/blake3
 // v0.1.0 的 API **形不同而语义同**:无 zeebo 的 hasher 构造 `NewDeriveKey`/`NewKeyed`,但 `DeriveKey(out,ctx,src)`
 // (过程式两步,flag 与 zeebo 同)与 `New(size,key)`(len(key)==32→FlagKeyedHash)达成字节级等价,KAT 守(8 向量锁)。
@@ -11,7 +11,7 @@ package crypto
 
 import "github.com/metacubex/blake3"
 
-// DeriveKey = `BLAKE3-DeriveKey(context, ikm)` → 32B(03 §3 域分离派生)。
+// DeriveKey = `BLAKE3-DeriveKey(context, ikm)` → 32B(域分离派生)。
 //
 // Rust: `blake3::derive_key(context, ikm)`(KDF 模式,内部 DERIVE_KEY_MATERIAL flag)。
 // Go: `blake3.DeriveKey(out, context, ikm)` —— 先以 DERIVE_KEY_CONTEXT flag 哈希 context 得 context_key,
@@ -26,7 +26,7 @@ func DeriveKey(context string, ikm []byte) Key {
 	return out
 }
 
-// Blake3Mac = `BLAKE3-keyed_hash(key, input)` → 32B(03 §3 handshake_secret / auth_tag MAC)。
+// Blake3Mac = `BLAKE3-keyed_hash(key, input)` → 32B(handshake_secret / auth_tag MAC)。
 //
 // Rust: `blake3::keyed_hash(key, input)`(MAC 模式,KEYED flag,key 恒 32B)。
 // Go: `blake3.New(MacLen, key[:])`(len(key)==32 → 内部置 FlagKeyedHash;等价 zeebo NewKeyed 的 hasher

@@ -110,7 +110,7 @@ var lowOrderPoints = [][KeyLen]byte{
 }
 
 // TestDH_LowOrderPointsRejected:7 个 RFC 7748 / libsodium 低序点 → DH 必返 ErrDhNonContributory
-// (03 §3 line 91 铁律)。升级自旧 TestDH_AllZeroPeerRejected(只测全零 identity)—— 现覆盖全部小子群点,
+// (line 91 铁律)。升级自旧 TestDH_AllZeroPeerRejected(只测全零 identity)—— 现覆盖全部小子群点,
 // 钉死库 v0.54.0 计算期拒低序点行为(对照 x/crypto curve25519_test.go TestLowOrderPoints 同款向量)。
 func TestDH_LowOrderPointsRejected(t *testing.T) {
 	kp, err := NewDhKeypair()

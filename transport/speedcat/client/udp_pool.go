@@ -1,13 +1,13 @@
 // udp_pool.go —— 客户端 UDP 池 + N-ASSOC/conn datagram demux(L4 收尾 A;镜像 Rust 服务端
-// ConnDgRouter —— proto-quic/src/datagram_router.rs;对照 docs/02 §6.1 / ADR-009 / ADR-011)。
+// ConnDgRouter —— proto-quic/src/datagram_router.rs。
 //
 // # 解决什么(兑现 L4 收尾 A 客户端侧)
 //
 // Stage 2 单 ASSOC/QUIC-conn:`DialUDP` 每 ASSOC 拨一条 fresh QUIC conn(含独立 reader)。N ASSOC = N conn +
-// N 握手(N RTT),与 ADR-008(1-conn-N-stream,省 N-1 RTT)背道。本池让 **1 QUIC conn 承 N ASSOC**:
+// N 握手(N RTT),与 (1-conn-N-stream,省 N-1 RTT)背道。本池让 **1 QUIC conn 承 N ASSOC**:
 //   - 池持 1 `*transport.QuicHandle`(conn 级句柄:OpenStream 开 N 握手流 + conn 级 datagram reader/sender);
 //   - conn 级**单** reader goroutine(`ReceiveDatagram` 单 owner/conn 语义,对照 Rust read_datagram 单 future/conn)
-//     把收到的 datagram **按 §6.1 header.AssocID 分发**给各自 ASSOC 的 inbound channel;
+//     把收到的 datagram **按 header.AssocID 分发**给各自 ASSOC 的 inbound channel;
 //   - 各 ASSOC 经 [`udpConnState.register`] 领独占 inbound channel,自跑 [`ReassemblyBuffer`] 重组 + sender 循环。
 //
 // # 与 TCP-CONNECT 池(QuicPool)的关系:物理隔离
@@ -24,7 +24,7 @@
 // 与 register 的(drain pending + insert route)做成相对彼此原子的临界区 → check-then-push 与 insert-then-drain
 // 不交错,**不丢包**。
 //
-// # ADR-009 前置不变量(并发 send 零协调)
+// # 前置不变量(并发 send 零协调)
 //
 // `DatagramCipher` 无 ctr / 无重放 / immutable → N ASSOC 共享一份 dc,并发 Seal 零锁零协调;quic-go
 // `Conn.SendDatagram` 内部 thread-safe channel → N ASSOC 并发 send 经共享 `handle.SendDatagram` 无锁。
@@ -35,10 +35,10 @@
 // reassembly goroutine 经 `select` 命中 `<-closed` 退。外部 Close(`UdpTunnel.done`)关单条 ASSOC;conn 死亡关
 // 全部。reassembly goroutine 拥有 `close(reply)`(单 sender → 无 send-on-closed),对照 `runStreamTunnel`。
 //
-// # 冷热路径(ADR-005)
+// # 冷热路径
 //
 // 拨 conn / 握手 / register / 分派 = 冷路径(连接生命周期事件);reader 的 dc.Open 是 datagram 路固有成本
-// (非本池引入)。锁只在分派/register 瞬态临界区持有,reassembly/sender 各持独占状态无锁。**禁每 datagram 日志**(§5.3)。
+// (非本池引入)。锁只在分派/register 瞬态临界区持有,reassembly/sender 各持独占状态无锁。**禁每 datagram 日志**。
 //
 // dev 限制:pending cap 8 / inbound chan 64 是保守默认(UDP 暴发容忍);assoc_id 单调分配器(u16,起点 1)。
 
@@ -56,7 +56,7 @@ import (
 )
 
 // pendingCap 未注册 assoc_id 的 datagram 缓冲上限(对照 Rust ConnDgRouter::PENDING_CAP=8)。
-// 防无界增长被未注册/恶意流量打爆;满丢最旧(UDP 允许丢,ADR-006)。
+// 防无界增长被未注册/恶意流量打爆;满丢最旧(UDP 允许丢)。
 const pendingCap = 8
 
 // assocChan per-ASSOC inbound channel 容量(reader → 该 ASSOC reassembly;对照 Rust ASSOC_CHAN=64)。
@@ -67,7 +67,7 @@ var errDupAssoc = errors.New("client/udp: assoc_id 重复注册")
 
 // inboundFrag reader 投给某 ASSOC 的一笔分片(已解密 + 解码 header;reassembly goroutine 据此 Insert)。
 type inboundFrag struct {
-	h    DatagramHeader // §6.1 header(含 AssocID / frag 元信息;首片带 Addr)
+	h    DatagramHeader // header(含 AssocID / frag 元信息;首片带 Addr)
 	frag []byte         // 该片 payload
 	now  time.Time      // 到达时间(GC 节流 + Insert created 用)
 }
@@ -76,8 +76,8 @@ type inboundFrag struct {
 // conn 级 reader goroutine。对照 Rust ConnDgRouter(conn 级单 reader + routes + pending)。
 type udpConnState struct {
 	handle   *transport.QuicHandle // conn 级句柄(OpenStream 开握手流 + conn 级 datagram reader/sender)
-	dc       *DatagramCipher       // 共享 AEAD(immutable;N ASSOC 并发 Seal 零协调,ADR-009)
-	maxPlain int                   // 单 datagram 明文上限(含 §6.1 header;扣 AEAD nonce/tag)
+	dc       *DatagramCipher       // 共享 AEAD(immutable;N ASSOC 并发 Seal 零协调)
+	maxPlain int                   // 单 datagram 明文上限(含 header;扣 AEAD nonce/tag)
 
 	// routes + pending 在同一把锁下 → reader 的 dispatch 与 relay 的 register 相对彼此原子(解 race)。
 	mu        sync.Mutex
@@ -222,7 +222,7 @@ func (p *udpPool) dialStateReal(ctx context.Context) (*udpConnState, error) {
 	if err != nil {
 		return nil, err
 	}
-	// DatagramCipher 从 conn 级 exporter 派生(label=UDPExporterLabel,与 stream 域分离 → 独立 32B key,ADR-009)。
+	// DatagramCipher 从 conn 级 exporter 派生(label=UDPExporterLabel,与 stream 域分离 → 独立 32B key)。
 	// 与 server ConnDgRouter 同 QUIC TLS session → 同 exporter → 同 key(对称)。
 	key, err := handle.ExporterWithLabel(crypto.UDPExporterLabel)
 	if err != nil {
@@ -235,7 +235,7 @@ func (p *udpPool) dialStateReal(ctx context.Context) (*udpConnState, error) {
 		return nil, errors.New("client/udp: QUIC conn 不支持 datagram(两端须 EnableDatagrams)")
 	}
 	dc := NewDatagramCipherFromKey(key)
-	// maxPlain = 单 datagram 明文上限(含 §6.1 header;扣 AEAD nonce 12 + tag 16;quicDatagramBudget 已含 QUIC framing)。
+	// maxPlain = 单 datagram 明文上限(含 header;扣 AEAD nonce 12 + tag 16;quicDatagramBudget 已含 QUIC framing)。
 	maxPlain := handle.MaxDatagramPayloadSize() - crypto.NonceLen - crypto.TagLen
 	s := &udpConnState{
 		handle:    handle,
@@ -283,7 +283,7 @@ func (p *udpPool) get(ctx context.Context) (*udpConnState, error) {
 func (p *udpPool) Dials() uint64 { return p.dials.Load() }
 
 // runPooledDatagramRelay pooled datagram 臂 relay(L4 收尾 A;QUIC)。镜像 runDatagramTunnel 但:
-//   - **共享** conn 级 handle(sender 经 handle.SendDatagram 并发安全)+ 共享 dc(N ASSOC 零协调,ADR-009);
+//   - **共享** conn 级 handle(sender 经 handle.SendDatagram 并发安全)+ 共享 dc(N ASSOC 零协调);
 //   - inbound 分片来自 conn 级 reader(按 AssocID 分发到本 ASSOC 的 inbound channel),非自起 reader;
 //   - 各 ASSOC 自跑 ReassemblyBuffer(单 owner无锁,对照 runDatagramTunnel 的 reader goroutine)。
 //
@@ -338,7 +338,7 @@ func runPooledDatagramRelay(
 					if serr != nil {
 						return // AEAD 错 = fatal → 关联结束。
 					}
-					// 共享 handle.SendDatagram(quic-go thread-safe → N ASSOC 并发 send 零锁,ADR-009)。
+					// 共享 handle.SendDatagram(quic-go thread-safe → N ASSOC 并发 send 零锁)。
 					if err := handle.SendDatagram(sealed); err != nil {
 						return // conn 关 / DatagramTooLarge → 关联结束(conn 死 reader 也会 markClosed)。
 					}

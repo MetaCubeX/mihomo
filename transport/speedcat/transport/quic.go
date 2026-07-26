@@ -65,7 +65,7 @@ func (q *quicConn) Exporter() ([crypto.KeyLen]byte, error) {
 }
 
 // ExporterWithLabel 按指定 label 取 QUIC 父 conn 的 TLS exporter(L4 新增;datagram 路用
-// crypto.UDPExporterLabel,与 stream crypto.ExporterLabel 域分离 → 独立密钥,ADR-009)。
+// crypto.UDPExporterLabel,与 stream crypto.ExporterLabel 域分离 → 独立密钥)。
 // **从父 conn 取**(stream 无 ConnectionState),对照 Rust QuicConn::export_keying_material。
 func (q *quicConn) ExporterWithLabel(label string) ([crypto.KeyLen]byte, error) {
 	var out [crypto.KeyLen]byte
@@ -80,7 +80,7 @@ func (q *quicConn) ExporterWithLabel(label string) ([crypto.KeyLen]byte, error) 
 
 // quicDatagramBudget 单 datagram 明文上限 fallback(L4;对照 Rust MVP_MAX_DATAGRAM_SIZE=1200)。
 // quic-go 不暴露 max-size 方法(仅 SendDatagram 的 DatagramTooLargeError 携真实值)→ MVP 用此常量。
-// 已含 QUIC framing overhead(gotcha #2);调用方扣 AEAD nonce/tag 得 §6.1 header+frag 预算。
+// 已含 QUIC framing overhead(gotcha #2);调用方扣 AEAD nonce/tag 得 header+frag 预算。
 // 探真实上限留收尾(SendDatagram 收 DatagramTooLargeError 反推)。
 const quicDatagramBudget = 1200
 
@@ -103,7 +103,7 @@ func (q *quicConn) ReceiveDatagram(ctx context.Context) ([]byte, error) {
 	return q.conn.ReceiveDatagram(ctx)
 }
 
-// MaxDatagramPayloadSize 单 datagram 明文上限(含 §6.1 header;已含 QUIC framing overhead)。
+// MaxDatagramPayloadSize 单 datagram 明文上限(含 header;已含 QUIC framing overhead)。
 // quic-go 无直接方法 → 返 fallback 常量;真实值仅在 SendDatagram 失败时暴露(DatagramTooLargeError)。
 func (q *quicConn) MaxDatagramPayloadSize() int {
 	return quicDatagramBudget

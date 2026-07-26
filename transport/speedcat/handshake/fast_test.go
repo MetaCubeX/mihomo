@@ -2,7 +2,7 @@
 // 错 PSK AuthTagMismatch;证 fast_client + auth_tag 链 Go 内自洽)。
 //
 // 快路用喂入的确定 exporter(隔离 handshake 帧+auth_tag+派生;真实 exporter 抽取在 transport/ 测,
-// 真实路径由跨实现 e2e 验)。§5.4:auth_tag/密钥绝不打 raw —— 失败消息不带字节。
+// 真实路径由跨实现 e2e 验)。auth_tag/密钥绝不打 raw —— 失败消息不带字节。
 
 package handshake
 
@@ -44,7 +44,7 @@ func TestFast_CorrectPSK_KeysEqual(t *testing.T) {
 	if !keysEqual(clientSess.Keys, serverSess.Keys) {
 		t.Fatal("两端 Session.Keys 不等(快路 exporter 派生分叉)")
 	}
-	// 快路 force 置 NO_INNER_AEAD(架构不变量,ADR-007)。
+	// 快路 force 置 NO_INNER_AEAD(架构不变量)。
 	if !clientSess.Caps.NoInnerAEAD() || !serverSess.Caps.NoInnerAEAD() {
 		t.Fatal("快路 NoInnerAEAD 应置位")
 	}
