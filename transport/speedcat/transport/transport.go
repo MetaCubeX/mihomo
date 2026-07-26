@@ -24,10 +24,12 @@ import (
 	"github.com/metacubex/mihomo/transport/speedcat/crypto"
 )
 
-// SpeedcatALPN 是 speedcat 协议 ALPN(预留「端到端落地」,Rust config.rs:441 注释)。
-// QUIC 握手 ALPN 命门:Rust server 当前 ALPN 空(quinn 允许);Go quic-go 可能强制 NextProtos 非空 →
-// 跨实现握手失败时两端固定此值兜底(决策 5;docs/17 §6 复议触发①)。
-const SpeedcatALPN = "speedcat/1"
+// SpeedcatALPN 是 speedcat QUIC 的 ALPN(伪装值 = HTTP/3 的 "h3";镜像 Rust proto-core SPEEDCAT_ALPN)。
+// QUIC 强制非空 ALPN(RFC 9001 §8.1 + 跨实现命门):Go quic-go dial Rust 空-ALPN server 报 0x178,两端固定同值即解。
+// 值 = "h3"(ADR-017 / internal/25 M6 硬化):原 "speedcat/1" 在 QUIC Initial 的 ClientHello 明文可见
+// (Initial 用公开 DCID 派生密钥,GFW 可解)= 自曝协议名;改 "h3" 与真实 HTTP/3 流量同名,消除 speedcat
+// 专属 ALPN 指纹。pre-release wire break(部署群体=0;两端随此常量同步更新)。
+const SpeedcatALPN = "h3"
 
 // Kind 选传输(TCP+TLS / QUIC / 裸 TCP 伪装路),对应 Rust TransportAddr::TcpTls / Quic / RawTcp。
 type Kind int
