@@ -194,5 +194,9 @@ func (rx *SessionRx) DecryptFrame(hdr wire.FrameHeader, body []byte, out *[]byte
 	}
 	rx.highest = hdr.Ctr
 	rx.hasHighest = true
+	// 方案 1C:Known → 自身类型 + payload;Skippable(0x80+ 未知)→ 当 Padding 盲丢(pump 复用 Padding 丢弃,零 pump 改)。
+	if wire.Classify(byte(hdr.Type)) == wire.FrameSkippable {
+		return wire.FramePadding, nil, nil
+	}
 	return hdr.Type, payload, nil
 }

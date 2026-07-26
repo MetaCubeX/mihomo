@@ -32,6 +32,27 @@ func FrameTypeFromByte(b byte) (FrameType, bool) {
 	}
 }
 
+// FrameClass 帧类型分类(方案 1C 可扩展性,对照 Rust wire::FrameClass)。
+type FrameClass int
+
+const (
+	FrameKnown     FrameClass = iota // 已知类型
+	FrameSkippable                   // 未知 high-bit 0x80+:AEAD 验后盲丢(前向兼容,未来帧旧 peer 可跳)
+	FrameCritical                    // 未知 0x0B-0x7F:fail-loud
+)
+
+// Classify 分类帧类型字节(对照 Rust frame::classify):已知 → Known;0x80+ 未知 → Skippable(可跳);
+// 0x0B-0x7F 未知 → Critical(拒)。现有帧全 <0x80 → 零行为改;MuxOpen=0x0A 仍 Known(reserved)。
+func Classify(b byte) FrameClass {
+	if _, ok := FrameTypeFromByte(b); ok {
+		return FrameKnown
+	}
+	if b >= 0x80 {
+		return FrameSkippable
+	}
+	return FrameCritical
+}
+
 // ErrorCode —— ERROR 帧(0x09)payload 错误码。
 type ErrorCode byte
 

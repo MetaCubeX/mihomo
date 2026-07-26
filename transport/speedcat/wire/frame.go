@@ -52,12 +52,13 @@ func ParseHeader(b []byte) (FrameHeader, error) {
 	if len(b) < FrameHeaderLen {
 		return FrameHeader{}, ErrFrameTruncated
 	}
-	ft, ok := FrameTypeFromByte(b[0])
-	if !ok {
+	// 方案 1C:已知 / skippable(0x80+)→ 接受(skippable 存原始类型字节,解码侧当 Padding 盲丢);
+	// critical(0x0B-0x7F)未知 → ErrUnknownFrameType(fail-loud,同 Rust)。
+	if Classify(b[0]) == FrameCritical {
 		return FrameHeader{}, ErrUnknownFrameType
 	}
 	return FrameHeader{
-		Type: ft,
+		Type: FrameType(b[0]), // 已知即其类型;skippable 存原始字节(MarshalHeader/BuildAAD 用 byte(Type),AEAD 对上)
 		Len:  binary.BigEndian.Uint16(b[1:3]),
 		Ctr:  binary.BigEndian.Uint32(b[3:7]),
 	}, nil

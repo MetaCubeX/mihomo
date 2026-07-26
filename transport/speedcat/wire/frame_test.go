@@ -34,10 +34,33 @@ func TestFrameHeaderRejectsShortAndBadType(t *testing.T) {
 	if _, err := ParseHeader([]byte{1, 2, 3}); err != ErrFrameTruncated {
 		t.Fatalf("want ErrFrameTruncated, got %v", err)
 	}
-	bad := FrameHeader{Type: FrameTCPData, Len: 0, Ctr: 0}.BuildAAD()
-	bad[0] = 0xff // 未知类型
-	if _, err := ParseHeader(bad[:]); err != ErrUnknownFrameType {
-		t.Fatalf("want ErrUnknownFrameType, got %v", err)
+	// 方案 1C:critical 未知(0x0B-0x7F)→ ErrUnknownFrameType(fail-loud);skippable 未知(0x80+)→ 接受(存原始字节,解码侧盲丢)。
+	crit := FrameHeader{Type: FrameTCPData, Len: 0, Ctr: 0}.BuildAAD()
+	crit[0] = 0x0B // critical 未知
+	if _, err := ParseHeader(crit[:]); err != ErrUnknownFrameType {
+		t.Fatalf("want ErrUnknownFrameType for 0x0B, got %v", err)
+	}
+	skip := FrameHeader{Type: FrameTCPData, Len: 0, Ctr: 0}.BuildAAD()
+	skip[0] = 0x85 // skippable 未知(0x80+)
+	if h, err := ParseHeader(skip[:]); err != nil || byte(h.Type) != 0x85 {
+		t.Fatalf("want skippable 0x85 accepted, got type=%#x err=%v", byte(h.Type), err)
+	}
+}
+
+func TestClassify(t *testing.T) {
+	// 已知 → Known;0x80+ 未知 → Skippable;0x00 / 0x0B-0x7F 未知 → Critical(对照 Rust classify)。
+	cases := []struct {
+		b    byte
+		want FrameClass
+	}{
+		{0x02, FrameKnown}, {0x0A, FrameKnown},
+		{0x80, FrameSkippable}, {0xFF, FrameSkippable},
+		{0x00, FrameCritical}, {0x0B, FrameCritical}, {0x7F, FrameCritical},
+	}
+	for _, c := range cases {
+		if got := Classify(c.b); got != c.want {
+			t.Fatalf("Classify(%#x) = %v, want %v", c.b, got, c.want)
+		}
 	}
 }
 

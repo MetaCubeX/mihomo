@@ -103,6 +103,37 @@ func TestSessionReplay(t *testing.T) {
 	}
 }
 
+func TestSkippableUnknownDiscardedCriticalRejected(t *testing.T) {
+	// 方案 1C:high-bit 未知(0x80+)→ 解码当 Padding 盲丢;低位未知(0x0B-0x7F)→ ParseHeader 拒。双路径(AEAD + 快路)。
+	for _, noInner := range []bool{false, true} {
+		k, n := testKeyNonce(0x44)
+		tx := SessionTx{key: k, nonceBase: n, noInnerAEAD: noInner}
+		rx := SessionRx{key: k, nonceBase: n, noInnerAEAD: noInner}
+		// skippable 0x85(Go FrameType 是 byte,cast 造未知类型)。
+		var enc []byte
+		if _, err := tx.EncryptFrameInto(wire.FrameType(0x85), []byte("future-frame"), &enc); err != nil {
+			t.Fatal(err)
+		}
+		hdr, err := wire.ParseHeader(enc[:wire.FrameHeaderLen])
+		if err != nil {
+			t.Fatalf("noInner=%v: skippable ParseHeader 应接受, got %v", noInner, err)
+		}
+		var out []byte
+		ft, p, err := rx.DecryptFrame(hdr, enc[wire.FrameHeaderLen:], &out)
+		if err != nil || ft != wire.FramePadding || len(p) != 0 {
+			t.Fatalf("noInner=%v: skippable 应当 Padding 盲丢, got ft=%#x len=%d err=%v", noInner, byte(ft), len(p), err)
+		}
+		// critical 0x0B → ParseHeader 拒(fail-loud)。
+		var enc2 []byte
+		if _, err := tx.EncryptFrameInto(wire.FrameType(0x0B), []byte("x"), &enc2); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := wire.ParseHeader(enc2[:wire.FrameHeaderLen]); err != wire.ErrUnknownFrameType {
+			t.Fatalf("noInner=%v: critical 未知应 ErrUnknownFrameType, got %v", noInner, err)
+		}
+	}
+}
+
 // TestSessionCtrExhaustion 证 tx ctr > 0xF000_0000 → ErrCtrExhaustion(防 nonce 空间耗尽)。
 func TestSessionCtrExhaustion(t *testing.T) {
 	k, n := testKeyNonce(0x44)
