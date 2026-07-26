@@ -52,15 +52,15 @@ func nonce12From(b Key) [NonceLen]byte {
 // DisguiseHSInput 构造伪装路握手 MAC 的输入明文(8 字段 = 进 MAC 的全部 transcript 字段)。
 // 顺序严格(SSOT),与 Rust disguise_hs_input(crypto.rs:228-249)逐字节一致:
 //
-//	HS_CTX ‖ ver_lo ‖ ver_hi ‖ shared[32] ‖ nonce_c[16] ‖ nonce_s[16]
+//	HS_CTX ‖ ver_min ‖ ver_max ‖ ver_sel ‖ shared[32] ‖ nonce_c[16] ‖ nonce_s[16]
 //	         ‖ caps_neg:BE ‖ max_bw_c:BE ‖ max_bw_s:BE
 //
-// 返回的 []byte 进 Blake3Mac(psk, input) 得 handshake_secret。ver_lo/ver_hi 平铺:
-// Rust 同款(预留版本区间协商,P1 阶段 lo==hi==PROTOCOL_VERSION)。
-func DisguiseHSInput(verLo, verHi byte, shared Key, nonceC, nonceS [HsNonceLen]byte, capsNeg uint16, maxBwC, maxBwS uint32) []byte {
-	v := make([]byte, 0, len(HSCtx)+2+KeyLen+2*HsNonceLen+2+8)
+// 返回的 []byte 进 Blake3Mac(psk, input) 得 handshake_secret。**方案 1B:ver_min ‖ ver_max(客户端声明范围)
+// + ver_sel(服务端选中 v*)全进 MAC → 改范围/改选择都致首帧 AEAD fail = 全下行降级保护。** Rust 逐字节同款。
+func DisguiseHSInput(verMin, verMax, verSel byte, shared Key, nonceC, nonceS [HsNonceLen]byte, capsNeg uint16, maxBwC, maxBwS uint32) []byte {
+	v := make([]byte, 0, len(HSCtx)+3+KeyLen+2*HsNonceLen+2+8)
 	v = append(v, HSCtx...)
-	v = append(v, verLo, verHi)
+	v = append(v, verMin, verMax, verSel)
 	v = append(v, shared[:]...)
 	v = append(v, nonceC[:]...)
 	v = append(v, nonceS[:]...)

@@ -39,6 +39,14 @@ const (
 // 协议版本(对照 Rust PROTOCOL_VERSION = 0x01,lib.rs:45)。auth_tag / 握手帧绑定它。
 const ProtocolVersion byte = 0x01
 
+// 本端支持的版本范围(方案 1B 版本协商;对照 Rust lib.rs VERSION_MIN/VERSION_MAX)。当前退化
+// min == max == 0x01,但协商机器就位:未来加不兼容 wire 版本只需上调 VersionMax。握手 ClientHello /
+// FastHello 携客户端 [ver_min, ver_max],服务端与本端范围取交集选最高(见 handshake.negotiateVersion)。
+const (
+	VersionMin byte = 0x01
+	VersionMax byte = ProtocolVersion
+)
+
 // 密钥派生 context 字符串(域分离)。与 Rust crypto.rs:193-196 逐字符一致 ——
 // context 是 BLAKE3 derive_key 的域分离输入,任一字符差异 → 派生密钥完全不同 → 握手挂。
 const (

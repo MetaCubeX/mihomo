@@ -24,7 +24,7 @@
 // # SSOT + 逐字节镜像
 //
 // 完全对照 Rust `crates/proto-core/src/handshake.rs`(SSOT):ClientHello 56B / ServerHello 55B /
-// FastHello 39B 字节布局逐位一致(全大端)。speedcat 是协议两份实现(Rust 内核 + Go adapter),
+// FastHello 40B 字节布局逐位一致(全大端)。speedcat 是协议两份实现(Rust 内核 + Go adapter),
 // 握手帧任一字节分叉 → 两端握手挂 —— 故每个布局都用 Go↔Go self-test + 跨实现 e2e 钉死。
 //
 // 本轮 Go 只做 **client 侧**(adapter 是 outbound,拨到 Rust server);DisguiseServer/FastServer 是
@@ -47,13 +47,31 @@ import (
 
 // 帧长度(对照 Rust handshake.rs:69,71,198;全大端)。
 const (
-	// chLen ClientHello 长度:ver_lo:u8 ver_hi:u8 caps_c:u16 eph_c:32 nonce_c:16 max_bw_c:u32 = 56B。
+	// chLen ClientHello 长度:ver_min:u8 ver_max:u8 caps_c:u16 eph_c:32 nonce_c:16 max_bw_c:u32 = 56B。
 	chLen = 1 + 1 + 2 + 32 + 16 + 4
 	// shLen ServerHello 长度:ver:u8 caps_s:u16 eph_s:32 nonce_s:16 max_bw_s:u32 = 55B。
 	shLen = 1 + 2 + 32 + 16 + 4
-	// fhLen FastHello 长度:ver:u8 caps_c:u16 max_bw_c:u32 auth_tag:32 = 39B。
-	fhLen = 1 + 2 + 4 + 32
+	// fhLen FastHello 长度(方案 1B,40B):ver_min:u8 ver_max:u8 caps_c:u16 max_bw_c:u32 auth_tag:32。
+	fhLen = 1 + 1 + 2 + 4 + 32
 )
+
+// negotiateVersion 版本协商(方案 1B):客户端声明 [clientMin, clientMax],与本端 [VersionMin, VersionMax]
+// 取交集选**最高** v*。交集空 / 范围非法 → ErrVersionUnsupported(铁律 2:调用方路由 fallback,不秒断)。
+// 对照 Rust handshake::negotiate_version;当前退化 min==max==0x01 恒返 0x01。
+func negotiateVersion(clientMin, clientMax byte) (byte, error) {
+	lo := clientMin
+	if crypto.VersionMin > lo {
+		lo = crypto.VersionMin
+	}
+	hi := clientMax
+	if crypto.VersionMax < hi {
+		hi = crypto.VersionMax
+	}
+	if clientMin > clientMax || lo > hi {
+		return 0, ErrVersionUnsupported
+	}
+	return hi, nil // v* = 交集最高版本
+}
 
 // 握手错误(对照 Rust Error::VersionUnsupported / AuthTagMismatch / Io;DH 全零错走 crypto.ErrDhNonContributory)。
 var (

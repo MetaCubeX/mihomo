@@ -3,7 +3,7 @@
 //
 // 帧布局:
 //
-//	ClientHello (56B): ver_lo:u8 ver_hi:u8 caps_c:u16 eph_c:32 nonce_c:16 max_bw_c:u32
+//	ClientHello (56B): ver_min:u8 ver_max:u8 caps_c:u16 eph_c:32 nonce_c:16 max_bw_c:u32
 //	ServerHello (55B): ver:u8 caps_s:u16 eph_s:32 nonce_s:16 max_bw_s:u32
 //
 // 密钥流:DH shared → blake3_mac(psk, hs_input) → handshake_secret → DeriveSessionKeys。
@@ -32,12 +32,12 @@ func disguiseClient(conn io.ReadWriter, psk crypto.Psk, params Params) (*Session
 	if err != nil {
 		return nil, err
 	}
-	ver := crypto.ProtocolVersion
+	verMin, verMax := crypto.VersionMin, crypto.VersionMax
 
-	// [1] ClientHello(56B):ver_lo=ver_hi=ProtocolVersion(P1 阶段 lo==hi)。
+	// [1] ClientHello(56B,方案 1B:携本端支持版本范围 [ver_min, ver_max])。
 	var ch [chLen]byte
-	ch[0] = ver
-	ch[1] = ver
+	ch[0] = verMin
+	ch[1] = verMax
 	capsC := params.Caps.Bytes()
 	copy(ch[2:4], capsC[:])
 	pubC := kp.PublicBytes()
@@ -53,7 +53,9 @@ func disguiseClient(conn io.ReadWriter, psk crypto.Psk, params Params) (*Session
 	if _, err := io.ReadFull(conn, sh[:]); err != nil {
 		return nil, wrapIO(err)
 	}
-	if sh[0] != crypto.ProtocolVersion {
+	// 方案 1B:ServerHello.ver = 服务端选中 v*,须落在本端声明范围内(否则坏 server / 中间人);ver_sel 进 MAC 抗下行降级。
+	verSel := sh[0]
+	if verSel < verMin || verSel > verMax {
 		return nil, ErrVersionUnsupported
 	}
 	capsS := wire.FromBytes([2]byte{sh[1], sh[2]})
@@ -69,7 +71,7 @@ func disguiseClient(conn io.ReadWriter, psk crypto.Psk, params Params) (*Session
 		return nil, err // crypto.ErrDhNonContributory(全零/低序点拒, line 91)
 	}
 	capsNeg := wire.Negotiate(params.Caps, capsS)
-	input := crypto.DisguiseHSInput(ver, ver, shared, nonceC, nonceS, uint16(capsNeg), params.MaxBandwidth, maxBwS)
+	input := crypto.DisguiseHSInput(verMin, verMax, verSel, shared, nonceC, nonceS, uint16(capsNeg), params.MaxBandwidth, maxBwS)
 	hsSecret := crypto.Blake3Mac(crypto.Key(psk), input)
 	keys := crypto.DeriveSessionKeys(crypto.Key(hsSecret), crypto.WholeConnection)
 
@@ -91,10 +93,11 @@ func DisguiseServer(conn io.ReadWriter, psk crypto.Psk, params Params) (*Session
 	if _, err := io.ReadFull(conn, ch[:]); err != nil {
 		return nil, wrapIO(err)
 	}
-	verLo, verHi := ch[0], ch[1]
-	// 版本区间协商(对照 Rust `(ver_lo..=ver_hi).contains(&PROTOCOL_VERSION)`):本端版本须落在客户端声明区间。
-	if verLo > crypto.ProtocolVersion || crypto.ProtocolVersion > verHi {
-		return nil, ErrVersionUnsupported
+	// 方案 1B:客户端声明版本范围 → 与本端交集选 v*(空则 VersionUnsupported → 上层 fallback,不秒断)。
+	verMin, verMax := ch[0], ch[1]
+	verSel, err := negotiateVersion(verMin, verMax)
+	if err != nil {
+		return nil, err
 	}
 	capsC := wire.FromBytes([2]byte{ch[2], ch[3]})
 	var ephC [crypto.KeyLen]byte
@@ -119,13 +122,13 @@ func DisguiseServer(conn io.ReadWriter, psk crypto.Psk, params Params) (*Session
 	if err != nil {
 		return nil, err
 	}
-	input := crypto.DisguiseHSInput(verLo, verHi, shared, nonceC, nonceS, uint16(capsNeg), maxBwC, params.MaxBandwidth)
+	input := crypto.DisguiseHSInput(verMin, verMax, verSel, shared, nonceC, nonceS, uint16(capsNeg), maxBwC, params.MaxBandwidth)
 	hsSecret := crypto.Blake3Mac(crypto.Key(psk), input)
 	keys := crypto.DeriveSessionKeys(crypto.Key(hsSecret), crypto.WholeConnection)
 
 	// [2] ServerHello(55B):声明本端 caps(params.Caps,非协商值)+ eph_s + nonce_s + max_bw_s。
 	var sh [shLen]byte
-	sh[0] = crypto.ProtocolVersion
+	sh[0] = verSel // 方案 1B:回告选中的 v*(客户端验其落在自身范围 + 进 MAC)
 	capsS := params.Caps.Bytes()
 	copy(sh[1:3], capsS[:])
 	copy(sh[3:35], pubS[:])

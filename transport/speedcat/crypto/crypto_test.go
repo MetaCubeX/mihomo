@@ -73,14 +73,14 @@ func TestKAT_FastAuthKey(t *testing.T) {
 	}
 }
 
-// TestKAT_FastAuthTag —— 快路 auth_tag 与 Rust 逐字节一致(ver=1, caps_c=0x0101, max_bw_c=0x12345678)。
+// TestKAT_FastAuthTag —— 快路 auth_tag 与 Rust 逐字节一致(方案 1B:ver_min=1, ver_max=1, caps_c=0x0101, max_bw_c=0x12345678)。
 func TestKAT_FastAuthTag(t *testing.T) {
 	var kAuth Key
 	copy(kAuth[:], mustHex(t, "e2397be01da089cbd2ba9750e21a39d0adfbf4c7808503754f92c8437bfd7f71"))
 	var exporter Key
 	copy(exporter[:], katExporter)
-	got := FastAuthTag(kAuth, exporter, 0x01, 0x0101, 0x12345678)
-	want := mustHex(t, "527fb773f65c6af7cf2cfd415a73704216f8e1a74f4d1bb7416ff5cfa0dc801c")
+	got := FastAuthTag(kAuth, exporter, 0x01, 0x01, 0x0101, 0x12345678)
+	want := mustHex(t, "11cdc8d3f9a0b83e04b34a27dd4d0024dcf2d268f9d2ec362dcf5331e59ceae1")
 	if !bytes.Equal(got[:], want) {
 		t.Fatalf("FastAuthTag:\n got %x\nwant %x", got[:], want)
 	}
@@ -160,15 +160,15 @@ func TestKAT_BuildNonce(t *testing.T) {
 	}
 }
 
-// TestKAT_DisguiseHSInput —— 伪装路握手 MAC 输入明文与 Rust 逐字节一致(8 字段拼接)。
+// TestKAT_DisguiseHSInput —— 伪装路握手 MAC 输入明文与 Rust 逐字节一致(方案 1B:9 字段,含 ver_sel)。
 func TestKAT_DisguiseHSInput(t *testing.T) {
 	var shared Key
 	copy(shared[:], katShared)
 	var nc, ns [HsNonceLen]byte
 	copy(nc[:], katNonceC)
 	copy(ns[:], katNonceS)
-	got := DisguiseHSInput(0x01, 0x01, shared, nc, ns, 0x0100, 0x11223344, 0x55667788)
-	want := mustHex(t, "73706565646361742d76312d68730101505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6fc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf01001122334455667788")
+	got := DisguiseHSInput(0x01, 0x01, 0x01, shared, nc, ns, 0x0100, 0x11223344, 0x55667788)
+	want := mustHex(t, "73706565646361742d76312d6873010101505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6fc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf01001122334455667788")
 	if !bytes.Equal(got, want) {
 		t.Fatalf("DisguiseHSInput:\n got %x\nwant %x", got, want)
 	}

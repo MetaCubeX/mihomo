@@ -3,7 +3,7 @@
 //
 // 帧布局:
 //
-//	FastHello (39B): ver:u8 caps_c:u16 max_bw_c:u32 auth_tag:32
+//	FastHello (40B): ver_min:u8 ver_max:u8 caps_c:u16 max_bw_c:u32 auth_tag:32
 //
 // 无 ServerHello。auth_tag 绑客户端声明值(快路无回告):
 //
@@ -24,20 +24,21 @@ import (
 
 // fastClient 客户端快路握手(对照 Rust fast_client,handshake.rs:200-228)。
 //
-// 算 auth_tag → 发 FastHello(39B,搭 auth_tag 0-RTT)→ 从 exporter 派生密钥 → Session。
+// 算 auth_tag → 发 FastHello(40B,搭 auth_tag 0-RTT)→ 从 exporter 派生密钥 → Session。
 // conn 取 io.Writer(快路 client 只发 FastHello,不读;握手后由 transport TLS record 承载)。
 // exporter 取自 transport.Conn.Exporter()(两端 TLS 1.3 + EMS 字节一致)。
 func fastClient(conn io.Writer, psk crypto.Psk, params Params, exporter [crypto.KeyLen]byte) (*Session, error) {
 	kAuth := crypto.FastAuthKey(psk)
-	authTag := crypto.FastAuthTag(kAuth, crypto.Key(exporter), crypto.ProtocolVersion, uint16(params.Caps), params.MaxBandwidth)
+	authTag := crypto.FastAuthTag(kAuth, crypto.Key(exporter), crypto.VersionMin, crypto.VersionMax, uint16(params.Caps), params.MaxBandwidth)
 
-	// FastHello(39B)。
+	// FastHello(方案 1B,40B):ver_min, ver_max, caps_c, max_bw_c, auth_tag。
 	var fh [fhLen]byte
-	fh[0] = crypto.ProtocolVersion
+	fh[0] = crypto.VersionMin
+	fh[1] = crypto.VersionMax
 	capsC := params.Caps.Bytes()
-	copy(fh[1:3], capsC[:])
-	binary.BigEndian.PutUint32(fh[3:7], params.MaxBandwidth)
-	copy(fh[7:39], authTag[:])
+	copy(fh[2:4], capsC[:])
+	binary.BigEndian.PutUint32(fh[4:8], params.MaxBandwidth)
+	copy(fh[8:40], authTag[:])
 	if _, err := conn.Write(fh[:]); err != nil {
 		return nil, wrapIO(err)
 	}
@@ -62,18 +63,21 @@ func FastServer(conn io.Reader, psk crypto.Psk, params Params, exporter [crypto.
 	if _, err := io.ReadFull(conn, fh[:]); err != nil {
 		return nil, wrapIO(err)
 	}
-	ver := fh[0]
-	if ver != crypto.ProtocolVersion {
-		return nil, ErrVersionUnsupported
+	// 方案 1B:客户端版本范围 → 交集选 v*(空则 ErrVersionUnsupported → 上层 fallback,不秒断)。
+	// 快路无 ServerHello,v* 无法回告 client(0-RTT 固有限制);仅用于服务端策略,不进 tag(tag 绑范围)。
+	verMin := fh[0]
+	verMax := fh[1]
+	if _, err := negotiateVersion(verMin, verMax); err != nil {
+		return nil, err
 	}
-	capsC := wire.FromBytes([2]byte{fh[1], fh[2]})
-	maxBwC := binary.BigEndian.Uint32(fh[3:7])
+	capsC := wire.FromBytes([2]byte{fh[2], fh[3]})
+	maxBwC := binary.BigEndian.Uint32(fh[4:8])
 	var tag [crypto.MacLen]byte
-	copy(tag[:], fh[7:39])
+	copy(tag[:], fh[8:40])
 
-	// 常量时间验 auth_tag(对照 Rust crypto::ct_eq)。tag 绑 ver/caps_c/max_bw_c(客户端声明),用收到的值重算比对。
+	// 常量时间验 auth_tag(对照 Rust crypto::ct_eq)。tag 绑 ver_min/ver_max/caps_c/max_bw_c(客户端声明),用收到的值重算比对。
 	kAuth := crypto.FastAuthKey(psk)
-	expect := crypto.FastAuthTag(kAuth, crypto.Key(exporter), ver, uint16(capsC), maxBwC)
+	expect := crypto.FastAuthTag(kAuth, crypto.Key(exporter), verMin, verMax, uint16(capsC), maxBwC)
 	if !crypto.CTEq(tag[:], expect[:]) {
 		return nil, ErrAuthTagMismatch
 	}

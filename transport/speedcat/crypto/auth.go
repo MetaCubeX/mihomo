@@ -16,16 +16,16 @@ func FastAuthKey(psk Psk) Key {
 //	auth_tag = BLAKE3-MAC(k_auth, FastAuthMsg ‖ exporter ‖ ver ‖ caps_c:BE ‖ max_bw_c:BE)
 //
 // (对照 Rust fast_auth_tag,crypto.rs:266-280)。**auth_tag 绑客户端声明值**(非协商值):
-// 快路无 ServerHello,客户端算 tag 时不知服务端 caps_s / max_bw_s,故只绑 ver/caps_c/max_bw_c,
-// 服务端按收到的声明重算比对。完整理由见 Rust crypto.rs:252-256 注释。
+// 快路无 ServerHello,客户端算 tag 时不知服务端 caps_s / max_bw_s,故只绑 ver_min/ver_max/caps_c/max_bw_c,
+// 服务端按收到的声明重算比对。完整理由见 Rust crypto.rs 注释。**方案 1B:两版本字节都进 tag → 中间人改范围即 auth fail。**
 //
 // exporter 是 TLS exporter(post-handshake,两端字节一致)—— 它同时是会话密钥的 IKM,
 // 故 auth_tag 隐式绑定「本次 TLS 会话」(防重放/绑流)。
-func FastAuthTag(kAuth Key, exporter Key, ver byte, capsC uint16, maxBwC uint32) [MacLen]byte {
-	v := make([]byte, 0, len(FastAuthMsg)+KeyLen+1+2+4)
+func FastAuthTag(kAuth Key, exporter Key, verMin, verMax byte, capsC uint16, maxBwC uint32) [MacLen]byte {
+	v := make([]byte, 0, len(FastAuthMsg)+KeyLen+2+2+4)
 	v = append(v, FastAuthMsg...)
 	v = append(v, exporter[:]...)
-	v = append(v, ver)
+	v = append(v, verMin, verMax)
 	v = binary.BigEndian.AppendUint16(v, capsC)
 	v = binary.BigEndian.AppendUint32(v, maxBwC)
 	return Blake3Mac(kAuth, v)
