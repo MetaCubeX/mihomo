@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	errNotHTTP  = errors.New("not a http")
+	errNotHTTP  = errors.New("not an HTTP")
 	errHostIsIP = errors.New("host is ip")
 )
 
