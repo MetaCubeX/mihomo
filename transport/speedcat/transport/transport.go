@@ -61,8 +61,13 @@ type Config struct {
 // + AsyncRead/AsyncWrite(字节流;QUIC 取一个 bidi stream 当流)。
 type Conn interface {
 	io.ReadWriteCloser
+	// **Contract B(安全契约,方案 1E,对照 Rust transport.rs export_keying_material):Exporter 返有效值
+	// (nil err)⟹ 本传输保证「机密 + 完整 + 抗重放」。** 快路 NO_INNER_AEAD 明文帧完全依赖此(机密/完整交
+	// TLS record,重放由 record 序号挡);不保证三性的传输(如裸 TCP KindRawTCP)Exporter 返 error → 强制走
+	// 伪装路双层 AEAD。新传输实现返有效 exporter 前须核验三性。
+	//
 	// Exporter 取快路 exporter(密钥源):label=crypto.ExporterLabel,context 空,32B。
-	// 对照 Rust handshake.rs:47 conn.export_keying_material(EXPORTER_LABEL, b"")。
+	// 对照 Rust handshake.rs conn.export_keying_material(EXPORTER_LABEL, b"")。
 	// 保留为便利方法(L3 握手用 stream label);底层委派 [Conn.ExporterWithLabel]。
 	Exporter() ([crypto.KeyLen]byte, error)
 	// ExporterWithLabel 按指定 label 取 TLS exporter。
