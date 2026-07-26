@@ -2,10 +2,40 @@ package crypto
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"testing"
 )
+
+// katVectorsJSON —— 跨实现 KAT 单一真相(方案 2B),由 `cargo run -p kat-gen` 从 proto-core 活 oracle 生成。
+// go:embed 随 crypto 包 re-vendor 一并带走(fork + Bettbox 同一份)→ **Go 端不再手抄 hex**,改一处 crypto.rs
+// 只需重生 JSON,两端自动同步。
+//
+//go:embed testdata/kat_vectors.json
+var katVectorsJSON []byte
+
+// katVectors 解 committed KAT JSON 的 vectors 段(name→hex)。
+var katVectors = func() map[string]string {
+	var doc struct {
+		Vectors map[string]string `json:"vectors"`
+	}
+	if err := json.Unmarshal(katVectorsJSON, &doc); err != nil {
+		panic("parse kat_vectors.json: " + err.Error())
+	}
+	return doc.Vectors
+}()
+
+// katWant 取 committed KAT 向量 name 的期望字节(hex 解码);缺失即 fatal(名须与 kat-gen 的 rows 对齐)。
+func katWant(t *testing.T, name string) []byte {
+	t.Helper()
+	h, ok := katVectors[name]
+	if !ok {
+		t.Fatalf("kat_vectors.json 无向量 %q(kat-gen 是否重生?)", name)
+	}
+	return mustHex(t, h)
+}
 
 // seq 生成长 n 的字节序列,起点 start、步长 step(用于逐字节复刻 Rust KAT harness 的固定输入)。
 func seq(start byte, n int, step int) []byte {
@@ -45,7 +75,7 @@ var (
 // TestKAT_DeriveKey —— BLAKE3 derive_key(KDF 模式)与 Rust 逐字节一致(承重 head risk)。
 func TestKAT_DeriveKey(t *testing.T) {
 	got := DeriveKey(C2SKeyCtx, katPSK)
-	want := mustHex(t, "929852758fc379927ca093443dfe0b0742a0a5e82ecb3d2d3bb960338470d0c1")
+	want := katWant(t, "derive_key_c2s")
 	if !bytes.Equal(got[:], want) {
 		t.Fatalf("DeriveKey c2s key:\n got %x\nwant %x", got[:], want)
 	}
@@ -56,7 +86,7 @@ func TestKAT_Blake3Mac(t *testing.T) {
 	var key Key
 	copy(key[:], katPSK)
 	got := Blake3Mac(key, katMacInput)
-	want := mustHex(t, "3adeeba6b899cab7206e0496b48c81793d5cf40a64885ba089eea5e65f8315a7")
+	want := katWant(t, "blake3_mac")
 	if !bytes.Equal(got[:], want) {
 		t.Fatalf("Blake3Mac:\n got %x\nwant %x", got[:], want)
 	}
@@ -67,7 +97,7 @@ func TestKAT_FastAuthKey(t *testing.T) {
 	var psk Psk
 	copy(psk[:], katPSK)
 	got := FastAuthKey(psk)
-	want := mustHex(t, "e2397be01da089cbd2ba9750e21a39d0adfbf4c7808503754f92c8437bfd7f71")
+	want := katWant(t, "fast_auth_key")
 	if !bytes.Equal(got[:], want) {
 		t.Fatalf("FastAuthKey:\n got %x\nwant %x", got[:], want)
 	}
@@ -76,11 +106,11 @@ func TestKAT_FastAuthKey(t *testing.T) {
 // TestKAT_FastAuthTag —— 快路 auth_tag 与 Rust 逐字节一致(方案 1B:ver_min=1, ver_max=1, caps_c=0x0101, max_bw_c=0x12345678)。
 func TestKAT_FastAuthTag(t *testing.T) {
 	var kAuth Key
-	copy(kAuth[:], mustHex(t, "e2397be01da089cbd2ba9750e21a39d0adfbf4c7808503754f92c8437bfd7f71"))
+	copy(kAuth[:], katWant(t, "fast_auth_key"))
 	var exporter Key
 	copy(exporter[:], katExporter)
 	got := FastAuthTag(kAuth, exporter, 0x01, 0x01, 0x0101, 0x12345678)
-	want := mustHex(t, "11cdc8d3f9a0b83e04b34a27dd4d0024dcf2d268f9d2ec362dcf5331e59ceae1")
+	want := katWant(t, "fast_auth_tag")
 	if !bytes.Equal(got[:], want) {
 		t.Fatalf("FastAuthTag:\n got %x\nwant %x", got[:], want)
 	}
@@ -94,15 +124,15 @@ func TestKAT_DeriveSessionKeys(t *testing.T) {
 	cases := []struct {
 		name string
 		got  []byte
-		hex  string
+		vec  string // kat_vectors.json 向量名
 	}{
-		{"c2s_key", sk.C2SKey[:], "0fdcf4eb8f8b2b09aa319dde88890c252230ba1e1d7ef444cb032a2a693fca98"},
-		{"s2c_key", sk.S2CKey[:], "7bb8a6d87c59fe9e65f701e9ad12333a9779555ac07864549ed151923633176f"},
-		{"c2s_nonce", sk.C2SNonce[:], "5e4d2a1cfe4aef27a3b312ae"},
-		{"s2c_nonce", sk.S2CNonce[:], "a50fef3fdf334acc7a6953b8"},
+		{"c2s_key", sk.C2SKey[:], "session_c2s_key"},
+		{"s2c_key", sk.S2CKey[:], "session_s2c_key"},
+		{"c2s_nonce", sk.C2SNonce[:], "session_c2s_nonce"},
+		{"s2c_nonce", sk.S2CNonce[:], "session_s2c_nonce"},
 	}
 	for _, c := range cases {
-		want := mustHex(t, c.hex)
+		want := katWant(t, c.vec)
 		if !bytes.Equal(c.got, want) {
 			t.Fatalf("DeriveSessionKeys %s:\n got %x\nwant %x", c.name, c.got, want)
 		}
@@ -118,15 +148,15 @@ func TestKAT_DeriveSessionKeysStream1(t *testing.T) {
 	cases := []struct {
 		name string
 		got  []byte
-		hex  string
+		vec  string // kat_vectors.json 向量名
 	}{
-		{"c2s_key", sk.C2SKey[:], "f66b93dbfbd84c2e4eb2a7856256339ca4e3d30cc59e57efbdf90b59a6e81aa5"},
-		{"s2c_key", sk.S2CKey[:], "a93dc5bcd93d8a3308016a510403df9a6d86b96a9338b24fefb5c7a80fad0e9d"},
-		{"c2s_nonce", sk.C2SNonce[:], "d5573c92b86881c55b72a0d2"},
-		{"s2c_nonce", sk.S2CNonce[:], "19fd677795dc7eb5d504908e"},
+		{"c2s_key", sk.C2SKey[:], "session_stream1_c2s_key"},
+		{"s2c_key", sk.S2CKey[:], "session_stream1_s2c_key"},
+		{"c2s_nonce", sk.C2SNonce[:], "session_stream1_c2s_nonce"},
+		{"s2c_nonce", sk.S2CNonce[:], "session_stream1_s2c_nonce"},
 	}
 	for _, c := range cases {
-		want := mustHex(t, c.hex)
+		want := katWant(t, c.vec)
 		if !bytes.Equal(c.got, want) {
 			t.Fatalf("DeriveSessionKeys Stream(1) %s:\n got %x\nwant %x", c.name, c.got, want)
 		}
@@ -143,7 +173,7 @@ func TestKAT_AEADEncrypt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AEADEncrypt: %v", err)
 	}
-	want := mustHex(t, "dd705a86b472fc642bf95ec202069febaa756347240aa3444709b4a605b6dc98078334890b")
+	want := katWant(t, "aead_ct")
 	if !bytes.Equal(ct, want) {
 		t.Fatalf("AEADEncrypt:\n got %x\nwant %x", ct, want)
 	}
@@ -154,7 +184,7 @@ func TestKAT_BuildNonce(t *testing.T) {
 	var base [NonceLen]byte
 	copy(base[:], katNonceBase)
 	got := BuildNonce(base, 0x12345678)
-	want := mustHex(t, "10111213141516170a2d4c63")
+	want := katWant(t, "build_nonce")
 	if !bytes.Equal(got[:], want) {
 		t.Fatalf("BuildNonce:\n got %x\nwant %x", got[:], want)
 	}
@@ -168,7 +198,7 @@ func TestKAT_DisguiseHSInput(t *testing.T) {
 	copy(nc[:], katNonceC)
 	copy(ns[:], katNonceS)
 	got := DisguiseHSInput(0x01, 0x01, 0x01, shared, nc, ns, 0x0100, 0x11223344, 0x55667788)
-	want := mustHex(t, "73706565646361742d76312d6873010101505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6fc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf01001122334455667788")
+	want := katWant(t, "disguise_hs_input")
 	if !bytes.Equal(got, want) {
 		t.Fatalf("DisguiseHSInput:\n got %x\nwant %x", got, want)
 	}
