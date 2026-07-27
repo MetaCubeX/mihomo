@@ -29,7 +29,7 @@ func TestQUIC_ExporterAndIO(t *testing.T) {
 	der, key := testCert(t)
 	serverCfg := &mtls.Config{
 		Certificates: []mtls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}},
-		NextProtos:   []string{SpeedcatALPN}, // Go quic-go 两端需非空 ALPN,固定 speedcat/1
+		NextProtos:   []string{SpeedcatALPN}, // Go quic-go 两端需非空 ALPN,固定 h3(SpeedcatALPN 常量,ADR-017)
 		MinVersion:   mtls.VersionTLS13,
 	}
 	ln, err := quic.ListenAddr("127.0.0.1:0", serverCfg, &quic.Config{})
