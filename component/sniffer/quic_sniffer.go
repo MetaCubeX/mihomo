@@ -139,7 +139,6 @@ type quicPacketSender struct {
 
 	done chan struct{}
 
-	closeOnce sync.Once
 	closed    bool
 }
 
@@ -184,9 +183,9 @@ func (q *quicPacketSender) Close() {
 }
 
 func (q *quicPacketSender) close() {
-	q.closeOnce.Do(func() {
-		q.lock.Lock()
-		defer q.lock.Unlock()
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	if !q.closed {
 		close(q.done)
 		q.closed = true
 		if q.buffer != nil {
@@ -194,7 +193,7 @@ func (q *quicPacketSender) close() {
 			q.buffer = nil
 		}
 		q.ranges = nil
-	})
+	}
 }
 
 func (q *quicPacketSender) readQUICData(b []byte) error {

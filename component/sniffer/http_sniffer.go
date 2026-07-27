@@ -69,7 +69,7 @@ func (http *HTTPSniffer) Protocol() string {
 	case HTTP2:
 		return "http2"
 	default:
-		return "http"
+		return "unknown"
 	}
 }
 
