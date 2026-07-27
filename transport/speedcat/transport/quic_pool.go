@@ -45,6 +45,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	congestionv2 "github.com/metacubex/mihomo/transport/speedcat/congestion"
 	"github.com/metacubex/mihomo/transport/speedcat/crypto"
 	"github.com/metacubex/quic-go"
 )
@@ -168,6 +169,12 @@ func dialQUICConn(ctx context.Context, cfg Config) (*quicConnHandle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("transport: quic dial (pool) %s: %w", addr, err)
 	}
+	// BBR parity(ADR-006/017):Rust transport.rs:651 在 TransportConfig 级设 BbrConfig → 每条 QUIC conn 跑 BBR;
+	// quic-go 无 Config.CongestionControl 字段 → per-conn 后置注入(metacubex 库模型,非 quinn endpoint 级)。
+	// cwnd=32 / profile=""(standard)对齐 mihomo tuic 默认(SetCongestionController cwnd==0→32、profile 空串→standard);
+	// RTTStats 由 quic-go 在 SetCongestionControl 内自动注入(sent_packet_handler→cc.SetRTTStatsProvider)。
+	// BBR-vs-CUBIC 差分是吞吐行为,仅真带宽路径可证(留 Phase 4 bench);本调证「wiring 正 + 不破功能」。
+	conn.SetCongestionControl(congestionv2.NewBbrSender(congestionv2.GetInitialPacketSize(conn), 32, ""))
 	return &quicConnHandle{conn: conn}, nil
 }
 
