@@ -3,7 +3,9 @@ package sniffer
 import (
 	"bytes"
 	"errors"
+	"net"
 	"net/netip"
+	"strings"
 
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
@@ -38,16 +40,8 @@ const (
 // RFC 9113 §6.5.2
 const headerTableSize uint32 = 4096
 
-type version byte
-
-const (
-	HTTP1 version = iota
-	HTTP2
-)
-
 type HTTPSniffer struct {
 	*BaseSniffer
-	version version
 }
 
 var _ sniffer.Sniffer = (*HTTPSniffer)(nil)
@@ -63,14 +57,7 @@ func NewHTTPSniffer(snifferConfig SnifferConfig) (*HTTPSniffer, error) {
 }
 
 func (http *HTTPSniffer) Protocol() string {
-	switch http.version {
-	case HTTP1:
-		return "http1"
-	case HTTP2:
-		return "http2"
-	default:
-		return "unknown"
-	}
+	return "http"
 }
 
 func (http *HTTPSniffer) SupportNetwork() C.NetWork {
@@ -78,12 +65,16 @@ func (http *HTTPSniffer) SupportNetwork() C.NetWork {
 }
 
 func (http *HTTPSniffer) SniffData(b []byte) (string, error) {
-	if !bytes.HasPrefix(b, h2ClientPreface) {
-		http.version = HTTP1
+	if len(b) < len(h2ClientPreface) {
+		if bytes.HasPrefix(h2ClientPreface, b) {
+			return "", &errNeedAtLeastData{length: len(h2ClientPreface), err: ErrNoClue}
+		}
 		return sniffHTTP1(b)
 	}
-	http.version = HTTP2
-	return sniffHTTP2(b)
+	if bytes.HasPrefix(b, h2ClientPreface) {
+		return sniffHTTP2(b)
+	}
+	return sniffHTTP1(b)
 }
 
 func isHTTPMethod(method []byte) bool {
@@ -97,7 +88,13 @@ func isHTTPMethod(method []byte) bool {
 
 func sniffHTTP1(b []byte) (string, error) {
 	req, _, found := bytes.Cut(b, []byte("\r\n"))
-	if !found || len(req) < 14 {
+	if !found {
+		return "", &errNeedAtLeastData{
+			length: len(b) + 1,
+			err: ErrNoClue,
+		}
+	}
+	if len(req) < 14 {
 		return "", ErrNoClue
 	}
 
@@ -141,29 +138,41 @@ func sniffHTTP1(b []byte) (string, error) {
 }
 
 func parseHeaderHostH1(b []byte) (string, error) {
-	_, b, found := bytes.Cut(bytes.ToLower(b), []byte("\r\nhost:")) // RFC 9110 §7.2
-	if !found {
-		return "", ErrNoClue
+	if !bytes.Contains(b, []byte("\r\n\r\n")) {
+		return "", &errNeedAtLeastData{length: len(b) + 1, err: ErrNoClue}
 	}
-
-	b, _, found = bytes.Cut(b, []byte("\r\n"))
-	if !found {
-		return "", ErrNoClue
+	rest := b
+	for {
+		line, tail, found := bytes.Cut(rest, []byte("\r\n"))
+		if !found || len(line) == 0 {
+			break
+		}
+		rest = tail
+		key, val, found := bytes.Cut(line, []byte(":"))
+		if !found || !bytes.EqualFold(key, []byte("host")) { // RFC 9110 §7.2
+			continue
+		}
+		return parseHost(bytes.TrimSpace(val))
 	}
-
-	b = bytes.Trim(b, " \t")
-
-	return parseHost(b)
+	return "", ErrNoClue
 }
 
 func sniffHTTP2(b []byte) (string, error) {
+	total := len(b)
 	b = b[len(h2ClientPreface):]
 
 	var (
 		payload []byte
 		flags   byte
 	)
-	for len(b) >= 9 { // RFC 9113 §4.1
+	for { // RFC 9113 §4.1
+		if len(b) < 9 {
+			return "", &errNeedAtLeastData{
+				length: total - len(b) + 9,
+				err: ErrNoClue,
+			}
+		}
+
 		length := int(b[0])<<16 | int(b[1])<<8 | int(b[2])
 		frameType := b[3]
 		flags = b[4]
@@ -171,7 +180,10 @@ func sniffHTTP2(b []byte) (string, error) {
 		b = b[9:]
 
 		if len(b) < length {
-			break
+			return "", &errNeedAtLeastData{
+				length: total - len(b) + length,
+				err: ErrNoClue,
+			}
 		}
 		if frameType == h2FrameHeaders {
 			payload = b[:length]
@@ -181,9 +193,6 @@ func sniffHTTP2(b []byte) (string, error) {
 		b = b[length:]
 	}
 
-	if payload == nil {
-		return "", ErrNoClue
-	}
 	if flags&h2FlagPadded != 0 {
 		if len(payload) == 0 {
 			return "", ErrNoClue
@@ -235,30 +244,30 @@ func parseHost(h []byte) (string, error) {
 	if len(h) == 0 {
 		return "", ErrNoClue
 	}
-
-	// RFC 3986 §3.2.2
-	// reject IPv6
-	if h[0] == '[' {
-		return "", errHostIsIP
-	}
+	hs := string(h)
 
 	// RFC 3986 §3.2.3
 	// strip port
-	if i := bytes.LastIndexByte(h, ':'); i >= 0 {
-		h = h[:i]
+	if host, _, err := net.SplitHostPort(hs); err == nil {
+		hs = host
+	}
+
+	// RFC 3986 §3.2.2
+	// reject IPv6
+	if strings.HasPrefix(hs, "[") && strings.HasSuffix(hs, "]") {
+		hs = hs[1 : len(hs)-1]
 	}
 
 	// strip dot
 	// for example: example.com. -> example.com
-	h = bytes.TrimRight(h, ".")
-	if len(h) == 0 {
+	hs = strings.TrimRight(hs, ".")
+	if hs == "" {
 		return "", ErrNoClue
 	}
 
-	host := string(h)
-	if _, err := netip.ParseAddr(host); err == nil {
+	if _, err := netip.ParseAddr(hs); err == nil {
 		return "", errHostIsIP
 	}
 
-	return host, nil
+	return hs, nil
 }

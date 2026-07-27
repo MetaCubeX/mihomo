@@ -157,6 +157,7 @@ func (q *quicPacketSender) Send(current constant.PacketAdapter) {
 	err := q.readQUICData(current.Data())
 	if err != nil {
 		q.close()
+		return
 	}
 }
 
