@@ -9,7 +9,6 @@ import (
 	"errors"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/common/buf"
@@ -125,11 +124,11 @@ func (sniffer *QUICSniffer) WrapperSender(packetSender constant.PacketSender, re
 var _ constant.PacketSender = (*quicPacketSender)(nil)
 
 type quicPacketSender struct {
-	structure atomic.Pointer[quicStructure]
+	structure *quicStructure
 	lock      sync.RWMutex
 	ranges    utils.IntRanges[uint64]
 	buffer    []byte
-	result    atomic.Pointer[string]
+	result    string
 
 	replaceDomain sniffer.ReplaceDomain
 
@@ -141,7 +140,7 @@ type quicPacketSender struct {
 	done chan struct{}
 
 	closeOnce sync.Once
-	closed    atomic.Bool
+	closed    bool
 }
 
 // Send will send PacketAdapter nonblocking
@@ -149,9 +148,12 @@ type quicPacketSender struct {
 func (q *quicPacketSender) Send(current constant.PacketAdapter) {
 	defer q.PacketSender.Send(current)
 
-	if q.closed.Load() {
+	q.lock.RLock()
+	if q.closed {
+		q.lock.RUnlock()
 		return
 	}
+	q.lock.RUnlock()
 
 	err := q.readQUICData(current.Data())
 	if err != nil {
@@ -163,9 +165,11 @@ func (q *quicPacketSender) Send(current constant.PacketAdapter) {
 func (q *quicPacketSender) DoSniff(metadata *constant.Metadata) error {
 	select {
 	case <-q.done:
-		if r := q.result.Load(); r != nil {
-			q.replaceDomain(metadata, *r)
+		q.lock.RLock()
+		if r := q.result; r != "" {
+			q.replaceDomain(metadata, r)
 		}
+		q.lock.RUnlock()
 	case <-time.After(quicWaitConn):
 		q.close()
 	}
@@ -184,7 +188,7 @@ func (q *quicPacketSender) close() {
 		q.lock.Lock()
 		defer q.lock.Unlock()
 		close(q.done)
-		q.closed.Store(true)
+		q.closed = true
 		if q.buffer != nil {
 			_ = pool.Put(q.buffer)
 			q.buffer = nil
@@ -325,10 +329,13 @@ func (q *quicPacketSender) readQUICData(b []byte) error {
 	buffer = buf.As(decrypted)
 
 	for i := 0; !buffer.IsEmpty(); i++ {
-		if q.closed.Load() {
+		q.lock.RLock()
+		if q.closed {
+			q.lock.RUnlock()
 			// close() was called, just return
 			return nil
 		}
+		q.lock.RUnlock()
 
 		frameType := framePadding
 		for frameType == framePadding && !buffer.IsEmpty() {
@@ -387,7 +394,7 @@ func (q *quicPacketSender) readQUICData(b []byte) error {
 
 			q.lock.Lock()
 
-			if q.closed.Load() {
+			if q.closed {
 				q.lock.Unlock()
 				return nil
 			}
@@ -430,7 +437,9 @@ func (q *quicPacketSender) readQUICData(b []byte) error {
 		return err
 	}
 	if domain != "" {
-		q.result.Store(&domain)
+		q.lock.Lock()
+		q.result = domain
+		q.lock.Unlock()
 		q.close()
 	}
 
@@ -438,13 +447,14 @@ func (q *quicPacketSender) readQUICData(b []byte) error {
 }
 
 func (q *quicPacketSender) tryAssemble() (string, error) {
-	if q.closed.Load() {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	if q.closed {
 		// close() was called, just return
 		return "", nil
 	}
 
-	q.lock.RLock()
-	defer q.lock.RUnlock()
 	if len(q.ranges) != 1 || q.ranges[0].Start() != 0 || q.ranges[0].End() != uint64(len(q.buffer)) {
 		// incomplete fragment, just return
 		return "", nil
@@ -467,15 +477,18 @@ func (q *quicPacketSender) tryAssemble() (string, error) {
 }
 
 func (q *quicPacketSender) getQUICStructure(vb []byte) (*quicStructure, error) {
-	if s := q.structure.Load(); s != nil {
-		return s, nil
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	if q.structure != nil {
+		return q.structure, nil
 	}
 
 	n := binary.BigEndian.Uint32(vb)
 	for _, v := range listQUICVersions {
 		if v.ver == n {
-			q.structure.CompareAndSwap(nil, v)
-			return q.structure.Load(), nil
+			q.structure = v
+			return q.structure, nil
 		}
 	}
 

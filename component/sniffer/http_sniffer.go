@@ -19,10 +19,10 @@ var (
 
 // RFC 9110 §9.3
 // RFC 5789 (PATCH method)
-var httpMethods = utils.Map(
-	[]string{"GET", "POST", "HEAD", "PUT", "DELETE", "OPTIONS", "CONNECT", "PATCH", "TRACE"},
-	utils.ImmutableBytesFromString,
-)
+var httpMethods = [...][]byte{
+	[]byte("GET"), []byte("POST"), []byte("HEAD"), []byte("PUT"),
+	[]byte("DELETE"), []byte("OPTIONS"), []byte("CONNECT"), []byte("PATCH"), []byte("TRACE"),
+}
 
 // RFC 9113 §3.4
 var h2ClientPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
@@ -41,8 +41,7 @@ const headerTableSize uint32 = 4096
 type version byte
 
 const (
-	HTTP version = iota
-	HTTP1
+	HTTP1 version = iota
 	HTTP2
 )
 
@@ -89,7 +88,7 @@ func (http *HTTPSniffer) SniffData(b []byte) (string, error) {
 
 func isHTTPMethod(method []byte) bool {
 	for _, m := range httpMethods {
-		if bytes.Equal(method, m) {
+		if bytes.EqualFold(method, m) {
 			return true
 		}
 	}
