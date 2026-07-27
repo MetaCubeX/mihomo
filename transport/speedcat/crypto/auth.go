@@ -13,7 +13,7 @@ func FastAuthKey(psk Psk) Key {
 
 // FastAuthTag 算快路 auth_tag(32B):
 //
-//	auth_tag = BLAKE3-MAC(k_auth, FastAuthMsg ‖ exporter ‖ ver ‖ caps_c:BE ‖ max_bw_c:BE)
+//	auth_tag = BLAKE3-MAC(k_auth, FastAuthMsg ‖ exporter ‖ ver_min ‖ ver_max ‖ caps_c:BE ‖ max_bw_c:BE)
 //
 // (对照 Rust fast_auth_tag,crypto.rs:266-280)。**auth_tag 绑客户端声明值**(非协商值):
 // 快路无 ServerHello,客户端算 tag 时不知服务端 caps_s / max_bw_s,故只绑 ver_min/ver_max/caps_c/max_bw_c,
