@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -279,12 +278,46 @@ func TestQUICHeaders(t *testing.T) {
 	t.Run("client hello followed by crypto data", func(t *testing.T) {
 		clientHello := makeTestClientHello("example.com", 0)
 		cryptoData := append(bytes.Clone(clientHello), 0x02, 0, 0, 0)
-		q := &quicPacketSender{
-			buffer: cryptoData,
-			ranges: utils.IntRanges[uint64]{
-				utils.NewRange(uint64(0), uint64(len(cryptoData))),
-			},
+		q := &quicPacketSender{done: make(chan struct{})}
+		t.Cleanup(q.close)
+		require.NoError(t, q.addCryptoData(0, cryptoData))
+
+		domain, err := q.tryAssemble()
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", domain)
+	})
+
+	t.Run("one byte gap remains incomplete", func(t *testing.T) {
+		clientHello := makeTestClientHello("example.com", 0)
+		q := &quicPacketSender{done: make(chan struct{})}
+		t.Cleanup(q.close)
+
+		require.NoError(t, q.addCryptoData(0, clientHello[:1]))
+		require.NoError(t, q.addCryptoData(2, clientHello[2:]))
+		domain, err := q.tryAssemble()
+		require.NoError(t, err)
+		assert.Empty(t, domain)
+		assert.Equal(t, uint64(1), q.contiguousCryptoEnd)
+
+		require.NoError(t, q.addCryptoData(1, clientHello[1:2]))
+		domain, err = q.tryAssemble()
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", domain)
+	})
+
+	t.Run("many sparse fragments", func(t *testing.T) {
+		clientHello := makeTestClientHello("example.com", 4*1024)
+		q := &quicPacketSender{done: make(chan struct{})}
+		t.Cleanup(q.close)
+
+		for i := 0; i < len(clientHello); i += 2 {
+			require.NoError(t, q.addCryptoData(uint64(i), clientHello[i:i+1]))
 		}
+		assert.Equal(t, uint64(1), q.contiguousCryptoEnd)
+		for i := 1; i < len(clientHello); i += 2 {
+			require.NoError(t, q.addCryptoData(uint64(i), clientHello[i:i+1]))
+		}
+
 		domain, err := q.tryAssemble()
 		require.NoError(t, err)
 		assert.Equal(t, "example.com", domain)

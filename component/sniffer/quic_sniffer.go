@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math/bits"
 	"sync"
 	"time"
 
@@ -29,10 +30,11 @@ const (
 	quicWaitConn = time.Second * 3
 
 	// maxCryptoStreamOffset bounds both the highest Initial CRYPTO stream offset
-	// accepted by the sniffer and its per-connection reassembly memory. 64 KiB
-	// matches the TCP sniffing budget and the largest pooled buffer, and aligns
-	// with the Initial CRYPTO limits used by ngtcp2 and Cloudflare quiche while
-	// remaining more permissive than the 16 KiB limits in quic-go and BoringSSL.
+	// and the payload retained by the sniffer. Its coverage bitmap uses at most
+	// another 8 KiB. The 64 KiB payload budget matches TCP sniffing and the
+	// largest pooled buffer, and aligns with the Initial CRYPTO limits used by
+	// ngtcp2 and Cloudflare quiche while remaining more permissive than the
+	// 16 KiB limits in quic-go and BoringSSL.
 	// This is a resource policy, not a QUIC or TLS protocol limit. For example,
 	// rustls permits a 65,535-byte Handshake payload plus its four-byte header;
 	// covering that boundary case would exceed the shared 64 KiB sniffing budget.
@@ -136,11 +138,12 @@ func (sniffer *QUICSniffer) WrapperSender(packetSender constant.PacketSender, re
 var _ constant.PacketSender = (*quicPacketSender)(nil)
 
 type quicPacketSender struct {
-	structure *quicStructure
-	lock      sync.RWMutex
-	ranges    utils.IntRanges[uint64]
-	buffer    []byte
-	result    string
+	structure           *quicStructure
+	lock                sync.RWMutex
+	buffer              []byte
+	receivedCryptoData  []uint64
+	contiguousCryptoEnd uint64
+	result              string
 
 	replaceDomain sniffer.ReplaceDomain
 
@@ -205,7 +208,8 @@ func (q *quicPacketSender) close() {
 			_ = pool.Put(q.buffer)
 			q.buffer = nil
 		}
-		q.ranges = nil
+		q.receivedCryptoData = nil
+		q.contiguousCryptoEnd = 0
 	}
 }
 
@@ -479,8 +483,8 @@ func (q *quicPacketSender) readQUICFrames(data []byte) error {
 }
 
 // addCryptoData stores a bounded CRYPTO fragment, growing the buffer only as
-// needed and merging ranges from out-of-order, overlapping, or retransmitted
-// frames.
+// needed and tracking exact byte coverage across out-of-order, overlapping, or
+// retransmitted frames.
 func (q *quicPacketSender) addCryptoData(offset uint64, data []byte) error {
 	if len(data) == 0 {
 		return nil
@@ -506,8 +510,49 @@ func (q *quicPacketSender) addCryptoData(offset uint64, data []byte) error {
 		q.buffer = q.buffer[:end]
 	}
 	copy(q.buffer[offset:end], data)
-	q.ranges = append(q.ranges, utils.NewRange(offset, end))
-	q.ranges = q.ranges.Merge()
+
+	wordCount := (cap(q.buffer) + 63) / 64
+	if wordCount > len(q.receivedCryptoData) {
+		receivedCryptoData := make([]uint64, wordCount)
+		copy(receivedCryptoData, q.receivedCryptoData)
+		q.receivedCryptoData = receivedCryptoData
+	}
+	firstWord := int(offset / 64)
+	lastWord := int((end - 1) / 64)
+	firstMask := ^uint64(0) << (offset % 64)
+	lastMask := ^uint64(0)
+	if endBit := end % 64; endBit != 0 {
+		lastMask = (uint64(1) << endBit) - 1
+	}
+	if firstWord == lastWord {
+		q.receivedCryptoData[firstWord] |= firstMask & lastMask
+	} else {
+		q.receivedCryptoData[firstWord] |= firstMask
+		for i := firstWord + 1; i < lastWord; i++ {
+			q.receivedCryptoData[i] = ^uint64(0)
+		}
+		q.receivedCryptoData[lastWord] |= lastMask
+	}
+
+	// The contiguous prefix only moves forward, so each retained byte is
+	// checked at most once regardless of fragment order or retransmission.
+	if offset <= q.contiguousCryptoEnd && end > q.contiguousCryptoEnd {
+		for q.contiguousCryptoEnd < uint64(len(q.buffer)) {
+			word := q.receivedCryptoData[q.contiguousCryptoEnd/64] >> (q.contiguousCryptoEnd % 64)
+			covered := uint64(bits.TrailingZeros64(^word))
+			remaining := uint64(len(q.buffer)) - q.contiguousCryptoEnd
+			if wordRemaining := 64 - q.contiguousCryptoEnd%64; remaining > wordRemaining {
+				remaining = wordRemaining
+			}
+			if covered > remaining {
+				covered = remaining
+			}
+			q.contiguousCryptoEnd += covered
+			if covered < remaining {
+				break
+			}
+		}
+	}
 	return nil
 }
 
@@ -520,7 +565,7 @@ func (q *quicPacketSender) tryAssemble() (string, error) {
 		return "", nil
 	}
 
-	if len(q.ranges) == 0 || q.ranges[0].Start() != 0 || q.ranges[0].End() < tlsHandshakeHeaderLen {
+	if q.contiguousCryptoEnd < tlsHandshakeHeaderLen {
 		// The beginning of the CRYPTO stream is still incomplete.
 		return "", nil
 	}
@@ -532,7 +577,7 @@ func (q *quicPacketSender) tryAssemble() (string, error) {
 	if helloSize > maxCryptoStreamOffset {
 		return "", io.ErrShortBuffer
 	}
-	if q.ranges[0].End() < uint64(helloSize) {
+	if q.contiguousCryptoEnd < uint64(helloSize) {
 		// The complete ClientHello has not arrived yet.
 		return "", nil
 	}
