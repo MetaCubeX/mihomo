@@ -51,8 +51,9 @@ const (
 )
 
 var (
-	errNotQUIC        = errors.New("not QUIC")
-	errNotQUICInitial = errors.New("not QUIC initial packet")
+	errNotQUIC              = errors.New("not QUIC")
+	errNotQUICInitial       = errors.New("not QUIC initial packet")
+	errQUICDecryptionFailed = errors.New("QUIC decryption failed")
 )
 
 // QUIC v2 remaps long-header packet type bits, so Initial and Retry values are
@@ -97,6 +98,12 @@ type quicLabels struct {
 	iv  []byte
 }
 
+type quicInitialKey struct {
+	destConnID          []byte
+	labels              quicLabels
+	largestPacketNumber int64
+}
+
 var _ sniffer.Sniffer = (*QUICSniffer)(nil)
 var _ sniffer.MultiPacketSniffer = (*QUICSniffer)(nil)
 
@@ -139,6 +146,7 @@ var _ constant.PacketSender = (*quicPacketSender)(nil)
 type quicPacketSender struct {
 	structure           *quicStructure
 	lock                sync.RWMutex
+	initialKeys         []quicInitialKey
 	buffer              []byte
 	receivedCryptoData  bitmap
 	contiguousCryptoEnd uint64
@@ -147,11 +155,6 @@ type quicPacketSender struct {
 	replaceDomain sniffer.ReplaceDomain
 
 	constant.PacketSender
-
-	labelsOnce sync.Once
-	labels     quicLabels
-	// initialDestConnID is the DCID from which labels were derived.
-	initialDestConnID []byte
 
 	done chan struct{}
 
@@ -327,16 +330,14 @@ func (q *quicPacketSender) readQUICPacket(b []byte, coalesced bool) (int, error)
 	cache := buf.NewPacket()
 	defer cache.Release()
 
-	labels := q.initialLabels(destConnID, s)
-	decrypted, err := decryptQUICInitialPacket(b, hdrLen, packetEnd, labels, cache)
-	if err != nil && !bytes.Equal(destConnID, q.initialDestConnID) {
-		// A Retry changes the DCID used to derive Initial keys. A regular
-		// Initial can change its header DCID without changing keys, so only
-		// retry with the current DCID after the cached keys fail. Retry keeps
-		// the TLS CRYPTO stream unchanged, so existing fragments remain valid.
-		decrypted, err = decryptQUICInitialPacket(b, hdrLen, packetEnd, expandLabels(destConnID, s), cache)
-	}
+	decrypted, err := q.decryptQUICInitialPacket(b, hdrLen, packetEnd, destConnID, s, cache)
 	if err != nil {
+		if errors.Is(err, errQUICDecryptionFailed) {
+			// Authentication failure can result from corruption or a delayed
+			// packet outside the reconstruction window. Ignore this Initial and
+			// continue sniffing subsequent packets in the datagram or connection.
+			return packetEnd, nil
+		}
 		return 0, err
 	}
 
@@ -347,16 +348,76 @@ func (q *quicPacketSender) readQUICPacket(b []byte, coalesced bool) (int, error)
 	return packetEnd, nil
 }
 
-// decryptQUICInitialPacket removes header protection and decrypts one Initial
-// packet with the supplied key set.
-func decryptQUICInitialPacket(b []byte, hdrLen, packetEnd int, labels quicLabels, cache *buf.Buffer) ([]byte, error) {
-	block, err := aes.NewCipher(labels.hp)
+// decryptQUICInitialPacket tries the Initial key epochs retained for the
+// connection. Retry changes the Initial keys without resetting packet numbers.
+// Per-key decoder state also lets delayed pre-Retry packets be authenticated,
+// while later header DCID changes continue using the same retained keys.
+func (q *quicPacketSender) decryptQUICInitialPacket(b []byte, hdrLen, packetEnd int, destConnID []byte, s *quicStructure, cache *buf.Buffer) ([]byte, error) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	if len(q.initialKeys) == 0 {
+		q.initialKeys = append(q.initialKeys, newQUICInitialKey(destConnID, s))
+	}
+
+	var decryptErr error
+	hasCurrentDestConnID := false
+	largestPacketNumber := int64(-1)
+	for i := range q.initialKeys {
+		key := &q.initialKeys[i]
+		hasCurrentDestConnID = hasCurrentDestConnID || bytes.Equal(destConnID, key.destConnID)
+		if key.largestPacketNumber > largestPacketNumber {
+			largestPacketNumber = key.largestPacketNumber
+		}
+		decrypted, packetNumber, err := decryptQUICInitialPacket(b, hdrLen, packetEnd, key.labels, key.largestPacketNumber, cache)
+		if err == nil {
+			if packetNumber > key.largestPacketNumber {
+				key.largestPacketNumber = packetNumber
+			}
+			return decrypted, nil
+		}
+		decryptErr = err
+	}
+	if hasCurrentDestConnID {
+		// These keys were already derived from the current DCID. A later epoch
+		// was still tried above because its keys may outlive a header DCID change.
+		return nil, decryptErr
+	}
+
+	// A Retry changes the DCID used to derive Initial keys without resetting the
+	// packet number space, so the new epoch inherits the largest authenticated
+	// packet number. Add it only after authentication, preventing a corrupt
+	// packet from replacing working keys. QUIC permits at most one accepted
+	// Retry, keeping two epochs sufficient for a connection.
+	candidate := newQUICInitialKey(destConnID, s)
+	candidate.largestPacketNumber = largestPacketNumber
+	decrypted, packetNumber, err := decryptQUICInitialPacket(b, hdrLen, packetEnd, candidate.labels, candidate.largestPacketNumber, cache)
 	if err != nil {
 		return nil, err
 	}
+	candidate.largestPacketNumber = packetNumber
+	if len(q.initialKeys) == 1 {
+		q.initialKeys = append(q.initialKeys, candidate)
+	} else {
+		q.initialKeys[1] = candidate
+	}
+	return decrypted, nil
+}
+
+// decryptQUICInitialPacket removes header protection and decrypts one Initial
+// packet with the supplied key set.
+func decryptQUICInitialPacket(b []byte, hdrLen, packetEnd int, labels quicLabels, largestPacketNumber int64, cache *buf.Buffer) ([]byte, int64, error) {
+	// Failed key epochs leave scratch data behind. Reset it before every attempt
+	// so trying retained Retry keys does not consume the buffer cumulatively.
+	cache.Reset()
+
+	block, err := aes.NewCipher(labels.hp)
+	if err != nil {
+		return nil, -1, err
+	}
 
 	if hdrLen+4+16 > packetEnd {
-		return nil, errNotQUIC
+		return nil, -1, errNotQUIC
 	}
 
 	mask := cache.Extend(block.BlockSize())
@@ -379,33 +440,55 @@ func decryptQUICInitialPacket(b []byte, hdrLen, packetEnd int, labels quicLabels
 	}
 
 	if extHdrLen > packetEnd {
-		return nil, errNotQUIC
+		return nil, -1, errNotQUIC
 	}
+	truncatedPacketNumber := int64(0)
+	for _, b := range packetNumber {
+		truncatedPacketNumber = truncatedPacketNumber<<8 | int64(b)
+	}
+	decodedPacketNumber := decodeQUICPacketNumber(packetNumberLength, largestPacketNumber, truncatedPacketNumber)
 
 	data := b[extHdrLen:packetEnd]
 
 	aesCipher, err := aes.NewCipher(labels.key)
 	if err != nil {
-		return nil, err
+		return nil, -1, err
 	}
 	aead, err := cipher.NewGCM(aesCipher)
 	if err != nil {
-		return nil, err
+		return nil, -1, err
 	}
 
 	// We only decrypt once, so we do not need to XOR it back.
 	// https://github.com/quic-go/qtls-go1-20/blob/e132a0e6cb45e20ac0b705454849a11d09ba5a54/cipher_suites.go#L496
 	iv := bytes.Clone(labels.iv)
-	for i, b := range packetNumber {
-		iv[len(iv)-len(packetNumber)+i] ^= b
+	for i := 0; i < 8; i++ {
+		iv[len(iv)-1-i] ^= byte(uint64(decodedPacketNumber) >> (8 * i))
 	}
 	dst := cache.Extend(len(data))
 	decrypted, err := aead.Open(dst[:0], iv, data, extHdr)
 	if err != nil {
-		return nil, err
+		return nil, -1, errQUICDecryptionFailed
 	}
 
-	return decrypted, nil
+	return decrypted, decodedPacketNumber, nil
+}
+
+// decodeQUICPacketNumber reconstructs a packet number from its truncated wire
+// representation using the window from RFC 9000 Appendix A.3.
+func decodeQUICPacketNumber(length int, largest, truncated int64) int64 {
+	expected := largest + 1
+	window := int64(1) << (length * 8)
+	halfWindow := window / 2
+	mask := window - 1
+	candidate := (expected & ^mask) | truncated
+	if candidate <= expected-halfWindow && candidate < 1<<62-window {
+		return candidate + window
+	}
+	if candidate > expected+halfWindow && candidate >= window {
+		return candidate - window
+	}
+	return candidate
 }
 
 // readQUICFrames validates the frames allowed in an Initial packet and retains
@@ -485,7 +568,7 @@ func (q *quicPacketSender) readQUICFrames(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			length, err := quicvarint.Read(buffer) // Field: Reason Phrase Length
-			if err != nil {
+			if err != nil || length > uint64(buffer.Len()) {
 				return io.ErrUnexpectedEOF
 			}
 			if _, err := buffer.ReadBytes(int(length)); err != nil { // Field: Reason Phrase
@@ -596,12 +679,12 @@ func (q *quicPacketSender) getQUICStructure(vb []byte) (*quicStructure, error) {
 	return nil, errNotQUIC
 }
 
-func (q *quicPacketSender) initialLabels(destConnID []byte, s *quicStructure) quicLabels {
-	q.labelsOnce.Do(func() {
-		q.initialDestConnID = bytes.Clone(destConnID)
-		q.labels = expandLabels(destConnID, s)
-	})
-	return q.labels
+func newQUICInitialKey(destConnID []byte, s *quicStructure) quicInitialKey {
+	return quicInitialKey{
+		destConnID:          bytes.Clone(destConnID),
+		labels:              expandLabels(destConnID, s),
+		largestPacketNumber: -1,
+	}
 }
 
 func expandLabels(destConnID []byte, s *quicStructure) quicLabels {

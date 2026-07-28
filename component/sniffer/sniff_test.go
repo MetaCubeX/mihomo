@@ -2,14 +2,19 @@ package sniffer
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/binary"
 	"encoding/hex"
+	"io"
 	"net"
 	"net/netip"
 	"strings"
 	"testing"
 
+	"github.com/metacubex/mihomo/common/buf"
 	"github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/quic-go/quicvarint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -148,7 +153,7 @@ func testQUICSniffer(data []string, async, staleInitialKeys bool) (string, strin
 		if err != nil {
 			return "", "", err
 		}
-		packetSender.initialLabels([]byte("stale initial dcid"), structure)
+		packetSender.initialKeys = append(packetSender.initialKeys, newQUICInitialKey([]byte("stale initial dcid"), structure))
 	}
 
 	go func() {
@@ -379,6 +384,134 @@ func TestQUICHeaders(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "example.com", domain)
 	})
+}
+
+func TestQUICPacketNumbers(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		largest   int64
+		length    int
+		truncated int64
+		expected  int64
+	}{
+		{name: "first packet", largest: -1, length: 1, truncated: 0, expected: 0},
+		{name: "next window", largest: 127, length: 1, truncated: 0, expected: 256},
+		{name: "previous window", largest: 382, length: 1, truncated: 0, expected: 256},
+		{name: "following window", largest: 383, length: 1, truncated: 0, expected: 512},
+		{name: "rfc 9000 appendix a.3", largest: 0xa82f30ea, length: 2, truncated: 0x9b32, expected: 0xa82f9b32},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, decodeQUICPacketNumber(test.length, test.largest, test.truncated))
+		})
+	}
+
+	t.Run("uses reconstructed packet number in nonce", func(t *testing.T) {
+		destConnID := []byte("initial dcid")
+		labels := expandLabels(destConnID, &quicV1)
+		plaintext := []byte("initial payload")
+		packet, packetNumberOffset := makeProtectedQUICInitialPacket(t, destConnID, labels, 256, 1, plaintext)
+
+		cache := buf.NewPacket()
+		defer cache.Release()
+		decrypted, packetNumber, err := decryptQUICInitialPacket(packet, packetNumberOffset, len(packet), labels, 127, cache)
+		require.NoError(t, err)
+		assert.Equal(t, int64(256), packetNumber)
+		assert.Equal(t, plaintext, decrypted)
+	})
+
+	t.Run("retains retry epoch across header dcid changes", func(t *testing.T) {
+		originalDestConnID := []byte("original dcid")
+		retryDestConnID := []byte("retry dcid")
+		retryKey := newQUICInitialKey(retryDestConnID, &quicV1)
+		originalKey := newQUICInitialKey(originalDestConnID, &quicV1)
+		originalKey.largestPacketNumber = 200
+		packetSender := quicPacketSender{
+			initialKeys: []quicInitialKey{originalKey},
+		}
+
+		cache := buf.NewPacket()
+		defer cache.Release()
+		plaintext := []byte("retry payload")
+		packet, packetNumberOffset := makeProtectedQUICInitialPacket(t, retryDestConnID, retryKey.labels, 256, 1, plaintext)
+		decrypted, err := packetSender.decryptQUICInitialPacket(packet, packetNumberOffset, len(packet), retryDestConnID, &quicV1, cache)
+		require.NoError(t, err)
+		assert.Equal(t, plaintext, decrypted)
+		require.Len(t, packetSender.initialKeys, 2)
+		assert.Equal(t, int64(256), packetSender.initialKeys[1].largestPacketNumber)
+
+		plaintext = []byte("changed dcid payload")
+		packet, packetNumberOffset = makeProtectedQUICInitialPacket(t, originalDestConnID, retryKey.labels, 257, 1, plaintext)
+		decrypted, err = packetSender.decryptQUICInitialPacket(packet, packetNumberOffset, len(packet), originalDestConnID, &quicV1, cache)
+		require.NoError(t, err)
+		assert.Equal(t, plaintext, decrypted)
+		assert.Equal(t, int64(257), packetSender.initialKeys[1].largestPacketNumber)
+	})
+
+	t.Run("continues after a delayed packet outside the reconstruction window", func(t *testing.T) {
+		destConnID := []byte("initial dcid")
+		initialKey := newQUICInitialKey(destConnID, &quicV1)
+		initialKey.largestPacketNumber = 200
+		packetSender := quicPacketSender{
+			initialKeys: []quicInitialKey{initialKey},
+			done:        make(chan struct{}),
+		}
+		t.Cleanup(packetSender.close)
+
+		delayed, _ := makeProtectedQUICInitialPacket(t, destConnID, initialKey.labels, 0, 1, []byte{framePing, framePadding, framePadding})
+		require.NoError(t, packetSender.readQUICData(delayed))
+		assert.False(t, packetSender.closed)
+
+		clientHello := makeTestClientHello("example.com", 0)
+		cryptoFrame := []byte{frameCrypto}
+		cryptoFrame = quicvarint.Append(cryptoFrame, 0)
+		cryptoFrame = quicvarint.Append(cryptoFrame, uint64(len(clientHello)))
+		cryptoFrame = append(cryptoFrame, clientHello...)
+		next, _ := makeProtectedQUICInitialPacket(t, destConnID, initialKey.labels, 201, 1, cryptoFrame)
+		require.NoError(t, packetSender.readQUICData(next))
+		assert.Equal(t, "example.com", packetSender.result)
+	})
+}
+
+func TestQUICFrames(t *testing.T) {
+	t.Run("rejects reason length larger than remaining data", func(t *testing.T) {
+		data := []byte{frameConnectionClose, 0, 0}
+		data = quicvarint.AppendWithLen(data, quicvarint.Max, 8)
+		err := (&quicPacketSender{}).readQUICFrames(data)
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+}
+
+func makeProtectedQUICInitialPacket(t *testing.T, destConnID []byte, labels quicLabels, packetNumber int64, packetNumberLength int, plaintext []byte) ([]byte, int) {
+	t.Helper()
+
+	header := []byte{0xc0 | byte(packetNumberLength-1), 0, 0, 0, 1, byte(len(destConnID))}
+	header = append(header, destConnID...)
+	header = append(header, 0, 0) // empty source connection ID and token
+	header = quicvarint.Append(header, uint64(packetNumberLength+len(plaintext)+16))
+	packetNumberOffset := len(header)
+	for shift := (packetNumberLength - 1) * 8; shift >= 0; shift -= 8 {
+		header = append(header, byte(uint64(packetNumber)>>shift))
+	}
+
+	block, err := aes.NewCipher(labels.key)
+	require.NoError(t, err)
+	aead, err := cipher.NewGCM(block)
+	require.NoError(t, err)
+	nonce := bytes.Clone(labels.iv)
+	for i := 0; i < 8; i++ {
+		nonce[len(nonce)-1-i] ^= byte(uint64(packetNumber) >> (8 * i))
+	}
+	packet := aead.Seal(bytes.Clone(header), nonce, plaintext, header)
+
+	headerProtection, err := aes.NewCipher(labels.hp)
+	require.NoError(t, err)
+	mask := make([]byte, headerProtection.BlockSize())
+	headerProtection.Encrypt(mask, packet[packetNumberOffset+4:packetNumberOffset+4+headerProtection.BlockSize()])
+	packet[0] ^= mask[0] & 0x0f
+	for i := 0; i < packetNumberLength; i++ {
+		packet[packetNumberOffset+i] ^= mask[1+i]
+	}
+	return packet, packetNumberOffset
 }
 
 func TestTLSHeaders(t *testing.T) {
