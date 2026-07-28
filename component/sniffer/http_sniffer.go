@@ -92,7 +92,27 @@ func isHTTPMethod(method []byte) bool {
 	return false
 }
 
+func isHTTPMethodPrefix(prefix []byte) bool {
+	for _, method := range httpMethods {
+		if len(prefix) <= len(method) && bytes.EqualFold(prefix, method[:len(prefix)]) {
+			return true
+		}
+	}
+	return false
+}
+
 func sniffHTTP1(b []byte) (string, error) {
+	method, _, found := bytes.Cut(b, []byte(" "))
+	if !found {
+		if isHTTPMethodPrefix(b) {
+			return "", &errNeedAtLeastData{length: len(b) + 1, err: ErrNoClue}
+		}
+		return "", errNotHTTP
+	}
+	if !isHTTPMethod(method) {
+		return "", errNotHTTP
+	}
+
 	req, _, found := bytes.Cut(b, []byte("\r\n"))
 	if !found {
 		return "", &errNeedAtLeastData{
@@ -104,13 +124,10 @@ func sniffHTTP1(b []byte) (string, error) {
 		return "", ErrNoClue
 	}
 
-	method, rest, ok1 := bytes.Cut(req, []byte(" "))
+	_, rest, ok1 := bytes.Cut(req, []byte(" "))
 	uri, _, ok2 := bytes.Cut(rest, []byte(" "))
 	if !ok1 || !ok2 {
 		return "", ErrNoClue
-	}
-	if !isHTTPMethod(method) {
-		return "", errNotHTTP
 	}
 	if len(uri) == 0 {
 		return "", ErrNoClue
@@ -144,23 +161,24 @@ func sniffHTTP1(b []byte) (string, error) {
 }
 
 func parseHeaderHostH1(b []byte) (string, error) {
-	if !bytes.Contains(b, []byte("\r\n\r\n")) {
-		return "", &errNeedAtLeastData{length: len(b) + 1, err: ErrNoClue}
-	}
 	rest := b
 	for {
 		line, tail, found := bytes.Cut(rest, []byte("\r\n"))
-		if !found || len(line) == 0 {
-			break
+		if !found {
+			return "", &errNeedAtLeastData{length: len(b) + 1, err: ErrNoClue}
+		}
+		if len(line) == 0 {
+			return "", ErrNoClue
 		}
 		rest = tail
 		key, val, found := bytes.Cut(line, []byte(":"))
 		if !found || !bytes.EqualFold(key, []byte("host")) { // RFC 9110 §7.2
 			continue
 		}
+		// A complete Host field is sufficient; waiting for the end of the
+		// header section would make unrelated large fields delay sniffing.
 		return parseHost(bytes.TrimSpace(val))
 	}
-	return "", ErrNoClue
 }
 
 func sniffHTTP2(b []byte) (string, error) {
@@ -285,7 +303,7 @@ func parseHost(h []byte) (string, error) {
 
 	// strip dot
 	// for example: example.com. -> example.com
-	hs = strings.TrimRight(hs, ".")
+	hs = strings.ToLower(strings.TrimRight(hs, "."))
 	if hs == "" {
 		return "", ErrNoClue
 	}

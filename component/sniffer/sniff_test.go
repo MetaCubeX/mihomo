@@ -553,6 +553,16 @@ func TestHTTPHeaders(t *testing.T) {
 			domain: "example.com",
 		},
 		{
+			name:   "http1 uppercase host",
+			input:  []byte("GET / HTTP/1.1\r\nHost: EXAMPLE.COM\r\n\r\n"),
+			domain: "example.com",
+		},
+		{
+			name:   "http1 host before end of headers",
+			input:  []byte("GET / HTTP/1.1\r\nHost: example.com\r\nX-Large: "),
+			domain: "example.com",
+		},
+		{
 			name:   "http1 absolute form",
 			input:  []byte("GET http://example.com/path HTTP/1.1\r\n\r\n"),
 			domain: "example.com",
@@ -617,6 +627,32 @@ func TestHTTPHeaders(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http1 rejects non-http prefix", func(t *testing.T) {
+		h, err := NewHTTPSniffer(SnifferConfig{})
+		require.NoError(t, err)
+		_, err = h.SniffData([]byte{0x16, 0x03, 0x01, 0x00, 0x20})
+		assert.ErrorIs(t, err, errNotHTTP)
+	})
+
+	t.Run("http1 waits for a partial method", func(t *testing.T) {
+		h, err := NewHTTPSniffer(SnifferConfig{})
+		require.NoError(t, err)
+		_, err = h.SniffData([]byte("GE"))
+		var need *errNeedAtLeastData
+		require.ErrorAs(t, err, &need)
+		assert.Equal(t, 3, need.length)
+	})
+
+	t.Run("http1 waits for a complete host line", func(t *testing.T) {
+		input := []byte("GET / HTTP/1.1\r\nHost: example")
+		h, err := NewHTTPSniffer(SnifferConfig{})
+		require.NoError(t, err)
+		_, err = h.SniffData(input)
+		var need *errNeedAtLeastData
+		require.ErrorAs(t, err, &need)
+		assert.Equal(t, len(input)+1, need.length)
+	})
 
 	t.Run("http2 continuation header missing", func(t *testing.T) {
 		input := makeTestHTTP2Input(
