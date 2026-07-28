@@ -2,7 +2,6 @@ package sniffer
 
 import (
 	"errors"
-	"net"
 	"net/netip"
 	"time"
 
@@ -227,11 +226,9 @@ func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (s
 	_, err := conn.Peek(1)
 	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil {
-		if _, ok := err.(*net.OpError); ok {
-			sd.cacheSniffFailed(metadata)
-			log.Errorln("[Sniffer] [%s] may not have any sent data, Consider adding skip", metadata.DstIP)
-			_ = conn.Close()
-		}
+		// The caller owns failure accounting and the connection lifetime. No
+		// initial data can be valid for a server-first protocol, so sniffing must
+		// not close the connection merely because this deadline expired.
 		log.Debugln("[Sniffer] [%s] the data length not enough, error: %v", metadata.DstIP, err)
 		return "", SnifferConfig{}, err
 	}

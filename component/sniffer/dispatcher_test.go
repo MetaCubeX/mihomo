@@ -90,6 +90,10 @@ type stubSniffer struct {
 	reply   func(data []byte) (string, error)
 }
 
+type domainMatcherFunc func(domain string) bool
+
+func (f domainMatcherFunc) MatchDomain(domain string) bool { return f(domain) }
+
 var _ sniffer.Sniffer = (*stubSniffer)(nil)
 
 func (s *stubSniffer) SupportNetwork() C.NetWork { return s.network }
@@ -340,6 +344,65 @@ func TestDispatcherMultipleSniffers(t *testing.T) {
 		_, _, err = sd.sniffDomain(N.NewBufferedConn(raw), metadata)
 
 		assert.Error(t, err)
+		assert.False(t, raw.closed)
+		_, cached := sd.skipList.Get(metadata.AddrPort())
+		assert.False(t, cached)
+	})
+
+	t.Run("keeps the connection open and caches an initial read failure once", func(t *testing.T) {
+		waiting := &stubSniffer{reply: func(data []byte) (string, error) {
+			return "", needAtLeast(len(data) + 1)
+		}}
+		sd, err := NewDispatcher(&Config{Enable: true, ParsePureIp: true})
+		assert.NoError(t, err)
+		sd.sniffers = []configuredSniffer{{Sniffer: waiting}}
+		raw := &chunkedConn{
+			t:       t,
+			readErr: &net.OpError{Op: "read", Net: "tcp", Err: io.ErrNoProgress},
+		}
+		t.Cleanup(raw.stopTimer)
+		metadata := &C.Metadata{
+			NetWork: C.TCP,
+			DstIP:   netip.MustParseAddr("192.0.2.1"),
+			DstPort: 80,
+		}
+
+		sniffed := sd.TCPSniff(N.NewBufferedConn(raw), metadata)
+
+		assert.False(t, sniffed)
+		assert.False(t, raw.closed)
+		assert.Empty(t, waiting.seen)
+		failures, cached := sd.skipList.Get(metadata.AddrPort())
+		assert.True(t, cached)
+		assert.Equal(t, uint8(1), failures)
+		assert.True(t, raw.deadline.IsZero(), "read deadline was not cleared")
+	})
+
+	t.Run("does not cache a forced initial read failure", func(t *testing.T) {
+		waiting := &stubSniffer{reply: func(data []byte) (string, error) {
+			return "", needAtLeast(len(data) + 1)
+		}}
+		sd, err := NewDispatcher(&Config{
+			Enable:      true,
+			ForceDomain: []C.DomainMatcher{domainMatcherFunc(func(string) bool { return true })},
+		})
+		assert.NoError(t, err)
+		sd.sniffers = []configuredSniffer{{Sniffer: waiting}}
+		raw := &chunkedConn{
+			t:       t,
+			readErr: &net.OpError{Op: "read", Net: "tcp", Err: io.ErrNoProgress},
+		}
+		t.Cleanup(raw.stopTimer)
+		metadata := &C.Metadata{
+			NetWork: C.TCP,
+			Host:    "forced.example",
+			DstIP:   netip.MustParseAddr("192.0.2.1"),
+			DstPort: 80,
+		}
+
+		sniffed := sd.TCPSniff(N.NewBufferedConn(raw), metadata)
+
+		assert.False(t, sniffed)
 		assert.False(t, raw.closed)
 		_, cached := sd.skipList.Get(metadata.AddrPort())
 		assert.False(t, cached)
