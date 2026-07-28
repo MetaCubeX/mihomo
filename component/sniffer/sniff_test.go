@@ -501,44 +501,132 @@ func TestTLSHeaders(t *testing.T) {
 }
 
 func TestHTTPHeaders(t *testing.T) {
+	domain := "example.com"
+	headerBlock := append([]byte{0x41, byte(len(domain))}, domain...)
+	const (
+		firstSplit  = 4
+		secondSplit = 9
+	)
+
 	cases := []struct {
+		name   string
 		input  []byte
 		domain string
 		err    bool
 	}{
 		{
+			name:   "http1 origin form",
 			input:  []byte("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"),
 			domain: "example.com",
 		},
 		{
+			name:   "http1 absolute form",
 			input:  []byte("GET http://example.com/path HTTP/1.1\r\n\r\n"),
 			domain: "example.com",
 		},
 		{
+			name:  "http1 ip host",
 			input: []byte("GET / HTTP/1.1\r\nHost: 1.2.3.4\r\n\r\n"),
 			err:   true,
 		},
 		{
-			input: []byte{
-				0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54,
-				0x54, 0x50, 0x2f, 0x32, 0x2e, 0x30, 0x0d, 0x0a,
-				0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a,
-				0x00, 0x00, 0x0d, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01,
-				0x41, 0x0b,
-				0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d,
-			},
-			domain: "example.com",
+			name: "http2 single headers frame",
+			input: makeTestHTTP2Input(
+				makeTestHTTP2Frame(h2FrameHeaders, h2FlagEndHeaders, 1, headerBlock),
+			),
+			domain: domain,
+		},
+		{
+			name: "http2 continuations",
+			input: makeTestHTTP2Input(
+				makeTestHTTP2Frame(h2FrameHeaders, 0, 1, headerBlock[:firstSplit]),
+				makeTestHTTP2Frame(h2FrameContinuation, 0, 1, headerBlock[firstSplit:secondSplit]),
+				makeTestHTTP2Frame(h2FrameContinuation, h2FlagEndHeaders, 1, headerBlock[secondSplit:]),
+			),
+			domain: domain,
+		},
+		{
+			name: "http2 continuation on another stream",
+			input: makeTestHTTP2Input(
+				makeTestHTTP2Frame(h2FrameHeaders, 0, 1, headerBlock[:firstSplit]),
+				makeTestHTTP2Frame(h2FrameContinuation, h2FlagEndHeaders, 3, headerBlock[firstSplit:]),
+			),
+			err: true,
+		},
+		{
+			name: "http2 interleaved frame",
+			input: makeTestHTTP2Input(
+				makeTestHTTP2Frame(h2FrameHeaders, 0, 1, headerBlock[:firstSplit]),
+				makeTestHTTP2Frame(0x4, 0, 0, nil), // SETTINGS
+				makeTestHTTP2Frame(h2FrameContinuation, h2FlagEndHeaders, 1, headerBlock[firstSplit:]),
+			),
+			err: true,
+		},
+		{
+			name: "http2 truncated hpack block after authority",
+			input: makeTestHTTP2Input(
+				makeTestHTTP2Frame(h2FrameHeaders, h2FlagEndHeaders, 1, append(bytes.Clone(headerBlock), 0x40)),
+			),
+			err: true,
 		},
 	}
 
 	for _, test := range cases {
-		h, _ := NewHTTPSniffer(SnifferConfig{})
-		domain, err := h.SniffData(test.input)
-		if test.err {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-			assert.Equal(t, test.domain, domain)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			h, err := NewHTTPSniffer(SnifferConfig{})
+			require.NoError(t, err)
+			domain, err := h.SniffData(test.input)
+			if test.err {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.domain, domain)
+			}
+		})
 	}
+
+	t.Run("http2 continuation header missing", func(t *testing.T) {
+		input := makeTestHTTP2Input(
+			makeTestHTTP2Frame(h2FrameHeaders, 0, 1, headerBlock[:firstSplit]),
+		)
+		h, err := NewHTTPSniffer(SnifferConfig{})
+		require.NoError(t, err)
+		_, err = h.SniffData(input)
+		var need *errNeedAtLeastData
+		require.ErrorAs(t, err, &need)
+		assert.Equal(t, len(input)+h2FrameHeaderLen, need.length)
+	})
+
+	t.Run("http2 continuation payload incomplete", func(t *testing.T) {
+		complete := makeTestHTTP2Input(
+			makeTestHTTP2Frame(h2FrameHeaders, 0, 1, headerBlock[:firstSplit]),
+			makeTestHTTP2Frame(h2FrameContinuation, h2FlagEndHeaders, 1, headerBlock[firstSplit:]),
+		)
+		h, err := NewHTTPSniffer(SnifferConfig{})
+		require.NoError(t, err)
+		_, err = h.SniffData(complete[:len(complete)-1])
+		var need *errNeedAtLeastData
+		require.ErrorAs(t, err, &need)
+		assert.Equal(t, len(complete), need.length)
+	})
+}
+
+func makeTestHTTP2Frame(frameType, flags byte, streamID uint32, payload []byte) []byte {
+	frame := make([]byte, h2FrameHeaderLen+len(payload))
+	frame[0] = byte(len(payload) >> 16)
+	frame[1] = byte(len(payload) >> 8)
+	frame[2] = byte(len(payload))
+	frame[3] = frameType
+	frame[4] = flags
+	binary.BigEndian.PutUint32(frame[5:9], streamID)
+	copy(frame[h2FrameHeaderLen:], payload)
+	return frame
+}
+
+func makeTestHTTP2Input(frames ...[]byte) []byte {
+	input := bytes.Clone(h2ClientPreface)
+	for _, frame := range frames {
+		input = append(input, frame...)
+	}
+	return input
 }

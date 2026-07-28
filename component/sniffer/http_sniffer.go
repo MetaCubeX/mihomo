@@ -2,6 +2,7 @@ package sniffer
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"net"
 	"net/netip"
@@ -29,12 +30,17 @@ var httpMethods = [...][]byte{
 // RFC 9113 §3.4
 var h2ClientPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
 
-// RFC 9113 §6.2
-const (
-	h2FrameHeaders byte = 0x1
+// RFC 9113 §4.1
+const h2FrameHeaderLen = 9
 
-	h2FlagPadded   byte = 0x8
-	h2FlagPriority byte = 0x20
+// RFC 9113 §6.2 / §6.10
+const (
+	h2FrameHeaders      byte = 0x1
+	h2FrameContinuation byte = 0x9
+
+	h2FlagEndHeaders byte = 0x4
+	h2FlagPadded     byte = 0x8
+	h2FlagPriority   byte = 0x20
 )
 
 // RFC 9113 §6.5.2
@@ -91,7 +97,7 @@ func sniffHTTP1(b []byte) (string, error) {
 	if !found {
 		return "", &errNeedAtLeastData{
 			length: len(b) + 1,
-			err: ErrNoClue,
+			err:    ErrNoClue,
 		}
 	}
 	if len(req) < 14 {
@@ -161,60 +167,11 @@ func sniffHTTP2(b []byte) (string, error) {
 	total := len(b)
 	b = b[len(h2ClientPreface):]
 
-	var (
-		payload []byte
-		flags   byte
-	)
-	for { // RFC 9113 §4.1
-		if len(b) < 9 {
-			return "", &errNeedAtLeastData{
-				length: total - len(b) + 9,
-				err: ErrNoClue,
-			}
-		}
-
-		length := int(b[0])<<16 | int(b[1])<<8 | int(b[2])
-		frameType := b[3]
-		flags = b[4]
-
-		b = b[9:]
-
-		if len(b) < length {
-			return "", &errNeedAtLeastData{
-				length: total - len(b) + length,
-				err: ErrNoClue,
-			}
-		}
-		if frameType == h2FrameHeaders {
-			payload = b[:length]
-			break
-		}
-
-		b = b[length:]
-	}
-
-	if flags&h2FlagPadded != 0 {
-		if len(payload) == 0 {
-			return "", ErrNoClue
-		}
-		padLen := int(payload[0])
-		if padLen >= len(payload) {
-			return "", ErrNoClue
-		}
-		payload = payload[1 : len(payload)-padLen]
-	}
-
-	if flags&h2FlagPriority != 0 {
-		if len(payload) < 5 {
-			return "", ErrNoClue
-		}
-		payload = payload[5:]
-	}
-
 	// RFC 9113 §8.3.1
 	var (
-		authority string
-		host      string
+		authority      string
+		host           string
+		headerStreamID uint32
 	)
 	decoder := hpack.NewDecoder(headerTableSize, func(f hpack.HeaderField) {
 		switch f.Name {
@@ -225,8 +182,76 @@ func sniffHTTP2(b []byte) (string, error) {
 		}
 	})
 
-	_, err := decoder.Write(payload)
-	if err != nil {
+	for { // RFC 9113 §4.1
+		if len(b) < h2FrameHeaderLen {
+			return "", &errNeedAtLeastData{
+				length: total - len(b) + h2FrameHeaderLen,
+				err:    ErrNoClue,
+			}
+		}
+
+		length := int(b[0])<<16 | int(b[1])<<8 | int(b[2])
+		frameType := b[3]
+		flags := b[4]
+		streamID := binary.BigEndian.Uint32(b[5:9]) & 0x7fffffff
+
+		b = b[h2FrameHeaderLen:]
+
+		if len(b) < length {
+			return "", &errNeedAtLeastData{
+				length: total - len(b) + length,
+				err:    ErrNoClue,
+			}
+		}
+		payload := b[:length]
+		b = b[length:]
+
+		if headerStreamID == 0 {
+			if frameType == h2FrameContinuation {
+				return "", ErrNoClue
+			}
+			if frameType != h2FrameHeaders {
+				continue
+			}
+			if streamID == 0 {
+				return "", ErrNoClue
+			}
+			headerStreamID = streamID
+
+			if flags&h2FlagPadded != 0 {
+				if len(payload) == 0 {
+					return "", ErrNoClue
+				}
+				padLen := int(payload[0])
+				if padLen >= len(payload) {
+					return "", ErrNoClue
+				}
+				payload = payload[1 : len(payload)-padLen]
+			}
+
+			if flags&h2FlagPriority != 0 {
+				if len(payload) < 5 {
+					return "", ErrNoClue
+				}
+				payload = payload[5:]
+			}
+		} else if frameType != h2FrameContinuation || streamID != headerStreamID {
+			// RFC 9113 §4.3 requires a header block's CONTINUATION frames to be
+			// contiguous and use the same stream identifier.
+			return "", ErrNoClue
+		}
+
+		if _, err := decoder.Write(payload); err != nil {
+			return "", ErrNoClue
+		}
+		if flags&h2FlagEndHeaders != 0 {
+			break
+		}
+	}
+
+	// END_HEADERS closes the HPACK block; Close rejects a partially buffered
+	// field that Write alone cannot distinguish from a valid fragment.
+	if err := decoder.Close(); err != nil {
 		return "", ErrNoClue
 	}
 
