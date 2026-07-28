@@ -36,15 +36,21 @@ const h2FrameHeaderLen = 9
 // RFC 9113 §6.2 / §6.10
 const (
 	h2FrameHeaders      byte = 0x1
+	h2FrameSettings     byte = 0x4
 	h2FrameContinuation byte = 0x9
 
+	h2FlagAck        byte = 0x1
 	h2FlagEndHeaders byte = 0x4
 	h2FlagPadded     byte = 0x8
 	h2FlagPriority   byte = 0x20
 )
 
-// RFC 9113 §6.5.2
-const headerTableSize uint32 = 4096
+const (
+	// RFC 9113 §6.5.2
+	headerTableSize uint32 = 4096
+	// RFC 9113 §4.2
+	h2DefaultMaxFrameSize = 1 << 14
+)
 
 type HTTPSniffer struct {
 	*BaseSniffer
@@ -73,7 +79,9 @@ func (http *HTTPSniffer) SupportNetwork() C.NetWork {
 func (http *HTTPSniffer) SniffData(b []byte) (string, error) {
 	if len(b) < len(h2ClientPreface) {
 		if bytes.HasPrefix(h2ClientPreface, b) {
-			return "", &errNeedAtLeastData{length: len(h2ClientPreface), err: ErrNoClue}
+			// Advance incrementally so a mismatch can fall back to HTTP/1
+			// without waiting for the entire preface.
+			return "", &errNeedAtLeastData{length: len(b) + 1, err: ErrNoClue}
 		}
 		return sniffHTTP1(b)
 	}
@@ -214,73 +222,116 @@ func sniffHTTP2(b []byte) (string, error) {
 		streamID := binary.BigEndian.Uint32(b[5:9]) & 0x7fffffff
 
 		b = b[h2FrameHeaderLen:]
-
-		if len(b) < length {
-			return "", &errNeedAtLeastData{
-				length: total - len(b) + length,
-				err:    ErrNoClue,
+		payloadOffset := total - len(b)
+		if payloadOffset == len(h2ClientPreface)+h2FrameHeaderLen {
+			// The client connection preface is followed by a non-ACK SETTINGS
+			// frame. Rejecting another type here avoids waiting for a payload
+			// that cannot make this a valid HTTP/2 connection.
+			if frameType != h2FrameSettings || flags&h2FlagAck != 0 {
+				return "", ErrNoClue
 			}
 		}
-		payload := b[:length]
-		b = b[length:]
-
+		if length > h2DefaultMaxFrameSize {
+			// No server SETTINGS can have been received while sniffing holds the
+			// connection, so the RFC-defined default frame size still applies.
+			return "", ErrNoClue
+		}
+		if frameType == h2FrameSettings {
+			ack := flags&h2FlagAck != 0
+			if streamID != 0 || ack && length != 0 || !ack && length%6 != 0 {
+				return "", ErrNoClue
+			}
+		}
 		if headerStreamID == 0 {
 			if frameType == h2FrameContinuation {
 				return "", ErrNoClue
 			}
-			if frameType != h2FrameHeaders {
-				continue
-			}
-			if streamID == 0 {
+			if frameType == h2FrameHeaders && streamID == 0 {
 				return "", ErrNoClue
-			}
-			headerStreamID = streamID
-
-			if flags&h2FlagPadded != 0 {
-				if len(payload) == 0 {
-					return "", ErrNoClue
-				}
-				padLen := int(payload[0])
-				if padLen >= len(payload) {
-					return "", ErrNoClue
-				}
-				payload = payload[1 : len(payload)-padLen]
-			}
-
-			if flags&h2FlagPriority != 0 {
-				if len(payload) < 5 {
-					return "", ErrNoClue
-				}
-				payload = payload[5:]
 			}
 		} else if frameType != h2FrameContinuation || streamID != headerStreamID {
 			// RFC 9113 §4.3 requires a header block's CONTINUATION frames to be
-			// contiguous and use the same stream identifier.
+			// contiguous and use the same stream identifier. The frame header is
+			// sufficient to reject a violation without waiting for its payload.
 			return "", ErrNoClue
 		}
 
-		if _, err := decoder.Write(payload); err != nil {
+		if headerStreamID == 0 {
+			if frameType != h2FrameHeaders {
+				if len(b) < length {
+					return "", &errNeedAtLeastData{length: payloadOffset + length, err: ErrNoClue}
+				}
+				b = b[length:]
+				continue
+			}
+			headerStreamID = streamID
+		}
+
+		fragmentStart := 0
+		fragmentEnd := length
+		if frameType == h2FrameHeaders {
+			if flags&h2FlagPadded != 0 {
+				if length == 0 {
+					return "", ErrNoClue
+				}
+				if len(b) == 0 {
+					return "", &errNeedAtLeastData{length: payloadOffset + 1, err: ErrNoClue}
+				}
+				padLen := int(b[0])
+				if padLen >= length {
+					return "", ErrNoClue
+				}
+				fragmentStart++
+				fragmentEnd -= padLen
+			}
+
+			if flags&h2FlagPriority != 0 {
+				if fragmentEnd-fragmentStart < 5 {
+					return "", ErrNoClue
+				}
+				fragmentStart += 5
+			}
+		}
+
+		availableEnd := len(b)
+		if availableEnd > fragmentEnd {
+			availableEnd = fragmentEnd
+		}
+		if availableEnd > fragmentStart {
+			_, err := decoder.Write(b[fragmentStart:availableEnd])
+			// A complete authority field is enough for routing. Like HTTP/1 Host,
+			// later fields cannot improve the sniffing result and must not delay it.
+			if authority != "" {
+				return parseHost([]byte(authority))
+			}
+			if host != "" {
+				return parseHost([]byte(host))
+			}
+			if err != nil {
+				return "", ErrNoClue
+			}
+		}
+		if flags&h2FlagEndHeaders != 0 && (fragmentStart == fragmentEnd || availableEnd == fragmentEnd) {
+			// The HPACK fragment is complete or known to be empty. Trailing frame
+			// padding cannot contain a host and therefore cannot change the verdict.
 			return "", ErrNoClue
 		}
-		if flags&h2FlagEndHeaders != 0 {
-			break
+
+		if len(b) < length {
+			want := payloadOffset + length
+			if availableEnd < fragmentEnd {
+				// More HPACK bytes may complete the authority before the rest of
+				// this frame, so advance only to the next byte that can help.
+				want = total + 1
+				if len(b) < fragmentStart {
+					want = payloadOffset + fragmentStart + 1
+				}
+			}
+			return "", &errNeedAtLeastData{length: want, err: ErrNoClue}
 		}
+		b = b[length:]
+		continue
 	}
-
-	// END_HEADERS closes the HPACK block; Close rejects a partially buffered
-	// field that Write alone cannot distinguish from a valid fragment.
-	if err := decoder.Close(); err != nil {
-		return "", ErrNoClue
-	}
-
-	if authority == "" {
-		if host == "" {
-			return "", ErrNoClue
-		}
-		authority = host
-	}
-
-	return parseHost([]byte(authority))
 }
 
 func parseHost(h []byte) (string, error) {

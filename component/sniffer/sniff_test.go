@@ -628,11 +628,21 @@ func TestHTTPHeaders(t *testing.T) {
 			err: true,
 		},
 		{
-			name: "http2 truncated hpack block after authority",
+			name: "http2 authority before incomplete frame payload",
+			input: func() []byte {
+				frame := makeTestHTTP2Frame(h2FrameHeaders, h2FlagEndHeaders, 1,
+					append(bytes.Clone(headerBlock), make([]byte, 1024)...))
+				return makeTestHTTP2Input(frame[:h2FrameHeaderLen+len(headerBlock)])
+			}(),
+			domain: domain,
+		},
+		{
+			name: "http2 authority before invalid trailing hpack",
 			input: makeTestHTTP2Input(
-				makeTestHTTP2Frame(h2FrameHeaders, h2FlagEndHeaders, 1, append(bytes.Clone(headerBlock), 0x40)),
+				makeTestHTTP2Frame(h2FrameHeaders, h2FlagEndHeaders, 1,
+					append(bytes.Clone(headerBlock), 0x80)), // indexed field with index zero
 			),
-			err: true,
+			domain: domain,
 		},
 	}
 
@@ -676,6 +686,81 @@ func TestHTTPHeaders(t *testing.T) {
 		assert.Equal(t, len(input)+1, need.length)
 	})
 
+	t.Run("http2 reads the preface incrementally", func(t *testing.T) {
+		for _, test := range []struct {
+			name  string
+			input []byte
+		}{
+			{name: "first byte", input: h2ClientPreface[:1]},
+			{name: "partial method", input: h2ClientPreface[:3]},
+			{name: "last byte missing", input: h2ClientPreface[:len(h2ClientPreface)-1]},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				h, err := NewHTTPSniffer(SnifferConfig{})
+				require.NoError(t, err)
+				_, err = h.SniffData(test.input)
+				var need *errNeedAtLeastData
+				require.ErrorAs(t, err, &need)
+				assert.Equal(t, len(test.input)+1, need.length)
+			})
+		}
+	})
+
+	t.Run("http2 rejects invalid frame headers before payload", func(t *testing.T) {
+		frameHeader := func(frameType, flags byte, streamID uint32, length int) []byte {
+			frame := makeTestHTTP2Frame(frameType, flags, streamID, make([]byte, length))
+			return frame[:h2FrameHeaderLen]
+		}
+		for _, test := range []struct {
+			name  string
+			input []byte
+		}{
+			{
+				name: "first frame is not settings",
+				input: append(bytes.Clone(h2ClientPreface),
+					frameHeader(0x0, 0, 1, 1024)...), // DATA
+			},
+			{
+				name: "first settings is an ack",
+				input: append(bytes.Clone(h2ClientPreface),
+					frameHeader(h2FrameSettings, h2FlagAck, 0, 0)...),
+			},
+			{
+				name:  "frame exceeds default maximum",
+				input: makeTestHTTP2Input(frameHeader(h2FrameHeaders, 0, 1, h2DefaultMaxFrameSize+1)),
+			},
+			{
+				name: "invalid settings length",
+				input: append(bytes.Clone(h2ClientPreface),
+					frameHeader(h2FrameSettings, 0, 0, 1)...),
+			},
+			{
+				name:  "unexpected continuation",
+				input: makeTestHTTP2Input(frameHeader(h2FrameContinuation, 0, 1, 1024)),
+			},
+			{
+				name:  "headers on stream zero",
+				input: makeTestHTTP2Input(frameHeader(h2FrameHeaders, 0, 0, 1024)),
+			},
+			{
+				name: "interleaved frame",
+				input: makeTestHTTP2Input(
+					makeTestHTTP2Frame(h2FrameHeaders, 0, 1, headerBlock[:firstSplit]),
+					frameHeader(h2FrameSettings, 0, 0, 0),
+				),
+			},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				h, err := NewHTTPSniffer(SnifferConfig{})
+				require.NoError(t, err)
+				_, err = h.SniffData(test.input)
+				assert.ErrorIs(t, err, ErrNoClue)
+				var need *errNeedAtLeastData
+				assert.NotErrorAs(t, err, &need)
+			})
+		}
+	})
+
 	t.Run("http2 continuation header missing", func(t *testing.T) {
 		input := makeTestHTTP2Input(
 			makeTestHTTP2Frame(h2FrameHeaders, 0, 1, headerBlock[:firstSplit]),
@@ -700,6 +785,22 @@ func TestHTTPHeaders(t *testing.T) {
 		require.ErrorAs(t, err, &need)
 		assert.Equal(t, len(complete), need.length)
 	})
+
+	t.Run("http2 rejects missing authority before frame padding", func(t *testing.T) {
+		const paddingLen = 128
+		payload := append([]byte{paddingLen, 0x82}, make([]byte, paddingLen)...)
+		input := makeTestHTTP2Input(
+			makeTestHTTP2Frame(h2FrameHeaders, h2FlagEndHeaders|h2FlagPadded, 1, payload),
+		)
+		input = input[:len(input)-paddingLen]
+
+		h, err := NewHTTPSniffer(SnifferConfig{})
+		require.NoError(t, err)
+		_, err = h.SniffData(input)
+		assert.ErrorIs(t, err, ErrNoClue)
+		var need *errNeedAtLeastData
+		assert.NotErrorAs(t, err, &need)
+	})
 }
 
 func makeTestHTTP2Frame(frameType, flags byte, streamID uint32, payload []byte) []byte {
@@ -716,6 +817,7 @@ func makeTestHTTP2Frame(frameType, flags byte, streamID uint32, payload []byte) 
 
 func makeTestHTTP2Input(frames ...[]byte) []byte {
 	input := bytes.Clone(h2ClientPreface)
+	input = append(input, makeTestHTTP2Frame(h2FrameSettings, 0, 0, nil)...)
 	for _, frame := range frames {
 		input = append(input, frame...)
 	}
