@@ -15,14 +15,17 @@ import (
 )
 
 func makeTestClientHello(host string, paddingLen int) []byte {
-	serverName := []byte(host)
-	serverNameListLen := 1 + 2 + len(serverName)
-	extensionDataLen := 2 + serverNameListLen
-	extensions := make([]byte, 4+extensionDataLen)
-	binary.BigEndian.PutUint16(extensions[2:4], uint16(extensionDataLen))
-	binary.BigEndian.PutUint16(extensions[4:6], uint16(serverNameListLen))
-	binary.BigEndian.PutUint16(extensions[7:9], uint16(len(serverName)))
-	copy(extensions[9:], serverName)
+	var extensions []byte
+	if host != "" {
+		serverName := []byte(host)
+		serverNameListLen := 1 + 2 + len(serverName)
+		extensionDataLen := 2 + serverNameListLen
+		extensions = make([]byte, 4+extensionDataLen)
+		binary.BigEndian.PutUint16(extensions[2:4], uint16(extensionDataLen))
+		binary.BigEndian.PutUint16(extensions[4:6], uint16(serverNameListLen))
+		binary.BigEndian.PutUint16(extensions[7:9], uint16(len(serverName)))
+		copy(extensions[9:], serverName)
+	}
 	if paddingLen > 0 {
 		padding := make([]byte, 4+paddingLen)
 		binary.BigEndian.PutUint16(padding[0:2], 0x15) // padding extension
@@ -30,7 +33,7 @@ func makeTestClientHello(host string, paddingLen int) []byte {
 		extensions = append(extensions, padding...)
 	}
 
-	body := make([]byte, 0, 64+len(serverName))
+	body := make([]byte, 0, 64+len(host))
 	body = append(body, 0x03, 0x03)          // legacy_version
 	body = append(body, make([]byte, 32)...) // random
 	body = append(body, 0)                   // legacy_session_id
@@ -361,11 +364,35 @@ func TestQUICHeaders(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "example.com", domain)
 	})
+
+	t.Run("server name before client hello padding", func(t *testing.T) {
+		const paddingLen = 20 * 1024
+		clientHello := makeTestClientHello("example.com", paddingLen)
+		prefixLen := len(clientHello) - (4 + paddingLen)
+		q := &quicPacketSender{done: make(chan struct{})}
+		t.Cleanup(q.close)
+
+		require.NoError(t, q.addCryptoData(0, clientHello[:prefixLen]))
+		assert.Less(t, q.contiguousCryptoEnd, uint64(len(clientHello)))
+
+		domain, err := q.tryAssemble()
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", domain)
+	})
 }
 
 func TestTLSHeaders(t *testing.T) {
 	generatedHello := makeTestClientHello("example.com", 0)
 	generatedHelloWithTrailingData := append(bytes.Clone(generatedHello), 0x02, 0, 0, 0)
+	const paddingLen = 4 * 1024
+	paddedHello := makeTestClientHello("example.com", paddingLen)
+	paddedPrefixLen := len(paddedHello) - (4 + paddingLen)
+	paddedRecord := makeTestTLSRecords(paddedHello)
+	paddedRecord = paddedRecord[:tlsRecordHeaderLen+paddedPrefixLen]
+	fragmentedPaddedRecord := makeTestTLSRecords(paddedHello, 2)
+	fragmentedPaddedRecord = fragmentedPaddedRecord[:2*tlsRecordHeaderLen+paddedPrefixLen]
+	incompleteTrailingRecord := makeTestTLSRecords(generatedHelloWithTrailingData)
+	incompleteTrailingRecord = incompleteTrailingRecord[:tlsRecordHeaderLen+len(generatedHello)]
 	cases := []struct {
 		name   string
 		input  []byte
@@ -515,6 +542,21 @@ func TestTLSHeaders(t *testing.T) {
 			input:  makeTestTLSRecords(generatedHelloWithTrailingData, 2),
 			domain: "example.com",
 		},
+		{
+			name:   "server name before client hello padding",
+			input:  paddedRecord,
+			domain: "example.com",
+		},
+		{
+			name:   "server name across records before padding",
+			input:  fragmentedPaddedRecord,
+			domain: "example.com",
+		},
+		{
+			name:   "client hello before incomplete record tail",
+			input:  incompleteTrailingRecord,
+			domain: "example.com",
+		},
 	}
 
 	for _, test := range cases {
@@ -542,7 +584,8 @@ func TestTLSHeaders(t *testing.T) {
 		{name: "two byte record header", have: 2, need: tlsRecordHeaderLen},
 		{name: "three byte record header", have: 3, need: tlsRecordHeaderLen},
 		{name: "four byte record header", have: 4, need: tlsRecordHeaderLen},
-		{name: "record payload missing", have: tlsRecordHeaderLen, need: tlsRecordHeaderLen + 2},
+		{name: "record payload missing", have: tlsRecordHeaderLen, need: tlsRecordHeaderLen + 1},
+		{name: "handshake type only", have: tlsRecordHeaderLen + 1, need: tlsRecordHeaderLen + 2},
 		{name: "next record header missing", have: tlsRecordHeaderLen + 2, need: 2*tlsRecordHeaderLen + 2},
 		{name: "final record payload incomplete", have: len(fragmented) - 1, need: len(fragmented)},
 	} {
@@ -553,6 +596,37 @@ func TestTLSHeaders(t *testing.T) {
 			assert.Equal(t, test.need, need.length)
 		})
 	}
+
+	t.Run("rejects oversized record before its payload", func(t *testing.T) {
+		input := []byte{tlsRecordTypeHandshake, 0x03, 0x01, 0x40, 0x01}
+		_, err := SniffTLS(input)
+		assert.ErrorIs(t, err, errNotTLS)
+		var need *errNeedAtLeastData
+		assert.NotErrorAs(t, err, &need)
+	})
+
+	t.Run("rejects another handshake type before record completion", func(t *testing.T) {
+		input := []byte{tlsRecordTypeHandshake, 0x03, 0x01, 0x40, 0x00, 0x02}
+		_, err := SniffTLS(input)
+		assert.ErrorIs(t, err, errNotClientHello)
+		var need *errNeedAtLeastData
+		assert.NotErrorAs(t, err, &need)
+	})
+
+	t.Run("rejects invalid client hello prefix before record completion", func(t *testing.T) {
+		clientHello := make([]byte, 39)
+		clientHello[0] = tlsHandshakeTypeClientHello
+		clientHello[2] = 0x03
+		clientHello[3] = 0xe8 // declared body length: 1000 bytes
+		clientHello[38] = 33  // legacy_session_id exceeds its 32-byte limit
+		input := []byte{tlsRecordTypeHandshake, 0x03, 0x01, 0x03, 0xec}
+		input = append(input, clientHello...)
+
+		_, err := SniffTLS(input)
+		assert.ErrorIs(t, err, errNotClientHello)
+		var need *errNeedAtLeastData
+		assert.NotErrorAs(t, err, &need)
+	})
 }
 
 func TestHTTPHeaders(t *testing.T) {
@@ -798,6 +872,18 @@ func TestHTTPHeaders(t *testing.T) {
 		require.NoError(t, err)
 		_, err = h.SniffData(input)
 		assert.ErrorIs(t, err, ErrNoClue)
+		var need *errNeedAtLeastData
+		assert.NotErrorAs(t, err, &need)
+	})
+
+	t.Run("rejects absent server name before final extension payload", func(t *testing.T) {
+		const paddingLen = 4 * 1024
+		clientHello := makeTestClientHello("", paddingLen)
+		input := makeTestTLSRecords(clientHello)
+		input = input[:tlsRecordHeaderLen+len(clientHello)-paddingLen]
+
+		_, err := SniffTLS(input)
+		assert.ErrorIs(t, err, errNotTLS)
 		var need *errNeedAtLeastData
 		assert.NotErrorAs(t, err, &need)
 	})

@@ -548,25 +548,29 @@ func (q *quicPacketSender) tryAssemble() (string, error) {
 		return "", nil
 	}
 
-	if q.contiguousCryptoEnd < tlsHandshakeHeaderLen {
-		// The beginning of the CRYPTO stream is still incomplete.
+	if q.contiguousCryptoEnd == 0 {
 		return "", nil
 	}
 
-	helloSize, err := clientHelloSize(q.buffer[:tlsHandshakeHeaderLen])
-	if err != nil {
-		return "", err
-	}
-	if helloSize > maxCryptoStreamOffset {
-		return "", io.ErrShortBuffer
-	}
-	if q.contiguousCryptoEnd < uint64(helloSize) {
-		// The complete ClientHello has not arrived yet.
-		return "", nil
+	if q.contiguousCryptoEnd >= tlsHandshakeHeaderLen {
+		helloSize, err := clientHelloSize(q.buffer[:tlsHandshakeHeaderLen])
+		if err != nil {
+			return "", err
+		}
+		if helloSize > maxCryptoStreamOffset {
+			return "", io.ErrShortBuffer
+		}
 	}
 
-	domain, err := ReadClientHello(q.buffer[:helloSize])
+	domain, err := ReadClientHello(q.buffer[:q.contiguousCryptoEnd])
 	if err != nil {
+		var need *errNeedAtLeastData
+		if errors.As(err, &need) {
+			if need.length > maxCryptoStreamOffset {
+				return "", io.ErrShortBuffer
+			}
+			return "", nil
+		}
 		return "", err
 	}
 
