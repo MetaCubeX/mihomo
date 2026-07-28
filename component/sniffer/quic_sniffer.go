@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"math/bits"
 	"sync"
 	"time"
 
@@ -141,7 +140,7 @@ type quicPacketSender struct {
 	structure           *quicStructure
 	lock                sync.RWMutex
 	buffer              []byte
-	receivedCryptoData  []uint64
+	receivedCryptoData  bitmap
 	contiguousCryptoEnd uint64
 	result              string
 
@@ -208,7 +207,7 @@ func (q *quicPacketSender) close() {
 			_ = pool.Put(q.buffer)
 			q.buffer = nil
 		}
-		q.receivedCryptoData = nil
+		q.receivedCryptoData = bitmap{}
 		q.contiguousCryptoEnd = 0
 	}
 }
@@ -511,47 +510,12 @@ func (q *quicPacketSender) addCryptoData(offset uint64, data []byte) error {
 	}
 	copy(q.buffer[offset:end], data)
 
-	wordCount := (cap(q.buffer) + 63) / 64
-	if wordCount > len(q.receivedCryptoData) {
-		receivedCryptoData := make([]uint64, wordCount)
-		copy(receivedCryptoData, q.receivedCryptoData)
-		q.receivedCryptoData = receivedCryptoData
-	}
-	firstWord := int(offset / 64)
-	lastWord := int((end - 1) / 64)
-	firstMask := ^uint64(0) << (offset % 64)
-	lastMask := ^uint64(0)
-	if endBit := end % 64; endBit != 0 {
-		lastMask = (uint64(1) << endBit) - 1
-	}
-	if firstWord == lastWord {
-		q.receivedCryptoData[firstWord] |= firstMask & lastMask
-	} else {
-		q.receivedCryptoData[firstWord] |= firstMask
-		for i := firstWord + 1; i < lastWord; i++ {
-			q.receivedCryptoData[i] = ^uint64(0)
-		}
-		q.receivedCryptoData[lastWord] |= lastMask
-	}
+	q.receivedCryptoData.setRange(int(offset), int(end))
 
-	// The contiguous prefix only moves forward, so each retained byte is
-	// checked at most once regardless of fragment order or retransmission.
+	// The contiguous prefix only moves forward, allowing the bitmap to skip
+	// complete words without rescanning the assembled prefix.
 	if offset <= q.contiguousCryptoEnd && end > q.contiguousCryptoEnd {
-		for q.contiguousCryptoEnd < uint64(len(q.buffer)) {
-			word := q.receivedCryptoData[q.contiguousCryptoEnd/64] >> (q.contiguousCryptoEnd % 64)
-			covered := uint64(bits.TrailingZeros64(^word))
-			remaining := uint64(len(q.buffer)) - q.contiguousCryptoEnd
-			if wordRemaining := 64 - q.contiguousCryptoEnd%64; remaining > wordRemaining {
-				remaining = wordRemaining
-			}
-			if covered > remaining {
-				covered = remaining
-			}
-			q.contiguousCryptoEnd += covered
-			if covered < remaining {
-				break
-			}
-		}
+		q.contiguousCryptoEnd = uint64(q.receivedCryptoData.firstUnset(int(q.contiguousCryptoEnd), len(q.buffer)))
 	}
 	return nil
 }
