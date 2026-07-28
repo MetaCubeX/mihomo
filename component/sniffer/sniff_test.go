@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/metacubex/mihomo/common/utils"
@@ -14,15 +15,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func makeTestClientHello(host string) []byte {
+func makeTestClientHello(host string, paddingLen int) []byte {
 	serverName := []byte(host)
 	serverNameListLen := 1 + 2 + len(serverName)
 	extensionDataLen := 2 + serverNameListLen
-	extension := make([]byte, 4+extensionDataLen)
-	binary.BigEndian.PutUint16(extension[2:4], uint16(extensionDataLen))
-	binary.BigEndian.PutUint16(extension[4:6], uint16(serverNameListLen))
-	binary.BigEndian.PutUint16(extension[7:9], uint16(len(serverName)))
-	copy(extension[9:], serverName)
+	extensions := make([]byte, 4+extensionDataLen)
+	binary.BigEndian.PutUint16(extensions[2:4], uint16(extensionDataLen))
+	binary.BigEndian.PutUint16(extensions[4:6], uint16(serverNameListLen))
+	binary.BigEndian.PutUint16(extensions[7:9], uint16(len(serverName)))
+	copy(extensions[9:], serverName)
+	if paddingLen > 0 {
+		padding := make([]byte, 4+paddingLen)
+		binary.BigEndian.PutUint16(padding[0:2], 0x15) // padding extension
+		binary.BigEndian.PutUint16(padding[2:4], uint16(paddingLen))
+		extensions = append(extensions, padding...)
+	}
 
 	body := make([]byte, 0, 64+len(serverName))
 	body = append(body, 0x03, 0x03)          // legacy_version
@@ -30,8 +37,8 @@ func makeTestClientHello(host string) []byte {
 	body = append(body, 0)                   // legacy_session_id
 	body = append(body, 0, 2, 0x13, 0x01)    // cipher_suites
 	body = append(body, 1, 0)                // compression_methods
-	body = binary.BigEndian.AppendUint16(body, uint16(len(extension)))
-	body = append(body, extension...)
+	body = binary.BigEndian.AppendUint16(body, uint16(len(extensions)))
+	body = append(body, extensions...)
 
 	hello := []byte{
 		tlsHandshakeTypeClientHello,
@@ -240,6 +247,11 @@ func TestQUICHeaders(t *testing.T) {
 			domain: "test.example.com",
 		},
 	}
+	// This fixture consists of two Initial packets for the same connection.
+	coalesced := cases[2]
+	coalesced.name = "coalesced initial packets"
+	coalesced.input = []string{strings.Join(coalesced.input, "")}
+	cases = append(cases, coalesced)
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -265,7 +277,7 @@ func TestQUICHeaders(t *testing.T) {
 	}
 
 	t.Run("client hello followed by crypto data", func(t *testing.T) {
-		clientHello := makeTestClientHello("example.com")
+		clientHello := makeTestClientHello("example.com", 0)
 		cryptoData := append(bytes.Clone(clientHello), 0x02, 0, 0, 0)
 		q := &quicPacketSender{
 			buffer: cryptoData,
@@ -277,10 +289,27 @@ func TestQUICHeaders(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "example.com", domain)
 	})
+
+	t.Run("client hello larger than 16 kib", func(t *testing.T) {
+		clientHello := makeTestClientHello("example.com", 20*1024)
+		q := &quicPacketSender{done: make(chan struct{})}
+		t.Cleanup(q.close)
+
+		const firstFragmentLen = 4 * 1024
+		require.NoError(t, q.addCryptoData(0, clientHello[:firstFragmentLen]))
+		initialCapacity := cap(q.buffer)
+		require.NoError(t, q.addCryptoData(firstFragmentLen, clientHello[firstFragmentLen:]))
+		assert.Greater(t, len(clientHello), 16*1024)
+		assert.Greater(t, cap(q.buffer), initialCapacity)
+
+		domain, err := q.tryAssemble()
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", domain)
+	})
 }
 
 func TestTLSHeaders(t *testing.T) {
-	generatedHello := makeTestClientHello("example.com")
+	generatedHello := makeTestClientHello("example.com", 0)
 	generatedHelloWithTrailingData := append(bytes.Clone(generatedHello), 0x02, 0, 0, 0)
 	cases := []struct {
 		name   string
