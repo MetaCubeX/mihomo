@@ -5,6 +5,7 @@ package sniffer
 // parsing itself (a complete buffer in, a domain out) belongs in sniff_test.go.
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"testing"
@@ -95,6 +96,7 @@ func needAtLeast(n int) error {
 func TestDispatcherFeedLoop(t *testing.T) {
 	segment := []byte("0123456789")
 	threeSegments := [][]byte{segment, segment, segment}
+	largeSize := 5000
 
 	tests := []struct {
 		name    string
@@ -104,7 +106,8 @@ func TestDispatcherFeedLoop(t *testing.T) {
 		wantErr bool
 		// size of each buffer handed to the sniffer, so both the number of
 		// rounds and how much they grew by are pinned down
-		seen []int
+		seen       []int
+		bufferSize int
 	}{
 		{
 			// a sniffer that discovers its needs incrementally (HTTP/2: preface,
@@ -121,6 +124,21 @@ func TestDispatcherFeedLoop(t *testing.T) {
 			},
 			host: "example.com",
 			seen: []int{10, 20, 30},
+		},
+		{
+			// requests beyond bufio.Reader's default capacity should expand the
+			// buffer before the dispatcher retries Peek
+			name:   "grows the peek buffer on demand",
+			chunks: [][]byte{segment, bytes.Repeat([]byte("x"), largeSize-len(segment))},
+			reply: func(data []byte) (string, error) {
+				if len(data) < largeSize {
+					return "", needAtLeast(largeSize)
+				}
+				return "example.com", nil
+			},
+			host:       "example.com",
+			seen:       []int{10, largeSize},
+			bufferSize: 8192,
 		},
 		{
 			// asking for one more byte still advances a whole segment at a time,
@@ -153,8 +171,9 @@ func TestDispatcherFeedLoop(t *testing.T) {
 			reply: func(data []byte) (string, error) {
 				return "", needAtLeast(1 << 20)
 			},
-			wantErr: true,
-			seen:    []int{10},
+			wantErr:    true,
+			seen:       []int{10},
+			bufferSize: maxSniffBufferSize,
 		},
 		{
 			name:   "gives up when the data never completes",
@@ -186,6 +205,9 @@ func TestDispatcherFeedLoop(t *testing.T) {
 				assert.Equal(t, test.host, host)
 			}
 			assert.Equal(t, test.seen, s.seen)
+			if test.bufferSize != 0 {
+				assert.Equal(t, test.bufferSize, conn.Reader().Size())
+			}
 			// sniffing must not leave a deadline behind for the relay that follows
 			assert.True(t, raw.deadline.IsZero(), "read deadline was not cleared")
 		})

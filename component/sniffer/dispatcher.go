@@ -21,6 +21,11 @@ var (
 	ErrNoClue               = errors.New("not enough information for making a decision")
 )
 
+// maxSniffBufferSize bounds the per-connection read-ahead memory used by TCP
+// sniffing. 64 KiB covers the HTTP/2 preface and several default-sized frames
+// while keeping lengths read from untrusted protocol headers bounded.
+const maxSniffBufferSize = 64 * 1024
+
 type Dispatcher struct {
 	enable          bool
 	sniffers        map[sniffer.Sniffer]SnifferConfig
@@ -242,6 +247,14 @@ func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (s
 				if need.length <= len(data) || !time.Now().Before(deadline) {
 					break
 				}
+				// Request enough capacity for the next retry. Grow rounds capacity up
+				// geometrically, while this power-of-two limit keeps automatic allocation
+				// bounded when a protocol advertises a much larger length.
+				growTo := need.length
+				if growTo > maxSniffBufferSize {
+					growTo = maxSniffBufferSize
+				}
+				conn.Grow(growTo)
 				//log.Debugln("[Sniffer] [%s] [%s] %v, got length: %d, want: %d", metadata.DstIP, s.Protocol(), need, len(data), need.length)
 				want = need.length
 			}
