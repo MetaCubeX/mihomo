@@ -147,3 +147,58 @@ func TestBufferedConnAppendData(t *testing.T) {
 		assert.Equal(t, append(original, appended...), data)
 	})
 }
+
+func TestBufferedConnPrependData(t *testing.T) {
+	t.Run("before unbuffered data", func(t *testing.T) {
+		conn := NewBufferedConn(&testReaderConn{Reader: bytes.NewReader([]byte("underlying"))})
+		conn.PrependData([]byte("prepended"))
+
+		data, err := io.ReadAll(conn)
+		require.NoError(t, err)
+		assert.Equal(t, []byte("prependedunderlying"), data)
+	})
+
+	t.Run("uses consumed headroom", func(t *testing.T) {
+		original := bytes.Repeat([]byte("a"), 4096)
+		prepended := bytes.Repeat([]byte("b"), 1024)
+		conn := NewBufferedConn(&testReaderConn{Reader: bytes.NewReader(original)})
+		_, err := conn.Peek(len(original))
+		require.NoError(t, err)
+		_, err = conn.Discard(2048)
+		require.NoError(t, err)
+		conn.PrependData(prepended)
+		assert.Equal(t, 4096, conn.Reader().Size())
+
+		data, err := io.ReadAll(conn)
+		require.NoError(t, err)
+		assert.Equal(t, append(prepended, original[2048:]...), data)
+	})
+
+	t.Run("shifts buffered data", func(t *testing.T) {
+		original := bytes.Repeat([]byte("a"), 2048)
+		prepended := bytes.Repeat([]byte("b"), 1024)
+		conn := NewBufferedConn(&testReaderConn{Reader: bytes.NewReader(original)})
+		_, err := conn.Peek(len(original))
+		require.NoError(t, err)
+		conn.PrependData(prepended)
+		assert.Equal(t, 4096, conn.Reader().Size())
+
+		data, err := io.ReadAll(conn)
+		require.NoError(t, err)
+		assert.Equal(t, append(prepended, original...), data)
+	})
+
+	t.Run("grows to make room", func(t *testing.T) {
+		original := bytes.Repeat([]byte("a"), 4096)
+		prepended := bytes.Repeat([]byte("b"), 2048)
+		conn := NewBufferedConn(&testReaderConn{Reader: bytes.NewReader(original)})
+		_, err := conn.Peek(len(original))
+		require.NoError(t, err)
+		conn.PrependData(prepended)
+		assert.Equal(t, 8192, conn.Reader().Size())
+
+		data, err := io.ReadAll(conn)
+		require.NoError(t, err)
+		assert.Equal(t, append(prepended, original...), data)
+	})
+}
