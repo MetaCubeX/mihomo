@@ -202,26 +202,48 @@ func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (s
 				return "", err
 			}
 
-			bufferedLen := conn.Buffered()
-			bytes, err := conn.Peek(bufferedLen)
-			if err != nil {
-				log.Debugln("[Sniffer] [%s] [%s] the data length not enough, error: %v", metadata.DstIP, s.Protocol(), err)
-				continue
-			}
-
-			host, err := s.SniffData(bytes)
-			var e *errNeedAtLeastData
-			if errors.As(err, &e) {
-				//log.Debugln("[Sniffer] [%s] [%s] %v, got length: %d", metadata.DstIP, s.Protocol(), e, len(bytes))
-				_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-				bytes, err = conn.Peek(e.length)
+			// Feed the sniffer until it reaches a verdict. A sniffer that needs more
+			// data returns errNeedAtLeastData with the total length it wants;
+			// protocols like HTTP/2 discover that length incrementally (preface,
+			// then frame header, then payload), so several rounds may be required.
+			var host string // the verdict, read after the loop
+			want := conn.Buffered()
+			// one budget for all rounds, so they can't add up
+			deadline := time.Now().Add(1 * time.Second)
+			for {
+				var data []byte
+				_ = conn.SetReadDeadline(deadline)
+				data, err = conn.Peek(want)
 				_ = conn.SetReadDeadline(time.Time{})
-				//log.Debugln("[Sniffer] [%s] [%s] try again, got length: %d", metadata.DstIP, s.Protocol(), len(bytes))
 				if err != nil {
 					log.Debugln("[Sniffer] [%s] [%s] the data length not enough, error: %v", metadata.DstIP, s.Protocol(), err)
-					continue
+					break
 				}
-				host, err = s.SniffData(bytes)
+				// Peeking fills the buffer from the underlying conn, which usually
+				// yields a whole segment rather than exactly the requested bytes.
+				// Hand over everything that arrived: sniffers that can't predict how
+				// much they need (HTTP/1 headers) then make progress per segment
+				// instead of per byte.
+				if buffered := conn.Buffered(); buffered > len(data) {
+					if all, e := conn.Peek(buffered); e == nil {
+						data = all
+					}
+				}
+
+				host, err = s.SniffData(data)
+				var need *errNeedAtLeastData
+				if !errors.As(err, &need) {
+					break
+				}
+				// Only keep going while more data can actually be obtained: the
+				// request has to exceed what the sniffer already saw and fit in the
+				// budget. Since a retry always asks for more than is buffered, it
+				// waits on the conn instead of spinning on the same data.
+				if need.length <= len(data) || !time.Now().Before(deadline) {
+					break
+				}
+				//log.Debugln("[Sniffer] [%s] [%s] %v, got length: %d, want: %d", metadata.DstIP, s.Protocol(), need, len(data), need.length)
+				want = need.length
 			}
 			if err != nil {
 				//log.Debugln("[Sniffer] [%s] [%s] Sniff data failed, error: %v", metadata.DstIP, s.Protocol(), err)
