@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 
 // chunkedConn hands out one chunk per Read, so a sniffer only ever sees the
 // bytes that have "arrived". It models a request spanning several TCP segments,
-// and reports EOF once they run out.
+// and reports readErr, or EOF by default, once they run out.
 //
 // Read deadlines are armed for real: the deadline is a watchdog that must never
 // fire, because sniffing should reach a verdict from the data it is given rather
@@ -28,10 +29,13 @@ import (
 // test too, since that is a conn stuck forever.
 type chunkedConn struct {
 	net.Conn
-	t        *testing.T
-	chunks   [][]byte
-	deadline time.Time
-	timer    *time.Timer
+	t         *testing.T
+	chunks    [][]byte
+	readErr   error
+	closed    bool
+	deadline  time.Time
+	deadlines []time.Time
+	timer     *time.Timer
 }
 
 func (c *chunkedConn) Read(b []byte) (int, error) {
@@ -39,6 +43,9 @@ func (c *chunkedConn) Read(b []byte) (int, error) {
 		chunk := c.chunks[0]
 		c.chunks = c.chunks[1:]
 		return copy(b, chunk), nil
+	}
+	if c.readErr != nil {
+		return 0, c.readErr
 	}
 	if c.deadline.IsZero() {
 		c.t.Error("read would block with no read deadline set")
@@ -50,6 +57,7 @@ func (c *chunkedConn) SetReadDeadline(deadline time.Time) error {
 	c.stopTimer()
 	c.deadline = deadline
 	if !deadline.IsZero() {
+		c.deadlines = append(c.deadlines, deadline)
 		c.timer = time.AfterFunc(time.Until(deadline), func() {
 			c.t.Error("read deadline expired: sniffing waited instead of deciding")
 		})
@@ -64,8 +72,11 @@ func (c *chunkedConn) stopTimer() {
 	}
 }
 
-func (c *chunkedConn) Write(b []byte) (int, error)    { return len(b), nil }
-func (c *chunkedConn) Close() error                   { return nil }
+func (c *chunkedConn) Write(b []byte) (int, error) { return len(b), nil }
+func (c *chunkedConn) Close() error {
+	c.closed = true
+	return nil
+}
 func (*chunkedConn) LocalAddr() net.Addr              { return &net.TCPAddr{} }
 func (*chunkedConn) RemoteAddr() net.Addr             { return &net.TCPAddr{} }
 func (*chunkedConn) SetDeadline(time.Time) error      { return nil }
@@ -74,15 +85,16 @@ func (*chunkedConn) SetWriteDeadline(time.Time) error { return nil }
 // stubSniffer records the size of every buffer it is handed and replies with a
 // scripted answer, so the feeding loop can be tested without any real protocol.
 type stubSniffer struct {
-	seen  []int
-	reply func(data []byte) (string, error)
+	network C.NetWork
+	seen    []int
+	reply   func(data []byte) (string, error)
 }
 
 var _ sniffer.Sniffer = (*stubSniffer)(nil)
 
-func (*stubSniffer) SupportNetwork() C.NetWork { return C.TCP }
-func (*stubSniffer) Protocol() string          { return "stub" }
-func (*stubSniffer) SupportPort(uint16) bool   { return true }
+func (s *stubSniffer) SupportNetwork() C.NetWork { return s.network }
+func (*stubSniffer) Protocol() string            { return "stub" }
+func (*stubSniffer) SupportPort(uint16) bool     { return true }
 
 func (s *stubSniffer) SniffData(b []byte) (string, error) {
 	s.seen = append(s.seen, len(b))
@@ -189,13 +201,13 @@ func TestDispatcherFeedLoop(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			s := &stubSniffer{reply: test.reply}
-			sd := &Dispatcher{enable: true, sniffers: map[sniffer.Sniffer]SnifferConfig{s: {}}}
+			sd := &Dispatcher{enable: true, sniffers: []configuredSniffer{{Sniffer: s}}}
 			raw := &chunkedConn{t: t, chunks: test.chunks}
 			// a leaked deadline must not fire once the test is over
 			t.Cleanup(raw.stopTimer)
 			conn := N.NewBufferedConn(raw)
 
-			host, err := sd.sniffDomain(conn, &C.Metadata{NetWork: C.TCP, DstPort: 80})
+			host, _, err := sd.sniffDomain(conn, &C.Metadata{NetWork: C.TCP, DstPort: 80})
 
 			if test.wantErr {
 				assert.Error(t, err)
@@ -210,6 +222,159 @@ func TestDispatcherFeedLoop(t *testing.T) {
 			}
 			// sniffing must not leave a deadline behind for the relay that follows
 			assert.True(t, raw.deadline.IsZero(), "read deadline was not cleared")
+			assert.GreaterOrEqual(t, len(raw.deadlines), 2, "initial and shared deadlines must both be set")
+			for _, deadline := range raw.deadlines[2:] {
+				assert.Equal(t, raw.deadlines[1], deadline, "all retries must reuse the shared deadline")
+			}
 		})
 	}
+}
+
+func TestDispatcherMultipleSniffers(t *testing.T) {
+	segment := []byte("0123456789")
+
+	t.Run("uses the successful sniffer config before reading more", func(t *testing.T) {
+		waiting := &stubSniffer{reply: func(data []byte) (string, error) {
+			return "", needAtLeast(len(data) + 1)
+		}}
+		successful := &stubSniffer{reply: func([]byte) (string, error) {
+			return "example.com", nil
+		}}
+		sd, err := NewDispatcher(&Config{Enable: true, ParsePureIp: true})
+		assert.NoError(t, err)
+		sd.sniffers = []configuredSniffer{
+			{Sniffer: waiting, config: SnifferConfig{OverrideDest: false}},
+			{Sniffer: successful, config: SnifferConfig{OverrideDest: true}},
+		}
+		raw := &chunkedConn{t: t, chunks: [][]byte{segment, segment}}
+		t.Cleanup(raw.stopTimer)
+		metadata := &C.Metadata{
+			NetWork: C.TCP,
+			DstIP:   netip.MustParseAddr("192.0.2.1"),
+			DstPort: 80,
+		}
+
+		sniffed := sd.TCPSniff(N.NewBufferedConn(raw), metadata)
+
+		assert.True(t, sniffed)
+		assert.Equal(t, "example.com", metadata.SniffHost)
+		assert.Equal(t, "example.com", metadata.Host)
+		assert.False(t, metadata.DstIP.IsValid())
+		assert.Equal(t, []int{len(segment)}, waiting.seen)
+		assert.Equal(t, []int{len(segment)}, successful.seen)
+		assert.Len(t, raw.chunks, 1)
+		assert.True(t, raw.deadline.IsZero(), "read deadline was not cleared")
+		assert.Len(t, raw.deadlines, 2, "one initial and one shared deadline should be sufficient")
+	})
+
+	t.Run("reads the smallest candidate request next", func(t *testing.T) {
+		slow := &stubSniffer{reply: func(data []byte) (string, error) {
+			if len(data) < 30 {
+				return "", needAtLeast(30)
+			}
+			return "slow.example.com", nil
+		}}
+		fast := &stubSniffer{reply: func(data []byte) (string, error) {
+			if len(data) < 20 {
+				return "", needAtLeast(20)
+			}
+			return "fast.example.com", nil
+		}}
+		sd := &Dispatcher{sniffers: []configuredSniffer{
+			{Sniffer: slow},
+			{Sniffer: fast},
+		}}
+		raw := &chunkedConn{t: t, chunks: [][]byte{segment, segment, segment}}
+		t.Cleanup(raw.stopTimer)
+
+		host, _, err := sd.sniffDomain(N.NewBufferedConn(raw), &C.Metadata{NetWork: C.TCP, DstPort: 80})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "fast.example.com", host)
+		assert.Equal(t, []int{10}, slow.seen)
+		assert.Equal(t, []int{10, 20}, fast.seen)
+		assert.Len(t, raw.chunks, 1)
+	})
+
+	t.Run("continues after an invalid host", func(t *testing.T) {
+		invalid := &stubSniffer{reply: func([]byte) (string, error) {
+			return "not a domain", nil
+		}}
+		valid := &stubSniffer{reply: func([]byte) (string, error) {
+			return "example.com", nil
+		}}
+		sd := &Dispatcher{sniffers: []configuredSniffer{
+			{Sniffer: invalid},
+			{Sniffer: valid},
+		}}
+		raw := &chunkedConn{t: t, chunks: [][]byte{segment}}
+		t.Cleanup(raw.stopTimer)
+
+		host, _, err := sd.sniffDomain(N.NewBufferedConn(raw), &C.Metadata{NetWork: C.TCP, DstPort: 80})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "example.com", host)
+		assert.Equal(t, []int{len(segment)}, invalid.seen)
+		assert.Equal(t, []int{len(segment)}, valid.seen)
+	})
+
+	t.Run("keeps the connection open after a follow-up read failure", func(t *testing.T) {
+		waiting := &stubSniffer{reply: func(data []byte) (string, error) {
+			return "", needAtLeast(len(data) + 1)
+		}}
+		sd, err := NewDispatcher(&Config{})
+		assert.NoError(t, err)
+		sd.sniffers = []configuredSniffer{{Sniffer: waiting}}
+		raw := &chunkedConn{
+			t:       t,
+			chunks:  [][]byte{segment},
+			readErr: &net.OpError{Op: "read", Net: "tcp", Err: io.ErrNoProgress},
+		}
+		t.Cleanup(raw.stopTimer)
+		metadata := &C.Metadata{
+			NetWork: C.TCP,
+			DstIP:   netip.MustParseAddr("192.0.2.1"),
+			DstPort: 80,
+		}
+
+		_, _, err = sd.sniffDomain(N.NewBufferedConn(raw), metadata)
+
+		assert.Error(t, err)
+		assert.False(t, raw.closed)
+		_, cached := sd.skipList.Get(metadata.AddrPort())
+		assert.False(t, cached)
+	})
+
+	t.Run("accepts all-network sniffer", func(t *testing.T) {
+		allNetwork := &stubSniffer{
+			network: C.ALLNet,
+			reply: func([]byte) (string, error) {
+				return "example.com", nil
+			},
+		}
+		sd := &Dispatcher{sniffers: []configuredSniffer{{Sniffer: allNetwork}}}
+		raw := &chunkedConn{t: t, chunks: [][]byte{segment}}
+		t.Cleanup(raw.stopTimer)
+
+		host, _, err := sd.sniffDomain(N.NewBufferedConn(raw), &C.Metadata{NetWork: C.TCP, DstPort: 80})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "example.com", host)
+		assert.Equal(t, []int{len(segment)}, allNetwork.seen)
+	})
+
+	t.Run("constructs sniffers in protocol order", func(t *testing.T) {
+		sd, err := NewDispatcher(&Config{Sniffers: map[sniffer.Type]SnifferConfig{
+			sniffer.QUIC: {},
+			sniffer.HTTP: {},
+			sniffer.TLS:  {},
+		}})
+
+		assert.NoError(t, err)
+		protocols := make([]string, 0, len(sd.sniffers))
+		for _, current := range sd.sniffers {
+			protocols = append(protocols, current.Protocol())
+		}
+		assert.Equal(t, []string{"tls", "http", "quic"}, protocols)
+	})
 }
