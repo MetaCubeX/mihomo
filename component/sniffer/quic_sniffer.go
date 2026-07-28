@@ -455,20 +455,24 @@ func (q *quicPacketSender) tryAssemble() (string, error) {
 		return "", nil
 	}
 
-	if len(q.ranges) != 1 || q.ranges[0].Start() != 0 || q.ranges[0].End() != uint64(len(q.buffer)) {
-		// incomplete fragment, just return
+	if len(q.ranges) == 0 || q.ranges[0].Start() != 0 || q.ranges[0].End() < tlsHandshakeHeaderLen {
+		// The beginning of the CRYPTO stream is still incomplete.
 		return "", nil
 	}
 
-	if len(q.buffer) <= 4 ||
-		// Handshake Type (1) + uint24 Length (3) + ClientHello body
-		// maxCryptoStreamOffset is in the valid range of uint16 so just ignore the q.buffer[1]
-		int(binary.BigEndian.Uint16([]byte{q.buffer[2], q.buffer[3]})+4) != len(q.buffer) {
-		// end of segment not reached, just return
+	helloSize, err := clientHelloSize(q.buffer[:tlsHandshakeHeaderLen])
+	if err != nil {
+		return "", err
+	}
+	if helloSize > maxCryptoStreamOffset {
+		return "", io.ErrShortBuffer
+	}
+	if q.ranges[0].End() < uint64(helloSize) {
+		// The complete ClientHello has not arrived yet.
 		return "", nil
 	}
 
-	domain, err := ReadClientHello(q.buffer)
+	domain, err := ReadClientHello(q.buffer[:helloSize])
 	if err != nil {
 		return "", err
 	}

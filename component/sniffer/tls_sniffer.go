@@ -16,6 +16,13 @@ var (
 	errNotClientHello = errors.New("not client hello")
 )
 
+const (
+	tlsRecordHeaderLen          = 5
+	tlsHandshakeHeaderLen       = 4
+	tlsRecordTypeHandshake      = 0x16
+	tlsHandshakeTypeClientHello = 0x01
+)
+
 type errNeedAtLeastData struct {
 	length int
 	err    error
@@ -66,7 +73,8 @@ func IsValidTLSVersion(major, minor byte) bool {
 	return major == 3
 }
 
-// ReadClientHello returns server name (if any) from TLS client hello message.
+// ReadClientHello returns the server name (if any) from exactly one complete
+// ClientHello handshake message, including its four-byte handshake header.
 // https://github.com/golang/go/blob/master/src/crypto/tls/handshake_messages.go#L300
 func ReadClientHello(data []byte) (*string, error) {
 	if len(data) < 42 {
@@ -161,28 +169,93 @@ func ReadClientHello(data []byte) (*string, error) {
 	return nil, errNotTLS
 }
 
-func SniffTLS(b []byte) (*string, error) {
-	if len(b) < 5 {
-		return nil, ErrNoClue
+func clientHelloSize(data []byte) (int, error) {
+	if len(data) < tlsHandshakeHeaderLen {
+		return 0, ErrNoClue
+	}
+	if data[0] != tlsHandshakeTypeClientHello {
+		return 0, errNotClientHello
 	}
 
-	if b[0] != 0x16 /* TLS Handshake */ {
-		return nil, errNotTLS
-	}
-	if !IsValidTLSVersion(b[1], b[2]) {
-		return nil, errNotTLS
-	}
-	headerLen := int(binary.BigEndian.Uint16(b[3:5]))
-	if 5+headerLen > len(b) {
-		return nil, &errNeedAtLeastData{
-			length: 5 + headerLen,
-			err:    ErrNoClue,
+	bodyLen := int(data[1])<<16 | int(data[2])<<8 | int(data[3])
+	return tlsHandshakeHeaderLen + bodyLen, nil
+}
+
+// readTLSClientHello removes TLS record headers and returns one complete
+// ClientHello handshake message. It scans before allocating so an untrusted
+// handshake length cannot cause an allocation until all declared bytes exist.
+func readTLSClientHello(b []byte) ([]byte, error) {
+	var handshakeHeader [tlsHandshakeHeaderLen]byte
+	wireOffset := 0
+	handshakeBytes := 0
+	helloSize := 0
+	records := 0
+
+	for {
+		if len(b)-wireOffset < tlsRecordHeaderLen {
+			return nil, &errNeedAtLeastData{
+				length: wireOffset + tlsRecordHeaderLen,
+				err:    ErrNoClue,
+			}
 		}
-	}
 
-	domain, err := ReadClientHello(b[5 : 5+headerLen])
-	if err == nil {
-		return domain, nil
+		header := b[wireOffset : wireOffset+tlsRecordHeaderLen]
+		if header[0] != tlsRecordTypeHandshake || !IsValidTLSVersion(header[1], header[2]) {
+			return nil, errNotTLS
+		}
+
+		recordLen := int(binary.BigEndian.Uint16(header[3:]))
+		payloadOffset := wireOffset + tlsRecordHeaderLen
+		recordEnd := payloadOffset + recordLen
+		if len(b) < recordEnd {
+			return nil, &errNeedAtLeastData{
+				length: recordEnd,
+				err:    ErrNoClue,
+			}
+		}
+		if recordLen == 0 {
+			return nil, errNotClientHello
+		}
+
+		payload := b[payloadOffset:recordEnd]
+		if handshakeBytes < tlsHandshakeHeaderLen {
+			copy(handshakeHeader[handshakeBytes:], payload)
+		}
+		handshakeBytes += len(payload)
+		records++
+
+		if helloSize == 0 && handshakeBytes >= tlsHandshakeHeaderLen {
+			var err error
+			helloSize, err = clientHelloSize(handshakeHeader[:])
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if helloSize != 0 && handshakeBytes >= helloSize {
+			if records == 1 {
+				return payload[:helloSize], nil
+			}
+
+			hello := make([]byte, helloSize)
+			copied := 0
+			for offset := 0; copied < helloSize; {
+				recordLen := int(binary.BigEndian.Uint16(b[offset+3 : offset+tlsRecordHeaderLen]))
+				payloadOffset := offset + tlsRecordHeaderLen
+				copied += copy(hello[copied:], b[payloadOffset:payloadOffset+recordLen])
+				offset = payloadOffset + recordLen
+			}
+			return hello, nil
+		}
+
+		wireOffset = recordEnd
 	}
-	return nil, err
+}
+
+func SniffTLS(b []byte) (*string, error) {
+	clientHello, err := readTLSClientHello(b)
+	if err != nil {
+		return nil, err
+	}
+	return ReadClientHello(clientHello)
 }
