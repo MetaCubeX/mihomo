@@ -5,6 +5,7 @@ package sniffer
 // parsing itself (a complete buffer in, a domain out) belongs in sniff_test.go.
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"net"
@@ -124,6 +125,9 @@ func TestDispatcherFeedLoop(t *testing.T) {
 		// rounds and how much they grew by are pinned down
 		seen       []int
 		bufferSize int
+		buffered   int
+		chunksLeft int
+		errorIs    error
 	}{
 		{
 			// a sniffer that discovers its needs incrementally (HTTP/2: preface,
@@ -181,15 +185,19 @@ func TestDispatcherFeedLoop(t *testing.T) {
 			seen:    []int{10},
 		},
 		{
-			// Peek cannot return more than the buffer holds
+			// An oversized request must be rejected before the reader grows or
+			// consumes more data while trying to fill its buffer.
 			name:   "stops when the request exceeds the peek limit",
 			chunks: threeSegments,
 			reply: func(data []byte) (string, error) {
 				return "", needAtLeast(1 << 20)
 			},
 			wantErr:    true,
+			errorIs:    bufio.ErrBufferFull,
 			seen:       []int{10},
-			bufferSize: maxSniffBufferSize,
+			bufferSize: 4096,
+			buffered:   10,
+			chunksLeft: 2,
 		},
 		{
 			name:   "gives up when the data never completes",
@@ -220,9 +228,18 @@ func TestDispatcherFeedLoop(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, test.host, host)
 			}
+			if test.errorIs != nil {
+				assert.ErrorIs(t, err, test.errorIs)
+			}
 			assert.Equal(t, test.seen, s.seen)
 			if test.bufferSize != 0 {
 				assert.Equal(t, test.bufferSize, conn.Reader().Size())
+			}
+			if test.buffered != 0 {
+				assert.Equal(t, test.buffered, conn.Buffered())
+			}
+			if test.chunksLeft != 0 {
+				assert.Len(t, raw.chunks, test.chunksLeft)
 			}
 			// sniffing must not leave a deadline behind for the relay that follows
 			assert.True(t, raw.deadline.IsZero(), "read deadline was not cleared")

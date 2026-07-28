@@ -1,6 +1,7 @@
 package sniffer
 
 import (
+	"bufio"
 	"errors"
 	"net/netip"
 	"time"
@@ -237,14 +238,12 @@ func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (s
 	deadline := time.Now().Add(1 * time.Second)
 	want := conn.Buffered()
 	for len(candidates) > 0 {
-		// Preserve want even when it exceeds the allocation budget. Growing only
-		// to the limit makes Peek return ErrBufferFull instead of trusting an
-		// unbounded length advertised by the input protocol.
-		growTo := want
-		if growTo > maxSniffBufferSize {
-			growTo = maxSniffBufferSize
+		// Reject an unmet oversized request before Grow or Peek. Otherwise Peek
+		// fills the bounded buffer before reporting that the request cannot fit.
+		if want > maxSniffBufferSize && want > conn.Buffered() {
+			return "", SnifferConfig{}, bufio.ErrBufferFull
 		}
-		conn.Grow(growTo)
+		conn.Grow(want)
 
 		_ = conn.SetReadDeadline(deadline)
 		_, err = conn.Peek(want)
