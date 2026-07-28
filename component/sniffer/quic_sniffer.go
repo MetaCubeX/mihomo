@@ -150,6 +150,8 @@ type quicPacketSender struct {
 
 	labelsOnce sync.Once
 	labels     quicLabels
+	// initialDestConnID is the DCID from which labels were derived.
+	initialDestConnID []byte
 
 	done chan struct{}
 
@@ -322,18 +324,39 @@ func (q *quicPacketSender) readQUICPacket(b []byte, coalesced bool) (int, error)
 		return packetEnd, nil
 	}
 
-	labels := q.expandLabels(destConnID, s)
+	cache := buf.NewPacket()
+	defer cache.Release()
 
-	block, err := aes.NewCipher(labels.hp)
+	labels := q.initialLabels(destConnID, s)
+	decrypted, err := decryptQUICInitialPacket(b, hdrLen, packetEnd, labels, cache)
+	if err != nil && !bytes.Equal(destConnID, q.initialDestConnID) {
+		// A Retry changes the DCID used to derive Initial keys. A regular
+		// Initial can change its header DCID without changing keys, so only
+		// retry with the current DCID after the cached keys fail. Retry keeps
+		// the TLS CRYPTO stream unchanged, so existing fragments remain valid.
+		decrypted, err = decryptQUICInitialPacket(b, hdrLen, packetEnd, expandLabels(destConnID, s), cache)
+	}
 	if err != nil {
 		return 0, err
 	}
 
-	cache := buf.NewPacket()
-	defer cache.Release()
+	if err := q.readQUICFrames(decrypted); err != nil {
+		return 0, err
+	}
+
+	return packetEnd, nil
+}
+
+// decryptQUICInitialPacket removes header protection and decrypts one Initial
+// packet with the supplied key set.
+func decryptQUICInitialPacket(b []byte, hdrLen, packetEnd int, labels quicLabels, cache *buf.Buffer) ([]byte, error) {
+	block, err := aes.NewCipher(labels.hp)
+	if err != nil {
+		return nil, err
+	}
 
 	if hdrLen+4+16 > packetEnd {
-		return 0, errNotQUIC
+		return nil, errNotQUIC
 	}
 
 	mask := cache.Extend(block.BlockSize())
@@ -356,18 +379,18 @@ func (q *quicPacketSender) readQUICPacket(b []byte, coalesced bool) (int, error)
 	}
 
 	if extHdrLen > packetEnd {
-		return 0, errNotQUIC
+		return nil, errNotQUIC
 	}
 
 	data := b[extHdrLen:packetEnd]
 
 	aesCipher, err := aes.NewCipher(labels.key)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	aead, err := cipher.NewGCM(aesCipher)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// We only decrypt once, so we do not need to XOR it back.
@@ -379,14 +402,10 @@ func (q *quicPacketSender) readQUICPacket(b []byte, coalesced bool) (int, error)
 	dst := cache.Extend(len(data))
 	decrypted, err := aead.Open(dst[:0], iv, data, extHdr)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	if err := q.readQUICFrames(decrypted); err != nil {
-		return 0, err
-	}
-
-	return packetEnd, nil
+	return decrypted, nil
 }
 
 // readQUICFrames validates the frames allowed in an Initial packet and retains
@@ -573,20 +592,25 @@ func (q *quicPacketSender) getQUICStructure(vb []byte) (*quicStructure, error) {
 	return nil, errNotQUIC
 }
 
-func (q *quicPacketSender) expandLabels(destConnID []byte, s *quicStructure) quicLabels {
+func (q *quicPacketSender) initialLabels(destConnID []byte, s *quicStructure) quicLabels {
 	q.labelsOnce.Do(func() {
-		initialSecret := hkdf.Extract(crypto.SHA256.New, destConnID, s.initialSalt)
-		secret := hkdfExpandLabel(initialSecret, "client in", crypto.SHA256.Size())
-
-		lp := s.labelPrefix
-
-		q.labels = quicLabels{
-			hp:  hkdfExpandLabel(secret, lp+" hp", 16),
-			key: hkdfExpandLabel(secret, lp+" key", 16),
-			iv:  hkdfExpandLabel(secret, lp+" iv", 12),
-		}
+		q.initialDestConnID = bytes.Clone(destConnID)
+		q.labels = expandLabels(destConnID, s)
 	})
 	return q.labels
+}
+
+func expandLabels(destConnID []byte, s *quicStructure) quicLabels {
+	initialSecret := hkdf.Extract(crypto.SHA256.New, destConnID, s.initialSalt)
+	secret := hkdfExpandLabel(initialSecret, "client in", crypto.SHA256.Size())
+
+	lp := s.labelPrefix
+
+	return quicLabels{
+		hp:  hkdfExpandLabel(secret, lp+" hp", 16),
+		key: hkdfExpandLabel(secret, lp+" key", 16),
+		iv:  hkdfExpandLabel(secret, lp+" iv", 12),
+	}
 }
 
 func hkdfExpandLabel(secret []byte, label string, length int) []byte {

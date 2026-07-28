@@ -120,7 +120,7 @@ func asPacket(data string) constant.PacketAdapter {
 
 const fakeHost = "fake.host.com"
 
-func testQUICSniffer(data []string, async bool) (string, string, error) {
+func testQUICSniffer(data []string, async, staleInitialKeys bool) (string, string, error) {
 	q, err := NewQUICSniffer(SnifferConfig{})
 	if err != nil {
 		return "", "", err
@@ -132,6 +132,21 @@ func testQUICSniffer(data []string, async bool) (string, string, error) {
 	sender := q.WrapperSender(emptySender, func(metadata *constant.Metadata, host string) {
 		replaceDomain(metadata, host, true)
 	})
+	if staleInitialKeys {
+		packet, err := hex.DecodeString(data[0])
+		if err != nil {
+			return "", "", err
+		}
+		if len(packet) < 5 {
+			return "", "", ErrNoClue
+		}
+		packetSender := sender.(*quicPacketSender)
+		structure, err := packetSender.getQUICStructure(packet[1:5])
+		if err != nil {
+			return "", "", err
+		}
+		packetSender.initialLabels([]byte("stale initial dcid"), structure)
+	}
 
 	go func() {
 		meta := constant.Metadata{Host: fakeHost}
@@ -254,15 +269,22 @@ func TestQUICHeaders(t *testing.T) {
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			for _, mode := range []struct {
-				name  string
-				async bool
+			modes := []struct {
+				name             string
+				async            bool
+				staleInitialKeys bool
 			}{
 				{name: "async", async: true},
 				{name: "sync", async: false},
-			} {
+				{name: "after retry", staleInitialKeys: true},
+				{name: "after retry async", async: true, staleInitialKeys: true},
+			}
+			if test.invalid {
+				modes = modes[:2]
+			}
+			for _, mode := range modes {
 				t.Run(mode.name, func(t *testing.T) {
-					data, host, err := testQUICSniffer(test.input, mode.async)
+					data, host, err := testQUICSniffer(test.input, mode.async, mode.staleInitialKeys)
 					require.NoError(t, err)
 					assert.Equal(t, test.domain, data)
 					if test.invalid {
