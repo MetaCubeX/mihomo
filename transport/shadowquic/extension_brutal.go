@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"time"
 )
 
 const (
@@ -16,6 +17,7 @@ const (
 	brutalNegotiationMaxPayloadLen      = 64
 
 	brutalNegotiationFlagRxAuto byte = 1 << 0
+	brutalNegotiationTimeout         = 10 * time.Second
 )
 
 var (

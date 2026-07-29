@@ -17,6 +17,15 @@ const DefaultDnsRelayTimeout = time.Second * 5
 
 const SafeDnsPacketSize = 2 * 1024 // safe size which is 1232 from https://dnsflagday.net/2020/, so 2048 is enough
 
+// RequestUDPSize returns the UDP payload size a reply to msg may occupy:
+// the client's advertised EDNS0 buffer size, or 512 (D.MinMsgSize) without an OPT record.
+func RequestUDPSize(msg *D.Msg) int {
+	if opt := msg.IsEdns0(); opt != nil {
+		return int(opt.UDPSize())
+	}
+	return D.MinMsgSize
+}
+
 func RelayDnsConn(ctx context.Context, conn net.Conn, readTimeout time.Duration) error {
 	buff := pool.Get(pool.UDPBufferSize)
 	defer func() {
@@ -90,11 +99,24 @@ func relayDnsPacket(ctx context.Context, payload []byte, target []byte, maxSize 
 	}
 
 	r.SetRcode(msg, r.Rcode)
-	if maxSize > 0 {
+	if maxSize > 0 { // udp
+		if size := RequestUDPSize(msg); size < maxSize {
+			maxSize = size
+		}
 		r.Truncate(maxSize)
 	}
 	r.Compress = true
-	return r.PackBuffer(target)
+	data, err := r.PackBuffer(target)
+	if err != nil {
+		return nil, err
+	}
+	// PackBuffer sizes its scratch space by the *uncompressed* message length and may
+	// have allocated a new slice even though the compressed result fits into target.
+	// Callers (e.g. the tun dns hijack) assume the result is backed by target, so copy it back.
+	if len(data) > 0 && len(data) <= len(target) && &data[0] != &target[0] {
+		data = target[:copy(target, data)]
+	}
+	return data, nil
 }
 
 // RelayDnsPacket will truncate udp message up to SafeDnsPacketSize

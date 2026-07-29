@@ -10,6 +10,7 @@ type ResTLS struct {
 	Password     string `inbound:"password"`
 	RestlsScript string `inbound:"restls-script,omitempty"`
 	MinRecordLen int    `inbound:"min-record-len,omitempty"`
+	RateLimit    uint64 `inbound:"rate-limit,omitempty"`
 	Proxy        string `inbound:"proxy,omitempty"`
 }
 
@@ -20,6 +21,7 @@ func (r ResTLS) Build() LC.ResTLS {
 		Password:     r.Password,
 		RestlsScript: r.RestlsScript,
 		MinRecordLen: r.MinRecordLen,
+		RateLimit:    r.RateLimit,
 		Proxy:        r.Proxy,
 	}
 }

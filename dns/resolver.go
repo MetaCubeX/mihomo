@@ -435,6 +435,33 @@ func (ns NameServer) Equal(ns2 NameServer) bool {
 	return false
 }
 
+// transportEqual reports whether two NameServers share the same raw transport and
+// may reuse a single client. It compares all fields except wrapper-only params.
+func (ns NameServer) transportEqual(ns2 NameServer) bool {
+	defer func() {
+		// C.ProxyAdapter compare maybe panic, just ignore
+		recover()
+	}()
+	paramsEqual := func(a, b map[string]string) bool {
+		for k, v := range a {
+			if isWrapperOnlyParam(k) {
+				continue
+			}
+			if bv, ok := b[k]; !ok || bv != v {
+				return false
+			}
+		}
+		return true
+	}
+	return ns.Net == ns2.Net &&
+		ns.Addr == ns2.Addr &&
+		ns.ProxyAdapter == ns2.ProxyAdapter &&
+		ns.ProxyName == ns2.ProxyName &&
+		ns.PreferH3 == ns2.PreferH3 &&
+		paramsEqual(ns.Params, ns2.Params) &&
+		paramsEqual(ns2.Params, ns.Params)
+}
+
 type Policy struct {
 	Domain      string
 	Matcher     C.DomainMatcher
@@ -510,22 +537,30 @@ func NewResolver(config Config) (rs Resolvers) {
 	cacheTransform := func(nameserver []NameServer) (result []dnsClient) {
 	LOOP:
 		for _, ns := range nameserver {
+			var dc dnsClient
 			for _, nsc := range nameServerCache {
 				if nsc.NameServer.Equal(ns) {
 					result = append(result, nsc.dnsClient)
-					continue LOOP
+					continue LOOP // exact match wins: reuse the wrapped client as-is
+				}
+				if dc == nil && nsc.NameServer.transportEqual(ns) {
+					dc = nsc.dnsClient // reusable raw transport; keep scanning for an exact match
 				}
 			}
-			// not in cache
-			dc := transform([]NameServer{ns}, defaultResolver)
-			if len(dc) > 0 {
-				dc := dc[0]
-				nameServerCache = append(nameServerCache, struct {
-					NameServer
-					dnsClient
-				}{NameServer: ns, dnsClient: dc})
-				result = append(result, dc)
+			if dc != nil { // reuse raw transport, re-wrap the client
+				dc = rewrapClient(dc, ns.Params)
+			} else { // no reusable transport: build from scratch
+				built := transform([]NameServer{ns}, defaultResolver)
+				if len(built) == 0 {
+					continue
+				}
+				dc = built[0]
 			}
+			nameServerCache = append(nameServerCache, struct {
+				NameServer
+				dnsClient
+			}{NameServer: ns, dnsClient: dc})
+			result = append(result, dc)
 		}
 		return
 	}

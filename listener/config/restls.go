@@ -8,6 +8,7 @@ type ResTLS struct {
 	Password     string
 	RestlsScript string
 	MinRecordLen int
+	RateLimit    uint64
 	Proxy        string
 }
 

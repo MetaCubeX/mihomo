@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/tls"
 )
@@ -95,6 +96,21 @@ func TestServer(t *testing.T) {
 				t.Fatal("client received corrupted server payload")
 			}
 		})
+	}
+}
+
+func TestUserFromConnThroughWrappers(t *testing.T) {
+	left, right := net.Pipe()
+	t.Cleanup(func() {
+		_ = left.Close()
+		_ = right.Close()
+	})
+	authenticated := &authenticatedConn{Conn: left, user: "test-user"}
+	conn := N.NewBufferedConn(N.NewCachedConn(authenticated, nil))
+
+	user, ok := UserFromConn(conn)
+	if !ok || user != authenticated.user {
+		t.Fatalf("UserFromConn() = (%q, %v), want (%q, true)", user, ok, authenticated.user)
 	}
 }
 

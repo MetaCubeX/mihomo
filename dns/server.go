@@ -25,8 +25,13 @@ type Server struct {
 	udpServer *D.Server
 }
 
+type serverHandler struct {
+	*Server
+	isUDP bool
+}
+
 // ServeDNS implement D.Handler ServeDNS
-func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
+func (s serverHandler) ServeDNS(w D.ResponseWriter, r *D.Msg) {
 	msg, err := s.service.ServeMsg(context.Background(), r)
 	if err != nil {
 		m := new(D.Msg)
@@ -35,8 +40,21 @@ func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
 		w.WriteMsg(m)
 		return
 	}
+	if s.isUDP {
+		// RFC 6891: fit the reply into the client's advertised buffer size,
+		// setting the TC bit if records must be dropped; 512 when no OPT present
+		msg.Truncate(resolver.RequestUDPSize(r))
+	}
 	msg.Compress = true
 	w.WriteMsg(msg)
+}
+
+func (s *Server) UDPHandler() D.Handler {
+	return serverHandler{Server: s, isUDP: true}
+}
+
+func (s *Server) TCPHandler() D.Handler {
+	return serverHandler{Server: s, isUDP: false}
 }
 
 func (s *Server) SetService(service resolver.Service) {
@@ -93,7 +111,7 @@ func ReCreateServer(addr string, lc C.InboundListenConfig, service resolver.Serv
 		}
 
 		log.Infoln("DNS server(UDP) listening at: %s", p.LocalAddr().String())
-		server.udpServer = &D.Server{Addr: addr, PacketConn: p, Handler: server}
+		server.udpServer = &D.Server{Addr: addr, PacketConn: p, Handler: server.UDPHandler()}
 		_ = server.udpServer.ActivateAndServe()
 	}()
 
@@ -105,7 +123,7 @@ func ReCreateServer(addr string, lc C.InboundListenConfig, service resolver.Serv
 		}
 
 		log.Infoln("DNS server(TCP) listening at: %s", l.Addr().String())
-		server.tcpServer = &D.Server{Addr: addr, Listener: l, Handler: server}
+		server.tcpServer = &D.Server{Addr: addr, Listener: l, Handler: server.TCPHandler()}
 		_ = server.tcpServer.ActivateAndServe()
 	}()
 

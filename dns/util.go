@@ -135,13 +135,32 @@ func transform(servers []NameServer, resolver resolver.Resolver) []dnsClient {
 		default:
 			c = newClient(s.Addr, resolver, s.Net, s.Params, s.ProxyAdapter, s.ProxyName)
 		}
-
-		c = warpClientWithEdns0Subnet(c, s.Params)
-		c = warpClientWithDisableTypes(c, s.Params)
-
+		c = rewrapClient(c, s.Params)
 		ret = append(ret, c)
 	}
 	return ret
+}
+
+// rewrapClient peels any existing wrapper layers off c to reach the raw transport
+// client, then re-wraps it according to params. Passing a raw client is fine (the
+// peel is a no-op), which lets a shared raw transport be re-wrapped per name server.
+func rewrapClient(c dnsClient, params map[string]string) dnsClient {
+	for {
+		u, ok := c.(interface{ Unwrap() dnsClient })
+		if !ok {
+			break
+		}
+		c = u.Unwrap()
+	}
+	c = wrapClientWithEdns0Subnet(c, params)
+	c = wrapClientWithDisableTypes(c, params)
+	return c
+}
+
+// isWrapperOnlyParam reports whether a param only affects the wrapper layer and not
+// the transport connection, so it can be ignored when comparing transports.
+func isWrapperOnlyParam(key string) bool {
+	return isDisableTypesParam(key) || isEdns0SubnetParam(key)
 }
 
 type clientWithDisableTypes struct {
@@ -181,7 +200,18 @@ func (c clientWithDisableTypes) inRR(rr D.RR) bool {
 	return ok
 }
 
-func warpClientWithDisableTypes(c dnsClient, params map[string]string) dnsClient {
+func (c clientWithDisableTypes) Unwrap() dnsClient { return c.dnsClient }
+
+// isDisableTypesParam reports the params consumed by wrapClientWithDisableTypes.
+func isDisableTypesParam(key string) bool {
+	switch key {
+	case "disable-ipv4", "disable-ipv6":
+		return true
+	}
+	return strings.HasPrefix(key, "disable-qtype-")
+}
+
+func wrapClientWithDisableTypes(c dnsClient, params map[string]string) dnsClient {
 	disableTypes := make(map[uint16]struct{})
 	if params["disable-ipv4"] == "true" {
 		disableTypes[D.TypeA] = struct{}{}
@@ -220,7 +250,18 @@ func (c clientWithEdns0Subnet) ExchangeContext(ctx context.Context, m *D.Msg) (*
 	return c.dnsClient.ExchangeContext(ctx, m)
 }
 
-func warpClientWithEdns0Subnet(c dnsClient, params map[string]string) dnsClient {
+func (c clientWithEdns0Subnet) Unwrap() dnsClient { return c.dnsClient }
+
+// isEdns0SubnetParam reports the params consumed by wrapClientWithEdns0Subnet.
+func isEdns0SubnetParam(key string) bool {
+	switch key {
+	case "ecs", "ecs-override":
+		return true
+	}
+	return false
+}
+
+func wrapClientWithEdns0Subnet(c dnsClient, params map[string]string) dnsClient {
 	var ecsPrefix netip.Prefix
 	var ecsOverride bool
 	if ecs := params["ecs"]; ecs != "" {

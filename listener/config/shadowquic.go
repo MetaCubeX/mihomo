@@ -12,11 +12,10 @@ type ShadowQuicUser struct {
 }
 
 type ShadowQuicJLSUpstream struct {
-	Addr             string `yaml:"addr" json:"addr"`
-	SNI              string `yaml:"sni" json:"sni,omitempty"`
-	Proxy            string `yaml:"proxy" json:"proxy,omitempty"`
-	RateLimit        uint64 `yaml:"rate-limit" json:"rate-limit,omitempty"`
-	QUICVersionProbe bool   `yaml:"quic-version-probe" json:"quic-version-probe,omitempty"`
+	Addr      string `yaml:"addr" json:"addr"`
+	SNI       string `yaml:"sni" json:"sni,omitempty"`
+	Proxy     string `yaml:"proxy" json:"proxy,omitempty"`
+	RateLimit uint64 `yaml:"rate-limit" json:"rate-limit,omitempty"`
 }
 
 type ShadowQuicServer struct {

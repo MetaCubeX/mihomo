@@ -17,6 +17,14 @@ type PushReply struct {
 	PeerID    uint32
 	Redirect  bool
 	BlockIPv6 bool
+
+	// DataCiphers is the list of data channel ciphers pushed by the server
+	// via the "data-ciphers" option (OpenVPN 2.5+).
+	DataCiphers []string
+
+	// Cipher is the single cipher pushed by the server via the "cipher"
+	// option (legacy or fallback).
+	Cipher string
 }
 
 func ParsePushReply(message string) (*PushReply, error) {
@@ -84,6 +92,22 @@ func ParsePushReply(message string) (*PushReply, error) {
 			reply.Redirect = true
 		case "block-ipv6":
 			reply.BlockIPv6 = true
+		case "data-ciphers", "ncp-ciphers":
+			// "data-ciphers" (OpenVPN 2.5+) or "ncp-ciphers" (2.4 legacy name).
+			// Value is a colon-separated list of cipher names.
+			if len(fields) >= 2 {
+				for _, c := range strings.Split(fields[1], ":") {
+					c = strings.TrimSpace(c)
+					if c != "" {
+						reply.DataCiphers = append(reply.DataCiphers, c)
+					}
+				}
+			}
+		case "cipher":
+			// Legacy single cipher push, or fallback cipher.
+			if len(fields) >= 2 {
+				reply.Cipher = strings.TrimSpace(fields[1])
+			}
 		}
 	}
 	if len(reply.Prefixes) == 0 {

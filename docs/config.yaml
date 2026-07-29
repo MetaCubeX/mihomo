@@ -1276,6 +1276,7 @@ proxies: # socks5
     #   # skip-cert-verify： false
     #   # name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
     #   # ......
+    # handshake-timeout: 30 # 单位为秒；配置后握手时不受外层连接超时影响；默认值为 0，表示仅使用外层连接超时
     ###quic-go特殊配置项，不要随意修改除非你知道你在干什么###
     # initial-stream-receive-window： 8388608
     # max-stream-receive-window： 8388608
@@ -1312,30 +1313,35 @@ proxies: # socks5
     #     reserved: [209,98,59]
     # 如果存在则开启AmneziaWG功能
     # amnezia-wg-option:
-    #   jc: 5
-    #   jmin: 500
-    #   jmax: 501
-    #   s1: 30
-    #   s2: 40
-    #   s3: 50                                            # AmneziaWG v1.5 and v2
-    #   s4: 5                                             # AmneziaWG v1.5 and v2
-    #   h1: 123456                                        # AmneziaWG v1.0 and v1.5
-    #   h2: 67543                                         # AmneziaWG v1.0 and v1.5
-    #   h3: 123123                                        # AmneziaWG v1.0 and v1.5
-    #   h4: 32345                                         # AmneziaWG v1.0 and v1.5
-    #   h1: 123456-123500                                 # AmneziaWG v2.0 only
-    #   h2: 67543-67550                                   # AmneziaWG v2.0 only
-    #   h3: 123123-123200                                 # AmneziaWG v2.0 only
-    #   h4: 32345-32350                                   # AmneziaWG v2.0 only
-    #   i1: <b 0xf6ab3267fa><c><b 0xf6ab><t><r 10><wt 10> # AmneziaWG v1.5 and v2
-    #   i2: <b 0xf6ab3267fa><r 100>                       # AmneziaWG v1.5 and v2
-    #   i3: ""                                            # AmneziaWG v1.5 and v2
-    #   i4: ""                                            # AmneziaWG v1.5 and v2
-    #   i5: ""                                            # AmneziaWG v1.5 and v2
-    #   j1: <b 0xffffffff><c><b 0xf6ab><t><r 10>          # AmneziaWG v1.5 only (removed in v2)
-    #   j2: <c><b 0xf6ab><t><wt 1000>                     # AmneziaWG v1.5 only (removed in v2)
-    #   j3: <t><b 0xf6ab><c><r 10>                        # AmneziaWG v1.5 only (removed in v2)
-    #   itime: 60                                         # AmneziaWG v1.5 only (removed in v2)
+    #   version: 2                                        # Only version 3 uses the v3 implementation; all other values use the legacy implementation
+    #   jc: 5                                             # AmneziaWG v1.0+
+    #   jmin: 500                                         # AmneziaWG v1.0+
+    #   jmax: 501                                         # AmneziaWG v1.0+
+    #   s1: 30                                            # AmneziaWG v1.0+
+    #   s2: 40                                            # AmneziaWG v1.0+
+    #   s3: 50                                            # AmneziaWG v1.5+
+    #   s4: 8                                             # AmneziaWG v1.5+
+    #   h1: 123456                                        # AmneziaWG v1.0/v1.5 support single values only; v2+ also supports ranges
+    #   h2: 67543                                         # AmneziaWG v1.0/v1.5 support single values only; v2+ also supports ranges
+    #   h3: 123123                                        # AmneziaWG v1.0/v1.5 support single values only; v2+ also supports ranges
+    #   h4: 32345                                         # AmneziaWG v1.0/v1.5 support single values only; v2+ also supports ranges
+    #   i1: <b 0xf6ab3267fa><b 0xf6ab><t><r 10>           # AmneziaWG v1.5+
+    #   i2: <b 0xf6ab3267fa><r 100>                       # AmneziaWG v1.5+
+    #   i3: ""                                            # AmneziaWG v1.5+
+    #   i4: ""                                            # AmneziaWG v1.5+
+    #   i5: ""                                            # AmneziaWG v1.5+
+    #   j1: <b 0xffffffff><c><b 0xf6ab><t><r 10>          # AmneziaWG v1.5 only (removed in v2+)
+    #   j2: <c><b 0xf6ab><t><wt 1000>                     # AmneziaWG v1.5 only (removed in v2+)
+    #   j3: <t><b 0xf6ab><c><r 10>                        # AmneziaWG v1.5 only (removed in v2+)
+    #   itime: 60                                         # AmneziaWG v1.5 only (removed in v2+)
+    #   header-protection-key: >-                         # AmneziaWG v3+
+    #     MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    #   content-padding-addition: 0-32                    # AmneziaWG v3+
+    #   rekey-after-time: 120                             # AmneziaWG v3+
+    #   rekey-timeout: 5                                  # AmneziaWG v3+
+    #   reject-after-time: 180                            # AmneziaWG v3+
+    #   keepalive-timeout: 10                             # AmneziaWG v3+
+    #   max-handshake-attempts: 18                        # AmneziaWG v3+
 
   # tailscale
   - name: "tailscale"
@@ -1365,6 +1371,8 @@ proxies: # socks5
     proto: udp # udp/tcp，默认 udp
     # dev: tun # 目前仅支持 tun，默认 tun
     # cipher: AES-128-GCM # 支持 AES-128-GCM / AES-192-GCM / AES-256-GCM / AES-128-CBC / AES-192-CBC / AES-256-CBC / CHACHA20-POLY1305，默认 AES-128-GCM；AES-CBC 会按 AES-128-CBC 处理
+    # data-ciphers: [AES-256-GCM, AES-128-GCM] # 数据通道 cipher 协商列表，发送 IV_CIPHERS 给服务端；服务端 push 的 cipher 列表与本地列表取交集，取第一个匹配项
+    # data-ciphers-fallback: AES-128-CBC # 协商失败时的回退 cipher（对应 --data-ciphers-fallback）
     # auth: SHA256 # 支持 MD5 / SHA1 / SHA256 / SHA384 / SHA512，默认 SHA256；AEAD cipher 会忽略 auth
     # comp-lzo: "no" # 可选值："yes", "no", "adaptive"
     # username / password: auth-user-pass 模式（与下方 cert+key 二选一，不能都不填）
@@ -1392,12 +1400,17 @@ proxies: # socks5
     #   ...
     #   -----END OpenVPN Static key V1-----
     # key-direction: "1" # tls-auth 使用，支持 "1" 或 "0"；如果不填或为空字符串，则为双向模式（bidirectional）
-    # 从 .ovpn 中复制 <tls-crypt></tls-crypt> 内的内容，不需要保留 <tls-crypt> 标签；没有 tls-crypt 的配置可省略
+    # 从 .ovpn 中复制 <tls-crypt></tls-crypt> 内的内容，不需要保留 <tls-crypt> 标签；没有 tls-crypt 的配置可省略；与 tls-auth / tls-crypt-v2 互斥
     # tls-crypt: |
     #   -----BEGIN OpenVPN Static key V1-----
     #   00000000000000000000000000000000
     #   ...
     #   -----END OpenVPN Static key V1-----
+    # 从 .ovpn 中复制 <tls-crypt-v2></tls-crypt-v2> 内的内容；tls-crypt-v2 使用独立客户端密钥（PEM 内含 256 字节密钥 + wrapped key）；与 tls-auth / tls-crypt 互斥
+    # tls-crypt-v2: |
+    #   -----BEGIN OpenVPN tls-crypt-v2 client key-----
+    #   AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8...
+    #   -----END OpenVPN tls-crypt-v2 client key-----
     # peer-info: # 透传给服务端的 peer-info 键值对，追加在内置 IV_VER/IV_PROTO/IV_CIPHERS 之后；用于服务端基于 peer-info 做准入决策
     #   IV_HWADDR: "52:54:00:ff:72:87"
     #   UV_DEVICE_ID: "laptop-001"
@@ -1511,11 +1524,11 @@ proxies: # socks5
     # alpn: [h3]
     # quic-versions: [v1] # support v1/v2, default v1
     # udp-over-stream: false # UDP over stream, default false
-    # zero-rtt: false # 官方 server 的 0-RTT 路径可能在 JLS 认证完成前读取用户状态（已确认影响 v0.3.11）；使用官方 server 时必须在服务端关闭 zero-rtt
+    # zero-rtt: false # 官方 server 的 0-RTT 路径可能在 JLS 认证完成前读取用户状态（已确认影响 v0.3.11）；使用官方 server 如果遇到不通或断联情况，请在服务端关闭 zero-rtt
     # keep-alive-interval: 10000
     # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
-    # up: 100 Mbps # enables brutal; client upload speed; requires mihomo ShadowQuic on both ends
-    # down: 100 Mbps # enables brutal; requested client download speed, capped by listener up; requires mihomo ShadowQuic on both ends
+    # up: 100 Mbps # enables brutal negotiation via a mihomo private extension; client upload speed; falls back to congestion-controller when unsupported
+    # down: 100 Mbps # enables brutal negotiation via a mihomo private extension; requested client download speed, capped by listener up; falls back to congestion-controller when unsupported
     # cwnd: 10 # default: 32
     # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
     # max-datagram-frame-size: 1400
@@ -2038,6 +2051,7 @@ listeners:
     #   restls-script: ""
     #   min-record-len: 0
     #   proxy: ""
+    #   rate-limit: 0 # fallback 双向转发限速，单位 bit/s；0 表示不限速
     # jls-config: # 仅封装 TCP；JLS 认证失败或普通 TLS 连接会透明回落到 dest
     #   enable: false
     #   users:
@@ -2099,6 +2113,7 @@ listeners:
     #   enable: false
     #   dest: test.com:443
     #   password: restls-password
+    #   rate-limit: 0 # fallback 双向转发限速，单位 bit/s；0 表示不限速
     # jls-config:
     #   enable: false
     #   users:
@@ -2191,6 +2206,7 @@ listeners:
     #   # restls-script: ""
     #   # min-record-len: 0
     #   # proxy: ""
+    #   # rate-limit: 0 # fallback 双向转发限速，单位 bit/s；0 表示不限速
     # 如果填写reality-config则开启reality（注意不可与certificate和private-key同时填写）
     # reality-config:
     #   dest: test.com:443
@@ -2271,14 +2287,13 @@ listeners:
       # sni: example.com # JLS 伪装目标 SNI，留空时从 addr 推导
       # proxy: proxy # 伪装上游使用的代理
       # rate-limit: 0 # 转发限速，单位 bit/s，0 表示不限速
-      # quic-version-probe: false # 在首次连接时探测伪装上游版本
     # alpn:
     #   - h3
-    # quic-versions: [v1] # 本机手动配置及探测失败时的版本；支持 v1/v2
+    # quic-versions: [v1] # 本机支持的 QUIC 版本；支持 v1/v2
     # zero-rtt: true
     # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
-    # up: 100 Mbps # enables brutal; server upload/client download speed cap; requires mihomo ShadowQuic on both ends
-    # down: 100 Mbps # enables brutal; requested server download/client upload speed; requires mihomo ShadowQuic on both ends
+    # up: 100 Mbps # enables brutal negotiation via a mihomo private extension; server upload/client download speed cap; falls back to congestion-controller when unsupported
+    # down: 100 Mbps # enables brutal negotiation via a mihomo private extension; requested server download/client upload speed; falls back to congestion-controller when unsupported
     # ignore-client-bandwidth: false # for brutal; ignore outbound down and use listener down/auto instead
     # cwnd: 10 # default: 32
     # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
@@ -2406,6 +2421,7 @@ listeners:
     #   # restls-script: ""
     #   # min-record-len: 0
     #   # proxy: ""
+    #   # rate-limit: 0 # fallback 双向转发限速，单位 bit/s；0 表示不限速
     ### 注意，对于vless listener, 如果 "allow-insecure" 不为 true, 至少需要填写 “certificate和private-key” 或 “shadow-tls” 或 “res-tls” 或 “jls-config” 或 “reality-config” 或 “decryption” 的其中一项 ###
     # allow-insecure: false # 是否允许不开启tls加密（注意：仅用于有 nginx, caddy 前置的情况）
 
@@ -2447,6 +2463,7 @@ listeners:
     #   # restls-script: ""
     #   # min-record-len: 0
     #   # proxy: ""
+    #   # rate-limit: 0 # fallback 双向转发限速，单位 bit/s；0 表示不限速
     # jls-config: # JLS 替代普通 TLS；未认证连接回落到 dest
     #   enable: true
     #   users:
@@ -2541,6 +2558,7 @@ listeners:
     #   # restls-script: ""
     #   # min-record-len: 0
     #   # proxy: ""
+    #   # rate-limit: 0 # fallback 双向转发限速，单位 bit/s；0 表示不限速
     # jls-config: # JLS 替代普通 TLS；未认证连接回落到 dest
     #   enable: true
     #   users:

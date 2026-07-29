@@ -103,25 +103,20 @@ func New(config LC.ShadowQuicServer, lc C.InboundListenConfig, tunnel C.Tunnel, 
 	jlsPacketDialer := func(_ context.Context, network, address string) (net.PacketConn, net.Addr, error) {
 		return inner.HandleUdp(tunnel, network, address, config.JLSUpstream.Proxy)
 	}
-	quicVersions, versionNegotiationVersions, getVersionNegotiationProfile, err := shadowquic.ResolveQUICVersionProfile(
-		config.QUICVersions,
-		config.JLSUpstream.Addr,
-		config.JLSUpstream.QUICVersionProbe,
-		jlsPacketDialer,
-		log.Warnln,
-	)
-	if err != nil {
-		return nil, err
+	quicVersions := shadowquic.DefaultQUICVersions()
+	if len(config.QUICVersions) > 0 {
+		quicVersions, err = shadowquic.ParseQUICVersions(config.QUICVersions)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	quicConfig := &quic.Config{
 		Versions: quicVersions,
 		JLSConfig: &quic.JLSConfig{
-			UpstreamAddr:                 config.JLSUpstream.Addr,
-			RateLimit:                    config.JLSUpstream.RateLimit,
-			PacketDialer:                 jlsPacketDialer,
-			VersionNegotiationVersions:   versionNegotiationVersions,
-			GetVersionNegotiationProfile: getVersionNegotiationProfile,
+			UpstreamAddr: config.JLSUpstream.Addr,
+			RateLimit:    config.JLSUpstream.RateLimit,
+			PacketDialer: jlsPacketDialer,
 		},
 		MaxIdleTimeout:                 time.Duration(config.MaxIdleTime) * time.Millisecond,
 		MaxIncomingStreams:             ServerMaxIncomingStreams,

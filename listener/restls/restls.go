@@ -23,6 +23,7 @@ func New(config LC.ResTLS, tunnel C.Tunnel) *Builder {
 		Password:       config.Password,
 		RestlsScript:   config.RestlsScript,
 		MinRecordLen:   config.MinRecordLen,
+		RateLimit:      config.RateLimit,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			return inner.HandleTcp(tunnel, address, config.Proxy)
 		},

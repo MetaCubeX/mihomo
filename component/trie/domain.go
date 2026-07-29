@@ -23,10 +23,17 @@ type DomainTrie[T any] struct {
 	root *Node[T]
 }
 
+// ValidAndSplitDomain lower-cases and splits a domain into its dot-separated
+// parts, reporting whether it is a well-formed pattern. It returns false for a
+// trailing dot ("a.com."), leading/trailing whitespace, or an empty segment,
+// as well as for misplaced wildcards (see below).
 func ValidAndSplitDomain(domain string) ([]string, bool) {
+	// A trailing dot would produce an empty final segment; reject it up front.
 	if domain != "" && domain[len(domain)-1] == '.' {
 		return nil, false
 	}
+	// Reject leading/trailing whitespace (a common copy-paste artifact) so it
+	// isn't silently baked into a label.
 	if domain != "" {
 		if r, _ := utf8.DecodeRuneInString(domain); unicode.IsSpace(r) {
 			return nil, false
@@ -37,16 +44,36 @@ func ValidAndSplitDomain(domain string) ([]string, bool) {
 	}
 	domain = strings.ToLower(domain)
 	parts := strings.Split(domain, domainStep)
+	// A single part must be non-empty (rejects ""); for multi-part domains every
+	// segment after the first must be non-empty (rejects "a..b", "a.", ".."),
+	// while an empty first segment is allowed as the ".example.com" dot-wildcard.
 	if len(parts) == 1 {
 		if parts[0] == "" {
 			return nil, false
 		}
-
-		return parts, true
+	} else {
+		for _, part := range parts[1:] {
+			if part == "" {
+				return nil, false
+			}
+		}
 	}
 
-	for _, part := range parts[1:] {
-		if part == "" {
+	// Validate wildcard placement so that DomainTrie.Search (treats a stray
+	// wildcard as a literal label) and DomainSet.Has (treats the wildcard byte
+	// as a wildcard) can never disagree:
+	//   - complexWildcard "+" is only valid as a whole first segment of a
+	//     multi-part domain, i.e. the "+.example.com" form. A bare "+", or a
+	//     "+" anywhere else, is rejected.
+	//   - wildcard "*" is only valid as a whole segment; a partial wildcard such
+	//     as "*a" or "a*b" is rejected.
+	for i, part := range parts {
+		if strings.Contains(part, complexWildcard) {
+			if part != complexWildcard || i != 0 || len(parts) == 1 {
+				return nil, false
+			}
+		}
+		if strings.Contains(part, wildcard) && part != wildcard {
 			return nil, false
 		}
 	}

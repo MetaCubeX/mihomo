@@ -37,11 +37,10 @@ type ShadowQuicUser struct {
 }
 
 type ShadowQuicJLSUpstream struct {
-	Addr             string `inbound:"addr"`
-	SNI              string `inbound:"sni,omitempty"`
-	Proxy            string `inbound:"proxy,omitempty"`
-	RateLimit        uint64 `inbound:"rate-limit,omitempty"`
-	QUICVersionProbe bool   `inbound:"quic-version-probe,omitempty"`
+	Addr      string `inbound:"addr"`
+	SNI       string `inbound:"sni,omitempty"`
+	Proxy     string `inbound:"proxy,omitempty"`
+	RateLimit uint64 `inbound:"rate-limit,omitempty"`
 }
 
 func (u ShadowQuicUser) Build() LC.ShadowQuicUser {
@@ -53,11 +52,10 @@ func (u ShadowQuicUser) Build() LC.ShadowQuicUser {
 
 func (u ShadowQuicJLSUpstream) Build() LC.ShadowQuicJLSUpstream {
 	return LC.ShadowQuicJLSUpstream{
-		Addr:             u.Addr,
-		SNI:              u.SNI,
-		Proxy:            u.Proxy,
-		RateLimit:        u.RateLimit,
-		QUICVersionProbe: u.QUICVersionProbe,
+		Addr:      u.Addr,
+		SNI:       u.SNI,
+		Proxy:     u.Proxy,
+		RateLimit: u.RateLimit,
 	}
 }
 

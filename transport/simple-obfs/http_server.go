@@ -22,6 +22,10 @@ type HTTPObfsServer struct {
 	firstResponse bool
 }
 
+func (hos *HTTPObfsServer) Upstream() any {
+	return hos.Conn
+}
+
 func (hos *HTTPObfsServer) Read(b []byte) (int, error) {
 	if hos.buf != nil {
 		n := copy(b, hos.buf[hos.offset:])

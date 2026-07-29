@@ -46,6 +46,7 @@ type AnyTLSOption struct {
 	IdleSessionCheckInterval int              `proxy:"idle-session-check-interval,omitempty"`
 	IdleSessionTimeout       int              `proxy:"idle-session-timeout,omitempty"`
 	MinIdleSession           int              `proxy:"min-idle-session,omitempty"`
+	DisableReuse             bool             `proxy:"disable-reuse,omitempty"`
 }
 
 func (t *AnyTLS) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
@@ -116,6 +117,7 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 		IdleSessionCheckInterval: time.Duration(option.IdleSessionCheckInterval) * time.Second,
 		IdleSessionTimeout:       time.Duration(option.IdleSessionTimeout) * time.Second,
 		MinIdleSession:           option.MinIdleSession,
+		DisableReuse:             option.DisableReuse,
 	}
 	echConfig, err := option.ECHOpts.Parse()
 	if err != nil {

@@ -112,7 +112,7 @@ func NewClient(ctx context.Context, conn net.Conn, config *ClientConfig) (net.Co
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return nil, err
 	}
-	if !tlsConn.ConnectionState().JLS.Authenticated {
+	if tlsConn.ConnectionState().JLS.Status != tls.JLSAuthenticated {
 		return nil, ErrJLSAuthFailed
 	}
 	return tlsConn, nil
@@ -180,27 +180,31 @@ func Server(ctx context.Context, conn net.Conn, config *ServerConfig) (net.Conn,
 	recorder := &handshakeRecorderConn{Conn: conn, recording: true}
 	tlsConn := tls.Server(recorder, config.TLSConfig.Clone())
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		// Forwarding after authentication or a local write would mix two server handshakes.
-		if tlsConn.ConnectionState().JLS.Authenticated || recorder.wroteToClient() {
+		// A partial or complete server flight may have been written before a later
+		// client message or network error; forwarding would then mix two TLS handshakes.
+		if recorder.wroteToClient() {
 			recorder.discard()
 			return nil, err
 		}
 		return nil, relayFallback(ctx, conn, recorder.stop(), config)
 	}
 	recorder.discard()
-	if !tlsConn.ConnectionState().JLS.Authenticated {
+	// Defensively reject a successful TLS handshake if custom configuration bypassed JLS authentication.
+	if tlsConn.ConnectionState().JLS.Status != tls.JLSAuthenticated {
 		return nil, ErrJLSAuthFailed
 	}
 	return tlsConn, nil
 }
 
 func UserFromConn(conn net.Conn) (string, bool) {
-	tlsConn, ok := conn.(*tls.Conn)
+	tlsConn, ok := N.FindUpstream(conn, func(tlsConn *tls.Conn) bool {
+		return tlsConn.ConnectionState().JLS.Status != tls.JLSDisabled
+	})
 	if !ok {
 		return "", false
 	}
 	state := tlsConn.ConnectionState().JLS
-	if !state.Authenticated || state.User == "" {
+	if state.Status != tls.JLSAuthenticated || state.User == "" {
 		return "", false
 	}
 	return state.User, true
@@ -338,6 +342,18 @@ type handshakeRecorderConn struct {
 	wrote     bool
 }
 
+func (c *handshakeRecorderConn) Upstream() any {
+	return c.Conn
+}
+
+func (c *handshakeRecorderConn) ReaderReplaceable() bool {
+	return !c.recording
+}
+
+func (c *handshakeRecorderConn) WriterReplaceable() bool {
+	return !c.recording
+}
+
 func (c *handshakeRecorderConn) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
 	if c.recording && n > 0 {
@@ -356,14 +372,16 @@ func (c *handshakeRecorderConn) Write(p []byte) (int, error) {
 
 func (c *handshakeRecorderConn) stop() []byte {
 	c.recording = false
-	data := append([]byte(nil), c.buffer.Bytes()...)
-	c.buffer.Reset()
+	data := c.buffer.Bytes()
+	// Transfer ownership of the backing slice to the fallback path. Recording is
+	// disabled before detaching, so the recorder cannot append to or reuse it.
+	c.buffer = bytes.Buffer{}
 	return data
 }
 
 func (c *handshakeRecorderConn) discard() {
 	c.recording = false
-	c.buffer.Reset()
+	c.buffer = bytes.Buffer{}
 }
 
 func (c *handshakeRecorderConn) wroteToClient() bool {

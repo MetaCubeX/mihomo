@@ -19,6 +19,10 @@ type TLSObfsServer struct {
 	firstResponse     bool
 }
 
+func (tos *TLSObfsServer) Upstream() any {
+	return tos.Conn
+}
+
 func (tos *TLSObfsServer) read(b []byte, discardN int) (int, error) {
 	buf := pool.Get(discardN)
 	_, err := io.ReadFull(tos.Conn, buf)

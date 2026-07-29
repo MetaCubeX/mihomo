@@ -289,7 +289,7 @@ type authenticatedConn struct {
 func (c *authenticatedConn) Upstream() any { return c.Conn }
 
 func UserFromConn(conn net.Conn) (string, bool) {
-	authenticated, ok := conn.(*authenticatedConn)
+	authenticated, ok := N.FindUpstream[*authenticatedConn](conn, nil)
 	if !ok {
 		return "", false
 	}

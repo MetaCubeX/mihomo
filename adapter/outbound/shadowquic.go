@@ -126,7 +126,7 @@ func NewShadowQuic(option ShadowQuicOption) (*ShadowQuic, error) {
 
 	quicVersions := shadowquic.DefaultQUICVersions()
 	if len(option.QUICVersions) > 0 {
-		parsedVersions, _, err := shadowquic.ParseQUICVersionProfile(option.QUICVersions)
+		parsedVersions, err := shadowquic.ParseQUICVersions(option.QUICVersions)
 		if err != nil {
 			return nil, err
 		}

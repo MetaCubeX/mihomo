@@ -67,7 +67,29 @@ func (c *ControlChannel) SetRemoteSessionID(id SessionID) {
 }
 
 func (c *ControlChannel) SendReset(ctx context.Context) error {
-	_, err := c.Send(ctx, PControlHardResetClientV2, nil)
+	opcode := PControlHardResetClientV2
+	if _, isTLSCryptV2 := c.crypt.(*TLSCryptV2); isTLSCryptV2 {
+		opcode = PControlHardResetClientV3
+	}
+	_, err := c.Send(ctx, opcode, nil)
+	return err
+}
+
+// SendSoftReset sends a P_CONTROL_SOFT_RESET_V1 and rotates the key ID.
+// Called during TLS renegotiation (rekey) to transition to a new key epoch.
+// The old pending/recvPending maps are cleared because they belong to the
+// previous key epoch; the message counters are reset for the new epoch.
+func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
+	c.mu.Lock()
+	newKeyID := c.keyID ^ 1 // toggle 0<->1
+	c.keyID = newKeyID
+	c.sendMessage = 0
+	c.recvMessage = 0
+	c.ackPending = nil
+	c.pending = make(map[uint32]*ControlPacket)
+	c.recvPending = make(map[uint32]*ControlPacket)
+	c.mu.Unlock()
+	_, err := c.Send(ctx, PControlSoftResetV1, nil)
 	return err
 }
 
@@ -117,9 +139,41 @@ func (c *ControlChannel) SendAck(ctx context.Context) error {
 }
 
 func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
+	return c.read(ctx, false)
+}
+
+func (c *ControlChannel) waitForSoftReset(ctx context.Context) error {
+	for {
+		packet, err := c.read(ctx, true)
+		if err != nil {
+			return err
+		}
+		if packet.Opcode == PControlSoftResetV1 {
+			return nil
+		}
+		if err := c.SendAck(ctx); err != nil {
+			return err
+		}
+	}
+}
+
+func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*ControlPacket, error) {
 	for {
 		c.mu.Lock()
 		if packet, ok := c.recvPending[c.recvMessage]; ok {
+			if watchSoftReset {
+				softReset, valid := c.classifyWatchPacketLocked(packet)
+				if !valid {
+					delete(c.recvPending, c.recvMessage)
+					c.mu.Unlock()
+					continue
+				}
+				if softReset {
+					delete(c.recvPending, c.recvMessage)
+					c.mu.Unlock()
+					return packet, nil
+				}
+			}
 			delete(c.recvPending, c.recvMessage)
 			c.recvMessage++
 			c.mu.Unlock()
@@ -127,9 +181,28 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 		}
 		c.mu.Unlock()
 
-		packet, err := c.readControlPacket(ctx)
+		raw, err := c.readRawControlPacket(ctx)
 		if err != nil {
 			return nil, err
+		}
+		packet, _, _, err := DecodeControlPacket(c.crypt, raw)
+		if err != nil {
+			if watchSoftReset {
+				continue
+			}
+			return nil, err
+		}
+
+		if watchSoftReset {
+			c.mu.Lock()
+			softReset, valid := c.classifyWatchPacketLocked(packet)
+			c.mu.Unlock()
+			if !valid {
+				continue
+			}
+			if softReset {
+				return packet, nil
+			}
 		}
 
 		var deliver *ControlPacket
@@ -173,6 +246,21 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 			}
 		}
 	}
+}
+
+// classifyWatchPacketLocked keeps packets from another session or key epoch
+// out of the established control channel. c.mu must be held by the caller.
+func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softReset bool, valid bool) {
+	if c.remote == (SessionID{}) || packet.LocalSession != c.remote {
+		return false, false
+	}
+	if packet.Opcode == PControlSoftResetV1 {
+		// Accept soft resets that carry a different key ID than the current
+		// active key epoch. This handles both server-initiated rekeys (new
+		// key ID) and the symmetric toggle between key ID 0 and 1.
+		return packet.KeyID != c.keyID, packet.KeyID != c.keyID
+	}
+	return false, packet.KeyID == c.keyID
 }
 
 func (c *ControlChannel) PendingMessages() int {
@@ -219,10 +307,14 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 	if err != nil {
 		return err
 	}
+	if tlsCryptV2, ok := c.crypt.(*TLSCryptV2); ok &&
+		packet.Opcode == PControlHardResetClientV3 && packet.MessageID == 0 {
+		encoded = append(encoded, tlsCryptV2.WrappedClientKey()...)
+	}
 	return c.io.WritePacket(ctx, encoded)
 }
 
-func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket, error) {
+func (c *ControlChannel) readRawControlPacket(ctx context.Context) ([]byte, error) {
 	c.mu.Lock()
 	deadline := c.readDeadline
 	c.mu.Unlock()
@@ -233,12 +325,7 @@ func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket,
 		defer cancel()
 	}
 
-	raw, err := c.io.ReadPacket(ctx)
-	if err != nil {
-		return nil, err
-	}
-	packet, _, _, err := DecodeControlPacket(c.crypt, raw)
-	return packet, err
+	return c.io.ReadPacket(ctx)
 }
 
 func (c *ControlChannel) SetDeadline(t time.Time) error {

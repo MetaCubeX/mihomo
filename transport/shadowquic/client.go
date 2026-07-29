@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"time"
 
 	C "github.com/metacubex/mihomo/constant"
 
@@ -52,43 +53,41 @@ func (c *Client) getConn(ctx context.Context) (*connState, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = c.configureCongestion(ctx, quicConn); err != nil {
-		_ = quicConn.CloseWithError(0, err.Error())
-		return nil, err
-	}
+	SetCongestionController(quicConn, c.option.CongestionController, c.option.CWND, c.option.BBRProfile)
 	c.conn = newConnState(quicConn)
+	if c.brutalEnabled() {
+		// Brutal is an optional upgrade; keep the connection usable while it is negotiated.
+		go c.negotiateBrutal(c.conn)
+	}
 	return c.conn, nil
 }
 
-func (c *Client) configureCongestion(ctx context.Context, quicConn *quic.Conn) error {
-	if !c.brutalEnabled() {
-		SetCongestionController(quicConn, c.option.CongestionController, c.option.CWND, c.option.BBRProfile)
-		return nil
-	}
-
-	stream, err := quicConn.OpenStreamSync(ctx)
+func (c *Client) negotiateBrutal(state *connState) {
+	ctx, cancel := context.WithTimeout(state.ctx, brutalNegotiationTimeout)
+	defer cancel()
+	stream, err := state.quicConn.OpenStreamSync(ctx)
 	if err != nil {
-		return err
+		return
 	}
 	defer stream.Close()
+	_ = stream.SetDeadline(time.Now().Add(brutalNegotiationTimeout))
 
 	if err = WriteBrutalNegotiationRequest(stream, c.option.ReceiveBPS); err != nil {
-		return err
+		return
 	}
 	rx, rxAuto, err := ReadBrutalNegotiationResponse(stream)
 	if err != nil {
-		return err
+		return
 	}
 	actualTx := rx
 	if actualTx == 0 || actualTx > c.option.SendBPS {
 		actualTx = c.option.SendBPS
 	}
 	if !rxAuto && actualTx > 0 {
-		setBrutalCongestionController(quicConn, actualTx)
+		setBrutalCongestionController(state.quicConn, actualTx)
 	} else {
-		SetCongestionController(quicConn, "bbr", c.option.CWND, c.option.BBRProfile)
+		SetCongestionController(state.quicConn, "bbr", c.option.CWND, c.option.BBRProfile)
 	}
-	return nil
 }
 
 func (c *Client) brutalEnabled() bool {

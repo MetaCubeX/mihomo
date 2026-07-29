@@ -49,9 +49,8 @@ func (s *Server) Serve() error {
 		if err != nil {
 			return err
 		}
-		if !s.brutalRequired() {
-			SetCongestionController(conn, s.option.CongestionController, s.option.CWND, s.option.BBRProfile)
-		}
+		// Application streams may arrive before Brutal negotiation completes.
+		SetCongestionController(conn, s.option.CongestionController, s.option.CWND, s.option.BBRProfile)
 		state := newConnState(conn)
 		go s.handleConnection(state)
 	}
@@ -79,11 +78,6 @@ func (s *Server) handleStream(state *connState, stream *quic.Stream) {
 		_ = conn.Close()
 		return
 	}
-	if command != CommandExtension && s.brutalRequired() && !state.isBrutalNegotiated() {
-		_ = conn.Close()
-		return
-	}
-
 	switch command {
 	case CommandConnect:
 		target, err := ReadRequestAddr(conn)
@@ -122,10 +116,6 @@ func (s *Server) handleStream(state *connState, stream *quic.Stream) {
 	}
 }
 
-func (s *Server) brutalRequired() bool {
-	return s.option.SendBPS > 0 || s.option.ReceiveBPS > 0
-}
-
 func (s *Server) handleBrutalNegotiation(state *connState, conn net.Conn) {
 	rx, err := ReadBrutalNegotiationRequest(conn)
 	if err != nil {
@@ -135,7 +125,6 @@ func (s *Server) handleBrutalNegotiation(state *connState, conn net.Conn) {
 	if err != nil {
 		return
 	}
-	state.markBrutalNegotiated()
 	if err = WriteBrutalNegotiationResponse(conn, s.option.ReceiveBPS, rxAuto); err != nil {
 		return
 	}
@@ -221,7 +210,7 @@ func (s *Server) jlsAdditions(state *connState) []inbound.Addition {
 
 func (s *Server) jlsUser(state *connState) string {
 	tlsState := state.quicConn.ConnectionState().TLS
-	if tlsState.JLS.Authenticated {
+	if tlsState.JLS.Status == tls.JLSAuthenticated {
 		return tlsState.JLS.User
 	}
 	return ""

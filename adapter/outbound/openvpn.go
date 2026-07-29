@@ -41,28 +41,31 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name             string            `proxy:"name"`
-	Server           string            `proxy:"server"`
-	Port             int               `proxy:"port"`
-	Proto            string            `proxy:"proto,omitempty"`
-	Dev              string            `proxy:"dev,omitempty"`
-	Cipher           string            `proxy:"cipher,omitempty"`
-	Auth             string            `proxy:"auth,omitempty"`
-	CompLZO          string            `proxy:"comp-lzo,omitempty"`
-	CA               string            `proxy:"ca"`
-	Cert             string            `proxy:"cert,omitempty"`
-	Key              string            `proxy:"key,omitempty"`
-	TLSAuth          string            `proxy:"tls-auth,omitempty"`
-	KeyDirection     string            `proxy:"key-direction,omitempty"`
-	TLSCrypt         string            `proxy:"tls-crypt,omitempty"`
-	Username         string            `proxy:"username,omitempty"`
-	Password         string            `proxy:"password,omitempty"`
-	PeerInfo         map[string]string `proxy:"peer-info,omitempty"`
-	Ping             int               `proxy:"ping,omitempty"`
-	PingRestart      int               `proxy:"ping-restart,omitempty"`
-	HandshakeTimeout int               `proxy:"handshake-timeout,omitempty"`
-	MTU              int               `proxy:"mtu,omitempty"`
-	UDP              bool              `proxy:"udp,omitempty"`
+	Name               string            `proxy:"name"`
+	Server             string            `proxy:"server"`
+	Port               int               `proxy:"port"`
+	Proto              string            `proxy:"proto,omitempty"`
+	Dev                string            `proxy:"dev,omitempty"`
+	Cipher             string            `proxy:"cipher,omitempty"`
+	DataCiphers        []string          `proxy:"data-ciphers,omitempty"`
+	DataCipherFallback string            `proxy:"data-ciphers-fallback,omitempty"`
+	Auth               string            `proxy:"auth,omitempty"`
+	CompLZO            string            `proxy:"comp-lzo,omitempty"`
+	CA                 string            `proxy:"ca"`
+	Cert               string            `proxy:"cert,omitempty"`
+	Key                string            `proxy:"key,omitempty"`
+	TLSAuth            string            `proxy:"tls-auth,omitempty"`
+	KeyDirection       string            `proxy:"key-direction,omitempty"`
+	TLSCrypt           string            `proxy:"tls-crypt,omitempty"`
+	TLSCryptV2         string            `proxy:"tls-crypt-v2,omitempty"`
+	Username           string            `proxy:"username,omitempty"`
+	Password           string            `proxy:"password,omitempty"`
+	PeerInfo           map[string]string `proxy:"peer-info,omitempty"`
+	Ping               int               `proxy:"ping,omitempty"`
+	PingRestart        int               `proxy:"ping-restart,omitempty"`
+	HandshakeTimeout   int               `proxy:"handshake-timeout,omitempty"`
+	MTU                int               `proxy:"mtu,omitempty"`
+	UDP                bool              `proxy:"udp,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -73,24 +76,27 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		return nil, errors.New("openvpn handshake timeout must be non-negative")
 	}
 	cfg := &ovpn.ClientConfig{
-		RemoteHost:   option.Server,
-		RemotePort:   uint16(option.Port),
-		Proto:        option.Proto,
-		Dev:          option.Dev,
-		Cipher:       option.Cipher,
-		Auth:         option.Auth,
-		CompLZO:      option.CompLZO,
-		CA:           []byte(option.CA),
-		Cert:         []byte(option.Cert),
-		Key:          []byte(option.Key),
-		TLSAuth:      []byte(option.TLSAuth),
-		KeyDirection: option.KeyDirection,
-		TLSCrypt:     []byte(option.TLSCrypt),
-		Username:     option.Username,
-		Password:     option.Password,
-		PeerInfo:     option.PeerInfo,
-		PingInterval: time.Duration(option.Ping) * time.Second,
-		PingRestart:  time.Duration(option.PingRestart) * time.Second,
+		RemoteHost:     option.Server,
+		RemotePort:     uint16(option.Port),
+		Proto:          option.Proto,
+		Dev:            option.Dev,
+		Cipher:         option.Cipher,
+		DataCiphers:    option.DataCiphers,
+		FallbackCipher: option.DataCipherFallback,
+		Auth:           option.Auth,
+		CompLZO:        option.CompLZO,
+		CA:             []byte(option.CA),
+		Cert:           []byte(option.Cert),
+		Key:            []byte(option.Key),
+		TLSAuth:        []byte(option.TLSAuth),
+		KeyDirection:   option.KeyDirection,
+		TLSCrypt:       []byte(option.TLSCrypt),
+		TLSCryptV2:     []byte(option.TLSCryptV2),
+		Username:       option.Username,
+		Password:       option.Password,
+		PeerInfo:       option.PeerInfo,
+		PingInterval:   time.Duration(option.Ping) * time.Second,
+		PingRestart:    time.Duration(option.PingRestart) * time.Second,
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
