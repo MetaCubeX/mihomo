@@ -35,6 +35,11 @@ func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
 		w.WriteMsg(m)
 		return
 	}
+	if _, isUDP := w.RemoteAddr().(*net.UDPAddr); isUDP {
+		// RFC 6891: fit the reply into the client's advertised buffer size,
+		// setting the TC bit if records must be dropped; 512 when no OPT present
+		msg.Truncate(resolver.RequestUDPSize(r))
+	}
 	msg.Compress = true
 	w.WriteMsg(msg)
 }
