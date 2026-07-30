@@ -81,31 +81,10 @@ func (ss *DomainSet) Has(key string) bool {
 			// The set is built with rune-wise reversal, which only matches
 			// byte-wise reversal for ASCII. Normalize the same way and
 			// byte-reverse so revLowerAt below observes it unchanged.
-			return ss.has(byteReverse(strings.ToLower(utils.Reverse(key))))
+			key = byteReverse(strings.ToLower(utils.Reverse(key)))
+			break
 		}
 	}
-	return ss.has(key)
-}
-
-// revLowerAt returns the i-th byte of key read back to front, lowercased for
-// ASCII. It lets has walk the reversed key without materializing it.
-func revLowerAt(key string, i int) byte {
-	c := key[len(key)-1-i]
-	if c >= 'A' && c <= 'Z' {
-		c += 'a' - 'A'
-	}
-	return c
-}
-
-func byteReverse(s string) string {
-	buf := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		buf[i] = s[len(s)-1-i]
-	}
-	return string(buf)
-}
-
-func (ss *DomainSet) has(key string) bool {
 	// no more labels in this node
 	// skip character matching
 	// go to next level
@@ -164,6 +143,24 @@ func (ss *DomainSet) has(key string) bool {
 
 	return getBit(ss.leaves, nodeId) != 0
 
+}
+
+// revLowerAt returns the i-th byte of key read back to front, lowercased for
+// ASCII. It lets Has walk the reversed key without materializing it.
+func revLowerAt(key string, i int) byte {
+	c := key[len(key)-1-i]
+	if c >= 'A' && c <= 'Z' {
+		c += 'a' - 'A'
+	}
+	return c
+}
+
+func byteReverse(s string) string {
+	buf := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		buf[i] = s[len(s)-1-i]
+	}
+	return string(buf)
 }
 
 func (ss *DomainSet) keys(f func(key string) bool) {
