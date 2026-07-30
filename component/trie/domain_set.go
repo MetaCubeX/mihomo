@@ -6,10 +6,15 @@ package trie
 import (
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/openacid/low/bitmap"
 )
+
+// maxReverseKeyLen bounds the stack buffer Has uses; a domain name cannot
+// exceed 253 characters.
+const maxReverseKeyLen = 255
 
 const (
 	complexWildcardByte = byte('+')
@@ -75,8 +80,30 @@ func (ss *DomainSet) Has(key string) bool {
 	if ss == nil {
 		return false
 	}
-	key = utils.Reverse(key)
-	key = strings.ToLower(key)
+	if len(key) <= maxReverseKeyLen {
+		// Reverse and lowercase in one pass into a stack buffer, which keeps the
+		// query path allocation free for the ASCII keys hostnames normally are.
+		var buf [maxReverseKeyLen]byte
+		ascii := true
+		for i := 0; i < len(key); i++ {
+			c := key[len(key)-1-i]
+			if c >= utf8.RuneSelf {
+				ascii = false
+				break
+			}
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			buf[i] = c
+		}
+		if ascii {
+			return ss.has(buf[:len(key)])
+		}
+	}
+	return ss.has([]byte(strings.ToLower(utils.Reverse(key))))
+}
+
+func (ss *DomainSet) has(key []byte) bool {
 	// no more labels in this node
 	// skip character matching
 	// go to next level
