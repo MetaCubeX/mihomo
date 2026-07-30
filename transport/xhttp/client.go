@@ -52,6 +52,7 @@ type PacketUpWriter struct {
 	buf                  []byte
 	timer                *time.Timer
 	flushErr             error
+	onError              func(error)
 }
 
 func (c *PacketUpWriter) Write(b []byte) (int, error) {
@@ -121,23 +122,64 @@ func (c *PacketUpWriter) write(b []byte) (int, error) {
 	seqStr := strconv.FormatUint(c.seq, 10)
 	c.seq++
 
-	if err := c.cfg.FillPacketRequest(req, c.sessionID, seqStr, b); err != nil {
+	payload := bytes.Clone(b)
+	if err := c.cfg.FillPacketRequest(req, c.sessionID, seqStr, payload); err != nil {
 		return 0, err
 	}
 	req.Host = c.cfg.Host
 
-	resp, err := c.transport.RoundTrip(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+	requestWritten := make(chan struct{})
+	var requestWrittenOnce sync.Once
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		WroteRequest: func(httptrace.WroteRequestInfo) {
+			requestWrittenOnce.Do(func() {
+				close(requestWritten)
+			})
+		},
+	}))
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("xhttp packet-up bad status: %s", resp.Status)
-	}
+	result := make(chan error, 1)
+	go func() {
+		resp, err := c.transport.RoundTrip(req)
+		if err == nil {
+			defer resp.Body.Close()
+			_, _ = io.Copy(io.Discard, resp.Body)
+			if resp.StatusCode != http.StatusOK {
+				err = fmt.Errorf("xhttp packet-up bad status: %s", resp.Status)
+			}
+		}
+		result <- err
+	}()
 
-	return len(b), nil
+	select {
+	case <-requestWritten:
+		go c.collectResult(result)
+		return len(b), nil
+	case err := <-result:
+		if err != nil {
+			return 0, err
+		}
+		return len(b), nil
+	}
+}
+
+func (c *PacketUpWriter) collectResult(result <-chan error) {
+	if err := <-result; err != nil {
+		if c.cancel != nil {
+			c.cancel()
+		}
+		c.writeMu.Lock()
+		var onError func(error)
+		if c.flushErr == nil {
+			c.flushErr = err
+			onError = c.onError
+		}
+		c.writeCond.Broadcast()
+		c.writeMu.Unlock()
+		if onError != nil {
+			onError(err)
+		}
+	}
 }
 
 func (c *PacketUpWriter) Close() error {
@@ -644,6 +686,11 @@ func (c *Client) DialPacketUp(ctx context.Context) (net.Conn, error) {
 	downloadReq.Host = downloadCfg.Host
 
 	wrc := NewWaitReadCloser()
+	writer.onError = func(error) {
+		reqCancel()
+		_ = wrc.Close()
+		httputils.CloseTransport(downloadTransport)
+	}
 
 	go func() {
 		resp, err := downloadTransport.RoundTrip(downloadReq)
