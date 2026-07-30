@@ -12,10 +12,6 @@ import (
 	"github.com/openacid/low/bitmap"
 )
 
-// maxReverseKeyLen bounds the stack buffer Has uses; a domain name cannot
-// exceed 253 characters.
-const maxReverseKeyLen = 255
-
 const (
 	complexWildcardByte = byte('+')
 	wildcardByte        = byte('*')
@@ -80,30 +76,36 @@ func (ss *DomainSet) Has(key string) bool {
 	if ss == nil {
 		return false
 	}
-	if len(key) <= maxReverseKeyLen {
-		// Reverse and lowercase in one pass into a stack buffer, which keeps the
-		// query path allocation free for the ASCII keys hostnames normally are.
-		var buf [maxReverseKeyLen]byte
-		ascii := true
-		for i := 0; i < len(key); i++ {
-			c := key[len(key)-1-i]
-			if c >= utf8.RuneSelf {
-				ascii = false
-				break
-			}
-			if c >= 'A' && c <= 'Z' {
-				c += 'a' - 'A'
-			}
-			buf[i] = c
-		}
-		if ascii {
-			return ss.has(buf[:len(key)])
+	for i := 0; i < len(key); i++ {
+		if key[i] >= utf8.RuneSelf {
+			// The set is built with rune-wise reversal, which only matches
+			// byte-wise reversal for ASCII. Normalize the same way and
+			// byte-reverse so revLowerAt below observes it unchanged.
+			return ss.has(byteReverse(strings.ToLower(utils.Reverse(key))))
 		}
 	}
-	return ss.has([]byte(strings.ToLower(utils.Reverse(key))))
+	return ss.has(key)
 }
 
-func (ss *DomainSet) has(key []byte) bool {
+// revLowerAt returns the i-th byte of key read back to front, lowercased for
+// ASCII. It lets has walk the reversed key without materializing it.
+func revLowerAt(key string, i int) byte {
+	c := key[len(key)-1-i]
+	if c >= 'A' && c <= 'Z' {
+		c += 'a' - 'A'
+	}
+	return c
+}
+
+func byteReverse(s string) string {
+	buf := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		buf[i] = s[len(s)-1-i]
+	}
+	return string(buf)
+}
+
+func (ss *DomainSet) has(key string) bool {
 	// no more labels in this node
 	// skip character matching
 	// go to next level
@@ -114,7 +116,7 @@ func (ss *DomainSet) has(key []byte) bool {
 	stack := make([]wildcardCursor, 0)
 	for i := 0; i < len(key); i++ {
 	RESTART:
-		c := key[i]
+		c := revLowerAt(key, i)
 		for ; ; bmIdx++ {
 			if getBit(ss.labelBitmap, bmIdx) != 0 {
 				if len(stack) > 0 {
@@ -124,7 +126,7 @@ func (ss *DomainSet) has(key []byte) bool {
 					nextNodeId := countZeros(ss.labelBitmap, ss.ranks, cursor.bmIdx+1)
 					nextBmIdx := selectIthOne(ss.labelBitmap, ss.ranks, ss.selects, nextNodeId-1) + 1
 					j := cursor.index
-					for ; j < len(key) && key[j] != domainStepByte; j++ {
+					for ; j < len(key) && revLowerAt(key, j) != domainStepByte; j++ {
 					}
 					if j == len(key) {
 						if getBit(ss.leaves, nextNodeId) != 0 {
