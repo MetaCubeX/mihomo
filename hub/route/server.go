@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ type Traffic struct {
 
 type Memory struct {
 	Inuse   uint64 `json:"inuse"`
-	OSLimit uint64 `json:"oslimit"` // maybe we need it in the future
+	OSLimit uint64 `json:"oslimit"` // the runtime soft memory limit, 0 when unlimited
 }
 
 type Config struct {
@@ -414,6 +415,19 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// memoryLimit reports the soft memory limit the Go runtime is enforcing, set
+// either through the GOMEMLIMIT environment variable or debug.SetMemoryLimit.
+// It returns 0 when no limit is in effect, since the runtime spells that as
+// math.MaxInt64, which is not a useful number to report.
+func memoryLimit() uint64 {
+	// A negative argument only reads the current limit, it does not set one.
+	limit := debug.SetMemoryLimit(-1)
+	if limit == math.MaxInt64 {
+		return 0
+	}
+	return uint64(limit)
+}
+
 func memory(w http.ResponseWriter, r *http.Request) {
 	var wsConn net.Conn
 	if r.Header.Get("Upgrade") == "websocket" {
@@ -445,9 +459,10 @@ func memory(w http.ResponseWriter, r *http.Request) {
 			inuse = 0
 			first = false
 		}
+		// read inside the loop so a limit changed at runtime is reflected
 		if err := json.NewEncoder(buf).Encode(Memory{
 			Inuse:   inuse,
-			OSLimit: 0,
+			OSLimit: memoryLimit(),
 		}); err != nil {
 			break
 		}
