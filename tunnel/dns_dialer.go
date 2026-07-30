@@ -111,7 +111,7 @@ func (d *DNSDialer) DialContext(ctx context.Context, network, addr string) (net.
 		}
 
 		if !proxyAdapter.SupportUDP() {
-			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
+			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter.Name())
 		}
 
 		packetConn, err := proxyAdapter.ListenPacketContext(ctx, metadata)
@@ -173,7 +173,7 @@ func (d *DNSDialer) ListenPacket(ctx context.Context, network, addr string) (net
 	}
 
 	if !proxyAdapter.SupportUDP() {
-		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
+		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter.Name())
 	}
 
 	packetConn, err := proxyAdapter.ListenPacketContext(ctx, metadata)
