@@ -36,15 +36,8 @@ const (
 	// connections in HTTP transport.
 	transportDefaultIdleConnTimeout = 5 * time.Minute
 
-	// dohMaxConnsPerHost controls the maximum number of connections for
-	// each host.  Note, that setting it to 1 may cause issues with Go's http
-	// implementation, see https://github.com/AdguardTeam/dnsproxy/issues/278.
-	dohMaxConnsPerHost = 2
 	dialTimeout        = 10 * time.Second
 
-	// dohMaxIdleConns controls the maximum number of connections being idle
-	// at the same time.
-	dohMaxIdleConns = 2
 	maxElapsedTime  = time.Second * 30
 )
 
@@ -394,8 +387,6 @@ func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripp
 		DisableCompression: true,
 		DialContext:        doh.dialer.DialContext,
 		IdleConnTimeout:    transportDefaultIdleConnTimeout,
-		MaxConnsPerHost:    dohMaxConnsPerHost,
-		MaxIdleConns:       dohMaxIdleConns,
 	}
 
 	if doh.url.Scheme == "http" {
