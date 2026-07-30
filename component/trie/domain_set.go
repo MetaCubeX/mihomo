@@ -6,6 +6,7 @@ package trie
 import (
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/openacid/low/bitmap"
@@ -75,8 +76,15 @@ func (ss *DomainSet) Has(key string) bool {
 	if ss == nil {
 		return false
 	}
-	key = utils.Reverse(key)
-	key = strings.ToLower(key)
+	for i := 0; i < len(key); i++ {
+		if key[i] >= utf8.RuneSelf {
+			// The set is built with rune-wise reversal, which only matches
+			// byte-wise reversal for ASCII. Normalize the same way and
+			// byte-reverse so revLowerAt below observes it unchanged.
+			key = byteReverse(strings.ToLower(utils.Reverse(key)))
+			break
+		}
+	}
 	// no more labels in this node
 	// skip character matching
 	// go to next level
@@ -87,7 +95,7 @@ func (ss *DomainSet) Has(key string) bool {
 	stack := make([]wildcardCursor, 0)
 	for i := 0; i < len(key); i++ {
 	RESTART:
-		c := key[i]
+		c := revLowerAt(key, i)
 		for ; ; bmIdx++ {
 			if getBit(ss.labelBitmap, bmIdx) != 0 {
 				if len(stack) > 0 {
@@ -97,7 +105,7 @@ func (ss *DomainSet) Has(key string) bool {
 					nextNodeId := countZeros(ss.labelBitmap, ss.ranks, cursor.bmIdx+1)
 					nextBmIdx := selectIthOne(ss.labelBitmap, ss.ranks, ss.selects, nextNodeId-1) + 1
 					j := cursor.index
-					for ; j < len(key) && key[j] != domainStepByte; j++ {
+					for ; j < len(key) && revLowerAt(key, j) != domainStepByte; j++ {
 					}
 					if j == len(key) {
 						if getBit(ss.leaves, nextNodeId) != 0 {
@@ -135,6 +143,24 @@ func (ss *DomainSet) Has(key string) bool {
 
 	return getBit(ss.leaves, nodeId) != 0
 
+}
+
+// revLowerAt returns the i-th byte of key read back to front, lowercased for
+// ASCII. It lets Has walk the reversed key without materializing it.
+func revLowerAt(key string, i int) byte {
+	c := key[len(key)-1-i]
+	if c >= 'A' && c <= 'Z' {
+		c += 'a' - 'A'
+	}
+	return c
+}
+
+func byteReverse(s string) string {
+	buf := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		buf[i] = s[len(s)-1-i]
+	}
+	return string(buf)
 }
 
 func (ss *DomainSet) keys(f func(key string) bool) {
