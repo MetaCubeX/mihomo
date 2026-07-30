@@ -34,7 +34,7 @@ func (c *Client) quicRoundTripper(tlsConfig *vmess.TLSConfig, congestionControlN
 			if err != nil {
 				return nil, err
 			}
-			_, quicConn, err := common.DialQuic(ctx, addr, c.dialOptions(), c.dialer, tlsCfg, cfg, true)
+			_, quicConn, err := common.DialQuic(ctx, addr, c.dialOptions(), c.dialer, tlsCfg, cfg, common.DialQuicOption{Early: true})
 			if err != nil {
 				return nil, err
 			}

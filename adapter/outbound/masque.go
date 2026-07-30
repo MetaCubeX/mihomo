@@ -263,7 +263,7 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 }
 
 func (w *Masque) dialQuic(ctx context.Context) (net.PacketConn, *quic.Conn, error) {
-	pc, quicConn, err := common.DialQuic(ctx, w.addr, w.DialOptions(), w.dialer, w.tlsConfig, w.quicConfig, false)
+	pc, quicConn, err := common.DialQuic(ctx, w.addr, w.DialOptions(), w.dialer, w.tlsConfig, w.quicConfig, common.DialQuicOption{})
 	if err != nil {
 		return nil, nil, err
 	}

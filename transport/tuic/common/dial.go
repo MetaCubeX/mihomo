@@ -16,7 +16,12 @@ type PacketDialer interface {
 	ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error)
 }
 
-func DialQuic(ctx context.Context, address string, opts []dialer.Option, pDialer PacketDialer, tlsConf *tls.Config, conf *quic.Config, early bool) (net.PacketConn, *quic.Conn, error) {
+type DialQuicOption struct {
+	Early              bool
+	ConnectionIDLength int
+}
+
+func DialQuic(ctx context.Context, address string, opts []dialer.Option, pDialer PacketDialer, tlsConf *tls.Config, conf *quic.Config, option DialQuicOption) (net.PacketConn, *quic.Conn, error) {
 	d := dialer.NewDialer(
 		dialer.WithOptions(opts...),
 		dialer.WithNetDialer(dialer.NetDialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -29,12 +34,15 @@ func DialQuic(ctx context.Context, address string, opts []dialer.Option, pDialer
 			if err != nil {
 				return nil, err
 			}
-			transport := quic.Transport{Conn: packetConn}
+			transport := quic.Transport{
+				Conn:               packetConn,
+				ConnectionIDLength: option.ConnectionIDLength,
+			}
 			transport.SetCreatedConn(true) // auto close conn
 			transport.SetSingleUse(true)   // auto close transport
 
 			var quicConn *quic.Conn
-			if early {
+			if option.Early {
 				quicConn, err = transport.DialEarly(ctx, udpAddr, tlsConf, conf)
 			} else {
 				quicConn, err = transport.Dial(ctx, udpAddr, tlsConf, conf)
