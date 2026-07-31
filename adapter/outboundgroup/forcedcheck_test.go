@@ -2,6 +2,8 @@ package outboundgroup
 
 import (
 	"context"
+	"errors"
+	"sync"
 	stdatomic "sync/atomic"
 	"testing"
 	"time"
@@ -38,62 +40,118 @@ func (t *testProvider) HealthCheckURL() string     { return "" }
 func (t *testProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 }
 
-func waitForHealthChecks(t *testing.T, tp *testProvider, want int32) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		if tp.healthChecks.Load() >= want {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatalf("expected at least %d health checks, got %d", want, tp.healthChecks.Load())
-}
-
-// A failure-triggered health check must not run again within the cooldown
-// window, otherwise every burst of failed dials rescans all provider nodes.
-func TestForcedHealthCheckCooldown(t *testing.T) {
-	tp := &testProvider{name: "stub-provider"}
-	gb := NewGroupBase(GroupBaseOption{
+func newTestGroupBase(tp *testProvider) *GroupBase {
+	return NewGroupBase(GroupBaseOption{
 		Name:      "group-under-test",
 		Type:      C.URLTest,
 		Providers: []P.ProxyProvider{tp},
 	})
+}
 
-	gb.healthCheck()
-	gb.healthCheck()
+// A forced health check must not run again within the cooldown window,
+// otherwise every burst of failed dials rescans all provider nodes.
+func TestForcedHealthCheckCooldown(t *testing.T) {
+	tp := &testProvider{name: "stub-provider"}
+	gb := newTestGroupBase(tp)
+
+	if !gb.tryForceHealthCheck(failureRecheckCooldown, gb.healthCheck) {
+		t.Fatal("first forced health check should run")
+	}
+	if gb.tryForceHealthCheck(failureRecheckCooldown, gb.healthCheck) {
+		t.Fatal("second forced health check within cooldown should be suppressed")
+	}
 
 	if got := tp.healthChecks.Load(); got != 1 {
 		t.Fatalf("expected exactly 1 health check within cooldown window, got %d", got)
 	}
 }
 
-// A group with a configured interval must use that interval as its
-// failure-triggered cooldown, not the fixed 30s floor - otherwise a group
-// configured for e.g. interval: 900 gets fully rescanned every ~30s as long
-// as dial failures keep recurring, ignoring what the user configured.
-func TestForcedHealthCheckCooldownUsesConfiguredInterval(t *testing.T) {
-	gb := NewGroupBase(GroupBaseOption{
-		Name:     "group-under-test",
-		Type:     C.URLTest,
-		Interval: 900,
-	})
+// healthCheck itself must stay unthrottled: it is the "check now" primitive,
+// and the cooldown belongs to the forced-trigger path only. Throttling it
+// here is what previously made a forced recovery check impossible to run more
+// often than the scheduled one.
+func TestHealthCheckItselfIsNotThrottled(t *testing.T) {
+	tp := &testProvider{name: "stub-provider"}
+	gb := newTestGroupBase(tp)
 
-	if got := gb.forcedHealthCheckCooldown(); got != 900*time.Second {
-		t.Fatalf("expected cooldown to match configured interval (900s), got %s", got)
+	gb.healthCheck()
+	gb.healthCheck()
+
+	if got := tp.healthChecks.Load(); got != 2 {
+		t.Fatalf("expected 2 unthrottled health checks, got %d", got)
 	}
 }
 
-// A group without a configured interval must fall back to the minimum
-// cooldown floor, preserving prior behavior for groups that never set one.
-func TestForcedHealthCheckCooldownFallsBackWithoutInterval(t *testing.T) {
-	gb := NewGroupBase(GroupBaseOption{
-		Name: "group-under-test",
-		Type: C.URLTest,
-	})
+// The cooldown gate is reached concurrently from many dial goroutines once a
+// group starts blackholing, so a check-then-set would let several through.
+func TestForcedHealthCheckCooldownIsRaceFree(t *testing.T) {
+	tp := &testProvider{name: "stub-provider"}
+	gb := newTestGroupBase(tp)
 
-	if got := gb.forcedHealthCheckCooldown(); got != minForcedHealthCheckCooldown {
-		t.Fatalf("expected fallback cooldown of %s, got %s", minForcedHealthCheckCooldown, got)
+	const goroutines = 64
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	var ran stdatomic.Int32
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if gb.tryForceHealthCheck(failureRecheckCooldown, gb.healthCheck) {
+				ran.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if got := ran.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 goroutine to pass the cooldown gate, got %d", got)
+	}
+	if got := tp.healthChecks.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 provider health check, got %d", got)
+	}
+}
+
+// resolvesToReject runs on every member of every dial and must not disturb
+// group state. Probing via Unwrap would run a child Fallback's own selection,
+// which drops the pin the user set through the API.
+func TestResolvesToRejectDoesNotClearChildPin(t *testing.T) {
+	reject := adapter.NewProxy(outbound.NewReject())
+
+	deadNode := adapter.NewProxy(outbound.NewDirect())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = deadNode.URLTest(ctx, stubTestURL, nil)
+
+	child, err := NewFallback(
+		GroupCommonOption{Name: "child-fallback", URL: stubTestURL},
+		FallbackOption{},
+		reject,
+		[]P.ProxyProvider{&testProvider{name: "members", proxies: []C.Proxy{deadNode}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child.ForceSet(deadNode.Name())
+
+	if resolvesToReject(adapter.NewProxy(child)) {
+		t.Fatal("a group holding a real node does not blackhole traffic")
+	}
+
+	if got := child.selected; got != deadNode.Name() {
+		t.Fatalf("read-only probe cleared the child's pin: selected = %q", got)
+	}
+}
+
+// A plain node has nothing to recurse into and must be answered immediately.
+func TestResolvesToRejectPlainNodes(t *testing.T) {
+	if resolvesToReject(adapter.NewProxy(outbound.NewDirect())) {
+		t.Fatal("a plain node does not resolve to REJECT")
+	}
+	if !resolvesToReject(adapter.NewProxy(outbound.NewReject())) {
+		t.Fatal("REJECT must be reported as blackholing")
 	}
 }
 
@@ -174,31 +232,145 @@ func TestFallbackPrefersStaleDeadMemberOverReject(t *testing.T) {
 	}
 }
 
-// A plain dead member (not resolving to REJECT) must not force a health
-// check on every dial: dead proxies already fail dials naturally and are
-// handled by onDialFailed's failedTimes/maxFailedTimes/cooldown gate.
-// Triggering here too bypasses that gate and reruns a full group health
-// check on every single dial as long as the picked member stays dead,
-// storming the network regardless of the group's configured interval.
-func TestForcedHealthCheckNotNeededForPlainDeadProxy(t *testing.T) {
-	direct := adapter.NewProxy(outbound.NewDirect())
+// After a forced check fires, the failure counter must be reset, otherwise
+// every further failed dial in the same window re-enters the maxFailedTimes
+// branch and re-emits the warning.
+func TestOnDialFailedResetsFailedTimesAfterFiring(t *testing.T) {
+	tp := &testProvider{name: "stub-provider"}
+	gb := newTestGroupBase(tp)
+	gb.testTimeout = 60_000 // keep every failure inside the same burst window
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, _ = direct.URLTest(ctx, stubTestURL, nil)
-	if direct.AliveForTestUrl(stubTestURL) {
-		t.Fatal("precondition failed: proxy should be flagged dead")
+	fired := make(chan struct{}, gb.maxFailedTimes*2)
+	fn := func() { fired <- struct{}{} }
+
+	for i := 0; i < gb.maxFailedTimes; i++ {
+		gb.onDialFailed(C.Shadowsocks, errors.New("dial timeout"), fn)
 	}
 
-	if forcedHealthCheckNeeded(direct, stubTestURL) {
-		t.Fatal("a plain dead proxy (not resolving to REJECT) must not force a health check on every dial")
+	select {
+	case <-fired:
+	case <-time.After(time.Second):
+		t.Fatal("expected a forced health check after maxFailedTimes failures")
+	}
+
+	gb.failedTestMux.Lock()
+	got := gb.failedTimes
+	gb.failedTestMux.Unlock()
+
+	if got != 0 {
+		t.Fatalf("expected failedTimes to be reset after firing, got %d", got)
 	}
 }
 
-// Dialing through an empty fallback group resolved to REJECT "succeeds"
-// (nopConn) and never reports a dial error, so the group must proactively
-// re-run its health check to notice members that came back to life.
-func TestFallbackRejectDialTriggersHealthCheck(t *testing.T) {
+// A url-test group must skip a member that currently blackholes traffic, the
+// same way Fallback does - otherwise the two group types disagree about what
+// an empty sub-group means.
+func TestURLTestSkipsMemberResolvingToReject(t *testing.T) {
+	reject := adapter.NewProxy(outbound.NewReject())
+
+	emptyMember := newURLTestMember(t, "empty-member", reject, &testProvider{name: "no-proxies"})
+	liveMember := newURLTestMember(t, "live-member", reject, &testProvider{
+		name:    "one-proxy",
+		proxies: []C.Proxy{adapter.NewProxy(outbound.NewDirect())},
+	})
+
+	u, err := NewURLTest(
+		GroupCommonOption{Name: "urltest-group", URL: stubTestURL},
+		URLTestOption{},
+		reject,
+		[]P.ProxyProvider{&testProvider{name: "members", proxies: []C.Proxy{emptyMember, liveMember}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := u.Now(); got != "live-member" {
+		t.Fatalf("url-test should skip the member resolving to REJECT, now: %s", got)
+	}
+}
+
+// When the url-test winner turns out to blackhole traffic, the replacement
+// must still respect aliveness. Picking merely "the first member that is not
+// REJECT" can hand back a dead node while a live one sits further down the
+// list - the delay-based main loop cannot catch this because proxies[0] seeds
+// `fast` unconditionally and an unmeasured member carries the max delay.
+func TestURLTestReplacementForRejectWinnerPrefersAliveMember(t *testing.T) {
+	reject := adapter.NewProxy(outbound.NewReject())
+
+	// proxies[0]: empty sub-group -> resolves to REJECT, but still flagged alive
+	emptyMember := newURLTestMember(t, "empty-member", reject, &testProvider{name: "no-proxies"})
+	// proxies[1]: plain node, not blackholing, but dead
+	deadNode := adapter.NewProxy(outbound.NewDirect())
+	// proxies[2]: a genuinely usable member, further down the list
+	liveMember := newURLTestMember(t, "live-member", reject, &testProvider{
+		name:    "one-proxy",
+		proxies: []C.Proxy{adapter.NewProxy(outbound.NewDirect())},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = deadNode.URLTest(ctx, stubTestURL, nil)
+	if deadNode.AliveForTestUrl(stubTestURL) {
+		t.Fatal("precondition failed: node should be flagged dead")
+	}
+
+	u, err := NewURLTest(
+		GroupCommonOption{Name: "urltest-group", URL: stubTestURL},
+		URLTestOption{},
+		reject,
+		[]P.ProxyProvider{&testProvider{
+			name:    "members",
+			proxies: []C.Proxy{emptyMember, deadNode, liveMember},
+		}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := u.Now(); got != "live-member" {
+		t.Fatalf("url-test picked %q; must prefer the alive member over a dead one", got)
+	}
+}
+
+// The fallback for "nothing is alive" must prefer a member that would not
+// blackhole traffic over the plain proxies[0], even when that member is a
+// group whose own empty-fallback is REJECT.
+func TestFallbackPrefersNonRejectMemberWhenNothingAlive(t *testing.T) {
+	reject := adapter.NewProxy(outbound.NewReject())
+
+	// member 0 is a group with no proxies -> resolves to its REJECT fallback
+	emptyMember := newURLTestMember(t, "empty-member", reject, &testProvider{name: "no-proxies"})
+	// member 1 is a plain node that is not alive either, but does not blackhole
+	deadNode := adapter.NewProxy(outbound.NewDirect())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _ = deadNode.URLTest(ctx, stubTestURL, nil)
+	if deadNode.AliveForTestUrl(stubTestURL) {
+		t.Fatal("precondition failed: node should be flagged dead")
+	}
+
+	f, err := NewFallback(
+		GroupCommonOption{Name: "fallback-group", URL: stubTestURL},
+		FallbackOption{},
+		reject,
+		[]P.ProxyProvider{&testProvider{name: "members", proxies: []C.Proxy{emptyMember, deadNode}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := f.Now(); got != deadNode.Name() {
+		t.Fatalf("fallback should prefer the non-blackholing member, now: %s", got)
+	}
+}
+
+// An empty group still answers dials through its empty-fallback without an
+// error (REJECT hands back a nop connection). Nothing in the group forces a
+// health check for this: HealthCheck cannot repopulate an empty provider -
+// only the provider's own Update can - so the recovery has to come from the
+// selection logic above, which skips such a member while it has alternatives.
+func TestRejectDialDoesNotError(t *testing.T) {
 	reject := adapter.NewProxy(outbound.NewReject())
 	tp := &testProvider{name: "stub-provider"} // no proxies -> group resolves to empty-fallback
 
@@ -220,32 +392,7 @@ func TestFallbackRejectDialTriggersHealthCheck(t *testing.T) {
 	}
 	defer conn.Close()
 
-	waitForHealthChecks(t, tp, 1)
-}
-
-// Same for url-test groups: an empty group serving REJECT must re-check its
-// providers instead of silently swallowing traffic.
-func TestURLTestRejectDialTriggersHealthCheck(t *testing.T) {
-	reject := adapter.NewProxy(outbound.NewReject())
-	tp := &testProvider{name: "stub-provider"} // no proxies -> group resolves to empty-fallback
-
-	u, err := NewURLTest(
-		GroupCommonOption{Name: "urltest-group", URL: stubTestURL},
-		URLTestOption{},
-		reject,
-		[]P.ProxyProvider{tp},
-	)
-	if err != nil {
-		t.Fatal(err)
+	if got := tp.healthChecks.Load(); got != 0 {
+		t.Fatalf("dialing must not trigger a health check, got %d", got)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn, err := u.DialContext(ctx, &C.Metadata{})
-	if err != nil {
-		t.Fatalf("REJECT dial should not error, got %v", err)
-	}
-	defer conn.Close()
-
-	waitForHealthChecks(t, tp, 1)
 }

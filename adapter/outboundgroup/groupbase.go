@@ -31,10 +31,10 @@ type GroupBase struct {
 	failedTimes       int
 	failedTime        time.Time
 	failedTesting     atomic.Bool
-	lastForcedCheck   atomic.TypedValue[time.Time]
+	forcedCheckMux    sync.Mutex
+	lastForcedCheck   time.Time
 	testTimeout       int
 	maxFailedTimes    int
-	interval          time.Duration
 	emptyFallback     C.Proxy
 
 	// for GetProxies
@@ -53,7 +53,6 @@ type GroupBaseOption struct {
 	ExcludeType    string
 	TestTimeout    int
 	MaxFailedTimes int
-	Interval       int
 	EmptyFallback  C.Proxy
 	Providers      []P.ProxyProvider
 }
@@ -91,7 +90,6 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		failedTesting:     atomic.NewBool(false),
 		testTimeout:       opt.TestTimeout,
 		maxFailedTimes:    opt.MaxFailedTimes,
-		interval:          time.Duration(opt.Interval) * time.Second,
 		emptyFallback:     opt.EmptyFallback,
 	}
 
@@ -277,7 +275,7 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 
 	go func() {
 		if strings.Contains(err.Error(), "connection refused") {
-			fn()
+			gb.tryForceHealthCheck(failureRecheckCooldown, fn)
 			return
 		}
 
@@ -296,42 +294,55 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 
 			log.Debugln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
 			if gb.failedTimes >= gb.maxFailedTimes {
-				log.Warnln("because %s failed multiple times, activate health check", gb.Name())
-				fn()
+				if gb.tryForceHealthCheck(failureRecheckCooldown, fn) {
+					log.Warnln("because %s failed multiple times, activate health check", gb.Name())
+				}
 				gb.failedTimes = 0
 			}
 		}
 	}()
 }
 
-// minForcedHealthCheckCooldown is the floor applied when a group has no
-// configured interval: rescanning every provider node on each burst of
-// failed dials floods the network when a group holds hundreds of proxies.
-const minForcedHealthCheckCooldown = 30 * time.Second
+// failureRecheckCooldown throttles the failure-triggered health check. A full
+// rescan of every provider node is expensive, and without a cooldown a flaky
+// uplink re-triggers one every few seconds for a group holding hundreds of
+// proxies. Scheduled checks run off the provider's own ticker and are not
+// affected by this.
+const failureRecheckCooldown = 5 * time.Minute
 
-// forcedHealthCheckCooldown limits how often a failure-triggered health
-// check may run: it must never rescan the group's providers more often than
-// the group's own configured interval, otherwise a persistently failing
-// group gets rescanned in full every ~30s regardless of what interval the
-// user configured.
-func (gb *GroupBase) forcedHealthCheckCooldown() time.Duration {
-	if gb.interval > 0 {
-		return gb.interval
+// tryForceHealthCheck runs check unless another forced check started within
+// cooldown, and reports whether it ran.
+//
+// The lock is released before check() runs: onDialFailed calls this while
+// holding failedTestMux, so holding forcedCheckMux across the check would
+// nest the two locks around a call that can re-enter the group's dial paths.
+// Keep the unlock-before-check shape.
+func (gb *GroupBase) tryForceHealthCheck(cooldown time.Duration, check func()) bool {
+	gb.forcedCheckMux.Lock()
+	if !gb.lastForcedCheck.IsZero() && time.Since(gb.lastForcedCheck) < cooldown {
+		gb.forcedCheckMux.Unlock()
+		return false
 	}
-	return minForcedHealthCheckCooldown
+	gb.lastForcedCheck = time.Now()
+	gb.forcedCheckMux.Unlock()
+
+	check()
+	return true
 }
 
+// healthCheck rescans every provider backing the group. It is the unthrottled
+// "check now" primitive - callers that may fire on a hot path must go through
+// tryForceHealthCheck instead of calling this directly.
 func (gb *GroupBase) healthCheck() {
-	if gb.failedTesting.Load() {
+	// claim the in-flight flag atomically: this is reached concurrently from
+	// several dial goroutines, and a check-then-set would let them all through
+	if !gb.failedTesting.CompareAndSwap(false, true) {
 		return
 	}
+	// deferred: a provider check that never returns would otherwise leave the
+	// flag set and disable every future health check for this group
+	defer gb.failedTesting.Store(false)
 
-	if time.Since(gb.lastForcedCheck.Load()) < gb.forcedHealthCheckCooldown() {
-		return
-	}
-	gb.lastForcedCheck.Store(time.Now())
-
-	gb.failedTesting.Store(true)
 	wg := sync.WaitGroup{}
 	for _, proxyProvider := range gb.providers {
 		wg.Add(1)
@@ -343,32 +354,63 @@ func (gb *GroupBase) healthCheck() {
 	}
 
 	wg.Wait()
-	gb.failedTesting.Store(false)
-	gb.failedTimes = 0
 }
+
+// maxGroupDepth bounds the recursion in resolvesToReject. Group references are
+// acyclic by config validation (proxyGroupsDagSort), but the GLOBAL selector is
+// handed a provider containing every group including itself, so the walk needs
+// a hard stop of its own.
+const maxGroupDepth = 16
 
 // resolvesToReject reports whether traffic sent to proxy would currently be
-// blackholed: the proxy itself is a REJECT, or it is a group (e.g. an empty
-// url-test serving its empty-fallback) whose current pick unwraps to one.
+// blackholed: the proxy is a REJECT, or it is a group with nothing left to
+// serve (e.g. an empty url-test falling back to REJECT).
+//
+// It deliberately inspects a group's member list rather than asking it what it
+// would pick via Unwrap. Unwrap runs the group's own selection, which clears a
+// Fallback's pin and rewrites a URLTest's cached node - real state changes,
+// caused by what every caller here treats as a read-only probe.
+//
+// Reading members instead makes the answer conservative: a group counts as
+// blackholing only when every member does, so a group that still has capacity
+// is never discarded, even if its current pick happens to be a dead branch.
 func resolvesToReject(proxy C.Proxy) bool {
-	for p := proxy; p != nil; p = p.Unwrap(nil, false) {
-		switch p.Type() {
-		case C.Reject, C.RejectDrop:
-			return true
-		}
-	}
-	return false
+	return resolvesToRejectDepth(proxy, 0)
 }
 
-// forcedHealthCheckNeeded reports whether traffic is being served by a proxy
-// that resolves to REJECT: an empty group resolved to its empty-fallback,
-// whose dials "succeed" on a nop connection and therefore never reach
-// onDialFailed. A plain dead member is deliberately excluded here - it
-// already fails dials naturally and is handled by onDialFailed's
-// failedTimes/maxFailedTimes/cooldown gate; triggering here too would bypass
-// that gate on every single dial and storm the group's health check.
-func forcedHealthCheckNeeded(proxy C.Proxy, testUrl string) bool {
-	return resolvesToReject(proxy)
+func resolvesToRejectDepth(proxy C.Proxy, depth int) bool {
+	switch proxy.Type() {
+	case C.Reject, C.RejectDrop:
+		return true
+	}
+
+	if depth >= maxGroupDepth {
+		return false
+	}
+
+	group, ok := proxy.Adapter().(ProxyGroup)
+	if !ok { // a plain node: nothing to recurse into
+		return false
+	}
+
+	members := group.Proxies()
+	if len(members) == 0 {
+		return false
+	}
+	for _, member := range members {
+		if !resolvesToRejectDepth(member, depth+1) {
+			return false
+		}
+	}
+	return true
+}
+
+// proxyUsable reports whether a group member can serve traffic right now: it
+// must have passed the health check and not resolve to REJECT. An empty
+// sub-group serving its empty-fallback has to be skipped immediately, without
+// waiting for a health check to flag it dead.
+func proxyUsable(proxy C.Proxy, testUrl string) bool {
+	return proxy.AliveForTestUrl(testUrl) && !resolvesToReject(proxy)
 }
 
 func (gb *GroupBase) onDialSuccess() {
