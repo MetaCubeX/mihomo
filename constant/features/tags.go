@@ -13,6 +13,9 @@ func Tags() (tags []string) {
 	if NoTailscale {
 		tags = append(tags, "no_tailscale")
 	}
+	if NoZeroTier {
+		tags = append(tags, "no_zerotier")
+	}
 	if WithGVisor {
 		tags = append(tags, "with_gvisor")
 	}

@@ -1357,6 +1357,33 @@ proxies: # socks5
     # routing-mark: 6666 # Linux 下配置 fwmark
     # ip-version: ipv4-prefer # 可选：dual/ipv4/ipv6/ipv4-prefer/ipv6-prefer
 
+  # zerotier
+  - name: "zerotier"
+    type: zerotier
+    network: "0123456789abcdef" # 16-digit ZeroTier network ID
+    # state-dir: ./zerotier-node # persistent node identity; defaults to an isolated directory derived from network and outbound name
+    # planet: ./planet # optional private planet file; replaces the built-in Earth planet
+    # mtu: 1400 # optional local MTU override; cannot exceed the controller MTU
+    # physical-mtu: 1432 # optional ZeroTier UDP payload MTU (510-10324; default 1432)
+    # primary-port: 0 # primary UDP port; 0 selects an available port
+    # secondary-port: 0 # second UDP port; 0 selects an available port, -1 disables it
+    # tcp-fallback-mode: auto # auto uses relay after UDP failure; force uses relay only; disable turns relay off
+    # tcp-fallback-relay: 204.80.128.1:443
+    # remote-trace-target: "0123456789" # optional node ID receiving global diagnostic traces
+    # remote-trace-level: 0 # 0 normal, 10 verbose, 15 rules, 20 debug, 30 insane
+    # low-bandwidth: false # reduce background traffic and network configuration refresh frequency
+    # encrypted-hello: false # use protocol-13 extended encryption for outgoing HELLO packets
+    # orbit: # optional federated root worlds (moons)
+    #   - world: "0123456789abcdef" # 16-digit moon world ID
+    #     seed: "0123456789" # 10-digit node ID of one moon root
+    udp: true
+    # remote-dns-resolve: true # resolve destination names through ZeroTier using controller-provided DNS servers
+    # dns: [10.147.17.1] # optional override for controller-provided DNS servers
+    # dialer-proxy: "ss1" # carry ZeroTier wire traffic through another outbound
+    # interface-name: "WLAN"
+    # routing-mark: 6666
+    # ip-version: ipv4-prefer
+
   # openvpn
   - name: "openvpn"
     type: openvpn
