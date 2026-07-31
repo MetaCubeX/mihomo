@@ -145,6 +145,9 @@ type ProxyAdapter interface {
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata, touch bool) Proxy
 
+	// Bandwidth returns the bandwidth limit in bits per second. 0 means unlimited.
+	Bandwidth() uint64
+
 	// Close releasing associated resources
 	Close() error
 }
