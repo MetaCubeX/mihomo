@@ -600,17 +600,39 @@ func (z *ZeroTier) handleNodeEvent(source *ZT.Node, event ZT.Event) {
 	}
 	switch event.Type {
 	case ZT.EventNodeUp:
-		log.Infoln("[ZeroTier](%s) node %s started; authorize this ID on network %016x", z.Name(), event.Address, z.networkID)
+		if ZT.IsAdHocNetworkID(z.networkID) {
+			log.Infoln("[ZeroTier](%s) node %s initialized", z.Name(), event.Address)
+		} else {
+			log.Infoln("[ZeroTier](%s) node %s initialized; authorize this ID on network %016x", z.Name(), event.Address, z.networkID)
+		}
 	case ZT.EventOnline:
 		log.Infoln("[ZeroTier](%s) node %s is online via %s", z.Name(), event.Address, event.Endpoint)
 	case ZT.EventOffline:
 		log.Warnln("[ZeroTier](%s) node %s is offline", z.Name(), event.Address)
+	case ZT.EventPeerLearned:
+		log.Debugln("[ZeroTier](%s) learned peer %s", z.Name(), event.Address)
+	case ZT.EventNetworkRequestingConfiguration:
+		log.Debugln("[ZeroTier](%s) requesting configuration for network %016x", z.Name(), event.NetworkID)
 	case ZT.EventNetworkReady:
-		log.Infoln("[ZeroTier](%s) network %016x configuration is ready", z.Name(), event.NetworkID)
+		if ZT.IsAdHocNetworkID(event.NetworkID) {
+			log.Infoln("[ZeroTier](%s) network %016x ad-hoc configuration created", z.Name(), event.NetworkID)
+		} else {
+			log.Infoln("[ZeroTier](%s) network %016x controller configuration accepted", z.Name(), event.NetworkID)
+		}
+	case ZT.EventNetworkConfigUpdate:
+		if ZT.IsAdHocNetworkID(event.NetworkID) {
+			log.Debugln("[ZeroTier](%s) network %016x ad-hoc configuration refresh accepted", z.Name(), event.NetworkID)
+		} else {
+			log.Debugln("[ZeroTier](%s) network %016x controller configuration update accepted", z.Name(), event.NetworkID)
+		}
 	case ZT.EventNetworkAccessDenied:
 		z.invalidateNetwork(errors.New("ZeroTier network access denied"), "", false)
 	case ZT.EventNetworkNotFound:
-		z.invalidateNetwork(errors.New("ZeroTier network not found or controller unsupported"), "", false)
+		if ZT.IsAdHocNetworkID(event.NetworkID) {
+			z.invalidateNetwork(errors.New("unsupported ZeroTier ad-hoc network ID"), "", false)
+		} else {
+			z.invalidateNetwork(errors.New("ZeroTier network not found or controller unsupported"), "", false)
+		}
 	case ZT.EventNetworkAuthenticationRequired:
 		authURL, err := event.Authentication.LoginURL()
 		if err != nil {
@@ -626,6 +648,11 @@ func (z *ZeroTier) handleNodeEvent(source *ZT.Node, event ZT.Event) {
 		z.invalidateNetwork(nil, authURL, false)
 	case ZT.EventFatalIdentityCollision:
 		go z.recoverIdentityCollision(event.Address)
+	case ZT.EventNetworkDown:
+		log.Warnln("[ZeroTier](%s) network %016x is down", z.Name(), event.NetworkID)
+		z.invalidateNetwork(errors.New("ZeroTier network is down"), "", false)
+	default:
+		log.Debugln("[ZeroTier](%s) ignored unknown node event %d", z.Name(), event.Type)
 	}
 }
 
@@ -693,15 +720,23 @@ func (z *ZeroTier) retryNetwork() bool {
 	if node == nil {
 		return false
 	}
-	if err := node.RefreshNetwork(z.networkID); err != nil {
+	operation := "refresh network configuration"
+	var err error
+	if _, joined := node.Network(z.networkID); joined {
+		err = node.RefreshNetwork(z.networkID)
+	} else {
+		operation = "rejoin network"
+		err = node.Join(z.networkID)
+	}
+	if err != nil {
 		if retryConfig {
-			log.Debugln("[ZeroTier](%s) refresh network configuration after local apply failure: %v", z.Name(), err)
+			log.Debugln("[ZeroTier](%s) %s after local apply failure: %v", z.Name(), operation, err)
 		} else {
-			log.Debugln("[ZeroTier](%s) refresh network configuration: %v", z.Name(), err)
+			log.Debugln("[ZeroTier](%s) %s: %v", z.Name(), operation, err)
 		}
 		z.stateMu.Lock()
 		if z.ctx.Err() == nil && z.node == node && z.configGeneration == generation {
-			z.setNetworkFailureLocked(fmt.Errorf("refresh ZeroTier network configuration: %w", err), z.authURL, z.retryLatestConfig)
+			z.setNetworkFailureLocked(fmt.Errorf("%s: %w", operation, err), z.authURL, z.retryLatestConfig)
 		}
 		z.stateMu.Unlock()
 	}
@@ -829,10 +864,12 @@ func (z *ZeroTier) applyNetworkConfig(config ZT.NetworkConfigData, generation ui
 		return nil
 	}
 	go z.runStackPackets(device, ipLink)
+	action := "joined"
 	if replacedDevice != nil {
 		_ = replacedDevice.Close()
+		action = "updated"
 	}
-	log.Infoln("[ZeroTier](%s) joined %016x (%s), addresses=%v routes=%v mtu=%d", z.Name(), config.NetworkID, config.Name, config.Assigned, config.Routes, mtu)
+	log.Infoln("[ZeroTier](%s) %s network %016x (%s), addresses=%v routes=%v mtu=%d", z.Name(), action, config.NetworkID, config.Name, config.Assigned, config.Routes, mtu)
 	return nil
 }
 
