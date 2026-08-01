@@ -1084,16 +1084,17 @@ func (z *ZeroTier) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.C
 	remoteResolver := z.resolver
 	z.stateMu.RUnlock()
 	var conn net.Conn
-	if metadata.Resolved() && remoteResolver == nil {
-		conn, err = (zeroTierNetDialer{zeroTier: z}).DialContext(ctx, "tcp", metadata.RemoteAddress())
-	} else {
+	if !metadata.Resolved() || remoteResolver != nil {
 		r := resolver.DefaultResolver
 		if remoteResolver != nil {
 			r = remoteResolver
 		}
 		options := z.DialOptions()
-		options = append(options, dialer.WithResolver(r), dialer.WithNetDialer(zeroTierNetDialer{zeroTier: z}))
+		options = append(options, dialer.WithResolver(r))
+		options = append(options, dialer.WithNetDialer(zeroTierNetDialer{zeroTier: z}))
 		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
+	} else {
+		conn, err = (zeroTierNetDialer{zeroTier: z}).DialContext(ctx, "tcp", metadata.AddrPort().String())
 	}
 	if err != nil {
 		return nil, err
@@ -1126,21 +1127,20 @@ func (z *ZeroTier) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 }
 
 func (z *ZeroTier) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
-	if metadata.Host == "" {
-		return nil
-	}
 	z.stateMu.RLock()
 	remoteResolver := z.resolver
 	z.stateMu.RUnlock()
-	r := resolver.DefaultResolver
-	if remoteResolver != nil {
-		r = remoteResolver
+	if (!metadata.Resolved() || remoteResolver != nil) && metadata.Host != "" {
+		r := resolver.DefaultResolver
+		if remoteResolver != nil {
+			r = remoteResolver
+		}
+		ip, err := resolveIPWithResolver(ctx, metadata.Host, z.prefer, r)
+		if err != nil {
+			return fmt.Errorf("can't resolve ip: %w", err)
+		}
+		metadata.DstIP = ip
 	}
-	address, err := resolveIPWithResolver(ctx, metadata.Host, z.prefer, r)
-	if err != nil {
-		return fmt.Errorf("can't resolve IP: %w", err)
-	}
-	metadata.DstIP = address
 	return nil
 }
 
