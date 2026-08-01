@@ -77,20 +77,21 @@ type ZeroTier struct {
 	nodeCancel  context.CancelFunc
 	// runtimeWG belongs to the current node generation. Add is completed while
 	// operationMu excludes detach; close waits only after canceling that runtime.
-	runtimeWG         *sync.WaitGroup
-	ipLink            *ZTIP.Link
-	wire              *ZTTransport.Transport
-	config            ZT.NetworkConfigData
-	tunDevice         wireguard.Device
-	resolver          resolver.Resolver
-	networkErr        error
-	stateCh           chan struct{}
-	latestConfig      ZT.NetworkConfigData
-	haveLatestConfig  bool
-	retryLatestConfig bool
-	networkRetrying   bool
-	authURL           string
-	configGeneration  uint64
+	runtimeWG            *sync.WaitGroup
+	ipLink               *ZTIP.Link
+	wire                 *ZTTransport.Transport
+	config               ZT.NetworkConfigData
+	tunDevice            wireguard.Device
+	resolver             resolver.Resolver
+	networkErr           error
+	stateCh              chan struct{}
+	latestConfig         ZT.NetworkConfigData
+	haveLatestConfig     bool
+	retryLatestConfig    bool
+	networkRetrying      bool
+	authURL              string
+	loggedNetworkFailure string
+	configGeneration     uint64
 }
 
 type ZeroTierOption struct {
@@ -341,6 +342,7 @@ func (z *ZeroTier) resetNetworkStateLocked(networkErr error) {
 	z.retryLatestConfig = false
 	z.networkErr = networkErr
 	z.authURL = ""
+	z.loggedNetworkFailure = ""
 	z.configGeneration++
 	z.notifyStateLocked()
 }
@@ -350,6 +352,14 @@ func (z *ZeroTier) setNetworkFailureLocked(err error, authURL string, retryConfi
 	z.authURL = authURL
 	z.retryLatestConfig = retryConfig && z.haveLatestConfig
 	z.notifyStateLocked()
+}
+
+func (z *ZeroTier) updateLoggedNetworkFailure(failure string) bool {
+	z.stateMu.Lock()
+	changed := z.loggedNetworkFailure != failure
+	z.loggedNetworkFailure = failure
+	z.stateMu.Unlock()
+	return changed
 }
 
 func (z *ZeroTier) detachRuntimeLocked() (node *ZT.Node, nodeCancel context.CancelFunc, runtimeWG *sync.WaitGroup, wireTransport *ZTTransport.Transport, device wireguard.Device) {
@@ -585,11 +595,18 @@ func (z *ZeroTier) runNetworkConfig() {
 func (z *ZeroTier) handleNodeEvent(source *ZT.Node, event ZT.Event) {
 	z.callbackMu.Lock()
 	defer z.callbackMu.Unlock()
+	// Node.Close emits EventNodeDown synchronously after the runtime has already
+	// been detached (and normal shutdown has canceled z.ctx), so it cannot pass
+	// the active-node checks below. Handle it first to retain the shutdown trace.
+	if event.Type == ZT.EventNodeDown {
+		log.Debugln("[ZeroTier](%s) node %s shut down", z.Name(), event.NodeAddress)
+		return
+	}
 	if z.ctx.Err() != nil {
 		return
 	}
-	// EventNodeUp is emitted synchronously by NewNode before it can be assigned
-	// to source. All later events must belong to the currently active node.
+	// Initialization events are emitted synchronously by NewNode before it can
+	// be assigned to source. All later events must belong to the active node.
 	if source != nil {
 		z.stateMu.RLock()
 		current := z.node == source
@@ -601,56 +618,93 @@ func (z *ZeroTier) handleNodeEvent(source *ZT.Node, event ZT.Event) {
 	switch event.Type {
 	case ZT.EventNodeUp:
 		if ZT.IsAdHocNetworkID(z.networkID) {
-			log.Infoln("[ZeroTier](%s) node %s initialized", z.Name(), event.Address)
+			log.Infoln("[ZeroTier](%s) node %s initialized", z.Name(), event.NodeAddress)
 		} else {
-			log.Infoln("[ZeroTier](%s) node %s initialized; authorize this ID on network %016x", z.Name(), event.Address, z.networkID)
+			log.Infoln("[ZeroTier](%s) node %s initialized; authorize this ID on network %016x", z.Name(), event.NodeAddress, z.networkID)
 		}
-	case ZT.EventOnline:
-		log.Infoln("[ZeroTier](%s) node %s is online via %s", z.Name(), event.Address, event.Endpoint)
-	case ZT.EventOffline:
-		log.Warnln("[ZeroTier](%s) node %s is offline", z.Name(), event.Address)
-	case ZT.EventPeerLearned:
-		log.Debugln("[ZeroTier](%s) learned peer %s", z.Name(), event.Address)
-	case ZT.EventNetworkRequestingConfiguration:
+	case ZT.EventNodeOnline:
+		log.Infoln("[ZeroTier](%s) node %s is online via %s", z.Name(), event.NodeAddress, event.Endpoint)
+	case ZT.EventNodeOffline:
+		log.Warnln("[ZeroTier](%s) node %s is offline", z.Name(), event.NodeAddress)
+	case ZT.EventNodeIdentityCollision:
+		go z.recoverIdentityCollision(event.NodeAddress)
+	case ZT.EventPeerIdentityLearned:
+		if event.PeerRole != ZT.PeerRoleLeaf {
+			log.Debugln("[ZeroTier](%s) loaded %s root identity %s", z.Name(), event.PeerRole, event.PeerAddress)
+		} else {
+			log.Debugln("[ZeroTier](%s) loaded peer identity %s", z.Name(), event.PeerAddress)
+		}
+	case ZT.EventPeerPathLearned:
+		if event.PeerRole != ZT.PeerRoleLeaf {
+			log.Debugln("[ZeroTier](%s) %s root %s authenticated path %s", z.Name(), event.PeerRole, event.PeerAddress, event.Endpoint)
+		} else {
+			log.Debugln("[ZeroTier](%s) peer %s authenticated path %s", z.Name(), event.PeerAddress, event.Endpoint)
+		}
+	case ZT.EventPeerRouteChanged:
+		switch event.Route {
+		case ZT.PeerRouteDirect:
+			if event.Endpoint.IsValid() {
+				log.Debugln("[ZeroTier](%s) peer %s selected direct route via %s", z.Name(), event.PeerAddress, event.Endpoint)
+			} else {
+				log.Debugln("[ZeroTier](%s) peer %s selected %d direct paths", z.Name(), event.PeerAddress, event.PathCount)
+			}
+		case ZT.PeerRouteRelayed:
+			log.Debugln("[ZeroTier](%s) peer %s selected upstream relay route", z.Name(), event.PeerAddress)
+		default:
+			log.Debugln("[ZeroTier](%s) peer %s selected unknown route %d", z.Name(), event.PeerAddress, event.Route)
+		}
+	case ZT.EventLocalSurfaceChanged:
+		log.Debugln("[ZeroTier](%s) external surface changed %s -> %s after report from %s root %s; revalidating %d paths", z.Name(), event.PreviousEndpoint, event.Endpoint, event.PeerRole, event.ReporterAddress, event.PathCount)
+	case ZT.EventNetworkConfigPending:
 		log.Debugln("[ZeroTier](%s) requesting configuration for network %016x", z.Name(), event.NetworkID)
-	case ZT.EventNetworkReady:
+	case ZT.EventNetworkConfigReady:
+		z.updateLoggedNetworkFailure("")
 		if ZT.IsAdHocNetworkID(event.NetworkID) {
 			log.Infoln("[ZeroTier](%s) network %016x ad-hoc configuration created", z.Name(), event.NetworkID)
 		} else {
 			log.Infoln("[ZeroTier](%s) network %016x controller configuration accepted", z.Name(), event.NetworkID)
 		}
-	case ZT.EventNetworkConfigUpdate:
+	case ZT.EventNetworkConfigChanged:
+		z.updateLoggedNetworkFailure("")
 		if ZT.IsAdHocNetworkID(event.NetworkID) {
 			log.Debugln("[ZeroTier](%s) network %016x ad-hoc configuration refresh accepted", z.Name(), event.NetworkID)
 		} else {
 			log.Debugln("[ZeroTier](%s) network %016x controller configuration update accepted", z.Name(), event.NetworkID)
 		}
 	case ZT.EventNetworkAccessDenied:
-		z.invalidateNetwork(errors.New("ZeroTier network access denied"), "", false)
-	case ZT.EventNetworkNotFound:
-		if ZT.IsAdHocNetworkID(event.NetworkID) {
-			z.invalidateNetwork(errors.New("unsupported ZeroTier ad-hoc network ID"), "", false)
-		} else {
-			z.invalidateNetwork(errors.New("ZeroTier network not found or controller unsupported"), "", false)
+		networkErr := errors.New("ZeroTier network access denied")
+		if z.updateLoggedNetworkFailure(networkErr.Error()) {
+			log.Warnln("[ZeroTier](%s) network %016x access denied", z.Name(), event.NetworkID)
 		}
+		z.invalidateNetwork(networkErr, "", false)
+	case ZT.EventNetworkNotFound:
+		var networkErr error
+		if ZT.IsAdHocNetworkID(event.NetworkID) {
+			networkErr = errors.New("unsupported ZeroTier ad-hoc network ID")
+		} else {
+			networkErr = errors.New("ZeroTier network not found or controller unsupported")
+		}
+		if z.updateLoggedNetworkFailure(networkErr.Error()) {
+			log.Warnln("[ZeroTier](%s) network %016x: %v", z.Name(), event.NetworkID, networkErr)
+		}
+		z.invalidateNetwork(networkErr, "", false)
 	case ZT.EventNetworkAuthenticationRequired:
 		authURL, err := event.Authentication.LoginURL()
 		if err != nil {
-			z.invalidateNetwork(fmt.Errorf("ZeroTier network authentication required: %w", err), "", false)
+			networkErr := fmt.Errorf("ZeroTier network authentication required: %w", err)
+			if z.updateLoggedNetworkFailure(networkErr.Error()) {
+				log.Warnln("[ZeroTier](%s) network %016x: %v", z.Name(), event.NetworkID, networkErr)
+			}
+			z.invalidateNetwork(networkErr, "", false)
 			return
 		}
-		z.stateMu.RLock()
-		changed := z.authURL != authURL
-		z.stateMu.RUnlock()
-		if changed {
-			log.Infoln("[ZeroTier](%s) network authentication required; complete login at %s", z.Name(), authURL)
+		if z.updateLoggedNetworkFailure("authentication-required:" + authURL) {
+			log.Infoln("[ZeroTier](%s) network %016x authentication required; complete login at %s", z.Name(), event.NetworkID, authURL)
 		}
 		z.invalidateNetwork(nil, authURL, false)
-	case ZT.EventFatalIdentityCollision:
-		go z.recoverIdentityCollision(event.Address)
-	case ZT.EventNetworkDown:
-		log.Warnln("[ZeroTier](%s) network %016x is down", z.Name(), event.NetworkID)
-		z.invalidateNetwork(errors.New("ZeroTier network is down"), "", false)
+	case ZT.EventNetworkLeft:
+		log.Warnln("[ZeroTier](%s) network %016x was left", z.Name(), event.NetworkID)
+		z.invalidateNetwork(errors.New("ZeroTier network was left"), "", false)
 	default:
 		log.Debugln("[ZeroTier](%s) ignored unknown node event %d", z.Name(), event.Type)
 	}
