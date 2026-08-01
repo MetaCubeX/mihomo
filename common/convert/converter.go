@@ -719,11 +719,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 func uniqueName(names map[string]int, name string) string {
 	if index, ok := names[name]; ok {
 		index++
-		names[name] = index
-		name = fmt.Sprintf("%s-%02d", name, index)
-	} else {
-		index = 0
-		names[name] = index
+		base := name
+		for {
+			name = fmt.Sprintf("%s-%02d", base, index)
+			if _, exist := names[name]; !exist {
+				break
+			}
+			index++
+		}
+		names[base] = index
 	}
+	names[name] = 0
 	return name
 }
