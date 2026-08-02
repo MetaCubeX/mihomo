@@ -47,7 +47,7 @@ require (
 	github.com/metacubex/tls v0.1.7
 	github.com/metacubex/utls v1.8.7
 	github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f
-	github.com/metacubex/zerotier-go v0.0.0-20260801154550-61ae682c0080
+	github.com/metacubex/zerotier-go v0.0.0-20260802035217-01508220020d
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
 	github.com/rasky/go-lzo v0.0.0-20200203143853-96a758eda86e

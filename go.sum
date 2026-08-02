@@ -184,8 +184,8 @@ github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f h1:FGBPRb1z
 github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f/go.mod h1:oPGcV994OGJedmmxrcK9+ni7jUEMGhR+uVQAdaduIP4=
 github.com/metacubex/yamux v0.0.0-20250918083631-dd5f17c0be49 h1:lhlqpYHopuTLx9xQt22kSA9HtnyTDmk5XjjQVCGHe2E=
 github.com/metacubex/yamux v0.0.0-20250918083631-dd5f17c0be49/go.mod h1:MBeEa9IVBphH7vc3LNtW6ZujVXFizotPo3OEiHQ+TNU=
-github.com/metacubex/zerotier-go v0.0.0-20260801154550-61ae682c0080 h1:3eKHStY/IKNOS14KnQjbTzxALSabkaJdsso6ZruAeyc=
-github.com/metacubex/zerotier-go v0.0.0-20260801154550-61ae682c0080/go.mod h1:8LxQupX5KaZ6lIcBMdaJ3u5xx7+OIRyq87uyyFA1Yto=
+github.com/metacubex/zerotier-go v0.0.0-20260802035217-01508220020d h1:PQ0DLu0a4QVqVecbwu6qrEWkxs29IrEUvuIyt9/jchY=
+github.com/metacubex/zerotier-go v0.0.0-20260802035217-01508220020d/go.mod h1:8LxQupX5KaZ6lIcBMdaJ3u5xx7+OIRyq87uyyFA1Yto=
 github.com/miekg/dns v1.1.63 h1:8M5aAw6OMZfFXTT7K5V0Eu5YiiL8l7nUAkyN6C9YwaY=
 github.com/miekg/dns v1.1.63/go.mod h1:6NGHfjhpmr5lt3XPLuyfDJi5AXbNIPM9PY6H6sF1Nfs=
 github.com/mitchellh/go-ps v1.0.0 h1:i6ampVEEF4wQFF+bkYfwYgY+F/uYJDktmvLPf7qIgjc=
