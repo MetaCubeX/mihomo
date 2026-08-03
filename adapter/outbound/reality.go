@@ -14,6 +14,8 @@ type RealityOptions struct {
 	PublicKey string `proxy:"public-key"`
 	ShortID   string `proxy:"short-id,omitempty"`
 
+	ClientVersion string `proxy:"client-version,omitempty"`
+
 	SupportX25519MLKEM768 bool `proxy:"support-x25519mlkem768,omitempty"`
 }
 
@@ -21,6 +23,7 @@ func (o RealityOptions) Parse() (*tlsC.RealityConfig, error) {
 	if o.PublicKey != "" {
 		config := new(tlsC.RealityConfig)
 		config.SupportX25519MLKEM768 = o.SupportX25519MLKEM768
+		config.ClientVer = tlsC.ParseClientVersion(o.ClientVersion)
 
 		const x25519ScalarSize = 32
 		publicKey, err := base64.RawURLEncoding.DecodeString(o.PublicKey)

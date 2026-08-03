@@ -14,6 +14,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,11 +29,35 @@ import (
 
 const RealityMaxShortIDLen = 8
 
+var realityDefaultClientVer = []byte{1, 8, 2}
+
 type RealityConfig struct {
 	PublicKey *ecdh.PublicKey
 	ShortID   [RealityMaxShortIDLen]byte
+	ClientVer []byte
 
 	SupportX25519MLKEM768 bool
+}
+
+// ParseClientVersion converts a string like "26.3.27" into []byte{26, 3, 27}.
+// It falls back to the default version when the input is empty or malformed.
+func ParseClientVersion(version string) []byte {
+	if version == "" {
+		return append([]byte(nil), realityDefaultClientVer...)
+	}
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return append([]byte(nil), realityDefaultClientVer...)
+	}
+	parsed := make([]byte, len(parts))
+	for i, part := range parts {
+		val, err := strconv.Atoi(part)
+		if err != nil || val < 0 || val > 255 {
+			return append([]byte(nil), realityDefaultClientVer...)
+		}
+		parsed[i] = byte(val)
+	}
+	return parsed
 }
 
 func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHelloID, serverName string, realityConfig *RealityConfig) (net.Conn, error) {
@@ -71,9 +96,15 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
 
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
-		hello.SessionId[0] = 1
-		hello.SessionId[1] = 8
-		hello.SessionId[2] = 2
+
+		clientVer := realityConfig.ClientVer
+		if len(clientVer) == 0 {
+			clientVer = realityDefaultClientVer
+		}
+		if len(clientVer) > 3 {
+			return nil, errors.New("invalid REALITY client version")
+		}
+		copy(hello.SessionId[:], clientVer)
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
