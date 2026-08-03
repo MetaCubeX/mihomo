@@ -235,7 +235,7 @@ func (c *Config) GetNormalizedScMinPostsIntervalMs() (Range, error) {
 }
 
 func (c *Config) GetNormalizedUplinkChunkSize() (Range, error) {
-	uplinkChunkSize, err := ParseRange(c.UplinkChunkSize, "")
+	uplinkChunkSize, err := ParseRange(c.UplinkChunkSize, "0")
 	if err != nil {
 		return Range{}, fmt.Errorf("invalid uplink-chunk-size: %w", err)
 	}
