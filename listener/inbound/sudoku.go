@@ -53,7 +53,7 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 	if options.Key == "" {
 		return nil, fmt.Errorf("sudoku inbound requires key")
 	}
-	base, err := NewBase(&options.BaseOption)
+	base, err := newBase(&options.BaseOption, true)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package inbound
 
 import (
+	"fmt"
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
@@ -35,9 +36,16 @@ type TrustTunnel struct {
 }
 
 func NewTrustTunnel(options *TrustTunnelOption) (*TrustTunnel, error) {
-	base, err := NewBase(&options.BaseOption)
+	base, err := newBase(&options.BaseOption, true)
 	if err != nil {
 		return nil, err
+	}
+	if base.unixSocket != "" {
+		for _, network := range options.Network {
+			if network != "tcp" {
+				return nil, fmt.Errorf("network %s cannot be used with a unix socket", network)
+			}
+		}
 	}
 	users := make(map[string]string)
 	for _, user := range options.Users {

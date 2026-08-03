@@ -27,6 +27,9 @@ func DisAllowedIPs() []netip.Prefix {
 }
 
 func IsRemoteAddrDisAllowed(addr net.Addr) bool {
+	if _, ok := addr.(*net.UnixAddr); ok {
+		return true
+	}
 	m := C.Metadata{}
 	if err := m.SetRemoteAddr(addr); err != nil {
 		return false

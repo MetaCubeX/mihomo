@@ -28,9 +28,16 @@ type Tunnel struct {
 }
 
 func NewTunnel(options *TunnelOption) (*Tunnel, error) {
-	base, err := NewBase(&options.BaseOption)
+	base, err := newBase(&options.BaseOption, true)
 	if err != nil {
 		return nil, err
+	}
+	if base.unixSocket != "" {
+		for _, network := range options.Network {
+			if network != "tcp" {
+				return nil, fmt.Errorf("network %s cannot be used with a unix socket", network)
+			}
+		}
 	}
 	return &Tunnel{
 		Base:   base,

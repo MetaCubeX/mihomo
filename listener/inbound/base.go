@@ -1,9 +1,12 @@
 package inbound
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/netip"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -18,9 +21,36 @@ type Base struct {
 	specialRules string
 	listenAddr   netip.Addr
 	ports        utils.IntRanges[uint16]
+	unixSocket   string
 }
 
 func NewBase(options *BaseOption) (*Base, error) {
+	return newBase(options, false)
+}
+
+func newBase(options *BaseOption, allowUnixSocket bool) (*Base, error) {
+	if filepath.IsAbs(options.Port) {
+		if !allowUnixSocket {
+			return nil, fmt.Errorf("unix socket is not supported by this listener type")
+		}
+		if options.Listen != "" {
+			return nil, fmt.Errorf("listen cannot be used with a unix socket")
+		}
+		if options.RoutingMark != 0 {
+			return nil, fmt.Errorf("routing-mark cannot be used with a unix socket")
+		}
+		path := filepath.Clean(options.Port)
+		if path == string(filepath.Separator) || strings.Contains(path, ",") {
+			return nil, fmt.Errorf("invalid unix socket path: %s", options.Port)
+		}
+		options.Port = path
+		return &Base{
+			name:         options.Name(),
+			specialRules: options.SpecialRules,
+			unixSocket:   path,
+			config:       options,
+		}, nil
+	}
 	if options.Listen == "" {
 		options.Listen = "0.0.0.0"
 	}
@@ -63,6 +93,9 @@ func (b *Base) Name() string {
 
 // RawAddress implements constant.InboundListener
 func (b *Base) RawAddress() string {
+	if b.unixSocket != "" {
+		return b.unixSocket
+	}
 	if len(b.ports) == 0 {
 		return net.JoinHostPort(b.listenAddr.String(), "0")
 	}
@@ -84,7 +117,27 @@ func (b *Base) Additions() []inbound.Addition {
 }
 
 func (b *Base) ListenConfig() C.InboundListenConfig {
-	return b.config.ListenConfig()
+	lc := b.config.ListenConfig()
+	if b.unixSocket != "" {
+		return unixSocketListenConfig{InboundListenConfig: lc, path: b.unixSocket}
+	}
+	return lc
+}
+
+type unixSocketListenConfig struct {
+	C.InboundListenConfig
+	path string
+}
+
+func (c unixSocketListenConfig) Listen(ctx context.Context, network, address string) (net.Listener, error) {
+	if network != "tcp" || address != c.path {
+		return nil, fmt.Errorf("invalid unix socket listen request: %s %s", network, address)
+	}
+	return c.InboundListenConfig.Listen(ctx, "unix", address)
+}
+
+func (c unixSocketListenConfig) ListenPacket(context.Context, string, string) (net.PacketConn, error) {
+	return nil, fmt.Errorf("unix socket listener is stream-only")
 }
 
 var _ C.InboundListener = (*Base)(nil)

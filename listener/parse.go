@@ -2,6 +2,7 @@ package listener
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/metacubex/mihomo/common/structure"
 	C "github.com/metacubex/mihomo/constant"
@@ -21,7 +22,7 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 	)
 	switch proxyType {
 	case "socks":
-		socksOption := &IN.SocksOption{UDP: true}
+		socksOption := &IN.SocksOption{UDP: defaultUDP(mapping)}
 		err = decoder.Decode(mapping, socksOption)
 		if err != nil {
 			return nil, err
@@ -49,7 +50,7 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 		}
 		listener, err = IN.NewRedir(redirOption)
 	case "mixed":
-		mixedOption := &IN.MixedOption{UDP: true}
+		mixedOption := &IN.MixedOption{UDP: defaultUDP(mapping)}
 		err = decoder.Decode(mapping, mixedOption)
 		if err != nil {
 			return nil, err
@@ -73,7 +74,7 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 		}
 		listener, err = IN.NewTun(tunOption)
 	case "shadowsocks":
-		shadowsocksOption := &IN.ShadowSocksOption{UDP: true}
+		shadowsocksOption := &IN.ShadowSocksOption{UDP: defaultUDP(mapping)}
 		err = decoder.Decode(mapping, shadowsocksOption)
 		if err != nil {
 			return nil, err
@@ -179,4 +180,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
 	return listener, err
+}
+
+func defaultUDP(mapping map[string]any) bool {
+	_, configured := mapping["udp"]
+	if configured {
+		return true
+	}
+	port, _ := mapping["port"].(string)
+	return !filepath.IsAbs(port)
 }

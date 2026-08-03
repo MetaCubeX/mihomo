@@ -1957,6 +1957,8 @@ sub-rules:
     - DOMAIN,dns.alidns.com,REJECT
 
 # 流量入站
+# http、socks、mixed、shadowsocks、snell、vmess、trojan、anytls、sudoku、tunnel、trusttunnel 和 hysteria2-realm
+# 可将 port 配置为 UNIX socket 的绝对路径。UNIX socket 仅支持 TCP，且不能同时配置 listen、routing-mark 或 UDP transport。
 listeners:
   - name: socks5-in-1
     type: socks

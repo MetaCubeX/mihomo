@@ -37,9 +37,12 @@ type Mixed struct {
 }
 
 func NewMixed(options *MixedOption) (*Mixed, error) {
-	base, err := NewBase(&options.BaseOption)
+	base, err := newBase(&options.BaseOption, true)
 	if err != nil {
 		return nil, err
+	}
+	if base.unixSocket != "" && options.UDP {
+		return nil, fmt.Errorf("udp cannot be used with a unix socket")
 	}
 	return &Mixed{
 		Base:   base,

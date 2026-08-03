@@ -36,9 +36,12 @@ type Socks struct {
 }
 
 func NewSocks(options *SocksOption) (*Socks, error) {
-	base, err := NewBase(&options.BaseOption)
+	base, err := newBase(&options.BaseOption, true)
 	if err != nil {
 		return nil, err
+	}
+	if base.unixSocket != "" && options.UDP {
+		return nil, fmt.Errorf("udp cannot be used with a unix socket")
 	}
 	return &Socks{
 		Base:   base,

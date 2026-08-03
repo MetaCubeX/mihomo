@@ -1,6 +1,7 @@
 package inbound
 
 import (
+	"fmt"
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
@@ -46,9 +47,17 @@ type ShadowSocks struct {
 }
 
 func NewShadowSocks(options *ShadowSocksOption) (*ShadowSocks, error) {
-	base, err := NewBase(&options.BaseOption)
+	base, err := newBase(&options.BaseOption, true)
 	if err != nil {
 		return nil, err
+	}
+	if base.unixSocket != "" {
+		if options.UDP {
+			return nil, fmt.Errorf("udp cannot be used with a unix socket")
+		}
+		if options.KcpTun.Enable {
+			return nil, fmt.Errorf("kcp-tun cannot be used with a unix socket")
+		}
 	}
 	return &ShadowSocks{
 		Base:   base,

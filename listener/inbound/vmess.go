@@ -1,6 +1,7 @@
 package inbound
 
 import (
+	"fmt"
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
@@ -47,9 +48,12 @@ type Vmess struct {
 }
 
 func NewVmess(options *VmessOption) (*Vmess, error) {
-	base, err := NewBase(&options.BaseOption)
+	base, err := newBase(&options.BaseOption, true)
 	if err != nil {
 		return nil, err
+	}
+	if base.unixSocket != "" && options.MKCPConfig.Enable {
+		return nil, fmt.Errorf("mkcp cannot be used with a unix socket")
 	}
 	users := make([]LC.VmessUser, len(options.Users))
 	for i, v := range options.Users {
