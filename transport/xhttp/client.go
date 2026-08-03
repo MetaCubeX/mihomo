@@ -126,18 +126,50 @@ func (c *PacketUpWriter) write(b []byte) (int, error) {
 	}
 	req.Host = c.cfg.Host
 
-	resp, err := c.transport.RoundTrip(req)
-	if err != nil {
+	requestWritten := make(chan error, 1)
+	var requestWrittenOnce sync.Once
+	reportRequestWritten := func(err error) {
+		requestWrittenOnce.Do(func() {
+			requestWritten <- err
+		})
+	}
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			reportRequestWritten(info.Err)
+		},
+	}))
+
+	go func() {
+		resp, err := c.transport.RoundTrip(req)
+		reportRequestWritten(err)
+		if err == nil {
+			defer resp.Body.Close()
+			_, _ = io.Copy(io.Discard, resp.Body)
+			if resp.StatusCode != http.StatusOK {
+				err = fmt.Errorf("xhttp packet-up bad status: %s", resp.Status)
+			}
+		}
+		if err != nil {
+			c.setError(err)
+		}
+	}()
+
+	if err := <-requestWritten; err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("xhttp packet-up bad status: %s", resp.Status)
-	}
-
 	return len(b), nil
+}
+
+func (c *PacketUpWriter) setError(err error) {
+	c.writeMu.Lock()
+	if c.flushErr == nil {
+		c.flushErr = err
+		c.writeCond.Broadcast()
+	}
+	c.writeMu.Unlock()
+	if c.cancel != nil {
+		c.cancel()
+	}
 }
 
 func (c *PacketUpWriter) Close() error {
