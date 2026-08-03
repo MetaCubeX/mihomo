@@ -15,6 +15,7 @@ func TestParseClientVersion(t *testing.T) {
 	}{
 		{"26.3.27", []byte{26, 3, 27}},
 		{"1.8.2", []byte{1, 8, 2}},
+		{"255.255.255", []byte{255, 255, 255}},
 		{"", defaultVersion},
 		{"26.3", defaultVersion},
 		{"26.3.27.1", defaultVersion},
