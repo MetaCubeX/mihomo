@@ -1365,6 +1365,9 @@ proxies: # socks5
     # planet: ./planet # optional private planet file; replaces the built-in Earth planet
     # mtu: 1400 # optional local MTU override; cannot exceed the controller MTU
     # physical-mtu: 1432 # optional ZeroTier UDP payload MTU (510-10324; default 1432)
+    # ip-stack:
+    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   congestion-controller: cubic # TCP congestion controller: cubic, reno, or bbr; ignored by gVisor
     # primary-port: 0 # primary UDP port; 0 selects an available port
     # secondary-port: 0 # second UDP port; 0 selects an available port, -1 disables it
     # tcp-fallback-mode: auto # auto uses relay after UDP failure; force uses relay only; disable turns relay off

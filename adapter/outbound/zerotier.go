@@ -1,4 +1,4 @@
-//go:build with_gvisor && !no_zerotier
+//go:build !no_zerotier
 
 package outbound
 
@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,8 +20,10 @@ import (
 	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mipstack"
 	wireguard "github.com/metacubex/sing-wireguard"
 	M "github.com/metacubex/sing/common/metadata"
 	ZT "github.com/metacubex/zerotier-go"
@@ -32,6 +35,12 @@ const (
 	zeroTierDefaultStateDir      = "zerotier"
 	zeroTierFrameQueueSize       = 256
 	zeroTierFrameDropLogInterval = 10 * time.Second
+)
+
+const (
+	ipStackAuto   = "auto"
+	ipStackGVisor = "gvisor"
+	ipStackMips   = "mips"
 )
 
 var errZeroTierClosed = errors.New("ZeroTier outbound closed")
@@ -81,7 +90,7 @@ type ZeroTier struct {
 	stateMu              sync.RWMutex
 	runtime              *zeroTierRuntime
 	config               ZT.NetworkConfigData
-	tunDevice            wireguard.Device
+	tunDevice            ipStack
 	resolver             resolver.Resolver
 	networkErr           error
 	stateCh              chan struct{}
@@ -101,6 +110,7 @@ type ZeroTierOption struct {
 	StateDir          string                `proxy:"state-dir,omitempty"`
 	Planet            string                `proxy:"planet,omitempty"`
 	MTU               int                   `proxy:"mtu,omitempty"`
+	IPStack           IPStackOption         `proxy:"ip-stack,omitempty"`
 	PhysicalMTU       int                   `proxy:"physical-mtu,omitempty"`
 	UDP               bool                  `proxy:"udp,omitempty"`
 	RemoteDnsResolve  bool                  `proxy:"remote-dns-resolve,omitempty"`
@@ -116,9 +126,56 @@ type ZeroTierOption struct {
 	RemoteTraceLevel  uint64                `proxy:"remote-trace-level,omitempty"`
 }
 
+type IPStackOption struct {
+	Mode                 string `proxy:"mode,omitempty"`
+	CongestionController string `proxy:"congestion-controller,omitempty"`
+}
+
 type ZeroTierOrbitOption struct {
 	World string `proxy:"world"`
 	Seed  string `proxy:"seed"`
+}
+
+func (o *IPStackOption) normalize() {
+	o.Mode = strings.ToLower(strings.TrimSpace(o.Mode))
+	if o.Mode == "" {
+		o.Mode = ipStackAuto
+	}
+	o.CongestionController = strings.ToLower(strings.TrimSpace(o.CongestionController))
+}
+
+func (o IPStackOption) validate() error {
+	switch o.Mode {
+	case ipStackAuto, ipStackMips:
+	case ipStackGVisor:
+		if !features.WithGVisor {
+			return errors.New("gVisor IP stack requires the with_gvisor build tag")
+		}
+	default:
+		return fmt.Errorf("invalid IP stack mode %q; expected auto, gvisor, or mips", o.Mode)
+	}
+	switch mipstack.CongestionControl(o.CongestionController) {
+	case "", mipstack.CongestionControlCUBIC, mipstack.CongestionControlReno, mipstack.CongestionControlBBR:
+		return nil
+	default:
+		return fmt.Errorf("invalid IP stack congestion controller %q; expected cubic, reno, or bbr", o.CongestionController)
+	}
+}
+
+// ipStack is the mihomo IP stack's packet and socket surface, adapted from
+// sing-wireguard only for gVisor.
+type ipStack interface {
+	Start() error
+	DialTCP(ctx context.Context, network string, source, destination netip.AddrPort) (net.Conn, error)
+	ListenUDP(ctx context.Context, network string, local netip.AddrPort) (net.PacketConn, error)
+	Read(buffers [][]byte, sizes []int, offset int) (int, error)
+	Write(buffers [][]byte, offset int) (int, error)
+	Close() error
+}
+
+// gVisorIPStack adapts sing-wireguard's stack device socket signatures.
+type gVisorIPStack struct {
+	wireguard.Device
 }
 
 type zeroTierOrbit struct {
@@ -153,6 +210,47 @@ type zeroTierPacketConn struct {
 	net.PacketConn
 	validateDestination func(netip.Addr) error
 }
+
+// newIPStack constructs the selected userspace IP stack.
+func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32) (ipStack, error) {
+	mode := option.Mode
+	if mode == ipStackAuto {
+		if features.WithGVisor {
+			mode = ipStackGVisor
+		} else {
+			mode = ipStackMips
+		}
+	}
+	switch mode {
+	case ipStackGVisor:
+		device, err := wireguard.NewStackDevice(localAddresses, mtu)
+		if err != nil {
+			return nil, err
+		}
+		return &gVisorIPStack{Device: device}, nil
+	case ipStackMips:
+		return mipstack.New(mipstack.Config{
+			LocalAddresses:    localAddresses,
+			MTU:               mtu,
+			CongestionControl: mipstack.CongestionControl(option.CongestionController),
+		})
+	default:
+		return nil, errors.New("invalid IP stack mode")
+	}
+}
+
+// DialTCP opens one active TCP connection through gVisor.
+func (s *gVisorIPStack) DialTCP(ctx context.Context, network string, _ netip.AddrPort, destination netip.AddrPort) (net.Conn, error) {
+	return s.DialContext(ctx, network, M.SocksaddrFromNetIP(destination))
+}
+
+// ListenUDP opens one unconnected UDP socket through gVisor.
+func (s *gVisorIPStack) ListenUDP(ctx context.Context, _ string, local netip.AddrPort) (net.PacketConn, error) {
+	return s.ListenPacket(ctx, M.SocksaddrFromNetIP(local))
+}
+
+var _ ipStack = (*mipstack.Stack)(nil)
+var _ ipStack = (*gVisorIPStack)(nil)
 
 func (c *zeroTierPacketConn) WriteTo(packet []byte, destination net.Addr) (int, error) {
 	address := M.SocksaddrFromNet(destination).Unwrap()
@@ -230,6 +328,10 @@ func NewZeroTier(option ZeroTierOption) (*ZeroTier, error) {
 		return nil, err
 	}
 	option.TCPFallbackMode = tcpFallbackMode.String()
+	option.IPStack.normalize()
+	if err = option.IPStack.validate(); err != nil {
+		return nil, err
+	}
 	if option.TCPFallbackRelay == "" {
 		option.TCPFallbackRelay = ZTTransport.DefaultTCPFallbackRelay
 	}
@@ -341,7 +443,7 @@ func zeroTierTransportInterfaces() ([]ZTTransport.Interface, error) {
 	return result, nil
 }
 
-func (z *ZeroTier) detachStackLocked() wireguard.Device {
+func (z *ZeroTier) detachStackLocked() ipStack {
 	device := z.tunDevice
 	z.tunDevice = nil
 	z.resolver = nil
@@ -378,7 +480,7 @@ func (z *ZeroTier) clearLoggedNetworkFailure(source *zeroTierRuntime) bool {
 	return true
 }
 
-func (z *ZeroTier) detachRuntimeLocked() (runtime *zeroTierRuntime, device wireguard.Device) {
+func (z *ZeroTier) detachRuntimeLocked() (runtime *zeroTierRuntime, device ipStack) {
 	runtime = z.runtime
 	device = z.detachStackLocked()
 	z.runtime = nil
@@ -402,7 +504,7 @@ func (r *zeroTierRuntime) startBackgroundTasks() {
 // close stops one retired runtime before its identity or persistent state can
 // be reused. Physical receive workers stop before the Node and its background
 // tasks, so no transport callback can race Node.Close.
-func (r *zeroTierRuntime) close(device wireguard.Device) error {
+func (r *zeroTierRuntime) close(device ipStack) error {
 	r.cancel()
 	_ = r.wire.Close()
 	r.wire.Wait()
@@ -866,7 +968,7 @@ func (z *ZeroTier) invalidateNetwork(source *zeroTierRuntime, err error, authURL
 	return shouldLog
 }
 
-func (z *ZeroTier) invalidateDevice(device wireguard.Device, err error) bool {
+func (z *ZeroTier) invalidateDevice(device ipStack, err error) bool {
 	z.stateMu.Lock()
 	if z.ctx.Err() != nil || z.tunDevice != device {
 		z.stateMu.Unlock()
@@ -909,7 +1011,7 @@ func (z *ZeroTier) applyNetworkConfig(config ZT.NetworkConfigData, generation ui
 	replaceDevice := oldDevice == nil || !oldConfig.ManagedAddressesEqual(config) || z.effectiveMTU(oldConfig) != mtu
 	device := oldDevice
 	if replaceDevice {
-		device, err = wireguard.NewStackDevice(config.Assigned, mtu)
+		device, err = newIPStack(z.option.IPStack, config.Assigned, mtu)
 		if err != nil {
 			return fmt.Errorf("create ZeroTier stack device: %w", err)
 		}
@@ -1041,7 +1143,7 @@ func (z *ZeroTier) resolverForNetworkConfig(config ZT.NetworkConfigData) (resolv
 	return resolver.Resolver(dns.NewResolver(dns.Config{Main: nameServers, IPv6: config.HasManagedIPv6()})), nil
 }
 
-func (z *ZeroTier) runStackPackets(runtime *zeroTierRuntime, device wireguard.Device) {
+func (z *ZeroTier) runStackPackets(runtime *zeroTierRuntime, device ipStack) {
 	buffer := make([]byte, 64*1024)
 	buffers := [][]byte{buffer}
 	sizes := []int{0}
@@ -1055,7 +1157,7 @@ func (z *ZeroTier) runStackPackets(runtime *zeroTierRuntime, device wireguard.De
 			}
 			return
 		}
-		packet := append([]byte(nil), buffer[:sizes[0]]...)
+		packet := buffer[:sizes[0]]
 		z.operationMu.RLock()
 		z.stateMu.RLock()
 		current := z.runtime == runtime && z.tunDevice == device
@@ -1128,7 +1230,7 @@ func (z *ZeroTier) handleInboundFrame(runtime *zeroTierRuntime, frame ZT.Frame) 
 	}
 }
 
-func (z *ZeroTier) networkStackFor(destination netip.Addr) (*ZTIP.Link, wireguard.Device, error) {
+func (z *ZeroTier) networkStackFor(destination netip.Addr) (*ZTIP.Link, ipStack, error) {
 	z.operationMu.RLock()
 	defer z.operationMu.RUnlock()
 	z.stateMu.RLock()
@@ -1171,7 +1273,7 @@ func (d zeroTierNetDialer) DialContext(ctx context.Context, network, address str
 	if err != nil {
 		return nil, err
 	}
-	return device.DialContext(ctx, network, M.ParseSocksaddr(address).Unwrap())
+	return device.DialTCP(ctx, network, netip.AddrPort{}, destination)
 }
 
 func (z *ZeroTier) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
@@ -1214,7 +1316,11 @@ func (z *ZeroTier) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	if err != nil {
 		return nil, err
 	}
-	packetConn, err := device.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, metadata.DstPort).Unwrap())
+	localAddress := netip.IPv4Unspecified()
+	if metadata.DstIP.Is6() {
+		localAddress = netip.IPv6Unspecified()
+	}
+	packetConn, err := device.ListenUDP(ctx, "udp", netip.AddrPortFrom(localAddress, 0))
 	if err != nil {
 		return nil, err
 	}
