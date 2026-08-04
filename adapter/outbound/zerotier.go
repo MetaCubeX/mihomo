@@ -176,11 +176,6 @@ type ipStack interface {
 	Close() error
 }
 
-// gVisorIPStack adapts sing-wireguard's stack device socket signatures.
-type gVisorIPStack struct {
-	wireguard.Device
-}
-
 type zeroTierOrbit struct {
 	world uint64
 	seed  ZT.Address
@@ -230,7 +225,7 @@ func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32)
 		if err != nil {
 			return nil, err
 		}
-		return &gVisorIPStack{Device: device}, nil
+		return device, nil
 	case ipStackMips:
 		return mipstack.New(mipstack.Config{
 			LocalAddresses:    localAddresses,
@@ -242,18 +237,8 @@ func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32)
 	}
 }
 
-// DialTCP opens one active TCP connection through gVisor.
-func (s *gVisorIPStack) DialTCP(ctx context.Context, network string, _ netip.AddrPort, destination netip.AddrPort) (net.Conn, error) {
-	return s.DialContext(ctx, network, M.SocksaddrFromNetIP(destination))
-}
-
-// ListenUDP opens one unconnected UDP socket through gVisor.
-func (s *gVisorIPStack) ListenUDP(ctx context.Context, _ string, local netip.AddrPort) (net.PacketConn, error) {
-	return s.ListenPacket(ctx, M.SocksaddrFromNetIP(local))
-}
-
 var _ ipStack = (*mipstack.Stack)(nil)
-var _ ipStack = (*gVisorIPStack)(nil)
+var _ ipStack = (wireguard.Device)(nil)
 
 func (c *zeroTierPacketConn) WriteTo(packet []byte, destination net.Addr) (int, error) {
 	address := M.SocksaddrFromNet(destination).Unwrap()
@@ -1319,11 +1304,8 @@ func (z *ZeroTier) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	if err != nil {
 		return nil, err
 	}
-	localAddress := netip.IPv4Unspecified()
-	if metadata.DstIP.Is6() {
-		localAddress = netip.IPv6Unspecified()
-	}
-	packetConn, err := device.ListenUDP(ctx, "udp", netip.AddrPortFrom(localAddress, 0))
+	// The ipStack contract guarantees that a generic UDP wildcard supports both address families.
+	packetConn, err := device.ListenUDP(ctx, "udp", netip.AddrPort{})
 	if err != nil {
 		return nil, err
 	}
