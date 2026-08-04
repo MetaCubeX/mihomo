@@ -1292,6 +1292,9 @@ proxies: # socks5
     # 数组格式也是合法的
     # reserved: [209,98,59]
     # persistent-keepalive: 0
+    # ip-stack:
+    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   congestion-controller: cubic # TCP congestion controller: cubic, reno, or bbr; ignored by gVisor
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
     # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false

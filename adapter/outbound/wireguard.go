@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,17 +20,26 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/slowdown"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
 
 	amneziav3 "github.com/metacubex/amneziawg-go/device"
 	amnezia "github.com/metacubex/amneziawg-go/device_v1"
+	"github.com/metacubex/mipstack"
 	wireguard "github.com/metacubex/sing-wireguard"
 	"github.com/metacubex/wireguard-go/device"
+	"github.com/metacubex/wireguard-go/tun"
 
 	"github.com/metacubex/sing/common/debug"
 	E "github.com/metacubex/sing/common/exceptions"
 	M "github.com/metacubex/sing/common/metadata"
+)
+
+const (
+	ipStackAuto   = "auto"
+	ipStackGVisor = "gvisor"
+	ipStackMips   = "mips"
 )
 
 type wireguardGoDevice interface {
@@ -40,7 +51,7 @@ type WireGuard struct {
 	*Base
 	bind      *wireguard.ClientBind
 	device    wireguardGoDevice
-	tunDevice wireguard.Device
+	tunDevice wireguardDevice
 	resolver  resolver.Resolver
 
 	initOk        atomic.Bool
@@ -66,6 +77,8 @@ type WireGuardOption struct {
 	MTU                 int    `proxy:"mtu,omitempty"`
 	UDP                 bool   `proxy:"udp,omitempty"`
 	PersistentKeepalive int    `proxy:"persistent-keepalive,omitempty"`
+
+	IPStack IPStackOption `proxy:"ip-stack,omitempty"`
 
 	AmneziaWGOption *AmneziaWGOption `proxy:"amnezia-wg-option,omitempty"`
 
@@ -123,6 +136,146 @@ type AmneziaWGOption struct {
 	RejectAfterTime        string `proxy:"reject-after-time,omitempty"`
 	KeepaliveTimeout       string `proxy:"keepalive-timeout,omitempty"`
 	MaxHandshakeAttempts   string `proxy:"max-handshake-attempts,omitempty"`
+}
+
+type IPStackOption struct {
+	Mode                 string `proxy:"mode,omitempty"`
+	CongestionController string `proxy:"congestion-controller,omitempty"`
+}
+
+func (o *IPStackOption) normalize() {
+	o.Mode = strings.ToLower(o.Mode)
+	if o.Mode == "" {
+		o.Mode = ipStackAuto
+	}
+	o.CongestionController = strings.ToLower(o.CongestionController)
+}
+
+func (o IPStackOption) validate() error {
+	switch o.Mode {
+	case ipStackAuto, ipStackMips:
+	case ipStackGVisor:
+		if !features.WithGVisor {
+			return errors.New("gVisor IP stack requires the with_gvisor build tag")
+		}
+	default:
+		return fmt.Errorf("invalid IP stack mode %q; expected auto, gvisor, or mips", o.Mode)
+	}
+	switch mipstack.CongestionControl(o.CongestionController) {
+	case "", mipstack.CongestionControlCUBIC, mipstack.CongestionControlReno, mipstack.CongestionControlBBR:
+		return nil
+	default:
+		return fmt.Errorf("invalid IP stack congestion controller %q; expected cubic, reno, or bbr", o.CongestionController)
+	}
+}
+
+// ipStack is the mihomo IP stack's packet and socket surface, adapted from
+// sing-wireguard only for gVisor.
+type ipStack interface {
+	Start() error
+	DialTCP(ctx context.Context, network string, source, destination netip.AddrPort) (net.Conn, error)
+	DialUDP(ctx context.Context, network string, source, destination netip.AddrPort) (net.Conn, error)
+	ListenUDP(ctx context.Context, network string, local netip.AddrPort) (net.PacketConn, error)
+	Read(buffers [][]byte, sizes []int, offset int) (int, error)
+	Write(buffers [][]byte, offset int) (int, error)
+	MTU() (int, error)
+	Name() (string, error)
+	BatchSize() int
+	Close() error
+}
+
+// newIPStack constructs the selected userspace IP stack.
+func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32) (ipStack, error) {
+	mode := option.Mode
+	if mode == ipStackAuto {
+		if features.WithGVisor {
+			mode = ipStackGVisor
+		} else {
+			mode = ipStackMips
+		}
+	}
+	switch mode {
+	case ipStackGVisor:
+		return wireguard.NewStackDevice(localAddresses, mtu)
+	case ipStackMips:
+		return mipstack.New(mipstack.Config{
+			LocalAddresses:    localAddresses,
+			MTU:               mtu,
+			CongestionControl: mipstack.CongestionControl(option.CongestionController),
+		})
+	default:
+		return nil, errors.New("invalid IP stack mode")
+	}
+}
+
+var _ ipStack = (*mipstack.Stack)(nil)
+var _ ipStack = (wireguard.Device)(nil)
+
+type ipStackNetDialer struct {
+	stack ipStack
+}
+
+var _ dialer.NetDialer = (*ipStackNetDialer)(nil)
+
+func (d ipStackNetDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	dst, err := netip.ParseAddrPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address %q: %w", address, err)
+	}
+	switch {
+	case strings.HasPrefix(network, "tcp"):
+		return d.stack.DialTCP(ctx, network, netip.AddrPort{}, dst)
+	case strings.HasPrefix(network, "udp"):
+		return d.stack.DialUDP(ctx, network, netip.AddrPort{}, dst)
+	default:
+		return nil, fmt.Errorf("invalid network %q", network)
+	}
+}
+
+type wireguardDevice interface {
+	ipStack
+	tun.Device
+}
+
+type ipStackWireguardDevice struct {
+	ipStack
+	events    chan tun.Event
+	closeOnce sync.Once
+}
+
+func (d *ipStackWireguardDevice) File() *os.File {
+	return nil
+}
+
+func (d *ipStackWireguardDevice) Events() <-chan tun.Event {
+	return d.events
+}
+
+func (d *ipStackWireguardDevice) Start() error {
+	d.events <- tun.EventUp
+	return nil
+}
+
+func (d *ipStackWireguardDevice) Close() error {
+	d.closeOnce.Do(func() {
+		close(d.events)
+	})
+	return d.ipStack.Close()
+}
+
+func newWireguardDevice(stack ipStack) (wireguardDevice, error) {
+	if wgDevice, ok := stack.(wireguardDevice); ok {
+		return wgDevice, nil
+	}
+	// mipstack must start at here
+	err := stack.Start()
+	if err != nil {
+		return nil, err
+	}
+	return &ipStackWireguardDevice{
+		ipStack: stack,
+		events:  make(chan tun.Event, 1),
+	}, nil
 }
 
 type wgSingErrorHandler struct {
@@ -285,13 +438,24 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	if mtu == 0 {
 		mtu = 1408
 	}
+	option.IPStack.normalize()
+	if err = option.IPStack.validate(); err != nil {
+		return nil, err
+	}
 	if len(outbound.localPrefixes) == 0 {
 		return nil, E.New("missing local address")
 	}
-	outbound.tunDevice, err = wireguard.NewStackDevice(outbound.localPrefixes, uint32(mtu))
+
+	stack, err := newIPStack(option.IPStack, outbound.localPrefixes, uint32(mtu))
 	if err != nil {
+		return nil, E.Cause(err, "create WireGuard stack")
+	}
+	outbound.tunDevice, err = newWireguardDevice(stack)
+	if err != nil {
+		_ = stack.Close()
 		return nil, E.Cause(err, "create WireGuard device")
 	}
+
 	logger := &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
 			log.SingLogger.Debug(fmt.Sprintf("[WG](%s) %s", option.Name, fmt.Sprintf(format, args...)))
@@ -611,10 +775,10 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.
 		}
 		options := w.DialOptions()
 		options = append(options, dialer.WithResolver(r))
-		options = append(options, dialer.WithNetDialer(wgNetDialer{tunDevice: w.tunDevice}))
+		options = append(options, dialer.WithNetDialer(ipStackNetDialer{stack: w.tunDevice}))
 		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
 	} else {
-		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, metadata.DstPort).Unwrap())
+		conn, err = w.tunDevice.DialTCP(ctx, "tcp", netip.AddrPort{}, metadata.AddrPort())
 	}
 	if err != nil {
 		return nil, err
@@ -633,7 +797,8 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if err = w.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, metadata.DstPort).Unwrap())
+	// The ipStack contract guarantees that a generic UDP wildcard supports both address families.
+	pc, err = w.tunDevice.ListenUDP(ctx, "udp", netip.AddrPort{})
 	if err != nil {
 		return nil, err
 	}
