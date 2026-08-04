@@ -1446,6 +1446,9 @@ proxies: # socks5
     # handshake-timeout: 30 # 单位为秒；配置后握手时不受外层连接超时影响；默认值为 0，表示仅使用外层连接超时
     # mtu: 1500
     udp: true
+    # ip-stack:
+    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   congestion-controller: cubic # TCP congestion controller: cubic, reno, or bbr; ignored by gVisor
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
     # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
