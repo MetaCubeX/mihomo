@@ -27,8 +27,6 @@ import (
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go"
-	wireguard "github.com/metacubex/sing-wireguard"
-	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
 	"golang.org/x/sync/semaphore"
 )
@@ -37,7 +35,7 @@ type Masque struct {
 	*Base
 	tlsConfig   *tls.Config
 	quicConfig  *quic.Config
-	tunDevice   wireguard.Device
+	tunDevice   ipStack
 	resolver    resolver.Resolver
 	uri         string
 	h2Transport *http.Transport
@@ -74,6 +72,8 @@ type MasqueOption struct {
 	CWND                 int    `proxy:"cwnd,omitempty"`
 	BBRProfile           string `proxy:"bbr-profile,omitempty"`
 
+	IPStack IPStackOption `proxy:"ip-stack,omitempty"`
+
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
 }
@@ -109,6 +109,10 @@ func (option MasqueOption) Prefixes() ([]netip.Prefix, error) {
 func NewMasque(option MasqueOption) (*Masque, error) {
 	if option.HandshakeTimeout < 0 {
 		return nil, errors.New("masque handshake timeout must be non-negative")
+	}
+	option.IPStack.normalize()
+	if err := option.IPStack.validate(); err != nil {
+		return nil, err
 	}
 	outbound := &Masque{
 		Base: NewBase(BaseOption{
@@ -232,7 +236,7 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 		if len(prefixes) == 0 {
 			return nil, errors.New("missing local address")
 		}
-		outbound.tunDevice, err = wireguard.NewStackDevice(prefixes, uint32(mtu))
+		outbound.tunDevice, err = newIPStack(option.IPStack, prefixes, uint32(mtu))
 		if err != nil {
 			return nil, fmt.Errorf("create device: %w", err)
 		}
@@ -472,10 +476,10 @@ func (w *Masque) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 		}
 		options := w.DialOptions()
 		options = append(options, dialer.WithResolver(r))
-		options = append(options, dialer.WithNetDialer(wgNetDialer{tunDevice: w.tunDevice}))
+		options = append(options, dialer.WithNetDialer(ipStackNetDialer{stack: w.tunDevice}))
 		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
 	} else {
-		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, metadata.DstPort).Unwrap())
+		conn, err = w.tunDevice.DialTCP(ctx, "tcp", netip.AddrPort{}, metadata.AddrPort())
 	}
 	if err != nil {
 		return nil, err
@@ -497,7 +501,8 @@ func (w *Masque) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err = w.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, metadata.DstPort).Unwrap())
+	// The ipStack contract guarantees that a generic UDP wildcard supports both address families.
+	pc, err = w.tunDevice.ListenUDP(ctx, "udp", netip.AddrPort{})
 	if err != nil {
 		return nil, err
 	}
