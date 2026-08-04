@@ -32,8 +32,11 @@ import (
 )
 
 const (
-	zeroTierDefaultStateDir      = "zerotier"
-	zeroTierFrameQueueSize       = 256
+	zeroTierDefaultStateDir = "zerotier"
+	// zeroTierFrameQueueSize absorbs short multi-flow bursts so data frames do
+	// not crowd handshake and window-update traffic out of the single ordered
+	// bridge consumer.
+	zeroTierFrameQueueSize       = 2048
 	zeroTierFrameDropLogInterval = 10 * time.Second
 )
 
