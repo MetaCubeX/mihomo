@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/netip"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,7 +68,8 @@ type TailscaleOption struct {
 
 func init() {
 	hostinfo.RegisterHostinfoNewHook(func(hi *tailcfg.Hostinfo) {
-		hi.IPNVersion = fmt.Sprintf("%s-%s-%s", ts.VersionDotTxt, C.MihomoName, C.Version)
+		versionDotTxt := strings.TrimSpace(ts.VersionDotTxt)
+		hi.IPNVersion = fmt.Sprintf("%s-%s-%s", versionDotTxt, C.MihomoName, C.Version)
 	})
 	envknob.SetNoLogsNoSupport()
 	if runtime.GOOS == "android" { // Android SDK 30 no longer permits Go's net.Interfaces to work (Issue 2293)
