@@ -31,11 +31,6 @@ type ZeroTierOption struct {
 	RemoteTraceLevel  uint64                `proxy:"remote-trace-level,omitempty"`
 }
 
-type IPStackOption struct {
-	Mode                 string `proxy:"mode,omitempty"`
-	CongestionController string `proxy:"congestion-controller,omitempty"`
-}
-
 type ZeroTierOrbitOption struct {
 	World string `proxy:"world"`
 	Seed  string `proxy:"seed"`
