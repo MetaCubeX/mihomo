@@ -32,7 +32,10 @@ const (
 	// zeroTierFrameQueueSize absorbs short multi-flow bursts so data frames do
 	// not crowd handshake and window-update traffic out of the single ordered
 	// bridge consumer.
-	zeroTierFrameQueueSize       = 2048
+	zeroTierFrameQueueSize = 2048
+	// zeroTierFrameBatchSize amortizes runtime validation, lock acquisition,
+	// and IP-stack delivery while retaining callback order.
+	zeroTierFrameBatchSize       = 64
 	zeroTierFrameDropLogInterval = 10 * time.Second
 )
 
@@ -1049,20 +1052,33 @@ func (z *ZeroTier) resolverForNetworkConfig(config ZT.NetworkConfigData) (resolv
 }
 
 func (z *ZeroTier) runStackPackets(runtime *zeroTierRuntime, device ipStack) {
-	buffer := make([]byte, 64*1024)
-	buffers := [][]byte{buffer}
-	sizes := []int{0}
+	mtu, err := device.MTU()
+	if err != nil || mtu < 1 {
+		mtu = 64 * 1024
+	}
+	batchSize := device.BatchSize()
+	if batchSize < 1 {
+		batchSize = 1
+	}
+	storage := make([]byte, mtu*batchSize)
+	buffers := make([][]byte, batchSize)
+	for index := range buffers {
+		start := index * mtu
+		buffers[index] = storage[start : start+mtu : start+mtu]
+	}
+	sizes := make([]int, batchSize)
+	writeErrors := make([]error, 0, batchSize)
 	for z.ctx.Err() == nil {
-		if _, err := device.Read(buffers, sizes, 0); err != nil {
+		count, readErr := device.Read(buffers, sizes, 0)
+		if readErr != nil {
 			if z.ctx.Err() == nil {
-				invalidated := z.invalidateDevice(device, fmt.Errorf("ZeroTier stack read failed: %w", err))
-				if invalidated && !errors.Is(err, net.ErrClosed) && !errors.Is(err, os.ErrClosed) {
-					log.Errorln("[ZeroTier](%s) stack read: %v", z.Name(), err)
+				invalidated := z.invalidateDevice(device, fmt.Errorf("ZeroTier stack read failed: %w", readErr))
+				if invalidated && !errors.Is(readErr, net.ErrClosed) && !errors.Is(readErr, os.ErrClosed) {
+					log.Errorln("[ZeroTier](%s) stack read: %v", z.Name(), readErr)
 				}
 			}
 			return
 		}
-		packet := buffer[:sizes[0]]
 		z.operationMu.RLock()
 		z.stateMu.RLock()
 		current := z.runtime == runtime && z.tunDevice == device
@@ -1071,68 +1087,87 @@ func (z *ZeroTier) runStackPackets(runtime *zeroTierRuntime, device ipStack) {
 			z.operationMu.RUnlock()
 			return
 		}
-		err := runtime.ipLink.WritePacket(packet)
+		writeErrors = writeErrors[:0]
+		for index := 0; index < count; index++ {
+			if writeErr := runtime.ipLink.WritePacket(buffers[index][:sizes[index]]); writeErr != nil {
+				writeErrors = append(writeErrors, writeErr)
+			}
+		}
 		z.operationMu.RUnlock()
-		if err != nil {
-			log.Debugln("[ZeroTier](%s) send IP packet: %v", z.Name(), err)
+		for _, writeErr := range writeErrors {
+			log.Debugln("[ZeroTier](%s) send IP packet: %v", z.Name(), writeErr)
 		}
 	}
 }
 
 func (z *ZeroTier) runInboundFrames() {
+	frames := make([]zeroTierInboundFrame, zeroTierFrameBatchSize)
+	packets := make([][]byte, 0, zeroTierFrameBatchSize)
+	frameErrors := make([]error, 0, zeroTierFrameBatchSize)
 	for {
+		var first zeroTierInboundFrame
 		select {
-		case inbound := <-z.frameCh:
-			z.stateMu.RLock()
-			current := z.runtime == inbound.runtime
-			z.stateMu.RUnlock()
-			if !current || inbound.runtime == nil {
-				continue
-			}
-			z.handleInboundFrame(inbound.runtime, inbound.frame)
+		case first = <-z.frameCh:
 		case <-z.ctx.Done():
 			return
 		}
+		frames[0] = first
+		count := 1
+	drain:
+		for count < len(frames) {
+			select {
+			case frames[count] = <-z.frameCh:
+				count++
+			default:
+				break drain
+			}
+		}
+		device, output, processingErrors := z.processInboundFrames(frames[:count], packets[:0], frameErrors[:0])
+		for _, err := range processingErrors {
+			log.Debugln("[ZeroTier](%s) process inbound frame: %v", z.Name(), err)
+		}
+		if device != nil && len(output) != 0 {
+			if _, writeErr := device.Write(output, 0); writeErr != nil && z.ctx.Err() == nil {
+				invalidated := z.invalidateDevice(device, fmt.Errorf("ZeroTier stack write failed: %w", writeErr))
+				if invalidated && !errors.Is(writeErr, net.ErrClosed) && !errors.Is(writeErr, os.ErrClosed) {
+					log.Debugln("[ZeroTier](%s) stack write: %v", z.Name(), writeErr)
+				}
+			}
+		}
+		for index := 0; index < count; index++ {
+			frames[index] = zeroTierInboundFrame{}
+		}
+		packets, frameErrors = output, processingErrors
 	}
 }
 
-func (z *ZeroTier) handleInboundFrame(runtime *zeroTierRuntime, frame ZT.Frame) {
+// processInboundFrames converts one callback-order batch while preventing a
+// concurrent configuration update from mutating its IP link. Stack delivery
+// follows after the read lock is released.
+func (z *ZeroTier) processInboundFrames(frames []zeroTierInboundFrame, packets [][]byte, frameErrors []error) (ipStack, [][]byte, []error) {
 	z.operationMu.RLock()
 	z.stateMu.RLock()
-	current := z.runtime == runtime
-	z.stateMu.RUnlock()
-	if !current {
-		z.operationMu.RUnlock()
-		return
-	}
-	packet, err := runtime.ipLink.HandleFrame(frame)
-	if len(packet) == 0 {
-		z.operationMu.RUnlock()
-		if err != nil {
-			log.Debugln("[ZeroTier](%s) process inbound frame: %v", z.Name(), err)
-		}
-		return
-	}
-	z.stateMu.RLock()
-	current = z.runtime == runtime
+	runtime := z.runtime
 	device := z.tunDevice
 	z.stateMu.RUnlock()
-	z.operationMu.RUnlock()
-	var writeErr error
-	var invalidated bool
-	if current && device != nil {
-		if _, writeErr = device.Write([][]byte{packet}, 0); writeErr != nil {
-			if z.ctx.Err() == nil {
-				invalidated = z.invalidateDevice(device, fmt.Errorf("ZeroTier stack write failed: %w", writeErr))
-			}
+	if runtime == nil {
+		z.operationMu.RUnlock()
+		return nil, packets, frameErrors
+	}
+	for _, inbound := range frames {
+		if inbound.runtime != runtime {
+			continue
+		}
+		packet, err := runtime.ipLink.HandleFrame(inbound.frame)
+		if err != nil {
+			frameErrors = append(frameErrors, err)
+		}
+		if len(packet) != 0 {
+			packets = append(packets, packet)
 		}
 	}
-	if err != nil {
-		log.Debugln("[ZeroTier](%s) process inbound frame: %v", z.Name(), err)
-	}
-	if invalidated && !errors.Is(writeErr, net.ErrClosed) && !errors.Is(writeErr, os.ErrClosed) {
-		log.Debugln("[ZeroTier](%s) stack write: %v", z.Name(), writeErr)
-	}
+	z.operationMu.RUnlock()
+	return device, packets, frameErrors
 }
 
 func (z *ZeroTier) networkStackFor(destination netip.Addr) (*ZTIP.Link, ipStack, error) {
