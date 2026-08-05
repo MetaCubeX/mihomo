@@ -199,9 +199,17 @@ func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32)
 		return wireguard.NewStackDevice(localAddresses, mtu)
 	case ipStackMips:
 		return mipstack.New(mipstack.Config{
-			LocalAddresses:    localAddresses,
-			MTU:               mtu,
-			CongestionControl: mipstack.CongestionControl(option.CongestionController),
+			LocalAddresses: localAddresses,
+			MTU:            mtu,
+			TCP: mipstack.TCPSocketDefaults{
+				CongestionControl: mipstack.CongestionControl(option.CongestionController),
+				// Align with sing-wireguard: enable keepalive with 15-second
+				// idle/interval timing and gVisor's default probe count.
+				KeepAlive: true,
+				KeepAliveConfig: mipstack.KeepAliveConfig{
+					Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 9,
+				},
+			},
 		})
 	default:
 		return nil, errors.New("invalid IP stack mode")
