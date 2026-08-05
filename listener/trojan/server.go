@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/httputils"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
@@ -30,6 +31,7 @@ import (
 	"github.com/metacubex/http"
 	"github.com/metacubex/smux"
 	"github.com/metacubex/tls"
+	"golang.org/x/exp/slices"
 )
 
 type Listener struct {
@@ -168,7 +170,8 @@ func New(config LC.TrojanServer, lc C.InboundListenConfig, tunnel C.Tunnel, addi
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			sl.HandleConn(conn, tunnel, additions...)
+			ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
+			sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
 		})
 		httpServer.Handler = httpMux
 		httpServer.Protocols.SetHTTP1(true)
@@ -177,8 +180,9 @@ func New(config LC.TrojanServer, lc C.InboundListenConfig, tunnel C.Tunnel, addi
 	if config.GrpcServiceName != "" {
 		httpServer.Handler = gun.NewServerHandler(gun.ServerOption{
 			ServiceName: config.GrpcServiceName,
-			ConnHandler: func(conn net.Conn) {
-				sl.HandleConn(conn, tunnel, additions...)
+			ConnHandler: func(conn net.Conn, r *http.Request) {
+				ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
+				sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
 			},
 			HttpHandler: httpServer.Handler,
 		})

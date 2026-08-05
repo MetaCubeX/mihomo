@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"net"
+	"net/netip"
 
 	C "github.com/metacubex/mihomo/constant"
 )
@@ -67,6 +68,17 @@ func WithInAddr(addr net.Addr) Addition {
 func WithDSCP(dscp uint8) Addition {
 	return func(metadata *C.Metadata) {
 		metadata.DSCP = dscp
+	}
+}
+
+func WithSrcAddrPort(ap netip.AddrPort) Addition {
+	return func(metadata *C.Metadata) {
+		if ap.IsValid() {
+			metadata.SrcIP = ap.Addr()
+			if p := ap.Port(); p != 0 {
+				metadata.SrcPort = p
+			}
+		}
 	}
 }
 

@@ -215,7 +215,7 @@ func New(config LC.VmessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	if config.GrpcServiceName != "" {
 		httpServer.Handler = gun.NewServerHandler(gun.ServerOption{
 			ServiceName: config.GrpcServiceName,
-			ConnHandler: func(conn net.Conn) {
+			ConnHandler: func(conn net.Conn, r *http.Request) {
 				sl.HandleConn(conn, tunnel, additions...)
 			},
 			HttpHandler: httpServer.Handler,

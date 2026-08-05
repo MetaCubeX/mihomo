@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/httputils"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/ech"
 	C "github.com/metacubex/mihomo/constant"
@@ -172,7 +173,8 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			sl.HandleConn(conn, tunnel, additions...)
+			ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
+			sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
 		})
 		httpServer.Handler = httpMux
 		httpServer.Protocols.SetHTTP1(true)
@@ -181,8 +183,9 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	if config.GrpcServiceName != "" {
 		httpServer.Handler = gun.NewServerHandler(gun.ServerOption{
 			ServiceName: config.GrpcServiceName,
-			ConnHandler: func(conn net.Conn) {
-				sl.HandleConn(conn, tunnel, additions...)
+			ConnHandler: func(conn net.Conn, r *http.Request) {
+				ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
+				sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
 			},
 			HttpHandler: httpServer.Handler,
 		})
@@ -229,8 +232,9 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 				ScMaxBufferedPosts:   config.XHTTPConfig.ScMaxBufferedPosts,
 				ScMaxEachPostBytes:   config.XHTTPConfig.ScMaxEachPostBytes,
 			},
-			ConnHandler: func(conn net.Conn) {
-				sl.HandleConn(conn, tunnel, additions...)
+			ConnHandler: func(conn net.Conn, r *http.Request) {
+				ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
+				sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
 			},
 			HttpHandler: httpServer.Handler,
 		})
