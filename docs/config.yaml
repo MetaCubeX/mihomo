@@ -356,7 +356,7 @@ dns:
   # 配置查询域名使用的 DNS 服务器
   nameserver-policy:
     #   'www.baidu.com': '114.114.114.114'
-    #   '+.internal.crop.com': '10.0.0.1'
+    #   '+.internal.corp.com': '10.0.0.1'
     "geosite:cn,private,apple":
       - https://doh.pub/dns-query
       - https://dns.alidns.com/dns-query
