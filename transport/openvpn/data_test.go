@@ -113,7 +113,7 @@ func TestDataChannelAcceptsOutOfOrderPacketsWithinReplayWindow(t *testing.T) {
 }
 
 func TestParsePushReply(t *testing.T) {
-	reply, err := ParsePushReply("PUSH_REPLY,redirect-gateway def1,dhcp-option DNS 8.8.8.8,ifconfig 10.8.0.2 255.255.255.0,peer-id 3,block-ipv6\x00")
+	reply, err := ParsePushReply("PUSH_REPLY,redirect-gateway def1,dhcp-option DNS 8.8.8.8,ifconfig 10.8.0.2 255.255.255.0,peer-id 3,block-ipv6,auth-token token-0,auth-token-user dG9rZW4tdXNlcg==\x00")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,6 +125,16 @@ func TestParsePushReply(t *testing.T) {
 	}
 	if len(reply.DNS) != 1 || reply.DNS[0].String() != "8.8.8.8" {
 		t.Fatalf("unexpected DNS: %#v", reply.DNS)
+	}
+	if reply.AuthToken != "token-0" || reply.AuthTokenUser != "token-user" {
+		t.Fatalf("unexpected pushed authentication token: token=%q user=%q", reply.AuthToken, reply.AuthTokenUser)
+	}
+}
+
+func TestParsePushReplyRejectsInvalidAuthTokenUser(t *testing.T) {
+	_, err := ParsePushReply("PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0,auth-token token-0,auth-token-user !invalid!\x00")
+	if err == nil {
+		t.Fatal("expected invalid auth-token-user encoding to be rejected")
 	}
 }
 
@@ -238,5 +248,27 @@ func TestDataChannelAESCBCSHA1V2RoundTrip(t *testing.T) {
 	encrypted[headerSize+sha1.Size] ^= 0xff
 	if _, err := server.Decrypt(encrypted); err == nil {
 		t.Fatal("expected HMAC authentication failure after IV tamper")
+	}
+}
+
+func TestDataChannelUsesKeyEpochInPacketHeader(t *testing.T) {
+	keys := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x11}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x33}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+	}
+	data, err := newDataChannel(keys, CipherAES128CBC, AuthSHA1, 7, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encrypted, err := data.Encrypt([]byte{0x45, 0, 0, 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opcode, keyID := parseOpcodeKeyID(encrypted[0])
+	if opcode != PDataV2 || keyID != 2 {
+		t.Fatalf("unexpected data header: opcode=%s keyID=%d", opcode, keyID)
 	}
 }

@@ -131,3 +131,32 @@ func TestParseServerKeyMethod2Record(t *testing.T) {
 		t.Fatalf("unexpected server randoms")
 	}
 }
+
+func TestServerKeyMethod2RecordLengthHandlesFragmentationAndTrailingControl(t *testing.T) {
+	var packet []byte
+	packet = binary.BigEndian.AppendUint32(packet, 0)
+	packet = append(packet, KeyMethod2)
+	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	packet = appendOpenVPNString(packet, "server-options")
+	packet = appendOpenVPNString(packet, "")
+	packet = appendOpenVPNString(packet, "")
+	packet = appendOpenVPNString(packet, "")
+
+	for split := 0; split < len(packet); split++ {
+		if _, complete, err := serverKeyMethod2RecordLength(packet[:split]); err != nil {
+			t.Fatalf("split %d returned an error: %v", split, err)
+		} else if complete {
+			t.Fatalf("split %d reported a complete record", split)
+		}
+	}
+
+	combined := append(append([]byte(nil), packet...), []byte("PUSH_REPLY,auth-token next\x00")...)
+	recordLength, complete, err := serverKeyMethod2RecordLength(combined)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !complete || recordLength != len(packet) {
+		t.Fatalf("record length = %d, complete = %t; want %d, true", recordLength, complete, len(packet))
+	}
+}

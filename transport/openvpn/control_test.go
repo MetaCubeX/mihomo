@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/metacubex/tls"
 )
 
 type memoryPacketIO struct {
@@ -267,7 +270,8 @@ func TestClientWaitServerResetRetransmitsUDP(t *testing.T) {
 	}
 }
 
-func TestClientClosesOnSoftReset(t *testing.T) {
+func TestClientReportsFailedSoftReset(t *testing.T) {
+	serverCert, caPEM := testRekeyServerCertificate(t)
 	for _, name := range []string{"plain", "tls-auth", "tls-crypt"} {
 		t.Run(name, func(t *testing.T) {
 			var (
@@ -287,6 +291,7 @@ func TestClientClosesOnSoftReset(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			config.CA = caPEM
 
 			clientIO, serverIO := newMemoryPacketPair()
 			client, err := NewClient(&config, clientIO)
@@ -297,12 +302,13 @@ func TestClientClosesOnSoftReset(t *testing.T) {
 			var serverID SessionID
 			copy(serverID[:], []byte("server01"))
 			client.control.SetRemoteSessionID(serverID)
-			go client.watchControl()
 			serverControl := NewControlChannel(serverIO, serverCrypt, serverID)
 			serverControl.SetRemoteSessionID(client.control.LocalSessionID())
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+			startTestTLSControlWatcher(t, ctx, client, serverControl, serverCert)
+			client.config.CA = nil
 			if _, err := client.control.Send(ctx, PControlV1, []byte("client control")); err != nil {
 				t.Fatal(err)
 			}
@@ -319,6 +325,15 @@ func TestClientClosesOnSoftReset(t *testing.T) {
 			if _, err := serverControl.Send(ctx, PControlV1, nil); err != nil {
 				t.Fatal(err)
 			}
+			ackCtx, ackCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			_, err = serverControl.Read(ackCtx)
+			ackCancel()
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("expected deadline after consuming client ack, got %v", err)
+			}
+			if serverControl.PendingMessages() != 0 {
+				t.Fatalf("expected client to ack ordinary control message: %d", serverControl.PendingMessages())
+			}
 			if err := serverIO.WritePacket(ctx, []byte{opcodeKeyID(PControlSoftResetV1, 1)}); err != nil {
 				t.Fatal(err)
 			}
@@ -334,36 +349,28 @@ func TestClientClosesOnSoftReset(t *testing.T) {
 			if err := serverIO.WritePacket(ctx, softReset); err != nil {
 				t.Fatal(err)
 			}
-			// With the rekey fix, the client attempts TLS renegotiation on
-			// soft reset. Since no real TLS connection was established in
-			// this unit test (tlsConn is nil), renegotiate() should fail
-			// and the client should close.
+			// The empty test config has no CA, so the fresh TLS epoch cannot
+			// be configured and the client should surface the rekey failure.
 			select {
 			case <-client.mux.done:
 			case <-ctx.Done():
 				t.Fatal("client did not close after soft reset renegotiation failure")
 			}
 			if client.control.recvMessage != 1 {
-				t.Fatalf("soft reset changed the old epoch receive sequence: %d", client.control.recvMessage)
+				t.Fatalf("new epoch receive sequence = %d; want 1", client.control.recvMessage)
 			}
-			if client.control.PendingMessages() != 0 {
-				t.Fatalf("expected server ack to clear client pending messages: %d", client.control.PendingMessages())
+			if client.control.PendingMessages() != 1 {
+				t.Fatalf("expected unacknowledged soft reset response, pending=%d", client.control.PendingMessages())
 			}
-
-			ackCtx, ackCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer ackCancel()
-			_, err = serverControl.Read(ackCtx)
-			if !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatalf("expected deadline after consuming client ack, got %v", err)
-			}
-			if serverControl.PendingMessages() != 0 {
-				t.Fatalf("expected client to ack ordinary control message: %d", serverControl.PendingMessages())
+			if client.Err() == nil || !strings.Contains(client.Err().Error(), "parse openvpn ca certificate") {
+				t.Fatalf("unexpected client error: %v", client.Err())
 			}
 		})
 	}
 }
 
 func TestClientControlWatcherIgnoresInvalidPackets(t *testing.T) {
+	serverCert, caPEM := testRekeyServerCertificate(t)
 	var serverID SessionID
 	copy(serverID[:], []byte("server01"))
 	var otherID SessionID
@@ -394,16 +401,22 @@ func TestClientControlWatcherIgnoresInvalidPackets(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clientIO, serverIO := newMemoryPacketPair()
-			client, err := NewClient(&ClientConfig{}, clientIO)
+			client, err := NewClient(&ClientConfig{CA: caPEM}, clientIO)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer client.Close()
 			client.control.SetRemoteSessionID(serverID)
-			go client.watchControl()
+			serverControl := NewControlChannel(serverIO, nil, serverID)
+			serverControl.SetRemoteSessionID(client.control.LocalSessionID())
 
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
+			startTestTLSControlWatcher(t, ctx, client, serverControl, serverCert)
+			client.control.mu.Lock()
+			initialRecvMessage := client.control.recvMessage
+			initialAckPending := len(client.control.ackPending)
+			client.control.mu.Unlock()
 			if err := serverIO.WritePacket(ctx, test.packet); err != nil {
 				t.Fatal(err)
 			}
@@ -416,11 +429,59 @@ func TestClientControlWatcherIgnoresInvalidPackets(t *testing.T) {
 			recvMessage := client.control.recvMessage
 			ackPending := len(client.control.ackPending)
 			client.control.mu.Unlock()
-			if recvMessage != 0 || ackPending != 0 {
-				t.Fatalf("invalid packet changed reliable state: recv=%d pending-acks=%d", recvMessage, ackPending)
+			if recvMessage != initialRecvMessage || ackPending != initialAckPending {
+				t.Fatalf(
+					"invalid packet changed reliable state: recv=%d want=%d pending-acks=%d want=%d",
+					recvMessage,
+					initialRecvMessage,
+					ackPending,
+					initialAckPending,
+				)
 			}
 		})
 	}
+}
+
+func startTestTLSControlWatcher(
+	t *testing.T,
+	ctx context.Context,
+	client *Client,
+	serverControl *ControlChannel,
+	serverCert tls.Certificate,
+) {
+	t.Helper()
+	serverTLS := tls.Server(NewControlConn(serverControl), &tls.Config{
+		Certificates:           []tls.Certificate{serverCert},
+		SessionTicketsDisabled: true,
+	})
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = serverTLS.SetDeadline(deadline)
+	}
+	serverResult := make(chan error, 1)
+	go func() {
+		serverResult <- serverTLS.HandshakeContext(ctx)
+	}()
+
+	tlsConfig, err := client.tlsConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientTLS := tls.Client(NewControlConn(client.control), tlsConfig)
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = clientTLS.SetDeadline(deadline)
+	}
+	if err := clientTLS.HandshakeContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-serverResult; err != nil {
+		t.Fatal(err)
+	}
+	_ = clientTLS.SetDeadline(time.Time{})
+	_ = serverTLS.SetDeadline(time.Time{})
+	if !client.setTLSConn(clientTLS) {
+		t.Fatal("failed to publish test TLS connection")
+	}
+	go client.watchControl()
 }
 
 func TestTCPPacketIOFraming(t *testing.T) {
