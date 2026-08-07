@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
@@ -107,18 +108,9 @@ func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read options: %w", err)
 	}
-	record.Username, offset, err = readOpenVPNString(packet, offset)
-	if err != nil {
-		return nil, fmt.Errorf("read username: %w", err)
-	}
-	record.Password, offset, err = readOpenVPNString(packet, offset)
-	if err != nil {
-		return nil, fmt.Errorf("read password: %w", err)
-	}
-	record.PeerInfo, _, err = readOpenVPNString(packet, offset)
-	if err != nil {
-		return nil, fmt.Errorf("read peer info: %w", err)
-	}
+	record.Username, offset, _ = readOpenVPNString(packet, offset)
+	record.Password, offset, _ = readOpenVPNString(packet, offset)
+	record.PeerInfo, _, _ = readOpenVPNString(packet, offset)
 	return record, nil
 }
 
@@ -134,18 +126,50 @@ func serverKeyMethod2RecordLength(packet []byte) (int, bool, error) {
 		return 0, false, fmt.Errorf("unsupported key method %d", packet[4])
 	}
 	offset := fixedLength
-	for i := 0; i < 4; i++ {
+	if len(packet) < offset+2 {
+		return 0, false, nil
+	}
+	length := int(binary.BigEndian.Uint16(packet[offset : offset+2]))
+	offset += 2
+	if len(packet) < offset+length {
+		return 0, false, nil
+	}
+	offset += length
+
+	// Some observed servers omit the trailing username, password, and peer-info
+	// strings from their key-method response. Treat them as optional, while
+	// still consuming canonical records so following TLS control data is kept.
+	mandatoryLength := offset
+	if len(packet) == mandatoryLength {
+		return mandatoryLength, true, nil
+	}
+	for i := 0; i < 3; i++ {
 		if len(packet) < offset+2 {
+			if i == 0 && isTLSControlPrefix(packet[mandatoryLength:]) {
+				return mandatoryLength, true, nil
+			}
 			return 0, false, nil
 		}
-		length := int(binary.BigEndian.Uint16(packet[offset : offset+2]))
+		length = int(binary.BigEndian.Uint16(packet[offset : offset+2]))
 		offset += 2
 		if len(packet) < offset+length {
+			if i == 0 && isTLSControlPrefix(packet[mandatoryLength:]) {
+				return mandatoryLength, true, nil
+			}
 			return 0, false, nil
 		}
 		offset += length
 	}
 	return offset, true, nil
+}
+
+func isTLSControlPrefix(packet []byte) bool {
+	for _, command := range []string{"PUSH_REPLY", "AUTH_FAILED"} {
+		if bytes.HasPrefix([]byte(command), packet) || bytes.HasPrefix(packet, []byte(command)) {
+			return true
+		}
+	}
+	return false
 }
 
 func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID, cipherKeyLen int) (*KeyMaterial, error) {

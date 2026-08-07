@@ -18,6 +18,7 @@ import (
 
 const (
 	ControlRetransmitDelay = time.Second
+	authTokenRefreshWait   = 3 * ControlRetransmitDelay
 
 	// renegotiateTimeout is the maximum time allowed for a TLS renegotiation
 	// (rekey) cycle. OpenVPN servers typically rekey every hour; the
@@ -48,6 +49,8 @@ type Client struct {
 
 	authUsername string
 	authPassword string
+	hasAuthToken bool
+	authRevision uint64
 
 	// controlReadBuf is owned by Handshake until watchControl starts and by
 	// that single watcher afterward. It carries partial TLS control messages.
@@ -251,7 +254,15 @@ func (c *Client) installPushedAuthToken(push *PushReply) bool {
 		c.authUsername = push.AuthTokenUser
 	}
 	c.authPassword = push.AuthToken
+	c.hasAuthToken = true
+	c.authRevision++
 	return true
+}
+
+func (c *Client) pushedAuthTokenState() (revision uint64, ok bool) {
+	c.authLock.RLock()
+	defer c.authLock.RUnlock()
+	return c.authRevision, c.hasAuthToken
 }
 
 func (c *Client) installDataChannel(newData *DataChannel) {
@@ -450,8 +461,14 @@ func (c *Client) renegotiate(reset *ControlPacket) error {
 		return fmt.Errorf("handshake OpenVPN rekey TLS session: %w", err)
 	}
 
+	authRevision, usesAuthToken := c.pushedAuthTokenState()
 	if _, err := c.doKeyExchange(renegCtx, tlsConn, reset.KeyID, false); err != nil {
 		return fmt.Errorf("exchange OpenVPN rekey material: %w", err)
+	}
+	if usesAuthToken {
+		if err := c.refreshPushedAuthToken(renegCtx, tlsConn, authRevision); err != nil {
+			return err
+		}
 	}
 	_ = tlsConn.SetDeadline(time.Time{})
 	if !c.setTLSConn(tlsConn) {
@@ -459,6 +476,42 @@ func (c *Client) renegotiate(reset *ControlPacket) error {
 		return net.ErrClosed
 	}
 	return nil
+}
+
+func (c *Client) refreshPushedAuthToken(ctx context.Context, tlsConn *tls.Conn, previousRevision uint64) error {
+	revision, _ := c.pushedAuthTokenState()
+	if revision != previousRevision {
+		return nil
+	}
+	refreshCtx, cancel := context.WithTimeout(ctx, authTokenRefreshWait)
+	defer cancel()
+	if deadline, ok := refreshCtx.Deadline(); ok {
+		_ = tlsConn.SetDeadline(deadline)
+	}
+	if _, err := tlsConn.Write([]byte(PushRequest + "\x00")); err != nil {
+		return fmt.Errorf("request OpenVPN auth-token refresh: %w", err)
+	}
+
+	readBuffer := make([]byte, 4096)
+	for {
+		n, err := tlsConn.Read(readBuffer)
+		if n > 0 {
+			if controlErr := c.consumeTLSControlBytes(readBuffer[:n]); controlErr != nil {
+				return controlErr
+			}
+			revision, _ = c.pushedAuthTokenState()
+			if revision != previousRevision {
+				return nil
+			}
+		}
+		if err == nil {
+			continue
+		}
+		if refreshCtx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("read OpenVPN auth-token refresh: %w", err)
+	}
 }
 
 func (c *Client) startControlRetransmit(ctx context.Context) func() {
@@ -600,6 +653,9 @@ func (c *Client) readServerKeyMethod(ctx context.Context, tlsConn *tls.Conn) (*K
 			return nil, nil, fmt.Errorf("read key method 2 server record: %w", err)
 		}
 		buf = append(buf, tmp[:n]...)
+		// Canonical OpenVPN key-method records fit in this read buffer and carry
+		// three trailing strings. A read ending exactly after the mandatory
+		// options string is the framing signal for servers that omit them.
 		recordLength, complete, err := serverKeyMethod2RecordLength(buf)
 		if err != nil {
 			return nil, nil, err
