@@ -43,7 +43,7 @@ require (
 	github.com/metacubex/sing-wireguard v0.0.0-20260804133520-b873d2f3e751
 	github.com/metacubex/smux v0.0.0-20260105030934-d0c8756d3141
 	github.com/metacubex/ssh v0.1.0
-	github.com/metacubex/tailscale v0.0.0-20260727131202-3748fbaa292c
+	github.com/metacubex/tailscale v0.0.0-20260807072706-a4fb5feabcbb
 	github.com/metacubex/tfo-go v0.0.0-20260623020846-376a77860b8c
 	github.com/metacubex/tls v0.1.7
 	github.com/metacubex/utls v1.8.7
