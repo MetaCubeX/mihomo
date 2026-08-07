@@ -38,7 +38,7 @@ require (
 	github.com/metacubex/sing-quic v0.0.0-20260726014900-38b0e9295f51
 	github.com/metacubex/sing-shadowsocks v0.2.12
 	github.com/metacubex/sing-shadowsocks2 v0.2.7
-	github.com/metacubex/sing-tun v0.4.21
+	github.com/metacubex/sing-tun v0.4.22
 	github.com/metacubex/sing-vmess v0.2.5
 	github.com/metacubex/sing-wireguard v0.0.0-20260804133520-b873d2f3e751
 	github.com/metacubex/smux v0.0.0-20260105030934-d0c8756d3141
@@ -110,7 +110,7 @@ require (
 	github.com/klauspost/reedsolomon v1.12.3 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/metacubex/ascon v0.1.0 // indirect
-	github.com/metacubex/gvisor v0.0.0-20260803120439-3db0444786c6 // indirect
+	github.com/metacubex/gvisor v0.0.0-20260807021258-5683e078dbc4 // indirect
 	github.com/metacubex/hkdf v0.1.0 // indirect
 	github.com/metacubex/hpke v0.1.0 // indirect
 	github.com/metacubex/jsonv2 v0.0.0-20260721082349-16b4998c8f89 // indirect
