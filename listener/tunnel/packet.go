@@ -9,6 +9,7 @@ import (
 type packet struct {
 	pc      net.PacketConn
 	rAddr   net.Addr
+	keyAddr net.Addr
 	payload []byte
 }
 
@@ -23,7 +24,7 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 
 // LocalAddr returns the source IP/Port of UDP Packet
 func (c *packet) LocalAddr() net.Addr {
-	return c.rAddr
+	return c.keyAddr
 }
 
 func (c *packet) Drop() {
