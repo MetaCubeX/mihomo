@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,18 +20,22 @@ import (
 )
 
 func TestClientCompletesSequentialSoftResetEpochs(t *testing.T) {
-	testClientCompletesSequentialSoftResetEpochs(t, false, false)
+	testClientCompletesSequentialSoftResetEpochs(t, false, false, false)
 }
 
 func TestClientUsesFixedAuthTokenAcrossSoftResetEpochs(t *testing.T) {
-	testClientCompletesSequentialSoftResetEpochs(t, true, false)
+	testClientCompletesSequentialSoftResetEpochs(t, true, false, false)
 }
 
 func TestClientUsesRefreshedAuthTokenAcrossSoftResetEpochs(t *testing.T) {
-	testClientCompletesSequentialSoftResetEpochs(t, true, true)
+	testClientCompletesSequentialSoftResetEpochs(t, true, true, false)
 }
 
-func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, refreshAuthToken bool) {
+func TestClientRetransmitsAuthTokenRefreshRequest(t *testing.T) {
+	testClientCompletesSequentialSoftResetEpochs(t, true, true, true)
+}
+
+func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, refreshAuthToken, dropRefreshRequest bool) {
 	serverCert, caPEM := testRekeyServerCertificate(t)
 	config := &ClientConfig{
 		RemoteHost: "127.0.0.1",
@@ -48,7 +53,13 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 	}
 
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(config, clientIO)
+	var clientPacketIO PacketIO = clientIO
+	var refreshDropper *dropOnceControlPacketIO
+	if dropRefreshRequest {
+		refreshDropper = &dropOnceControlPacketIO{PacketIO: clientIO, dropped: make(chan struct{})}
+		clientPacketIO = refreshDropper
+	}
+	client, err := NewClient(config, clientPacketIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,12 +131,15 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 
 		serverResult := make(chan rekeyServerResult, 1)
 		refreshedAuthToken := ""
-		var refreshGate chan struct{}
-		var refreshDone chan error
-		if useAuthToken && refreshAuthToken {
-			refreshedAuthToken = fmt.Sprintf("token-%d", epochIndex+1)
-			refreshGate = make(chan struct{})
-			refreshDone = make(chan error, 1)
+		if useAuthToken {
+			refreshedAuthToken = "token-0"
+			if refreshAuthToken {
+				refreshedAuthToken = fmt.Sprintf("token-%d", epochIndex+1)
+			}
+		}
+		var armRefreshDrop func()
+		if refreshDropper != nil && epochIndex == 0 {
+			armRefreshDrop = refreshDropper.Arm
 		}
 		go func() {
 			data, clientRecord, err := serveOpenVPNRekeyEpoch(
@@ -133,8 +147,7 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 				serverControl,
 				serverCert,
 				refreshedAuthToken,
-				refreshGate,
-				refreshDone,
+				armRefreshDrop,
 			)
 			serverResult <- rekeyServerResult{data: data, clientRecord: clientRecord, err: err}
 		}()
@@ -182,24 +195,17 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 			t.Fatalf("data channel count = %d; want 2", dataChannelCount)
 		}
 
-		if refreshGate != nil {
-			select {
-			case err := <-refreshDone:
-				t.Fatalf("auth token refresh completed before the new data epoch was active: %v", err)
-			default:
-			}
-			close(refreshGate)
-			select {
-			case err := <-refreshDone:
-				if err != nil {
-					t.Fatal(err)
-				}
-			case <-ctx.Done():
-				t.Fatal(ctx.Err())
-			}
+		if refreshedAuthToken != "" {
 			if err := waitForClientPassword(ctx, client, refreshedAuthToken); err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+	if refreshDropper != nil {
+		select {
+		case <-refreshDropper.dropped:
+		default:
+			t.Fatal("auth-token refresh request was not dropped")
 		}
 	}
 
@@ -280,8 +286,7 @@ func serveOpenVPNRekeyEpoch(
 	control *ControlChannel,
 	serverCert tls.Certificate,
 	refreshedAuthToken string,
-	refreshGate <-chan struct{},
-	refreshDone chan<- error,
+	armRefreshDrop func(),
 ) (*DataChannel, *KeyMethod2Record, error) {
 	reset, err := control.Read(ctx)
 	if err != nil {
@@ -315,21 +320,22 @@ func serveOpenVPNRekeyEpoch(
 		return nil, nil, fmt.Errorf("write server key method record: %w", err)
 	}
 	if refreshedAuthToken != "" {
-		go func() {
-			select {
-			case <-refreshGate:
-				_, err := tlsConn.Write([]byte(fmt.Sprintf(
-					"PUSH_REPLY,auth-token %s\x00",
-					refreshedAuthToken,
-				)))
-				if err != nil {
-					err = fmt.Errorf("write refreshed auth token: %w", err)
-				}
-				refreshDone <- err
-			case <-ctx.Done():
-				refreshDone <- ctx.Err()
-			}
-		}()
+		if armRefreshDrop != nil {
+			armRefreshDrop()
+		}
+		message, _, err := readTLSControlMessage(ctx, tlsConn, nil)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read auth-token refresh request: %w", err)
+		}
+		if message != PushRequest {
+			return nil, nil, fmt.Errorf("auth-token control message = %q; want %q", message, PushRequest)
+		}
+		if _, err := tlsConn.Write([]byte(fmt.Sprintf(
+			"PUSH_REPLY,auth-token %s\x00",
+			refreshedAuthToken,
+		))); err != nil {
+			return nil, nil, fmt.Errorf("write refreshed auth token: %w", err)
+		}
 	}
 
 	sources := clientRecord.Sources
@@ -346,6 +352,25 @@ func serveOpenVPNRekeyEpoch(
 	}
 	data, err := newDataChannel(serverKeys, CipherAES128CBC, AuthSHA1, 7, reset.KeyID)
 	return data, clientRecord, err
+}
+
+type dropOnceControlPacketIO struct {
+	PacketIO
+	armed   atomic.Bool
+	dropped chan struct{}
+}
+
+func (d *dropOnceControlPacketIO) Arm() {
+	d.armed.Store(true)
+}
+
+func (d *dropOnceControlPacketIO) WritePacket(ctx context.Context, packet []byte) error {
+	opcode, _ := parseOpcodeKeyID(packet[0])
+	if opcode == PControlV1 && d.armed.CompareAndSwap(true, false) {
+		close(d.dropped)
+		return nil
+	}
+	return d.PacketIO.WritePacket(ctx, packet)
 }
 
 func waitForClientPassword(ctx context.Context, client *Client, password string) error {
@@ -502,9 +527,6 @@ func testServerKeyMethodRecord() (*KeyMethod2Record, []byte, error) {
 	copy(serverRecord.Sources.Server.Random2[:], randomBytes[keySourceRandomSize:])
 	record = append(record, randomBytes...)
 	record = appendOpenVPNString(record, "V4,dev-type tun,cipher AES-128-CBC,auth SHA1,key-method 2,tls-server")
-	record = appendOpenVPNString(record, "")
-	record = appendOpenVPNString(record, "")
-	record = appendOpenVPNString(record, "")
 	return serverRecord, record, nil
 }
 

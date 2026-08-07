@@ -132,31 +132,69 @@ func TestParseServerKeyMethod2Record(t *testing.T) {
 	}
 }
 
-func TestServerKeyMethod2RecordLengthHandlesFragmentationAndTrailingControl(t *testing.T) {
-	var packet []byte
-	packet = binary.BigEndian.AppendUint32(packet, 0)
-	packet = append(packet, KeyMethod2)
-	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
-	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
-	packet = appendOpenVPNString(packet, "server-options")
-	packet = appendOpenVPNString(packet, "")
-	packet = appendOpenVPNString(packet, "")
-	packet = appendOpenVPNString(packet, "")
+func TestParseServerKeyMethod2RecordWithoutOptionalStrings(t *testing.T) {
+	packet := testServerKeyMethod2Packet("server-options")
 
-	for split := 0; split < len(packet); split++ {
-		if _, complete, err := serverKeyMethod2RecordLength(packet[:split]); err != nil {
+	record, err := ParseServerKeyMethod2Record(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Options != "server-options" {
+		t.Fatalf("options = %q; want server-options", record.Options)
+	}
+	if record.Username != "" || record.Password != "" || record.PeerInfo != "" {
+		t.Fatalf("unexpected optional strings: %#v", record)
+	}
+}
+
+func TestServerKeyMethod2RecordLengthHandlesFragmentationAndTrailingControl(t *testing.T) {
+	mandatory := testServerKeyMethod2Packet("server-options")
+
+	for split := 0; split < len(mandatory); split++ {
+		if _, complete, err := serverKeyMethod2RecordLength(mandatory[:split]); err != nil {
 			t.Fatalf("split %d returned an error: %v", split, err)
 		} else if complete {
 			t.Fatalf("split %d reported a complete record", split)
 		}
 	}
 
-	combined := append(append([]byte(nil), packet...), []byte("PUSH_REPLY,auth-token next\x00")...)
+	control := []byte("PUSH_REPLY,auth-token next\x00")
+	for prefix := 1; prefix <= len(control); prefix++ {
+		combined := append(append([]byte(nil), mandatory...), control[:prefix]...)
+		recordLength, complete, err := serverKeyMethod2RecordLength(combined)
+		if err != nil {
+			t.Fatalf("control prefix %d returned an error: %v", prefix, err)
+		}
+		if !complete || recordLength != len(mandatory) {
+			t.Fatalf("control prefix %d: record length = %d, complete = %t; want %d, true", prefix, recordLength, complete, len(mandatory))
+		}
+	}
+
+	withOptional := append(append([]byte(nil), mandatory...), appendOpenVPNString(nil, "")...)
+	withOptional = appendOpenVPNString(withOptional, "")
+	withOptional = appendOpenVPNString(withOptional, "IV_VER=server\n")
+	for split := len(mandatory) + 1; split < len(withOptional); split++ {
+		if _, complete, err := serverKeyMethod2RecordLength(withOptional[:split]); err != nil {
+			t.Fatalf("optional split %d returned an error: %v", split, err)
+		} else if complete {
+			t.Fatalf("optional split %d reported a complete record", split)
+		}
+	}
+
+	combined := append(append([]byte(nil), withOptional...), control...)
 	recordLength, complete, err := serverKeyMethod2RecordLength(combined)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !complete || recordLength != len(packet) {
-		t.Fatalf("record length = %d, complete = %t; want %d, true", recordLength, complete, len(packet))
+	if !complete || recordLength != len(withOptional) {
+		t.Fatalf("record length = %d, complete = %t; want %d, true", recordLength, complete, len(withOptional))
 	}
+}
+
+func testServerKeyMethod2Packet(options string) []byte {
+	packet := binary.BigEndian.AppendUint32(nil, 0)
+	packet = append(packet, KeyMethod2)
+	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	return appendOpenVPNString(packet, options)
 }
