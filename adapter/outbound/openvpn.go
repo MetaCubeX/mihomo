@@ -410,7 +410,9 @@ func (o *OpenVPN) startPacketLoops() {
 		for runCtx.Err() == nil {
 			packet, err := client.ReadIPPacket(runCtx)
 			if err != nil {
-				if runCtx.Err() == nil && (errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed)) {
+				if clientErr := client.Err(); clientErr != nil {
+					log.Warnln("[OpenVPN](%s) OpenVPN link failed: %v", o.name, clientErr)
+				} else if runCtx.Err() == nil && (errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed)) {
 					log.Warnln("[OpenVPN](%s) OpenVPN link closed while reading packet: %v", o.name, err)
 				} else if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, os.ErrClosed) {
 					log.Warnln("[OpenVPN](%s) error reading packet from OpenVPN link: %v", o.name, err)

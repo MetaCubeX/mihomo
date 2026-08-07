@@ -81,16 +81,44 @@ func (c *ControlChannel) SendReset(ctx context.Context) error {
 // previous key epoch; the message counters are reset for the new epoch.
 func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
 	c.mu.Lock()
-	newKeyID := c.keyID ^ 1 // toggle 0<->1
-	c.keyID = newKeyID
-	c.sendMessage = 0
-	c.recvMessage = 0
-	c.ackPending = nil
-	c.pending = make(map[uint32]*ControlPacket)
-	c.recvPending = make(map[uint32]*ControlPacket)
+	c.startKeyEpochLocked(nextKeyID(c.keyID), 0, nil)
 	c.mu.Unlock()
 	_, err := c.Send(ctx, PControlSoftResetV1, nil)
 	return err
+}
+
+// respondSoftReset starts the key epoch requested by the peer and sends the
+// matching soft reset response. The peer's reset is the first reliable
+// message in the new epoch, so acknowledge it in the response.
+func (c *ControlChannel) respondSoftReset(ctx context.Context, reset *ControlPacket) error {
+	if reset == nil || reset.Opcode != PControlSoftResetV1 {
+		return errors.New("invalid openvpn soft reset packet")
+	}
+
+	c.mu.Lock()
+	if c.remote == (SessionID{}) || reset.LocalSession != c.remote {
+		c.mu.Unlock()
+		return errors.New("openvpn soft reset has an unexpected session id")
+	}
+	expectedKeyID := nextKeyID(c.keyID)
+	if reset.KeyID != expectedKeyID {
+		c.mu.Unlock()
+		return fmt.Errorf("unexpected openvpn soft reset key id %d, expected %d", reset.KeyID, expectedKeyID)
+	}
+	c.startKeyEpochLocked(reset.KeyID, reset.MessageID+1, []uint32{reset.MessageID})
+	c.mu.Unlock()
+
+	_, err := c.Send(ctx, PControlSoftResetV1, nil)
+	return err
+}
+
+func (c *ControlChannel) startKeyEpochLocked(keyID uint8, recvMessage uint32, ackPending []uint32) {
+	c.keyID = keyID
+	c.sendMessage = 0
+	c.recvMessage = recvMessage
+	c.ackPending = ackPending
+	c.pending = make(map[uint32]*ControlPacket)
+	c.recvPending = make(map[uint32]*ControlPacket)
 }
 
 func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte) (uint32, error) {
@@ -142,17 +170,17 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 	return c.read(ctx, false)
 }
 
-func (c *ControlChannel) waitForSoftReset(ctx context.Context) error {
+func (c *ControlChannel) waitForSoftReset(ctx context.Context) (*ControlPacket, error) {
 	for {
 		packet, err := c.read(ctx, true)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if packet.Opcode == PControlSoftResetV1 {
-			return nil
+			return packet, nil
 		}
 		if err := c.SendAck(ctx); err != nil {
-			return err
+			return nil, err
 		}
 	}
 }
@@ -202,6 +230,14 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			}
 			if softReset {
 				return packet, nil
+			}
+		} else {
+			c.mu.Lock()
+			remote := c.remote
+			keyID := c.keyID
+			c.mu.Unlock()
+			if remote != (SessionID{}) && (packet.LocalSession != remote || packet.KeyID != keyID) {
+				continue
 			}
 		}
 
@@ -255,12 +291,18 @@ func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softR
 		return false, false
 	}
 	if packet.Opcode == PControlSoftResetV1 {
-		// Accept soft resets that carry a different key ID than the current
-		// active key epoch. This handles both server-initiated rekeys (new
-		// key ID) and the symmetric toggle between key ID 0 and 1.
-		return packet.KeyID != c.keyID, packet.KeyID != c.keyID
+		expectedKeyID := nextKeyID(c.keyID)
+		return packet.KeyID == expectedKeyID, packet.KeyID == expectedKeyID
 	}
 	return false, packet.KeyID == c.keyID
+}
+
+func nextKeyID(keyID uint8) uint8 {
+	next := (keyID + 1) & KeyIDMask
+	if next == 0 {
+		next = 1
+	}
+	return next
 }
 
 func (c *ControlChannel) PendingMessages() int {
@@ -271,6 +313,10 @@ func (c *ControlChannel) PendingMessages() int {
 
 func (c *ControlChannel) RetransmitPending(ctx context.Context) error {
 	c.mu.Lock()
+	if len(c.pending) == 0 {
+		c.mu.Unlock()
+		return nil
+	}
 	packets := make([]*ControlPacket, 0, len(c.pending))
 	for _, packet := range c.pending {
 		cp := *packet
@@ -366,6 +412,16 @@ type ControlConn struct {
 	mu      sync.Mutex
 }
 
+// softResetReadError transfers a peer-initiated key epoch from the packet
+// layer to the TLS watcher without consuming or acknowledging the reset.
+type softResetReadError struct {
+	packet *ControlPacket
+}
+
+func (e *softResetReadError) Error() string {
+	return "OpenVPN peer requested a new key epoch"
+}
+
 func NewControlConn(channel *ControlChannel) *ControlConn {
 	return &ControlConn{channel: channel}
 }
@@ -385,9 +441,12 @@ func (c *ControlConn) Read(b []byte) (int, error) {
 	c.mu.Unlock()
 
 	for {
-		packet, err := c.channel.Read(context.Background())
+		packet, err := c.channel.read(context.Background(), true)
 		if err != nil {
 			return 0, err
+		}
+		if packet.Opcode == PControlSoftResetV1 {
+			return 0, &softResetReadError{packet: packet}
 		}
 		if packet.Opcode != PControlV1 {
 			if err := c.channel.SendAck(context.Background()); err != nil {

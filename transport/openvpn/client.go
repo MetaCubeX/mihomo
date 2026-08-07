@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"strings"
 	"sync"
@@ -30,10 +29,11 @@ type Client struct {
 	config *ClientConfig
 	mux    *PacketMux
 
-	control *ControlChannel
-	tlsConn *tls.Conn
-	data    *DataChannel
-	push    *PushReply
+	control   *ControlChannel
+	tlsConn   *tls.Conn
+	data      *DataChannel
+	dataByKey map[uint8]*DataChannel
+	push      *PushReply
 
 	// negotiatedCipher is the data channel cipher selected during the most
 	// recent key exchange.
@@ -42,6 +42,19 @@ type Client struct {
 	// dataLock protects c.data during TLS renegotiation (rekey), where the
 	// DataChannel is atomically replaced.
 	dataLock sync.RWMutex
+	tlsLock  sync.Mutex
+	closed   bool
+	authLock sync.RWMutex
+
+	authUsername string
+	authPassword string
+
+	// controlReadBuf is owned by Handshake until watchControl starts and by
+	// that single watcher afterward. It carries partial TLS control messages.
+	controlReadBuf []byte
+
+	errLock sync.Mutex
+	runErr  error
 
 	runCtx context.Context
 	cancel context.CancelFunc
@@ -87,12 +100,15 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	mux := NewPacketMux(io)
 	go mux.Run(runCtx)
 	client := &Client{
-		config:   config,
-		mux:      mux,
-		control:  NewControlChannel(mux, crypt, local),
-		runCtx:   runCtx,
-		cancel:   cancel,
-		writeSem: semaphore.NewWeighted(1),
+		config:       config,
+		mux:          mux,
+		control:      NewControlChannel(mux, crypt, local),
+		dataByKey:    make(map[uint8]*DataChannel, 2),
+		runCtx:       runCtx,
+		cancel:       cancel,
+		writeSem:     semaphore.NewWeighted(1),
+		authUsername: strings.TrimSpace(config.Username),
+		authPassword: config.Password,
 	}
 	client.markSend()
 	client.markReceive()
@@ -109,25 +125,31 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	if err := c.waitServerReset(ctx); err != nil {
 		return nil, err
 	}
+	stopRetransmit := c.startControlRetransmit(ctx)
+	defer stopRetransmit()
 
 	tlsConfig, err := c.tlsConfig()
 	if err != nil {
 		return nil, err
 	}
 	controlConn := NewControlConn(c.control)
-	c.tlsConn = tls.Client(controlConn, tlsConfig)
+	tlsConn := tls.Client(controlConn, tlsConfig)
 	if deadline, ok := ctx.Deadline(); ok {
-		_ = c.tlsConn.SetDeadline(deadline)
+		_ = tlsConn.SetDeadline(deadline)
 	}
-	if err := c.tlsConn.HandshakeContext(ctx); err != nil {
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return nil, fmt.Errorf("openvpn tls handshake: %w", err)
 	}
 
-	push, err := c.doKeyExchange(ctx)
+	push, err := c.doKeyExchange(ctx, tlsConn, 0, true)
 	if err != nil {
 		return nil, err
 	}
-	_ = c.tlsConn.SetDeadline(time.Time{})
+	_ = tlsConn.SetDeadline(time.Time{})
+	if !c.setTLSConn(tlsConn) {
+		_ = tlsConn.Close()
+		return nil, net.ErrClosed
+	}
 	go c.watchControl()
 	return push, nil
 }
@@ -136,17 +158,18 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 // control channel and creates a fresh data channel. It is used both for the
 // initial handshake and for subsequent TLS renegotiations (rekeys).
 // On success, c.data is atomically replaced with the new DataChannel.
-func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
+func (c *Client) doKeyExchange(ctx context.Context, tlsConn *tls.Conn, keyID uint8, requestPush bool) (*PushReply, error) {
 	primaryCipher := c.config.Cipher
 	if len(c.config.DataCiphers) > 0 {
 		primaryCipher = normalizeCipher(c.config.DataCiphers[0])
 	}
 
+	username, password := c.keyMethodCredentials()
 	clientRecord, err := NewClientKeyMethod2Record(
 		InstallScriptOptionsString(c.config.Proto, primaryCipher, c.config.Auth, c.config.CompLZO),
 		InstallScriptPeerInfo(primaryCipher, c.config.DataCiphers, c.config.CompLZO, c.config.PeerInfo),
-		strings.TrimSpace(c.config.Username),
-		c.config.Password,
+		username,
+		password,
 	)
 	if err != nil {
 		return nil, err
@@ -155,10 +178,10 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := c.tlsConn.Write(clientBytes); err != nil {
+	if _, err := tlsConn.Write(clientBytes); err != nil {
 		return nil, fmt.Errorf("write key method 2 client record: %w", err)
 	}
-	serverRecord, err := c.readServerKeyMethod(ctx)
+	serverRecord, pendingControl, err := c.readServerKeyMethod(ctx, tlsConn)
 	if err != nil {
 		return nil, err
 	}
@@ -173,39 +196,75 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 		return nil, fmt.Errorf("derive data channel keys: %w", err)
 	}
 
-	if _, err := c.tlsConn.Write([]byte(PushRequest + "\x00")); err != nil {
-		return nil, fmt.Errorf("write push request: %w", err)
+	push := c.push
+	negotiatedCipher := c.negotiatedCipher
+	if requestPush {
+		if _, err := tlsConn.Write([]byte(PushRequest + "\x00")); err != nil {
+			return nil, fmt.Errorf("write push request: %w", err)
+		}
+		push, pendingControl, err = c.readPushReply(ctx, tlsConn, pendingControl)
+		if err != nil {
+			return nil, err
+		}
+		negotiatedCipher, err = c.config.NegotiateCipher(push.DataCiphers, push.Cipher)
+		if err != nil {
+			return nil, fmt.Errorf("negotiate data cipher: %w", err)
+		}
+		c.push = push
+		c.negotiatedCipher = negotiatedCipher
+		c.installPushedAuthToken(push)
+	} else if push == nil || negotiatedCipher == "" {
+		return nil, errors.New("openvpn rekey started before initial data-channel negotiation")
 	}
-	push, err := c.readPushReply(ctx)
-	if err != nil {
+	if err := c.consumeTLSControlBytes(pendingControl); err != nil {
 		return nil, err
 	}
-	c.push = push
-
-	// Negotiate the data channel cipher based on the push reply.
-	negotiatedCipher, err := c.config.NegotiateCipher(push.DataCiphers, push.Cipher)
-	if err != nil {
-		return nil, fmt.Errorf("negotiate data cipher: %w", err)
-	}
-	c.negotiatedCipher = negotiatedCipher
 
 	// Slice the derived keys to the negotiated cipher's key length.
 	cipherKeyLen := CipherKeyLength(negotiatedCipher)
 	keys.SendCipherKey = keys.SendCipherKey[:cipherKeyLen]
 	keys.RecvCipherKey = keys.RecvCipherKey[:cipherKeyLen]
 
-	newData, err := NewDataChannel(keys, negotiatedCipher, c.config.Auth, push.PeerID)
+	newData, err := newDataChannel(keys, negotiatedCipher, c.config.Auth, push.PeerID, keyID)
 	if err != nil {
 		return nil, err
 	}
-	c.dataLock.Lock()
-	oldData := c.data
-	c.data = newData
-	c.dataLock.Unlock()
-	_ = oldData
+	c.installDataChannel(newData)
 	c.markSend()
 	c.markReceive()
 	return push, nil
+}
+
+func (c *Client) keyMethodCredentials() (username, password string) {
+	c.authLock.RLock()
+	defer c.authLock.RUnlock()
+	return c.authUsername, c.authPassword
+}
+
+func (c *Client) installPushedAuthToken(push *PushReply) bool {
+	if push == nil || push.AuthToken == "" {
+		return false
+	}
+	c.authLock.Lock()
+	defer c.authLock.Unlock()
+	if push.AuthTokenUser != "" {
+		c.authUsername = push.AuthTokenUser
+	}
+	c.authPassword = push.AuthToken
+	return true
+}
+
+func (c *Client) installDataChannel(newData *DataChannel) {
+	c.dataLock.Lock()
+	defer c.dataLock.Unlock()
+
+	dataByKey := make(map[uint8]*DataChannel, 2)
+	if c.data != nil {
+		dataByKey[c.data.keyID] = c.data
+	}
+	dataByKey[newData.keyID] = newData
+	c.data = newData
+	c.dataByKey = dataByKey
 }
 
 func (c *Client) WriteIPPacket(ctx context.Context, packet []byte) error {
@@ -256,11 +315,12 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 		}
 		// Re-acquire the data channel after reading, since a rekey may have
 		// swapped c.data while ReadDataPacket was blocked.
+		_, keyID := parseOpcodeKeyID(packet[0])
 		c.dataLock.RLock()
-		data := c.data
+		data := c.dataByKey[keyID]
 		c.dataLock.RUnlock()
 		if data == nil {
-			return nil, errors.New("openvpn data channel is not ready")
+			continue
 		}
 		plain, err := data.Decrypt(packet)
 		if err != nil {
@@ -283,49 +343,181 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 // then atomically swaps in a fresh DataChannel. If renegotiation fails or
 // the control channel stops, the client is terminated.
 func (c *Client) watchControl() {
+	readBuffer := make([]byte, 4096)
 	for {
-		err := c.control.waitForSoftReset(c.runCtx)
-		if err != nil {
-			c.cancel()
-			_ = c.mux.Close()
+		tlsConn := c.currentTLSConn()
+		if tlsConn == nil {
+			if c.runCtx.Err() == nil {
+				c.fail(errors.New("watch OpenVPN control channel: missing TLS connection"))
+			}
 			return
 		}
-		if err := c.renegotiate(); err != nil {
-			c.cancel()
-			_ = c.mux.Close()
-			return
+
+		n, err := tlsConn.Read(readBuffer)
+		if n > 0 {
+			if controlErr := c.consumeTLSControlBytes(readBuffer[:n]); controlErr != nil {
+				c.fail(controlErr)
+				return
+			}
+		}
+		if err == nil {
+			continue
+		}
+
+		var resetErr *softResetReadError
+		if errors.As(err, &resetErr) {
+			c.controlReadBuf = nil
+			if err := c.renegotiate(resetErr.packet); err != nil {
+				if c.runCtx.Err() == nil {
+					c.fail(err)
+				}
+				return
+			}
+			continue
+		}
+		if c.runCtx.Err() == nil {
+			c.fail(fmt.Errorf("watch OpenVPN TLS control channel: %w", err))
+		}
+		return
+	}
+}
+
+func (c *Client) currentTLSConn() *tls.Conn {
+	c.tlsLock.Lock()
+	defer c.tlsLock.Unlock()
+	return c.tlsConn
+}
+
+func (c *Client) consumeTLSControlBytes(data []byte) error {
+	c.controlReadBuf = append(c.controlReadBuf, data...)
+	for {
+		end := bytes.IndexByte(c.controlReadBuf, 0)
+		if end < 0 {
+			if len(c.controlReadBuf) > 64*1024 {
+				return errors.New("OpenVPN TLS control message exceeds 64 KiB")
+			}
+			return nil
+		}
+		message := string(c.controlReadBuf[:end])
+		c.controlReadBuf = c.controlReadBuf[end+1:]
+		if err := c.handleTLSControlMessage(message); err != nil {
+			return err
 		}
 	}
 }
 
-// errRenegotiateNoTLS is returned when renegotiate() is called before a TLS
-// connection has been established.
-var errRenegotiateNoTLS = errors.New("cannot renegotiate: tls connection not established")
+func (c *Client) handleTLSControlMessage(message string) error {
+	message = strings.TrimSpace(message)
+	switch {
+	case strings.HasPrefix(message, "PUSH_REPLY"):
+		push, err := parsePushReply(message, false)
+		if err != nil {
+			return fmt.Errorf("parse OpenVPN control push: %w", err)
+		}
+		c.installPushedAuthToken(push)
+		return nil
+	case strings.HasPrefix(message, "AUTH_FAILED"):
+		return errors.New("OpenVPN server rejected authentication")
+	default:
+		return nil
+	}
+}
 
-// renegotiate performs a single TLS renegotiation cycle:
+// renegotiate performs a single OpenVPN key-epoch transition:
 // 1. Send our own soft reset to acknowledge the server's rekey request
-// 2. Renegotiate the TLS session on the existing tlsConn
+// 2. Create and handshake a fresh TLS session for the new key epoch
 // 3. Exchange fresh key method 2 records and derive new data channel keys
 // 4. Atomically replace c.data with the new DataChannel
-func (c *Client) renegotiate() error {
-	if c.tlsConn == nil {
-		return errRenegotiateNoTLS
-	}
+func (c *Client) renegotiate(reset *ControlPacket) error {
 	renegCtx, cancel := context.WithTimeout(c.runCtx, renegotiateTimeout)
 	defer cancel()
+	stopRetransmit := c.startControlRetransmit(renegCtx)
+	defer stopRetransmit()
 
-	if err := c.control.SendSoftReset(renegCtx); err != nil {
-		return fmt.Errorf("send soft reset: %w", err)
+	if err := c.control.respondSoftReset(renegCtx, reset); err != nil {
+		return fmt.Errorf("respond to OpenVPN soft reset: %w", err)
 	}
 
-	if err := c.tlsConn.HandshakeContext(renegCtx); err != nil {
-		return fmt.Errorf("tls renegotiation: %w", err)
+	tlsConfig, err := c.tlsConfig()
+	if err != nil {
+		return fmt.Errorf("configure OpenVPN rekey TLS session: %w", err)
+	}
+	tlsConn := tls.Client(NewControlConn(c.control), tlsConfig)
+	if deadline, ok := renegCtx.Deadline(); ok {
+		_ = tlsConn.SetDeadline(deadline)
+	}
+	if err := tlsConn.HandshakeContext(renegCtx); err != nil {
+		return fmt.Errorf("handshake OpenVPN rekey TLS session: %w", err)
 	}
 
-	if _, err := c.doKeyExchange(renegCtx); err != nil {
-		return fmt.Errorf("rekey exchange: %w", err)
+	if _, err := c.doKeyExchange(renegCtx, tlsConn, reset.KeyID, false); err != nil {
+		return fmt.Errorf("exchange OpenVPN rekey material: %w", err)
+	}
+	_ = tlsConn.SetDeadline(time.Time{})
+	if !c.setTLSConn(tlsConn) {
+		_ = tlsConn.Close()
+		return net.ErrClosed
 	}
 	return nil
+}
+
+func (c *Client) startControlRetransmit(ctx context.Context) func() {
+	if c.config.Proto != ProtoUDP {
+		return func() {}
+	}
+	retransmitCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(ControlRetransmitDelay)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-retransmitCtx.Done():
+				return
+			case <-ticker.C:
+				writeCtx, cancelWrite := context.WithTimeout(retransmitCtx, ControlRetransmitDelay)
+				_ = c.control.RetransmitPending(writeCtx)
+				cancelWrite()
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
+func (c *Client) setTLSConn(tlsConn *tls.Conn) bool {
+	c.tlsLock.Lock()
+	defer c.tlsLock.Unlock()
+	if c.closed {
+		return false
+	}
+	c.tlsConn = tlsConn
+	return true
+}
+
+func (c *Client) fail(err error) {
+	c.tlsLock.Lock()
+	if c.closed {
+		c.tlsLock.Unlock()
+		return
+	}
+	c.errLock.Lock()
+	if c.runErr == nil {
+		c.runErr = err
+	}
+	c.errLock.Unlock()
+	c.tlsLock.Unlock()
+	c.cancel()
+	_ = c.mux.Close()
+}
+
+func (c *Client) Err() error {
+	c.errLock.Lock()
+	defer c.errLock.Unlock()
+	return c.runErr
 }
 
 func (c *Client) SinceSend() time.Duration {
@@ -350,11 +542,16 @@ func (c *Client) markReceive() {
 var start = time.Now().Add(-time.Hour)
 
 func (c *Client) Close() error {
+	c.tlsLock.Lock()
+	c.closed = true
+	tlsConn := c.tlsConn
+	c.tlsConn = nil
+	c.tlsLock.Unlock()
 	if c.cancel != nil {
 		c.cancel()
 	}
-	if c.tlsConn != nil {
-		_ = c.tlsConn.Close()
+	if tlsConn != nil {
+		_ = tlsConn.Close()
 	}
 	if c.mux != nil {
 		return c.mux.Close()
@@ -391,54 +588,60 @@ func (c *Client) waitServerReset(ctx context.Context) error {
 	}
 }
 
-func (c *Client) readServerKeyMethod(ctx context.Context) (*KeyMethod2Record, error) {
+func (c *Client) readServerKeyMethod(ctx context.Context, tlsConn *tls.Conn) (*KeyMethod2Record, []byte, error) {
 	var buf []byte
 	tmp := make([]byte, 4096)
 	for {
 		if deadline, ok := ctx.Deadline(); ok {
-			_ = c.tlsConn.SetReadDeadline(deadline)
+			_ = tlsConn.SetReadDeadline(deadline)
 		}
-		n, err := c.tlsConn.Read(tmp)
+		n, err := tlsConn.Read(tmp)
 		if err != nil {
-			return nil, fmt.Errorf("read key method 2 server record: %w", err)
+			return nil, nil, fmt.Errorf("read key method 2 server record: %w", err)
 		}
 		buf = append(buf, tmp[:n]...)
-		record, err := ParseServerKeyMethod2Record(buf)
-		if err == nil {
-			return record, nil
+		recordLength, complete, err := serverKeyMethod2RecordLength(buf)
+		if err != nil {
+			return nil, nil, err
 		}
-		if !strings.Contains(err.Error(), "truncated") && !errors.Is(err, ioStringEOF) {
-			return nil, err
+		if complete {
+			record, err := ParseServerKeyMethod2Record(buf[:recordLength])
+			if err != nil {
+				return nil, nil, err
+			}
+			return record, cloneBytes(buf[recordLength:]), nil
 		}
 	}
 }
 
-func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
-	var buf []byte
+func (c *Client) readPushReply(ctx context.Context, tlsConn *tls.Conn, pending []byte) (*PushReply, []byte, error) {
+	message, remaining, err := readTLSControlMessage(ctx, tlsConn, pending)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read push reply: %w", err)
+	}
+	push, err := ParsePushReply(message)
+	if err != nil {
+		return nil, nil, err
+	}
+	return push, remaining, nil
+}
+
+func readTLSControlMessage(ctx context.Context, tlsConn *tls.Conn, pending []byte) (string, []byte, error) {
+	buf := cloneBytes(pending)
 	tmp := make([]byte, 4096)
 	for {
-		if deadline, ok := ctx.Deadline(); ok {
-			_ = c.tlsConn.SetReadDeadline(deadline)
+		if end := bytes.IndexByte(buf, 0); end >= 0 {
+			return string(buf[:end]), cloneBytes(buf[end+1:]), nil
 		}
-		n, err := c.tlsConn.Read(tmp)
+		if deadline, ok := ctx.Deadline(); ok {
+			_ = tlsConn.SetReadDeadline(deadline)
+		}
+		n, err := tlsConn.Read(tmp)
 		if err != nil {
-			if errors.Is(err, io.EOF) && len(buf) > 0 {
-				break
-			}
-			return nil, fmt.Errorf("read push reply: %w", err)
+			return "", nil, err
 		}
 		buf = append(buf, tmp[:n]...)
-		if bytes.Contains(buf, []byte("\x00")) || strings.Contains(string(buf), "PUSH_REPLY") {
-			msg := string(buf)
-			if idx := strings.IndexByte(msg, 0); idx >= 0 {
-				msg = msg[:idx]
-			}
-			if reply, err := ParsePushReply(msg); err == nil {
-				return reply, nil
-			}
-		}
 	}
-	return nil, ctx.Err()
 }
 
 func (c *Client) tlsConfig() (*tls.Config, error) {
@@ -464,9 +667,6 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	cfg := &tls.Config{
 		InsecureSkipVerify: true,
 		VerifyConnection:   verify,
-		// Allow the server to initiate TLS renegotiation (rekey). OpenVPN
-		// servers rekey the control channel at regular intervals (default 1h).
-		Renegotiation: tls.RenegotiateFreelyAsClient,
 	}
 	certPEM := bytes.TrimSpace(c.config.Cert)
 	keyPEM := bytes.TrimSpace(c.config.Key)

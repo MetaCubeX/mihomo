@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/netip"
 	"strconv"
@@ -17,6 +18,11 @@ type PushReply struct {
 	PeerID    uint32
 	Redirect  bool
 	BlockIPv6 bool
+	AuthToken string
+
+	// AuthTokenUser is the decoded username associated with AuthToken. OpenVPN
+	// transports auth-token-user as base64 in PUSH_REPLY messages.
+	AuthTokenUser string
 
 	// DataCiphers is the list of data channel ciphers pushed by the server
 	// via the "data-ciphers" option (OpenVPN 2.5+).
@@ -28,6 +34,10 @@ type PushReply struct {
 }
 
 func ParsePushReply(message string) (*PushReply, error) {
+	return parsePushReply(message, true)
+}
+
+func parsePushReply(message string, requireIfconfig bool) (*PushReply, error) {
 	message = strings.TrimRight(message, "\x00")
 	if !strings.HasPrefix(message, "PUSH_REPLY") {
 		return nil, fmt.Errorf("unexpected openvpn push message %q", message)
@@ -92,6 +102,18 @@ func ParsePushReply(message string) (*PushReply, error) {
 			reply.Redirect = true
 		case "block-ipv6":
 			reply.BlockIPv6 = true
+		case "auth-token":
+			if len(fields) >= 2 {
+				reply.AuthToken = fields[1]
+			}
+		case "auth-token-user":
+			if len(fields) >= 2 {
+				username, err := decodeAuthTokenUser(fields[1])
+				if err != nil {
+					return nil, fmt.Errorf("decode pushed auth-token-user: %w", err)
+				}
+				reply.AuthTokenUser = username
+			}
 		case "data-ciphers", "ncp-ciphers":
 			// "data-ciphers" (OpenVPN 2.5+) or "ncp-ciphers" (2.4 legacy name).
 			// Value is a colon-separated list of cipher names.
@@ -110,10 +132,24 @@ func ParsePushReply(message string) (*PushReply, error) {
 			}
 		}
 	}
-	if len(reply.Prefixes) == 0 {
+	if requireIfconfig && len(reply.Prefixes) == 0 {
 		return nil, fmt.Errorf("openvpn push reply missing ifconfig address")
 	}
 	return reply, nil
+}
+
+func decodeAuthTokenUser(encoded string) (string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(encoded)
+		if err != nil {
+			return "", err
+		}
+	}
+	if len(decoded) == 0 {
+		return "", fmt.Errorf("decoded username is empty")
+	}
+	return string(decoded), nil
 }
 
 func splitPushOptions(message string) []string {

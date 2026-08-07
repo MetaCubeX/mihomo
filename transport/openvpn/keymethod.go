@@ -88,15 +88,14 @@ func (r *KeyMethod2Record) MarshalClient() ([]byte, error) {
 }
 
 func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
-	if len(packet) < 4+1+keySourceRandomSize*2 {
-		return nil, errors.New("key method 2 packet too short")
+	recordLength, complete, err := serverKeyMethod2RecordLength(packet)
+	if err != nil {
+		return nil, err
 	}
-	if binary.BigEndian.Uint32(packet[:4]) != 0 {
-		return nil, errors.New("invalid key method 2 prefix")
+	if !complete {
+		return nil, ioStringEOF
 	}
-	if packet[4]&0x0f != KeyMethod2 {
-		return nil, fmt.Errorf("unsupported key method %d", packet[4])
-	}
+	packet = packet[:recordLength]
 	offset := 5
 	record := &KeyMethod2Record{}
 	copy(record.Sources.Server.Random1[:], packet[offset:offset+keySourceRandomSize])
@@ -104,15 +103,49 @@ func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
 	copy(record.Sources.Server.Random2[:], packet[offset:offset+keySourceRandomSize])
 	offset += keySourceRandomSize
 
-	var err error
 	record.Options, offset, err = readOpenVPNString(packet, offset)
 	if err != nil {
 		return nil, fmt.Errorf("read options: %w", err)
 	}
-	record.Username, offset, _ = readOpenVPNString(packet, offset)
-	record.Password, offset, _ = readOpenVPNString(packet, offset)
-	record.PeerInfo, _, _ = readOpenVPNString(packet, offset)
+	record.Username, offset, err = readOpenVPNString(packet, offset)
+	if err != nil {
+		return nil, fmt.Errorf("read username: %w", err)
+	}
+	record.Password, offset, err = readOpenVPNString(packet, offset)
+	if err != nil {
+		return nil, fmt.Errorf("read password: %w", err)
+	}
+	record.PeerInfo, _, err = readOpenVPNString(packet, offset)
+	if err != nil {
+		return nil, fmt.Errorf("read peer info: %w", err)
+	}
 	return record, nil
+}
+
+func serverKeyMethod2RecordLength(packet []byte) (int, bool, error) {
+	const fixedLength = 4 + 1 + 2*keySourceRandomSize
+	if len(packet) < fixedLength {
+		return 0, false, nil
+	}
+	if binary.BigEndian.Uint32(packet[:4]) != 0 {
+		return 0, false, errors.New("invalid key method 2 prefix")
+	}
+	if packet[4]&0x0f != KeyMethod2 {
+		return 0, false, fmt.Errorf("unsupported key method %d", packet[4])
+	}
+	offset := fixedLength
+	for i := 0; i < 4; i++ {
+		if len(packet) < offset+2 {
+			return 0, false, nil
+		}
+		length := int(binary.BigEndian.Uint16(packet[offset : offset+2]))
+		offset += 2
+		if len(packet) < offset+length {
+			return 0, false, nil
+		}
+		offset += length
+	}
+	return offset, true, nil
 }
 
 func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID, cipherKeyLen int) (*KeyMaterial, error) {
