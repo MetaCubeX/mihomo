@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1.6
+
+FROM mirror-docker.raah.ir/golang@sha256:111d79159b2326f7e80c4a4706e1ba166acb0e2611df853955f3621828cd49e8 AS build
+
+ENV GOPROXY=https://mirror.raah.ir/artifactory/api/go/go,direct
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1 \
+    go build -tags with_gvisor -trimpath \
+    -ldflags='-X github.com/metacubex/mihomo/constant.Version=openvpn-rekey-test -w -s -buildid=' \
+    -o /out/mihomo .
+
+FROM mirror-docker.raah.ir/metacubex/mihomo@sha256:5e7bcc5e7a866afcc8b007ef827c9ba773f2f34b6d7311b6d39ed1751f37cfd5
+
+COPY --from=build /out/mihomo /mihomo
+
+ENTRYPOINT ["/mihomo"]

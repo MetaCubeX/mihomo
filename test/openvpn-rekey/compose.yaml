@@ -1,0 +1,153 @@
+name: mihomo-openvpn-rekey
+
+services:
+  bootstrap:
+    image: mihomo-openvpn-rekey-server:local
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: bootstrap
+    environment:
+      # Set false to reproduce the expiring auth-token disconnect.
+      STATIC_DISABLE_AUTH_TOKEN: ${STATIC_DISABLE_AUTH_TOKEN:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /state/static/config.yaml && test -s /state/token/config.yaml"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+    volumes:
+      - test-state:/state
+
+  openvpn-static:
+    image: mihomo-openvpn-rekey-server:local
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: server
+    environment:
+      AUTH_GEN_TOKEN: ${STATIC_AUTH_GEN_TOKEN-10}
+      AUTH_MODE: static
+      HAND_WINDOW: ${HAND_WINDOW:-5}
+      RENEG_SEC: ${RENEG_SEC:-10}
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    volumes:
+      - test-state:/state:ro
+    networks:
+      control:
+        ipv4_address: 172.30.0.2
+      outside:
+        ipv4_address: 172.31.0.2
+
+  openvpn-token:
+    image: mihomo-openvpn-rekey-server:local
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: server
+    environment:
+      AUTH_GEN_TOKEN: ${TOKEN_AUTH_GEN_TOKEN:-3600}
+      AUTH_MODE: once
+      HAND_WINDOW: ${HAND_WINDOW:-5}
+      RENEG_SEC: ${RENEG_SEC:-10}
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    volumes:
+      - test-state:/state:ro
+    networks:
+      control:
+        ipv4_address: 172.30.0.5
+      outside:
+        ipv4_address: 172.31.0.3
+
+  origin:
+    image: mirror-docker.raah.ir/nginx@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+    networks:
+      outside:
+        ipv4_address: 172.31.0.10
+
+  mihomo-static:
+    image: mihomo-openvpn-rekey-client:local
+    build:
+      context: ../..
+      dockerfile: test/openvpn-rekey/Dockerfile.mihomo
+    command: ["-d", "/state/static"]
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+      openvpn-static:
+        condition: service_started
+    volumes:
+      - test-state:/state
+    networks:
+      control:
+        ipv4_address: 172.30.0.3
+
+  mihomo-token:
+    image: mihomo-openvpn-rekey-client:local
+    build:
+      context: ../..
+      dockerfile: test/openvpn-rekey/Dockerfile.mihomo
+    command: ["-d", "/state/token"]
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+      openvpn-token:
+        condition: service_started
+    volumes:
+      - test-state:/state
+    networks:
+      control:
+        ipv4_address: 172.30.0.6
+
+  probe:
+    image: mihomo-openvpn-rekey-server:local
+    command: probe
+    environment:
+      PROBE_ATTEMPTS: ${PROBE_ATTEMPTS:-1400}
+      PROBE_DELAY: ${PROBE_DELAY:-0.05}
+      PROBE_STARTUP_ATTEMPTS: ${PROBE_STARTUP_ATTEMPTS:-30}
+      PROBE_TIMEOUT: ${PROBE_TIMEOUT:-0.25}
+    depends_on:
+      mihomo-static:
+        condition: service_started
+      mihomo-token:
+        condition: service_started
+      origin:
+        condition: service_healthy
+    networks:
+      control:
+        ipv4_address: 172.30.0.4
+
+volumes:
+  test-state:
+
+networks:
+  control:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  outside:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24

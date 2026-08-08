@@ -245,7 +245,7 @@ func (c *Client) keyMethodCredentials() (username, password string) {
 }
 
 func (c *Client) installPushedAuthToken(push *PushReply) bool {
-	if push == nil || push.AuthToken == "" {
+	if c.config.DisableAuthToken || push == nil || push.AuthToken == "" {
 		return false
 	}
 	c.authLock.Lock()

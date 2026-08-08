@@ -20,33 +20,38 @@ import (
 )
 
 func TestClientCompletesSequentialSoftResetEpochs(t *testing.T) {
-	testClientCompletesSequentialSoftResetEpochs(t, false, false, false)
+	testClientCompletesSequentialSoftResetEpochs(t, false, false, false, false)
 }
 
 func TestClientUsesFixedAuthTokenAcrossSoftResetEpochs(t *testing.T) {
-	testClientCompletesSequentialSoftResetEpochs(t, true, false, false)
+	testClientCompletesSequentialSoftResetEpochs(t, true, false, false, false)
 }
 
 func TestClientUsesRefreshedAuthTokenAcrossSoftResetEpochs(t *testing.T) {
-	testClientCompletesSequentialSoftResetEpochs(t, true, true, false)
+	testClientCompletesSequentialSoftResetEpochs(t, true, true, false, false)
 }
 
 func TestClientRetransmitsAuthTokenRefreshRequest(t *testing.T) {
-	testClientCompletesSequentialSoftResetEpochs(t, true, true, true)
+	testClientCompletesSequentialSoftResetEpochs(t, true, true, true, false)
 }
 
-func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, refreshAuthToken, dropRefreshRequest bool) {
+func TestClientKeepsConfiguredCredentialsWhenAuthTokenIsDisabled(t *testing.T) {
+	testClientCompletesSequentialSoftResetEpochs(t, false, false, false, true)
+}
+
+func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, refreshAuthToken, dropRefreshRequest, disableAuthToken bool) {
 	serverCert, caPEM := testRekeyServerCertificate(t)
 	config := &ClientConfig{
-		RemoteHost: "127.0.0.1",
-		RemotePort: 1194,
-		Proto:      ProtoUDP,
-		Dev:        "tun",
-		Cipher:     CipherAES128CBC,
-		Auth:       AuthSHA1,
-		CA:         caPEM,
-		Username:   "testuser",
-		Password:   "testpass",
+		RemoteHost:       "127.0.0.1",
+		RemotePort:       1194,
+		Proto:            ProtoUDP,
+		Dev:              "tun",
+		Cipher:           CipherAES128CBC,
+		Auth:             AuthSHA1,
+		CA:               caPEM,
+		Username:         "testuser",
+		Password:         "testpass",
+		DisableAuthToken: disableAuthToken,
 	}
 	if err := config.Prepare(); err != nil {
 		t.Fatal(err)
@@ -79,7 +84,7 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 
 	initialResult := make(chan initialServerResult, 1)
 	go func() {
-		clientRecord, err := serveOpenVPNInitialEpoch(ctx, serverControl, serverCert, useAuthToken)
+		clientRecord, err := serveOpenVPNInitialEpoch(ctx, serverControl, serverCert, useAuthToken || disableAuthToken)
 		initialResult <- initialServerResult{clientRecord: clientRecord, err: err}
 	}()
 
@@ -115,7 +120,7 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 			config.Password,
 		)
 	}
-	if useAuthToken {
+	if useAuthToken || disableAuthToken {
 		if push.AuthToken != "token-0" || push.AuthTokenUser != "token-user" {
 			t.Fatalf("initial push token = (%q, %q); want token-0 and token-user", push.AuthToken, push.AuthTokenUser)
 		}
@@ -141,20 +146,6 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 		if refreshDropper != nil && epochIndex == 0 {
 			armRefreshDrop = refreshDropper.Arm
 		}
-		go func() {
-			data, clientRecord, err := serveOpenVPNRekeyEpoch(
-				ctx,
-				serverControl,
-				serverCert,
-				refreshedAuthToken,
-				armRefreshDrop,
-			)
-			serverResult <- rekeyServerResult{data: data, clientRecord: clientRecord, err: err}
-		}()
-		result := <-serverResult
-		if result.err != nil {
-			t.Fatalf("server rekey failed: %v (client error: %v)", result.err, client.Err())
-		}
 		expectedUsername := config.Username
 		expectedPassword := config.Password
 		if useAuthToken {
@@ -163,6 +154,22 @@ func testClientCompletesSequentialSoftResetEpochs(t *testing.T, useAuthToken, re
 			if refreshAuthToken {
 				expectedPassword = fmt.Sprintf("token-%d", epochIndex)
 			}
+		}
+		go func() {
+			data, clientRecord, err := serveOpenVPNRekeyEpoch(
+				ctx,
+				serverControl,
+				serverCert,
+				expectedUsername,
+				expectedPassword,
+				refreshedAuthToken,
+				armRefreshDrop,
+			)
+			serverResult <- rekeyServerResult{data: data, clientRecord: clientRecord, err: err}
+		}()
+		result := <-serverResult
+		if result.err != nil {
+			t.Fatalf("server rekey failed: %v (client error: %v)", result.err, client.Err())
 		}
 		if result.clientRecord.Username != expectedUsername || result.clientRecord.Password != expectedPassword {
 			t.Fatalf(
@@ -285,6 +292,8 @@ func serveOpenVPNRekeyEpoch(
 	ctx context.Context,
 	control *ControlChannel,
 	serverCert tls.Certificate,
+	expectedUsername string,
+	expectedPassword string,
 	refreshedAuthToken string,
 	armRefreshDrop func(),
 ) (*DataChannel, *KeyMethod2Record, error) {
@@ -310,6 +319,15 @@ func serveOpenVPNRekeyEpoch(
 	clientRecord, err := readClientKeyMethod2Record(tlsConn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read client key method record: %w", err)
+	}
+	if clientRecord.Username != expectedUsername || clientRecord.Password != expectedPassword {
+		return nil, clientRecord, fmt.Errorf(
+			"reject rekey credentials (%q, %q); want (%q, %q)",
+			clientRecord.Username,
+			clientRecord.Password,
+			expectedUsername,
+			expectedPassword,
+		)
 	}
 
 	serverRecord, serverBytes, err := testServerKeyMethodRecord()
@@ -337,7 +355,6 @@ func serveOpenVPNRekeyEpoch(
 			return nil, nil, fmt.Errorf("write refreshed auth token: %w", err)
 		}
 	}
-
 	sources := clientRecord.Sources
 	sources.Server = serverRecord.Sources.Server
 	clientKeys, err := DeriveClientKeyMaterial(sources, control.RemoteSessionID(), control.LocalSessionID(), 16)

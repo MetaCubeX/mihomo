@@ -54,6 +54,11 @@ type ClientConfig struct {
 	Username string
 	Password string
 
+	// DisableAuthToken ignores server-pushed auth-token credentials and reuses
+	// Username and Password for every rekey. This is only safe when those
+	// configured credentials are reusable.
+	DisableAuthToken bool
+
 	PeerInfo map[string]string
 
 	PingInterval time.Duration
