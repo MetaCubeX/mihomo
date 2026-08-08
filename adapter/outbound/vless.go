@@ -431,6 +431,9 @@ func (v *Vless) Close() error {
 }
 
 func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
+	if metadata.Host == RvsSentinel { // 反向代理:VLESS Rvs 命令,不带地址
+		return &vless.DstAddr{Rvs: true}
+	}
 	var addrType byte
 	var addr []byte
 	switch metadata.AddrType() {
