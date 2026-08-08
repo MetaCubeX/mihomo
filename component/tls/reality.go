@@ -33,6 +33,7 @@ type RealityConfig struct {
 	ShortID   [RealityMaxShortIDLen]byte
 
 	SupportX25519MLKEM768 bool
+	ClientVer             [3]byte // REALITY 声明的客户端版本;[0,0,0]=用构建默认
 }
 
 func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHelloID, serverName string, realityConfig *RealityConfig) (net.Conn, error) {
@@ -71,9 +72,15 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
 
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
-		hello.SessionId[0] = 1
-		hello.SessionId[1] = 8
-		hello.SessionId[2] = 2
+		if realityConfig.ClientVer != ([3]byte{}) {
+			hello.SessionId[0] = realityConfig.ClientVer[0]
+			hello.SessionId[1] = realityConfig.ClientVer[1]
+			hello.SessionId[2] = realityConfig.ClientVer[2]
+		} else {
+			hello.SessionId[0] = 26
+			hello.SessionId[1] = 7
+			hello.SessionId[2] = 28
+		}
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 

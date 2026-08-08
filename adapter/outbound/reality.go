@@ -15,6 +15,7 @@ type RealityOptions struct {
 	ShortID   string `proxy:"short-id,omitempty"`
 
 	SupportX25519MLKEM768 bool `proxy:"support-x25519mlkem768,omitempty"`
+	ClientVer             string `proxy:"client-ver,omitempty"` // 覆盖 REALITY 声明的客户端版本, 如 "26.7.28"
 }
 
 func (o RealityOptions) Parse() (*tlsC.RealityConfig, error) {
@@ -39,6 +40,14 @@ func (o RealityOptions) Parse() (*tlsC.RealityConfig, error) {
 		n, err = hex.Decode(config.ShortID[:], []byte(o.ShortID))
 		if err != nil || n > tlsC.RealityMaxShortIDLen {
 			return nil, errors.New("invalid REALITY short ID")
+		}
+
+		if o.ClientVer != "" {
+			var a, b, c int
+			if _, err := fmt.Sscanf(o.ClientVer, "%d.%d.%d", &a, &b, &c); err != nil {
+				return nil, fmt.Errorf("invalid REALITY client-ver %q: %w", o.ClientVer, err)
+			}
+			config.ClientVer = [3]byte{byte(a), byte(b), byte(c)}
 		}
 
 		return config, nil
