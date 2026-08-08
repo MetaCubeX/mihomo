@@ -1937,7 +1937,7 @@ func parseIPRuleSet(domainSetName string, adapterName string, ruleProviders map[
 	} else {
 		switch rp.Behavior() {
 		case P.Domain:
-			return nil, fmt.Errorf("rule provider type error, except ipcidr,actual %s", rp.Behavior())
+			return nil, fmt.Errorf("rule provider type error, expect ipcidr,actual %s", rp.Behavior())
 		case P.Classical:
 			log.Warnln("%s provider is %s, only matching it contain ip rule", rp.Name(), rp.Behavior())
 		default:
@@ -1952,7 +1952,7 @@ func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders 
 	} else {
 		switch rp.Behavior() {
 		case P.IPCIDR:
-			return nil, fmt.Errorf("rule provider type error, except domain,actual %s", rp.Behavior())
+			return nil, fmt.Errorf("rule provider type error, expect domain,actual %s", rp.Behavior())
 		case P.Classical:
 			log.Warnln("%s provider is %s, only matching it contain domain rule", rp.Name(), rp.Behavior())
 		default:
