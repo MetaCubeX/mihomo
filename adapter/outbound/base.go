@@ -390,6 +390,9 @@ func (p *autoCloseProxyAdapter) Close() error {
 	return p.closeErr
 }
 
+// InnerProxyAdapter 暴露被 auto-close 包装的内层适配器(反向代理据此取 *Vless 调 DialReverse)。
+func (p *autoCloseProxyAdapter) InnerProxyAdapter() ProxyAdapter { return p.ProxyAdapter }
+
 func NewAutoCloseProxyAdapter(adapter ProxyAdapter) ProxyAdapter {
 	proxy := &autoCloseProxyAdapter{
 		ProxyAdapter: adapter,
