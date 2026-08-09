@@ -30,6 +30,9 @@ func TestHandleUDPUsesListenerAddressInSessionKey(t *testing.T) {
 	if capture.packets[0].Key() != capture.packets[2].Key() {
 		t.Errorf("session key changed within one listener: %q != %q", capture.packets[0].Key(), capture.packets[2].Key())
 	}
+	if got, want := capture.packets[0].Key(), "127.0.0.1:51820|192.0.2.1:51823"; got != want {
+		t.Errorf("session key = %q, want %q", got, want)
+	}
 
 	for i, packet := range capture.packets {
 		if got := packet.Metadata().SourceAddress(); got != source.String() {

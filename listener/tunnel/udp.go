@@ -78,7 +78,7 @@ func NewUDP(addr, target, proxy string, lc C.InboundListenConfig, tunnel C.Tunne
 
 func (l *PacketConn) handleUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, addr net.Addr, additions ...inbound.Addition) {
 	// Keep associations from different tunnel listeners separate for the same source address.
-	sessionKey := fmt.Sprintf("%s:%s", pc.LocalAddr(), addr)
+	sessionKey := fmt.Sprintf("%s|%s", pc.LocalAddr().String(), addr.String())
 	cPacket := &packet{
 		pc:      pc,
 		rAddr:   addr,
