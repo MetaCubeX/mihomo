@@ -941,7 +941,9 @@ func (z *ZeroTier) applyNetworkConfig(config ZT.NetworkConfigData, generation ui
 		}
 		return errZeroTierStaleConfig
 	}
-	if err = ipLink.ApplyNetworkConfig(config); err != nil {
+	linkConfig := config
+	linkConfig.MTU = mtu
+	if err = ipLink.ApplyNetworkConfig(linkConfig); err != nil {
 		if replaceDevice {
 			_ = device.Close()
 		}
@@ -952,7 +954,9 @@ func (z *ZeroTier) applyNetworkConfig(config ZT.NetworkConfigData, generation ui
 		z.stateMu.Unlock()
 		var rollbackErr error
 		if oldConfig.NetworkID == z.networkID && len(oldConfig.Assigned) != 0 {
-			rollbackErr = ipLink.ApplyNetworkConfig(oldConfig)
+			oldLinkConfig := oldConfig
+			oldLinkConfig.MTU = z.effectiveMTU(oldConfig)
+			rollbackErr = ipLink.ApplyNetworkConfig(oldLinkConfig)
 		}
 		if replaceDevice {
 			_ = device.Close()
@@ -970,28 +974,8 @@ func (z *ZeroTier) applyNetworkConfig(config ZT.NetworkConfigData, generation ui
 	z.authURL = ""
 	z.retryLatestConfig = false
 	z.configGeneration++
-	appliedGeneration := z.configGeneration
 	z.notifyStateLocked()
 	z.stateMu.Unlock()
-	var resetErr error
-	if replaceDevice {
-		resetErr = ipLink.ResetMulticast()
-		z.stateMu.RLock()
-		current = z.runtime == runtime && z.tunDevice == device && z.configGeneration == appliedGeneration
-		z.stateMu.RUnlock()
-		if !current {
-			if replacedDevice != nil {
-				_ = replacedDevice.Close()
-			}
-			if resetErr != nil {
-				log.Debugln("[ZeroTier](%s) reset multicast subscriptions: %v", z.Name(), resetErr)
-			}
-			return errZeroTierStaleConfig
-		}
-	}
-	if resetErr != nil {
-		log.Debugln("[ZeroTier](%s) reset multicast subscriptions: %v", z.Name(), resetErr)
-	}
 	if !replaceDevice {
 		return nil
 	}
@@ -1015,6 +999,14 @@ func (z *ZeroTier) configSnapshotCurrentLocked(runtime *zeroTierRuntime, config 
 
 func (z *ZeroTier) effectiveMTU(config ZT.NetworkConfigData) uint32 {
 	mtu := config.MTU
+	switch {
+	case mtu == 0:
+		mtu = ZT.DefaultNetworkMTU
+	case mtu < ZT.MinNetworkMTU:
+		mtu = ZT.MinNetworkMTU
+	case mtu > ZT.MaxNetworkMTU:
+		mtu = ZT.MaxNetworkMTU
+	}
 	if z.option.MTU != 0 && uint32(z.option.MTU) < mtu {
 		mtu = uint32(z.option.MTU)
 	}
