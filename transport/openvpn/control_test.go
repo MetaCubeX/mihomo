@@ -3,9 +3,11 @@ package openvpn
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -66,6 +68,109 @@ type dummyAddr string
 
 func (d dummyAddr) Network() string { return string(d) }
 func (d dummyAddr) String() string  { return string(d) }
+
+type datagramReadResult struct {
+	packet []byte
+	err    error
+}
+
+type scriptedDatagramConn struct {
+	reads    []datagramReadResult
+	writes   [][]byte
+	writeErr error
+}
+
+func (c *scriptedDatagramConn) Read(b []byte) (int, error) {
+	if len(c.reads) == 0 {
+		return 0, net.ErrClosed
+	}
+	result := c.reads[0]
+	c.reads = c.reads[1:]
+	return copy(b, result.packet), result.err
+}
+
+func (c *scriptedDatagramConn) Write(b []byte) (int, error) {
+	if c.writeErr != nil {
+		return 0, c.writeErr
+	}
+	c.writes = append(c.writes, cloneBytes(b))
+	return len(b), nil
+}
+
+func (c *scriptedDatagramConn) Close() error                     { return nil }
+func (c *scriptedDatagramConn) LocalAddr() net.Addr              { return dummyAddr("local") }
+func (c *scriptedDatagramConn) RemoteAddr() net.Addr             { return dummyAddr("remote") }
+func (c *scriptedDatagramConn) SetDeadline(time.Time) error      { return nil }
+func (c *scriptedDatagramConn) SetReadDeadline(time.Time) error  { return nil }
+func (c *scriptedDatagramConn) SetWriteDeadline(time.Time) error { return nil }
+
+func TestDatagramPacketIORecoversFromAsynchronousReadError(t *testing.T) {
+	for name, errno := range map[string]syscall.Errno{
+		"connection-refused": syscall.ECONNREFUSED,
+		"connection-reset":   syscall.ECONNRESET,
+		"message-too-long":   syscall.EMSGSIZE,
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn := &scriptedDatagramConn{
+				reads: []datagramReadResult{
+					{err: &net.OpError{Op: "read", Net: "udp", Err: errno}},
+					{packet: []byte("next OpenVPN packet")},
+				},
+			}
+			packetIO := NewDatagramPacketIO(conn)
+
+			packet, err := packetIO.ReadPacket(context.Background())
+			if err != nil {
+				t.Fatalf("read after asynchronous ICMP error: %v", err)
+			}
+			if got, want := string(packet), "next OpenVPN packet"; got != want {
+				t.Fatalf("packet = %q; want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestDatagramPacketIOWriteErrorHandling(t *testing.T) {
+	for name, test := range map[string]struct {
+		err         syscall.Errno
+		recoverable bool
+	}{
+		"connection-refused": {err: syscall.ECONNREFUSED, recoverable: true},
+		"connection-reset":   {err: syscall.ECONNRESET, recoverable: true},
+		"message-too-long":   {err: syscall.EMSGSIZE},
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn := &scriptedDatagramConn{
+				writeErr: &net.OpError{Op: "write", Net: "udp", Err: test.err},
+			}
+			packetIO := NewDatagramPacketIO(conn)
+
+			err := packetIO.WritePacket(context.Background(), []byte("OpenVPN packet"))
+			if test.recoverable && err != nil {
+				t.Fatalf("recoverable write error = %v", err)
+			}
+			if !test.recoverable && !errors.Is(err, test.err) {
+				t.Fatalf("write error = %v; want %v", err, test.err)
+			}
+		})
+	}
+}
+
+func TestDatagramPacketIOSurfacesNonICMPError(t *testing.T) {
+	ioErr := errors.New("UDP socket: invalid argument")
+	conn := &scriptedDatagramConn{
+		writeErr: ioErr,
+		reads:    []datagramReadResult{{err: ioErr}},
+	}
+	packetIO := NewDatagramPacketIO(conn)
+
+	if _, err := packetIO.ReadPacket(context.Background()); !errors.Is(err, ioErr) {
+		t.Fatalf("read error = %v; want %v", err, ioErr)
+	}
+	if err := packetIO.WritePacket(context.Background(), []byte("packet")); !errors.Is(err, ioErr) {
+		t.Fatalf("write error = %v; want %v", err, ioErr)
+	}
+}
 
 func newTestChannels(t *testing.T) (*ControlChannel, *ControlChannel) {
 	t.Helper()
@@ -157,6 +262,77 @@ func TestControlConnCarriesTLSBytes(t *testing.T) {
 	}
 	if client.PendingMessages() != 0 {
 		t.Fatalf("expected client message to be acked, pending=%d", client.PendingMessages())
+	}
+}
+
+type recordingPacketIO struct {
+	PacketIO
+	mu     sync.Mutex
+	writes [][]byte
+}
+
+func (r *recordingPacketIO) WritePacket(ctx context.Context, packet []byte) error {
+	r.mu.Lock()
+	r.writes = append(r.writes, cloneBytes(packet))
+	r.mu.Unlock()
+	return r.PacketIO.WritePacket(ctx, packet)
+}
+
+func (r *recordingPacketIO) packets() [][]byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([][]byte(nil), r.writes...)
+}
+
+func TestControlConnChunksTLSWrites(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+	// OpenVPN 2.6 can attach up to RELIABLE_ACK_SIZE (8) acknowledgements.
+	// Exercise the largest normal tls-crypt header, not only the empty-ACK case.
+	client.mu.Lock()
+	for id := uint32(1); id <= 8; id++ {
+		client.ackPending = append(client.ackPending, id)
+	}
+	client.mu.Unlock()
+
+	recorder := &recordingPacketIO{PacketIO: client.io}
+	client.io = recorder
+	clientConn := NewControlConn(client)
+	serverConn := NewControlConn(server)
+	payload := make([]byte, 4*1024+17)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		n, err := clientConn.Write(payload)
+		if err == nil && n != len(payload) {
+			err = io.ErrShortWrite
+		}
+		errCh <- err
+	}()
+
+	got := make([]byte, len(payload))
+	if _, err := io.ReadFull(serverConn, got); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(payload) {
+		t.Fatal("reassembled TLS stream differs from the written payload")
+	}
+
+	packets := recorder.packets()
+	if len(packets) < 2 {
+		t.Fatalf("control packet count = %d; want multiple bounded packets", len(packets))
+	}
+	for i, packet := range packets {
+		if len(packet) > maxControlPacketSize {
+			t.Fatalf("control packet %d size = %d; want at most %d", i, len(packet), maxControlPacketSize)
+		}
 	}
 }
 

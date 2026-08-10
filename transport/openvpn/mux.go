@@ -13,6 +13,8 @@ type PacketMux struct {
 	data    chan []byte
 	done    chan struct{}
 	once    sync.Once
+	errMu   sync.RWMutex
+	readErr error
 }
 
 func NewPacketMux(io PacketIO) *PacketMux {
@@ -29,6 +31,9 @@ func (m *PacketMux) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		packet, err := m.io.ReadPacket(ctx)
 		if err != nil {
+			if ctx.Err() == nil {
+				m.closeWithError(err)
+			}
 			return
 		}
 		if len(packet) == 0 {
@@ -56,7 +61,7 @@ func (m *PacketMux) ReadPacket(ctx context.Context) ([]byte, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-m.done:
-		return nil, net.ErrClosed
+		return nil, m.terminalError()
 	}
 }
 
@@ -67,7 +72,7 @@ func (m *PacketMux) ReadDataPacket(ctx context.Context) ([]byte, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-m.done:
-		return nil, net.ErrClosed
+		return nil, m.terminalError()
 	}
 }
 
@@ -76,11 +81,28 @@ func (m *PacketMux) WritePacket(ctx context.Context, packet []byte) error {
 }
 
 func (m *PacketMux) Close() error {
+	m.closeWithError(net.ErrClosed)
+	return nil
+}
+
+func (m *PacketMux) closeWithError(err error) {
 	m.once.Do(func() {
+		m.errMu.Lock()
+		m.readErr = err
+		m.errMu.Unlock()
 		close(m.done)
 		_ = m.io.Close()
 	})
-	return nil
+}
+
+func (m *PacketMux) terminalError() error {
+	m.errMu.RLock()
+	err := m.readErr
+	m.errMu.RUnlock()
+	if err == nil {
+		return net.ErrClosed
+	}
+	return err
 }
 
 func (m *PacketMux) LocalAddr() net.Addr {

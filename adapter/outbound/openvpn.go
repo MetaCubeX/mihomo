@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
 	"sync"
 	"time"
 
@@ -371,8 +370,11 @@ func (o *OpenVPN) startPacketLoops() {
 	client := o.client
 	tunDevice := o.tunDevice
 	var stopOnce sync.Once
-	stop := func() {
+	stop := func(loop string, loopErr error) {
 		stopOnce.Do(func() {
+			if runCtx.Err() == nil && loopErr != nil {
+				log.Warnln("[OpenVPN](%s) stopping packet loops after %s failed: %v", o.name, loop, loopErr)
+			}
 			runCancel()
 			_ = client.Close()
 			_ = tunDevice.Close()
@@ -386,45 +388,39 @@ func (o *OpenVPN) startPacketLoops() {
 		})
 	}
 	go func() {
-		defer stop()
+		var loopErr error
+		defer func() { stop("stack-to-OpenVPN loop", loopErr) }()
 		buf := make([]byte, 64*1024)
 		bufs := [][]byte{buf}
 		sizes := []int{0}
 		for runCtx.Err() == nil {
 			_, err := tunDevice.Read(bufs, sizes, 0)
 			if err != nil {
-				if runCtx.Err() == nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, os.ErrClosed) {
-					log.Errorln("[OpenVPN](%s) error reading from stack device: %v", o.name, err)
-				}
+				loopErr = fmt.Errorf("read stack device: %w", err)
 				return
 			}
 			if err := client.WriteIPPacket(runCtx, buf[:sizes[0]]); err != nil {
-				if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
-					log.Warnln("[OpenVPN](%s) error writing packet to OpenVPN link: %v", o.name, err)
-				}
+				loopErr = fmt.Errorf("write OpenVPN packet: %w", err)
 				return
 			}
 		}
 	}()
 
 	go func() {
-		defer stop()
+		var loopErr error
+		defer func() { stop("OpenVPN-to-stack loop", loopErr) }()
 		for runCtx.Err() == nil {
 			packet, err := client.ReadIPPacket(runCtx)
 			if err != nil {
 				if clientErr := client.Err(); clientErr != nil {
-					log.Warnln("[OpenVPN](%s) OpenVPN link failed: %v", o.name, clientErr)
-				} else if runCtx.Err() == nil && (errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed)) {
-					log.Warnln("[OpenVPN](%s) OpenVPN link closed while reading packet: %v", o.name, err)
-				} else if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, os.ErrClosed) {
-					log.Warnln("[OpenVPN](%s) error reading packet from OpenVPN link: %v", o.name, err)
+					loopErr = clientErr
+				} else {
+					loopErr = fmt.Errorf("read OpenVPN packet: %w", err)
 				}
 				return
 			}
 			if _, err := tunDevice.Write([][]byte{packet}, 0); err != nil {
-				if !errors.Is(err, net.ErrClosed) {
-					log.Errorln("[OpenVPN](%s) error writing to stack device: %v", o.name, err)
-				}
+				loopErr = fmt.Errorf("write stack device: %w", err)
 				return
 			}
 		}
@@ -432,7 +428,8 @@ func (o *OpenVPN) startPacketLoops() {
 
 	if o.config.PingInterval > 0 {
 		go func() {
-			defer stop()
+			var loopErr error
+			defer func() { stop("ping loop", loopErr) }()
 			ticker := time.NewTicker(o.config.PingInterval)
 			defer ticker.Stop()
 			for runCtx.Err() == nil {
@@ -440,9 +437,7 @@ func (o *OpenVPN) startPacketLoops() {
 				case <-ticker.C:
 					if sinceSend := client.SinceSend(); sinceSend >= o.config.PingInterval {
 						if err := client.WritePing(runCtx); err != nil {
-							if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
-								log.Warnln("[OpenVPN](%s) error writing ping packet: %v", o.name, err)
-							}
+							loopErr = fmt.Errorf("write OpenVPN ping: %w", err)
 							return
 						}
 						log.Debugln("[OpenVPN](%s) sent ping packet after %s idle", o.name, sinceSend.Round(time.Second))
@@ -456,18 +451,15 @@ func (o *OpenVPN) startPacketLoops() {
 
 	if o.config.PingRestart > 0 {
 		go func() {
-			defer stop()
+			var loopErr error
+			defer func() { stop("ping-restart loop", loopErr) }()
 			ticker := time.NewTicker(o.config.PingRestart)
 			defer ticker.Stop()
 			for runCtx.Err() == nil {
 				select {
 				case <-ticker.C:
 					if sinceReceive := client.SinceReceive(); sinceReceive >= o.config.PingRestart {
-						log.Warnln(
-							"[OpenVPN](%s) ping-restart timeout: no packet received for %s",
-							o.name,
-							sinceReceive.Round(time.Second),
-						)
+						loopErr = fmt.Errorf("no packet received for %s", sinceReceive.Round(time.Second))
 						return
 					}
 				case <-runCtx.Done():

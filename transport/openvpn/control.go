@@ -7,9 +7,18 @@ import (
 	"io"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/metacubex/mihomo/common/pool"
+)
+
+const (
+	// OpenVPN 2.6 limits control-channel packets to 1250 bytes by default.
+	// Leave room for the control header, message metadata, acknowledgements,
+	// and tls-auth/tls-crypt overhead when packetizing the TLS byte stream.
+	maxControlPacketSize  = 1250
+	maxControlPayloadSize = 1024
 )
 
 type PacketIO interface {
@@ -410,6 +419,7 @@ type ControlConn struct {
 	readBuf []byte
 	closed  bool
 	mu      sync.Mutex
+	writeMu sync.Mutex
 }
 
 // softResetReadError transfers a peer-initiated key epoch from the packet
@@ -471,6 +481,9 @@ func (c *ControlConn) Read(b []byte) (int, error) {
 }
 
 func (c *ControlConn) Write(b []byte) (int, error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
@@ -478,10 +491,18 @@ func (c *ControlConn) Write(b []byte) (int, error) {
 	}
 	c.mu.Unlock()
 
-	if _, err := c.channel.Send(context.Background(), PControlV1, b); err != nil {
-		return 0, err
+	written := 0
+	for written < len(b) {
+		end := written + maxControlPayloadSize
+		if end > len(b) {
+			end = len(b)
+		}
+		if _, err := c.channel.Send(context.Background(), PControlV1, b[written:end]); err != nil {
+			return written, err
+		}
+		written = end
 	}
-	return len(b), nil
+	return written, nil
 }
 
 func (c *ControlConn) Close() error {
@@ -538,11 +559,20 @@ func (d *datagramPacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 	buf := make([]byte, 64*1024)
-	n, err := d.conn.Read(buf)
-	if err != nil {
-		return nil, contextIOError(ctx, err)
+	for {
+		n, err := d.conn.Read(buf)
+		if err == nil {
+			return buf[:n], nil
+		}
+		err = contextIOError(ctx, err)
+		if ctx.Err() == nil && isRecoverableDatagramReadError(err) {
+			// Connected UDP sockets report asynchronous ICMP failures on a
+			// later read. The socket remains usable, and losing the datagram
+			// is valid UDP behavior, so keep the OpenVPN session alive.
+			continue
+		}
+		return nil, err
 	}
-	return buf[:n], nil
 }
 
 func (d *datagramPacketIO) WritePacket(ctx context.Context, packet []byte) error {
@@ -550,7 +580,22 @@ func (d *datagramPacketIO) WritePacket(ctx context.Context, packet []byte) error
 		return err
 	}
 	_, err := d.conn.Write(packet)
-	return contextIOError(ctx, err)
+	err = contextIOError(ctx, err)
+	if ctx.Err() == nil && isRecoverableDatagramWriteError(err) {
+		// The error can describe an earlier datagram rather than this write.
+		// Treat it as packet loss and let OpenVPN retransmit control traffic
+		// or ping-restart the session if the peer is actually unavailable.
+		return nil
+	}
+	return err
+}
+
+func isRecoverableDatagramReadError(err error) bool {
+	return isRecoverableDatagramWriteError(err) || errors.Is(err, syscall.EMSGSIZE)
+}
+
+func isRecoverableDatagramWriteError(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ECONNRESET)
 }
 
 func (d *datagramPacketIO) Close() error {
