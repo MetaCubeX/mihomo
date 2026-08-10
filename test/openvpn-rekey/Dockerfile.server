@@ -1,10 +1,11 @@
-# syntax=docker/dockerfile:1.6
-
 FROM mirror-docker.raah.ir/alpine@sha256:310c62b5e7ca5b08167e4384c68db0fd2905dd9c7493756d356e893909057601
 
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirror.raah.ir/artifactory|g' /etc/apk/repositories \
     && apk add --no-cache curl iptables openvpn=2.6.20-r0 openssl
 
 COPY --chmod=0755 openvpn-test.sh /usr/local/bin/openvpn-test
+
+RUN ln -s /usr/local/bin/openvpn-test /usr/local/bin/openvpn-active-connect \
+    && ln -s /usr/local/bin/openvpn-test /usr/local/bin/openvpn-active-disconnect
 
 ENTRYPOINT ["/usr/local/bin/openvpn-test"]

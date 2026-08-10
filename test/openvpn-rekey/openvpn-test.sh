@@ -1,9 +1,29 @@
 #!/bin/sh
 set -eu
 
+active_marker=/tmp/openvpn-active-testuser
+case "${0##*/}" in
+openvpn-active-connect)
+  mkdir "$active_marker" 2>/dev/null || true
+  if [ -n "${CONNECTION_COUNT_FILE:-}" ]; then
+    connection_count=$(cat "$CONNECTION_COUNT_FILE")
+    printf '%d\n' "$((connection_count + 1))" >"$CONNECTION_COUNT_FILE"
+  fi
+  exit 0
+  ;;
+openvpn-active-disconnect)
+  (
+    sleep "${ACTIVE_RELEASE_DELAY:-0}"
+    rmdir "$active_marker" 2>/dev/null || true
+  ) &
+  exit 0
+  ;;
+esac
+
 case "${1:-}" in
 bootstrap)
-  if [ ! -s /state/ca.crt ]; then
+  if [ ! -s /state/ca.crt ] || \
+    ! openssl x509 -in /state/server.crt -noout -text 2>/dev/null | grep -q 'DNS:openvpn-fault'; then
     openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
       -keyout /state/ca.key -out /state/ca.crt -days 2 \
       -subj /CN=mihomo-openvpn-rekey-test-ca >/dev/null 2>&1
@@ -14,7 +34,7 @@ bootstrap)
       'basicConstraints=CA:FALSE' \
       'keyUsage=digitalSignature,keyEncipherment' \
       'extendedKeyUsage=serverAuth' \
-      'subjectAltName=DNS:openvpn-static,DNS:openvpn-token' >/state/server.ext
+      'subjectAltName=DNS:openvpn-static,DNS:openvpn-token,DNS:openvpn-fault' >/state/server.ext
     openssl x509 -req -sha256 -days 2 \
       -in /state/server.csr -CA /state/ca.crt -CAkey /state/ca.key \
       -CAcreateserial -extfile /state/server.ext \
@@ -55,6 +75,7 @@ bootstrap)
       printf '%s\n' \
         '    ping: 2' \
         '    ping-restart: 20' \
+        '    mtu: 1200' \
         '    udp: true' \
         'rules:' \
         '  - MATCH,openvpn-main'
@@ -63,6 +84,7 @@ bootstrap)
 
   write_client_config static openvpn-static "${STATIC_DISABLE_AUTH_TOKEN:-true}"
   write_client_config token openvpn-token false
+  write_client_config fault openvpn-fault true
   exec tail -f /dev/null
   ;;
 
@@ -70,6 +92,11 @@ server)
   openvpn --version | sed -n '1p'
   if [ "${AUTH_MODE:-static}" = once ]; then
     rmdir /tmp/openvpn-configured-password-used 2>/dev/null || true
+  fi
+  if [ "${AUTH_MODE:-static}" = active ]; then
+    rmdir "$active_marker" 2>/dev/null || true
+    printf '0\n' >"${CONNECTION_COUNT_FILE:?missing connection count file}"
+    printf '0\n' >"${FAULT_COUNT_FILE:?missing fault count file}"
   fi
   iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -j MASQUERADE
   set -- openvpn \
@@ -85,6 +112,11 @@ server)
     --verify-client-cert none \
     --username-as-common-name \
     --auth-user-pass-verify /usr/local/bin/openvpn-test via-file \
+    --client-connect /usr/local/bin/openvpn-active-connect \
+    --client-disconnect /usr/local/bin/openvpn-active-disconnect \
+    --setenv ACTIVE_RELEASE_DELAY "${ACTIVE_RELEASE_DELAY:-0}" \
+    --setenv AUTH_MODE "${AUTH_MODE:-static}" \
+    --setenv CONNECTION_COUNT_FILE "${CONNECTION_COUNT_FILE:-}" \
     --script-security 2 \
     --cipher AES-256-CBC \
     --data-ciphers AES-256-CBC \
@@ -99,6 +131,19 @@ server)
     --verb 4
   if [ -n "${AUTH_GEN_TOKEN:-}" ]; then
     set -- "$@" --auth-gen-token "$AUTH_GEN_TOKEN"
+  fi
+  if [ -n "${FAULT_INTERVAL:-}" ]; then
+    (
+      sleep "${FAULT_START_DELAY:-5}"
+      while :; do
+        iptables -I INPUT 1 -p udp --dport 1194 -j REJECT --reject-with icmp-port-unreachable
+        fault_count=$(cat "${FAULT_COUNT_FILE:?missing fault count file}")
+        printf '%d\n' "$((fault_count + 1))" >"$FAULT_COUNT_FILE"
+        sleep "${FAULT_DURATION:-0.2}"
+        iptables -D INPUT -p udp --dport 1194 -j REJECT --reject-with icmp-port-unreachable
+        sleep "$FAULT_INTERVAL"
+      done
+    ) &
   fi
   exec "$@"
   ;;
@@ -120,7 +165,7 @@ probe)
     attempts=0
     while [ "$attempts" -lt "${PROBE_ATTEMPTS:-1400}" ]; do
       attempts=$((attempts + 1))
-      if ! curl --fail --silent --show-error --max-time "${PROBE_TIMEOUT:-0.25}" \
+      if ! curl --fail --silent --show-error --max-time "$probe_timeout" \
         --proxy "http://$proxy_host:7890" http://172.31.0.10/ >/dev/null; then
         failures=$((failures + 1))
         printf '%s probe failed: attempt=%d failures=%d\n' "$proxy_host" "$attempts" "$failures" >&2
@@ -133,18 +178,30 @@ probe)
 
   probe_target() {
     proxy_host=$1
+    probe_timeout=$2
     probe_one_target
   }
 
-  probe_target mihomo-static &
+  probe_target mihomo-static "${PROBE_TIMEOUT:-0.25}" &
   static_pid=$!
-  probe_target mihomo-token &
+  probe_target mihomo-token "${PROBE_TIMEOUT:-0.25}" &
   token_pid=$!
+  probe_target mihomo-fault "${PROBE_FAULT_TIMEOUT:-3}" &
+  fault_pid=$!
   status=0
   if ! wait "$static_pid"; then
     status=1
   fi
   if ! wait "$token_pid"; then
+    status=1
+  fi
+  if ! wait "$fault_pid"; then
+    status=1
+  fi
+  connection_count=$(cat /state/fault/connect-count)
+  fault_count=$(cat /state/fault/fault-count)
+  printf 'mihomo-fault session summary: connections=%d injected-faults=%d\n' "$connection_count" "$fault_count"
+  if [ "$connection_count" -ne 1 ] || [ "$fault_count" -lt 10 ]; then
     status=1
   fi
   exit "$status"
@@ -161,6 +218,12 @@ probe)
   once)
     if ! mkdir /tmp/openvpn-configured-password-used 2>/dev/null; then
       printf 'rejected reused configured password for one-time authentication\n' >&2
+      exit 1
+    fi
+    ;;
+  active)
+    if [ -d "$active_marker" ]; then
+      printf 'rejected duplicate login while configured user is already active\n' >&2
       exit 1
     fi
     ;;
