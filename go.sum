@@ -134,8 +134,8 @@ github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604 h1:hJwCVlE3ojViC3
 github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604/go.mod h1:lpmN3m269b3V5jFCWtffqBLS4U3QQoIid9ugtO+OhVc=
 github.com/metacubex/mhurl v0.1.0 h1:ZdW4Zxe3j3uJ89gNytOazHu6kbHn5owutN/VfXOI8GE=
 github.com/metacubex/mhurl v0.1.0/go.mod h1:2qpQImCbXoUs6GwJrjuEXKelPyoimsIXr07eNKZdS00=
-github.com/metacubex/mipstack v0.0.0-20260810030937-189aceb10c32 h1:ZkG6EGpb5U5Q12EMnYCEW8EspbBlM2WG9CZvN9F8VDA=
-github.com/metacubex/mipstack v0.0.0-20260810030937-189aceb10c32/go.mod h1:+bbwALZI0pbi2auSG5A3ptdpV2DZ2eLObziXo+P7oj0=
+github.com/metacubex/mipstack v0.0.0-20260812143522-015f9ee3b4cb h1:Zr/WUTEvC2yUod6B4oRZ1PrC606t0F18DoZOj3fZNDI=
+github.com/metacubex/mipstack v0.0.0-20260812143522-015f9ee3b4cb/go.mod h1:+bbwALZI0pbi2auSG5A3ptdpV2DZ2eLObziXo+P7oj0=
 github.com/metacubex/mlkem v0.1.0 h1:wFClitonSFcmipzzQvax75beLQU+D7JuC+VK1RzSL8I=
 github.com/metacubex/mlkem v0.1.0/go.mod h1:amhaXZVeYNShuy9BILcR7P0gbeo/QLZsnqCdL8U2PDQ=
 github.com/metacubex/nftables v0.0.0-20260426003805-208c2c1ba2cb h1:wk6mHYPURSUvWcUv72gNP79oiylFsscBSDPJ6ieV6Iw=
@@ -186,8 +186,8 @@ github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f h1:FGBPRb1z
 github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f/go.mod h1:oPGcV994OGJedmmxrcK9+ni7jUEMGhR+uVQAdaduIP4=
 github.com/metacubex/yamux v0.0.0-20250918083631-dd5f17c0be49 h1:lhlqpYHopuTLx9xQt22kSA9HtnyTDmk5XjjQVCGHe2E=
 github.com/metacubex/yamux v0.0.0-20250918083631-dd5f17c0be49/go.mod h1:MBeEa9IVBphH7vc3LNtW6ZujVXFizotPo3OEiHQ+TNU=
-github.com/metacubex/zerotier-go v0.0.0-20260810055754-4216d2c19212 h1:B0Qj8n+4y9X6dSbDpiAa4zJCZNHckZUhMy84Edji0t8=
-github.com/metacubex/zerotier-go v0.0.0-20260810055754-4216d2c19212/go.mod h1:8LxQupX5KaZ6lIcBMdaJ3u5xx7+OIRyq87uyyFA1Yto=
+github.com/metacubex/zerotier-go v0.0.0-20260812022010-b725c9a42b89 h1:tbXRDrpiQOHqexLC6oiaXkKIchjR5wV3L6qm2H3cIwU=
+github.com/metacubex/zerotier-go v0.0.0-20260812022010-b725c9a42b89/go.mod h1:8LxQupX5KaZ6lIcBMdaJ3u5xx7+OIRyq87uyyFA1Yto=
 github.com/miekg/dns v1.1.63 h1:8M5aAw6OMZfFXTT7K5V0Eu5YiiL8l7nUAkyN6C9YwaY=
 github.com/miekg/dns v1.1.63/go.mod h1:6NGHfjhpmr5lt3XPLuyfDJi5AXbNIPM9PY6H6sF1Nfs=
 github.com/mitchellh/go-ps v1.0.0 h1:i6ampVEEF4wQFF+bkYfwYgY+F/uYJDktmvLPf7qIgjc=
