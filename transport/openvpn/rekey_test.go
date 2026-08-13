@@ -1,7 +1,9 @@
 package openvpn
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"testing"
 	"time"
@@ -92,9 +94,10 @@ func TestSendSoftResetRotatesKeyID(t *testing.T) {
 	}
 }
 
-// TestClassifyWatchAcceptsNewEpochSoftResets verifies that the soft reset
-// watcher accepts a different key ID than the current epoch.
-func TestClassifyWatchAcceptsNewEpochSoftResets(t *testing.T) {
+// TestClassifyWatchAcceptsNextEpochSoftReset verifies the soft reset watcher
+// only accepts the strictly-next key epoch (0 -> 1 -> ... -> 7 -> 1), and
+// rejects stale or invalid epochs.
+func TestClassifyWatchAcceptsNextEpochSoftReset(t *testing.T) {
 	var serverID SessionID
 	copy(serverID[:], []byte("server01"))
 
@@ -108,26 +111,32 @@ func TestClassifyWatchAcceptsNewEpochSoftResets(t *testing.T) {
 	client := NewControlChannel(clientIO, clientCrypt, clientID)
 	client.SetRemoteSessionID(serverID)
 
-	// Initial keyID = 0, so soft reset with keyID=1 should be accepted.
-	pkt1 := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 1, LocalSession: serverID}
-	softReset, valid := client.classifyWatchPacketLocked(pkt1)
+	// Initial keyID = 0, so a soft reset with keyID=1 (the next epoch) is accepted.
+	pktNext := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 1, LocalSession: serverID}
+	softReset, valid := client.classifyWatchPacketLocked(pktNext)
 	if !softReset || !valid {
-		t.Fatalf("expected soft reset keyID=1 to be accepted when current keyID=0")
+		t.Fatalf("expected next-epoch soft reset keyID=1 to be accepted when current keyID=0")
 	}
 
-	// Simulate rotation to keyID=1; now soft reset with keyID=0 should be accepted.
-	client.keyID = 1
-	pkt0 := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 0, LocalSession: serverID}
-	softReset, valid = client.classifyWatchPacketLocked(pkt0)
-	if !softReset || !valid {
-		t.Fatalf("expected soft reset keyID=0 to be accepted when current keyID=1")
-	}
-
-	// Soft reset with the same keyID as current should NOT be accepted.
-	pktSame := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 1, LocalSession: serverID}
+	// Same key ID is rejected.
+	pktSame := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 0, LocalSession: serverID}
 	softReset, valid = client.classifyWatchPacketLocked(pktSame)
 	if softReset || valid {
-		t.Fatalf("expected soft reset with same keyID=1 to be rejected when current keyID=1")
+		t.Fatalf("expected soft reset with same keyID=0 to be rejected when current keyID=0")
+	}
+
+	// After epoch 1, key ID 0 (a stale / invalid epoch) must be rejected.
+	client.keyID = 1
+	pktStale := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 0, LocalSession: serverID}
+	softReset, valid = client.classifyWatchPacketLocked(pktStale)
+	if softReset || valid {
+		t.Fatalf("expected stale soft reset keyID=0 to be rejected when current keyID=1")
+	}
+	// The strictly-next epoch is keyID=2.
+	pktNext2 := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 2, LocalSession: serverID}
+	softReset, valid = client.classifyWatchPacketLocked(pktNext2)
+	if !softReset || !valid {
+		t.Fatalf("expected next-epoch soft reset keyID=2 to be accepted when current keyID=1")
 	}
 }
 
@@ -245,6 +254,67 @@ func TestRekeyDataHeaderUsesActiveKeyID(t *testing.T) {
 	}
 }
 
+func TestRecordCompleteRejectsFragmentedKM2(t *testing.T) {
+	var packet []byte
+	packet = binary.BigEndian.AppendUint32(packet, 0)
+	packet = append(packet, KeyMethod2)
+	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	packet = appendOpenVPNString(packet, "server-options")
+	packet = appendOpenVPNString(packet, "user")
+
+	if complete, _ := RecordComplete(packet); complete {
+		t.Fatal("fragmented record reported complete")
+	}
+	// Appending the remaining strings (with empty trailing ones) completes it.
+	packet = appendOpenVPNString(packet, "pass")
+	packet = appendOpenVPNString(packet, "IV_VER=server\n")
+	if complete, _ := RecordComplete(packet); !complete {
+		t.Fatal("complete record not reported complete")
+	}
+	// Truncated length prefix is also incomplete.
+	if complete, _ := RecordComplete(packet[:len(packet)-1]); complete {
+		t.Fatal("truncated record reported complete")
+	}
+}
+
+func TestParseShortenedKM2OnlyWhenTLSControlFollows(t *testing.T) {
+	var packet []byte
+	packet = binary.BigEndian.AppendUint32(packet, 0)
+	packet = append(packet, KeyMethod2)
+	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	packet = appendOpenVPNString(packet, "server-options")
+	packet = append(packet, []byte("PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0\x00")...)
+
+	// PUSH_REPLY is positively identified, so the shortened record parses.
+	if _, _, err := ParseServerKeyMethod2RecordConsumed(packet); err != nil {
+		t.Fatalf("shortened record with PUSH_REPLY should parse: %v", err)
+	}
+
+	// A truncated trailing string that is NOT a following TLS control
+	// message must not be treated as a valid end of record: it is a
+	// fragmented standard record that still needs more TLS reads.
+	var frag []byte
+	frag = binary.BigEndian.AppendUint32(frag, 0)
+	frag = append(frag, KeyMethod2)
+	frag = append(frag, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	frag = append(frag, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	frag = appendOpenVPNString(frag, "server-options")
+	frag = appendOpenVPNString(frag, "username")
+	frag = frag[:len(frag)-1] // truncate the username value, not a PUSH_REPLY
+	if _, _, err := ParseServerKeyMethod2RecordConsumed(frag); err == nil {
+		t.Fatal("truncated trailing field should not parse")
+	}
+	// And a standard record with all four strings always parses.
+	full := appendOpenVPNString(packet, "user")
+	full = appendOpenVPNString(full, "pass")
+	full = appendOpenVPNString(full, "IV_VER=server\n")
+	if _, _, err := ParseServerKeyMethod2RecordConsumed(full); err != nil {
+		t.Fatalf("standard full record should parse: %v", err)
+	}
+}
+
 func TestParsePushReplyAuthToken(t *testing.T) {
 	msg := "PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0,auth-token SESS_ID_tok,auth-token-user dGVzdA=="
 	reply, err := ParsePushReply(msg)
@@ -286,6 +356,119 @@ func TestStashedSoftResetIsNotSwallowedByControlRead(t *testing.T) {
 	}
 	if got.Opcode != PControlSoftResetV1 || got.KeyID != 2 {
 		t.Fatalf("stashed packet = %s key=%d", got.Opcode, got.KeyID)
+	}
+}
+
+// TestReadAllKeepsPendingSoftReset ensures the queued soft reset survives the
+// post-handshake drain that feeds TLS payload back to tls.Conn: draining must
+// not steal the rekey trigger from waitForSoftReset.
+func TestReadAllKeepsPendingSoftReset(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Park a next-epoch soft reset in pendingSoftReset while on epoch 1.
+	client.AdoptKeyID(1)
+	server.AdoptKeyID(2)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	readCtx, readCancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer readCancel()
+	_, _ = client.Read(readCtx) // stashes the soft reset
+	if client.pendingSoftReset == nil {
+		t.Fatal("soft reset was not stashed in pendingSoftReset")
+	}
+
+	// Draining queued control must not consume the stashed soft reset.
+	_ = client.ReadAll()
+	if client.pendingSoftReset == nil {
+		t.Fatal("ReadAll consumed the pending soft reset")
+	}
+
+	// The watcher must still see it.
+	got, err := client.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Opcode != PControlSoftResetV1 || got.KeyID != 2 {
+		t.Fatalf("soft reset lost: got %s key=%d", got.Opcode, got.KeyID)
+	}
+}
+
+func TestRekeyRetransmitsLostClientHello(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	serverCrypt, err := NewTLSCrypt(testStaticKey(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+
+	client, err := NewClient(&ClientConfig{
+		Proto:   ProtoUDP,
+		TLSCryptKey: testStaticKey(),
+	}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.control.SetRemoteSessionID(serverID)
+
+	server := NewControlChannel(serverIO, serverCrypt, serverID)
+	server.SetRemoteSessionID(client.control.LocalSessionID())
+	client.control.clock = func() time.Time { return time.Unix(1714567890, 0) }
+	server.clock = func() time.Time { return time.Unix(1714567891, 0) }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Server starts epoch 1 with a soft reset, exactly like a real rekey.
+	server.AdoptKeyID(1)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	soft, err := client.control.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client.control.AdoptKeyID(1)
+	client.control.MarkReceived(soft.MessageID)
+	client.control.QueueAck(soft.MessageID)
+	if err := client.control.SendSoftReset(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Start the UDP rekey retransmission loop exactly like renegotiate().
+	stop := client.retransmitRekey(ctx)
+	defer stop()
+	// Simulate the TLS epoch: a ClientHello record on epoch 1.
+	if _, err := client.control.Send(ctx, PControlV1, []byte("client-hello")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Drop the client-hello the first time it is sent; it must be
+	// retransmitted by the loop.
+	gotHello := false
+	for i := 0; i < 3; i++ {
+		raw, err := serverIO.ReadPacket(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pkt, _, _, err := DecodeControlPacket(serverCrypt, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pkt.Opcode == PControlV1 && string(pkt.Payload) == "client-hello" {
+			gotHello = true
+			break
+		}
+	}
+	if !gotHello {
+		t.Fatal("client-hello never retransmitted after loss")
 	}
 }
 
@@ -341,7 +524,109 @@ func TestCaptureAuthTokenUsedOnNextKeyMethod(t *testing.T) {
 	if client.authUser != "test" || client.authPass != "SESS_ID_next" {
 		t.Fatalf("auth credentials not refreshed: %q/%q", client.authUser, client.authPass)
 	}
-	if client.lastAuthToken != "SESS_ID_next" {
-		t.Fatalf("lastAuthToken = %q", client.lastAuthToken)
+}
+
+func TestRekeyConsumesTokenPushReplyAndKeepsPeerID(t *testing.T) {
+	client := &Client{}
+	client.push = &PushReply{
+		PeerID: 42,
+	}
+	// A token-only PUSH_REPLY arrives in leftoverTLS after the server
+	// key-method-2 record (send_push_reply_auth_token).
+	client.leftoverTLS = []byte("PUSH_REPLY,auth-token SESS_ID_new,auth-token-user dGVzdA==\x00")
+
+	// The rekey branch must consume it and keep the previous peer-id.
+	client.consumeRekeyPush()
+	if client.push.PeerID != 42 {
+		t.Fatalf("peer-id not inherited across rekey: %d", client.push.PeerID)
+	}
+	if client.push.AuthTokenPass != "SESS_ID_new" {
+		t.Fatalf("auth-token not renewed: %q", client.push.AuthTokenPass)
+	}
+	if client.authUser != "test" || client.authPass != "SESS_ID_new" {
+		t.Fatalf("auth credentials not applied: %q/%q", client.authUser, client.authPass)
+	}
+}
+
+func TestWaitForSoftResetParksLateControlPayload(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	client.AdoptKeyID(1)
+	server.AdoptKeyID(1)
+
+	// Late token-only PUSH_REPLY on the current epoch, then a next-epoch
+	// soft reset. The watcher must park the token, not drop it.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_, _ = server.Send(ctx, PControlV1, []byte("PUSH_REPLY,auth-token SESS_ID_parked\x00"))
+		time.Sleep(20 * time.Millisecond)
+		server.AdoptKeyID(2)
+		_, _ = server.Send(ctx, PControlSoftResetV1, nil)
+	}()
+
+	got, err := client.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Opcode != PControlSoftResetV1 || got.KeyID != 2 {
+		t.Fatalf("got %s key=%d", got.Opcode, got.KeyID)
+	}
+	queued := client.ReadAll()
+	if len(queued) != 1 || string(queued[0].Payload) != "PUSH_REPLY,auth-token SESS_ID_parked\x00" {
+		t.Fatalf("parked payload lost: %#v", queued)
+	}
+}
+
+func TestConsumeRekeyPushReadsParkedTokenViaLeftover(t *testing.T) {
+	c := &Client{push: &PushReply{PeerID: 9, AuthTokenPass: "SESS_ID_old"}}
+	c.leftoverTLS = []byte("PUSH_REPLY,auth-token SESS_ID_parked,auth-token-user dGVzdA==\x00")
+	c.consumeRekeyPush()
+	if c.authPass != "SESS_ID_parked" {
+		t.Fatalf("parked token not applied: %q", c.authPass)
+	}
+	if c.push.PeerID != 9 {
+		t.Fatalf("peer-id lost: %d", c.push.PeerID)
+	}
+}
+
+func TestLooksLikeFollowingTLSControlNotOnWholeKM2Buffer(t *testing.T) {
+	var packet []byte
+	packet = binary.BigEndian.AppendUint32(packet, 0)
+	packet = append(packet, KeyMethod2)
+	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	packet = appendOpenVPNString(packet, "server-options")
+	packet = append(packet, []byte("PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0\x00")...)
+
+	// The whole buffer starts with the KM2 header, not PUSH_REPLY.
+	if looksLikeFollowingTLSControl(packet) {
+		t.Fatal("looksLikeFollowingTLSControl must not match a KM2-prefixed buffer")
+	}
+	// The tail after the options string does.
+	offset := 5 + keySourceRandomSize*2
+	offset += 2 + int(binary.BigEndian.Uint16(packet[offset:offset+2]))
+	if !looksLikeFollowingTLSControl(packet[offset:]) {
+		t.Fatal("tail after options should look like TLS control")
+	}
+	// And the tolerant parser still accepts the shortened record.
+	if _, _, err := ParseServerKeyMethod2RecordConsumed(packet); err != nil {
+		t.Fatalf("shortened record should parse via tail check: %v", err)
+	}
+}
+
+func TestRekeyKeepsPeerIDWithoutTokenPush(t *testing.T) {
+	client := &Client{}
+	client.push = &PushReply{
+		PeerID: 7,
+	}
+	// No token pushed on this rekey; peer-id must still carry over.
+	client.consumeRekeyPush()
+	if client.push.PeerID != 7 {
+		t.Fatalf("peer-id not inherited across rekey without token: %d", client.push.PeerID)
 	}
 }

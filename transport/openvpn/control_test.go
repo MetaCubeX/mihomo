@@ -227,39 +227,46 @@ func TestClientWaitServerResetRetransmitsUDP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	errCh := make(chan error, 1)
+	waitErr := make(chan error, 1)
 	go func() {
-		packet, err := serverControl.Read(ctx)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		if packet.Opcode != PControlHardResetClientV2 {
-			errCh <- errors.New("unexpected reset opcode")
-			return
-		}
-		raw, err := serverIO.ReadPacket(ctx)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		packet, _, _, err = DecodeControlPacket(nil, raw)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		if packet.Opcode != PControlHardResetClientV2 || packet.MessageID != 0 {
-			errCh <- errors.New("unexpected retransmitted reset packet")
-			return
-		}
-		_, err = serverControl.Send(ctx, PControlHardResetServerV2, nil)
-		errCh <- err
+		waitErr <- client.waitServerReset(ctx)
 	}()
 
-	if err := client.waitServerReset(ctx); err != nil {
+	// Drop the first raw reset; the client retransmits on the next
+	// ControlRetransmitDelay once waitServerReset is running.
+	first, err := serverIO.ReadPacket(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := <-errCh; err != nil {
+	pkt, _, _, err := DecodeControlPacket(nil, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkt.Opcode != PControlHardResetClientV2 {
+		t.Fatalf("unexpected first reset opcode: %s", pkt.Opcode)
+	}
+
+	second, err := serverIO.ReadPacket(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkt, _, _, err = DecodeControlPacket(nil, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkt.Opcode != PControlHardResetClientV2 || pkt.MessageID != 0 {
+		t.Fatalf("unexpected retransmitted reset: %s msg=%d", pkt.Opcode, pkt.MessageID)
+	}
+
+	// Ack the retransmitted reset, then respond with the server hard reset.
+	serverControl.QueueAck(0)
+	if err := serverControl.SendAck(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := serverControl.Send(ctx, PControlHardResetServerV2, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-waitErr; err != nil {
 		t.Fatal(err)
 	}
 	if clientControl.PendingMessages() != 0 {

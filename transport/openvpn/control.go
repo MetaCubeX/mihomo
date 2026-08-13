@@ -39,8 +39,12 @@ type ControlChannel struct {
 	// current epoch was still doing TLS/key-method. waitForSoftReset
 	// consumes it so ControlConn.Read cannot swallow it.
 	pendingSoftReset *ControlPacket
-	readDeadline     time.Time
-	writeDeadline    time.Time
+	// parkedTLS holds same-epoch P_CONTROL_V1 payloads that arrived while
+	// the watcher was waiting for a soft reset (typically a token-only
+	// PUSH_REPLY). ReadAll drains them into leftoverTLS / tls.Conn.
+	parkedTLS    [][]byte
+	readDeadline time.Time
+	writeDeadline time.Time
 }
 
 func NewControlChannel(io PacketIO, crypt ControlCryptor, local SessionID) *ControlChannel {
@@ -103,6 +107,7 @@ func (c *ControlChannel) beginEpochLocked(keyID uint8) {
 	c.ackPending = nil
 	c.pending = make(map[uint32]*ControlPacket)
 	c.recvPending = make(map[uint32]*ControlPacket)
+	c.parkedTLS = nil
 }
 
 // RotateKeyID advances to the next local key epoch and resets reliable state.
@@ -214,10 +219,49 @@ func (c *ControlChannel) waitForSoftReset(ctx context.Context) (*ControlPacket, 
 		if packet.Opcode == PControlSoftResetV1 {
 			return packet, nil
 		}
+		// Same-epoch P_CONTROL_V1 after a rekey is typically a token-only
+		// PUSH_REPLY (send_push_reply_auth_token). Park the TLS payload for
+		// ReadAll instead of ACK-and-dropping it. read() already ACKed.
+		if packet.Opcode == PControlV1 && len(packet.Payload) > 0 {
+			c.mu.Lock()
+			c.parkedTLS = append(c.parkedTLS, append([]byte(nil), packet.Payload...))
+			c.mu.Unlock()
+			continue
+		}
 		if err := c.SendAck(ctx); err != nil {
 			return nil, err
 		}
 	}
+}
+
+// ReadAll returns every queued control packet decoded so far, without
+// touching the underlying TLS state of the active epoch. Used after key
+// exchange so that a TLS-encrypted P_CONTROL_V1 auth-token update is not
+// acknowledged and discarded by a raw ControlChannel read. pendingSoftReset
+// is deliberately left in place: it is the trigger for the next rekey, not
+// TLS payload, and must stay for waitForSoftReset to consume.
+func (c *ControlChannel) ReadAll() []*ControlPacket {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := len(c.recvPending) + len(c.parkedTLS)
+	if n == 0 {
+		return nil
+	}
+	out := make([]*ControlPacket, 0, n)
+	for id := c.recvMessage; ; id++ {
+		pkt, ok := c.recvPending[id]
+		if !ok {
+			break
+		}
+		delete(c.recvPending, id)
+		c.recvMessage = id + 1
+		out = append(out, pkt)
+	}
+	for _, payload := range c.parkedTLS {
+		out = append(out, &ControlPacket{Opcode: PControlV1, Payload: payload})
+	}
+	c.parkedTLS = nil
+	return out
 }
 
 func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*ControlPacket, error) {
@@ -314,22 +358,23 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 		case packet.MessageID == c.recvMessage:
 			deliver = packet
 			c.recvMessage++
+			sendAck = true
 		default:
 			if _, exists := c.recvPending[packet.MessageID]; !exists {
 				c.recvPending[packet.MessageID] = packet
 			}
 			sendAck = true
 		}
-
 		c.mu.Unlock()
 
-		if deliver != nil {
-			return deliver, nil
-		}
 		if sendAck {
 			if err := c.SendAck(ctx); err != nil {
 				return nil, err
 			}
+		}
+
+		if deliver != nil {
+			return deliver, nil
 		}
 	}
 }
@@ -341,9 +386,11 @@ func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softR
 		return false, false
 	}
 	if packet.Opcode == PControlSoftResetV1 {
-		// Accept a soft reset from the same session on a different key epoch.
-		// OpenVPN advances 0->1->...->7->1; do not invent the next ID locally.
-		return packet.KeyID != c.keyID, packet.KeyID != c.keyID
+		// OpenVPN advances 0 -> 1 -> ... -> 7 -> 1. Reject stale or invalid
+		// epochs: a delayed reset from a retiring epoch, or key ID 0 after
+		// the initial epoch, must not move the client backwards.
+		expected := NextKeyID(c.keyID)
+		return packet.KeyID == expected, packet.KeyID == expected
 	}
 	return false, packet.KeyID == c.keyID
 }
@@ -463,6 +510,16 @@ func (c *ControlConn) Reset() {
 	c.mu.Unlock()
 }
 
+// UnsafeFeed pushes already-decoded control payload bytes into the TLS
+// read buffer. The caller must have drained ReadAll() and must not be
+// concurrently reading or writing the tls.Conn. The prefix buffer is
+// intentionally NOT the first value so tls.Conn.Read consumes it in order.
+func (c *ControlConn) UnsafeFeed(payload []byte) {
+	c.mu.Lock()
+	c.readBuf = append(c.readBuf, payload...)
+	c.mu.Unlock()
+}
+
 func (c *ControlConn) Read(b []byte) (int, error) {
 	c.mu.Lock()
 	if c.closed {
@@ -512,6 +569,11 @@ func (c *ControlConn) Write(b []byte) (int, error) {
 	}
 	c.mu.Unlock()
 
+	// Flush any unacknowledged read BEFORE writing data, so the ACK does not
+	// piggyback onto this control message and corrupt the TLS record.
+	if err := c.channel.SendAck(context.Background()); err != nil {
+		return 0, err
+	}
 	if _, err := c.channel.Send(context.Background(), PControlV1, b); err != nil {
 		return 0, err
 	}

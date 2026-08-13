@@ -31,7 +31,9 @@ type Client struct {
 	mux    *PacketMux
 
 	control *ControlChannel
-	tlsConn *tls.Conn
+	// tlsConn is the active TLS session; swapped on each rekey by the
+	// watchControl goroutine and read by Close. Atomic to avoid racing.
+	tlsConn atomic.Pointer[tls.Conn]
 	data    *DataChannel
 	// retiring is the previous data-channel epoch, kept during a rekey so
 	// packets still labeled with the old key ID can be decrypted.
@@ -43,19 +45,10 @@ type Client struct {
 	leftoverTLS []byte
 	// lastRekeyErr is the original renegotiation failure, preserved because
 	// closing the mux otherwise only surfaces "use of closed network connection".
-	lastRekeyErr error
-	rekeyLogOnce sync.Once
+	// Written by watchControl, read by the packet reader: atomic.
+	lastRekeyErr atomic.Pointer[error]
 	// dataByKey keeps active and retiring data channels indexed by key ID.
 	dataByKey map[uint8]*DataChannel
-	// lastSoftResetKey is the key ID from the most recently accepted server
-	// soft-reset packet. Tests inspect this after a rekey.
-	lastSoftResetKey uint8
-	// lastDataKey is the key ID encoded on the current outgoing data header.
-	lastDataKey uint8
-	// lastAuthToken is the most recently pushed auth-token, if any.
-	lastAuthToken string
-	// tlsEpoch is incremented every time a new tls.Conn is installed.
-	tlsEpoch uint32
 	// controlConn is the net.Conn adapter wrapping the control channel.
 	controlConn *ControlConn
 
@@ -145,7 +138,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = c.tlsConn.SetDeadline(time.Time{})
+	_ = c.tlsConn.Load().SetDeadline(time.Time{})
 	go c.watchControl()
 	return push, nil
 }
@@ -158,22 +151,41 @@ func (c *Client) startTLSEpoch(ctx context.Context) error {
 	if c.controlConn == nil {
 		c.controlConn = NewControlConn(c.control)
 	}
-	if c.tlsConn != nil {
+	if c.tlsConn.Load() != nil {
 		// Drop the old epoch without writing close_notify. Close() would send
 		// it on whatever key ID is current and pollute the new control epoch.
-		c.tlsConn = nil
+		c.tlsConn.Store(nil)
 	}
 	c.controlConn.Reset()
 	c.leftoverTLS = nil
-	c.tlsConn = tls.Client(c.controlConn, tlsConfig)
-	c.tlsEpoch++
+	conn := tls.Client(c.controlConn, tlsConfig)
+	c.tlsConn.Store(conn)
 	if deadline, ok := ctx.Deadline(); ok {
-		_ = c.tlsConn.SetDeadline(deadline)
+		_ = conn.SetDeadline(deadline)
 	}
-	if err := c.tlsConn.HandshakeContext(ctx); err != nil {
+	if err := conn.HandshakeContext(ctx); err != nil {
 		return fmt.Errorf("openvpn tls handshake: %w", err)
 	}
+	// Drain any control packets that arrived on the new epoch while the
+	// handshake was reading, so they are not acknowledged and dropped by a
+	// raw ControlChannel read. A TLS-encrypted P_CONTROL_V1 token update
+	// must stay reachable through the active tls.Conn.
+	c.consumeQueuedControl()
 	return nil
+}
+
+// consumeQueuedControl parses queued control packets and routes them back
+// into the active TLS stream so the key-method / PUSH exchange can see them.
+func (c *Client) consumeQueuedControl() {
+	if c.controlConn == nil {
+		return
+	}
+	for _, pkt := range c.control.ReadAll() {
+		if pkt.Opcode != PControlV1 || len(pkt.Payload) == 0 {
+			continue
+		}
+		c.controlConn.UnsafeFeed(pkt.Payload)
+	}
 }
 
 // doKeyExchange performs the OpenVPN key method 2 exchange over the TLS
@@ -199,7 +211,7 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := c.tlsConn.Write(clientBytes); err != nil {
+	if _, err := c.tlsConn.Load().Write(clientBytes); err != nil {
 		return nil, fmt.Errorf("write key method 2 client record: %w", err)
 	}
 	serverRecord, err := c.readServerKeyMethod(ctx)
@@ -219,9 +231,11 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 
 	if c.push != nil {
 		// Authenticated rekeys keep the previous ifconfig / peer-id.
-		// OpenVPN 2.6 often does not send another PUSH_REPLY here.
-		push := mergePushReply(c.push, &PushReply{})
-		c.push = push
+		// OpenVPN 2.6 often does not send another PUSH_REPLY here, but may
+		// push a fresh auth-token (send_push_reply_auth_token) that must be
+		// consumed to keep the next key-method-2 auth from expiring.
+		c.consumeRekeyPush()
+		push := c.push
 		negotiatedCipher, err := c.config.NegotiateCipher(push.DataCiphers, push.Cipher)
 		if err != nil {
 			return nil, fmt.Errorf("negotiate data cipher: %w", err)
@@ -241,7 +255,7 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 		return push, nil
 	}
 
-	if _, err := c.tlsConn.Write([]byte(PushRequest + "\x00")); err != nil {
+	if _, err := c.tlsConn.Load().Write([]byte(PushRequest + "\x00")); err != nil {
 		return nil, fmt.Errorf("write push request: %w", err)
 	}
 	push, err := c.readPushReply(ctx)
@@ -278,12 +292,37 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 	return push, nil
 }
 
+// consumeRekeyPush updates the cached push state after an authenticated
+// rekey: it inherits the previous peer-id and applies any fresh auth-token
+// pushed by send_push_reply_auth_token. Must be called only when c.push is
+// non-nil (i.e. on rekey, not the initial handshake).
+func (c *Client) consumeRekeyPush() {
+	base := *c.push
+	rekey := &PushReply{
+		PeerID: base.PeerID,
+	}
+	push := mergePushReply(c.push, rekey)
+	// A token-only PUSH_REPLY may already be buffered in leftoverTLS
+	// (it follows the server key-method-2 record on the TLS stream),
+	// or arrive in the next control record right after it.
+	if reply, rest, ok := takePushReply(c.leftoverTLS); ok {
+		c.leftoverTLS = rest
+		push = mergePushReply(push, reply)
+	} else if conn := c.tlsConn.Load(); conn != nil {
+		if reply, rest, ok := readTokenPushReply(conn, c.leftoverTLS); ok {
+			c.leftoverTLS = rest
+			push = mergePushReply(push, reply)
+		}
+	}
+	c.push = push
+	c.captureAuthToken(push)
+}
+
 func (c *Client) installDataChannel(newData *DataChannel) {
 	c.dataLock.Lock()
 	old := c.data
 	c.retiring = old
 	c.data = newData
-	c.lastDataKey = newData.keyID
 	if c.dataByKey == nil {
 		c.dataByKey = make(map[uint8]*DataChannel)
 	}
@@ -308,26 +347,10 @@ func (c *Client) captureAuthToken(push *PushReply) {
 	if !ok {
 		return
 	}
-	c.lastAuthToken = pass
 	if user != "" {
 		c.authUser = user
 	}
 	c.authPass = pass
-}
-
-func (c *Client) ActiveDataKeyID() uint8 {
-	c.dataLock.RLock()
-	defer c.dataLock.RUnlock()
-	if c.data == nil {
-		return 0
-	}
-	return c.data.keyID
-}
-
-func (c *Client) LastSoftResetKeyID() uint8 {
-	c.dataLock.RLock()
-	defer c.dataLock.RUnlock()
-	return c.lastSoftResetKey
 }
 
 func (c *Client) WriteIPPacket(ctx context.Context, packet []byte) error {
@@ -371,15 +394,22 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 }
 
 func (c *Client) LastRekeyError() error {
-	return c.lastRekeyErr
+	if err := c.lastRekeyErr.Load(); err != nil {
+		return *err
+	}
+	return nil
 }
 
 func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 	for {
 		packet, err := c.mux.ReadDataPacket(ctx)
 		if err != nil {
-			if c.lastRekeyErr != nil {
-				return nil, fmt.Errorf("%w: %v", err, c.lastRekeyErr)
+			// Only surface the rekey failure when the transport is actually
+			// being torn down; do not pollute unrelated read errors.
+			if errors.Is(err, net.ErrClosed) {
+				if rekeyErr := c.LastRekeyError(); rekeyErr != nil {
+					return nil, fmt.Errorf("%w: %v", err, rekeyErr)
+				}
 			}
 			return nil, err
 		}
@@ -429,6 +459,13 @@ func (c *Client) watchControl() {
 			c.failControl(fmt.Errorf("wait for soft reset: %w", err))
 			return
 		}
+		// Token-only PUSH_REPLY parked since the last rekey must land in
+		// authPass before this key-method-2 exchange, otherwise the server
+		// rejects the expired token.
+		c.consumeQueuedControl()
+		if c.push != nil {
+			c.consumeRekeyPush()
+		}
 		if err := c.renegotiate(packet); err != nil {
 			c.failControl(fmt.Errorf("renegotiate: %w", err))
 			return
@@ -437,12 +474,7 @@ func (c *Client) watchControl() {
 }
 
 func (c *Client) failControl(err error) {
-	c.lastRekeyErr = err
-	c.rekeyLogOnce.Do(func() {
-		// Keep the original rekey error; the packet reader otherwise only
-		// sees the secondary "use of closed network connection".
-		_ = err
-	})
+	c.lastRekeyErr.Store(&err)
 	c.cancel()
 	_ = c.mux.Close()
 }
@@ -457,19 +489,23 @@ var errRenegotiateNoTLS = errors.New("cannot renegotiate: tls connection not est
 // 3. Exchange fresh key method 2 records and derive new data channel keys
 // 4. Atomically replace c.data with the new DataChannel
 func (c *Client) renegotiate(serverReset *ControlPacket) error {
-	if c.tlsConn == nil && c.controlConn == nil {
+	if c.tlsConn.Load() == nil && c.controlConn == nil {
 		return errRenegotiateNoTLS
 	}
 	renegCtx, cancel := context.WithTimeout(c.runCtx, renegotiateTimeout)
 	defer cancel()
+	// The rekey is a discrete operation: clear any deadline set by the TLS
+	// handshake so waitForSoftReset can block indefinitely on the next epoch.
+	defer func() {
+		if c.controlConn != nil {
+			_ = c.controlConn.SetDeadline(time.Time{})
+		}
+	}()
 
 	keyID := NextKeyID(c.control.KeyID())
 	if serverReset != nil {
 		keyID = serverReset.KeyID & KeyIDMask
 	}
-	c.dataLock.Lock()
-	c.lastSoftResetKey = keyID
-	c.dataLock.Unlock()
 	// Adopt first so QueueAck lands on the new epoch; AdoptKeyID clears acks.
 	c.control.AdoptKeyID(keyID)
 	if serverReset != nil {
@@ -484,6 +520,16 @@ func (c *Client) renegotiate(serverReset *ControlPacket) error {
 		return fmt.Errorf("send soft reset: %w", err)
 	}
 
+	// On UDP, the client soft reset, TLS ClientHello and the TLS control
+	// records are reliable control messages. Retransmit them while the
+	// rekey is in flight; losing any single datagram would otherwise stall
+	// the rekey until the 30s timeout.
+	var retransmitStop func()
+	if c.config.Proto == ProtoUDP {
+		retransmitStop = c.retransmitRekey(renegCtx)
+		defer retransmitStop()
+	}
+
 	if err := c.startTLSEpoch(renegCtx); err != nil {
 		return fmt.Errorf("tls epoch handshake: %w", err)
 	}
@@ -492,6 +538,35 @@ func (c *Client) renegotiate(serverReset *ControlPacket) error {
 		return fmt.Errorf("rekey exchange: %w", err)
 	}
 	return nil
+}
+
+// retransmitRekey retransmits unacked control messages every
+// ControlRetransmitDelay while the rekey context is live. It is the UDP
+// reliability path for the soft reset, ClientHello and TLS records.
+func (c *Client) retransmitRekey(ctx context.Context) (stop func()) {
+	stopCh := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(ControlRetransmitDelay)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := c.control.RetransmitPending(ctx); err != nil {
+					return
+				}
+			case <-stopCh:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return func() {
+		close(stopCh)
+		<-done
+	}
 }
 
 func (c *Client) SinceSend() time.Duration {
@@ -519,8 +594,8 @@ func (c *Client) Close() error {
 	if c.cancel != nil {
 		c.cancel()
 	}
-	if c.tlsConn != nil {
-		_ = c.tlsConn.Close()
+	if conn := c.tlsConn.Load(); conn != nil {
+		_ = conn.Close()
 	}
 	if c.mux != nil {
 		return c.mux.Close()
@@ -562,20 +637,28 @@ func (c *Client) readServerKeyMethod(ctx context.Context) (*KeyMethod2Record, er
 	c.leftoverTLS = nil
 	tmp := make([]byte, 4096)
 	for {
-		if len(buf) > 0 {
+		// Only treat the record as complete when all four strings are
+		// present. A standard record fragmented across TLS reads must not
+		// be accepted early (its tail would be mistaken for PUSH_REPLY).
+		if complete, _ := RecordComplete(buf); complete {
 			record, consumed, err := ParseServerKeyMethod2RecordConsumed(buf)
-			if err == nil {
-				c.leftoverTLS = append([]byte(nil), buf[consumed:]...)
-				return record, nil
-			}
-			if !strings.Contains(err.Error(), "truncated") && !errors.Is(err, ioStringEOF) {
+			if err != nil {
 				return nil, err
 			}
+			c.leftoverTLS = append([]byte(nil), buf[consumed:]...)
+			return record, nil
+		}
+		// Shortened 2.6 record (options only, then PUSH_REPLY / AUTH_FAILED).
+		// Parse itself inspects the tail; a truncated standard record fails
+		// and we keep reading.
+		if record, consumed, err := ParseServerKeyMethod2RecordConsumed(buf); err == nil {
+			c.leftoverTLS = append([]byte(nil), buf[consumed:]...)
+			return record, nil
 		}
 		if deadline, ok := ctx.Deadline(); ok {
-			_ = c.tlsConn.SetReadDeadline(deadline)
+			_ = c.tlsConn.Load().SetReadDeadline(deadline)
 		}
-		n, err := c.tlsConn.Read(tmp)
+		n, err := c.tlsConn.Load().Read(tmp)
 		if err != nil {
 			return nil, fmt.Errorf("read key method 2 server record: %w", err)
 		}
@@ -600,9 +683,9 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 			return reply, nil
 		}
 		if deadline, ok := ctx.Deadline(); ok {
-			_ = c.tlsConn.SetReadDeadline(deadline)
+			_ = c.tlsConn.Load().SetReadDeadline(deadline)
 		}
-		n, err := c.tlsConn.Read(tmp)
+		n, err := c.tlsConn.Load().Read(tmp)
 		if err != nil {
 			if errors.Is(err, io.EOF) && len(buf) > 0 {
 				if reply, _, parseErr := ParsePushReplyFlexible(string(buf)); parseErr == nil {
@@ -613,6 +696,41 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 		}
 		buf = append(buf, tmp[:n]...)
 	}
+}
+
+// tokenPushReadTimeout bounds how long a rekey waits for a token-only
+// PUSH_REPLY after the server key-method-2 record. OpenVPN pushes the fresh
+// auth-token in the same TLS session right after the record, but never
+// blocks on it; a timeout keeps rekeys from stalling.
+const tokenPushReadTimeout = 300 * time.Millisecond
+
+// readTokenPushReply tries to consume a token-only PUSH_REPLY (an
+// auth-token renewal pushed by send_push_reply_auth_token) from the TLS
+// stream, without stalling a rekey. leftover holds bytes already read past
+// the server key-method-2 record. Returns the reply (if any), the updated
+// leftover, and whether a reply was found.
+func readTokenPushReply(conn *tls.Conn, leftover []byte) (*PushReply, []byte, bool) {
+	buf := append([]byte(nil), leftover...)
+	tmp := make([]byte, 4096)
+	// Try leftover first, then read with a short deadline so a record
+	// arriving right after the key-method-2 record is still captured.
+	for attempt := 0; attempt < 2; attempt++ {
+		if reply, rest, ok := takePushReply(buf); ok {
+			return reply, rest, true
+		}
+		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
+			return nil, buf, false
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(tokenPushReadTimeout))
+		n, err := conn.Read(tmp)
+		if err != nil {
+			// Timeout (or no more data): keep whatever was buffered.
+			_ = conn.SetReadDeadline(time.Time{})
+			return nil, buf, false
+		}
+		buf = append(buf, tmp[:n]...)
+	}
+	return nil, buf, false
 }
 
 func takePushReply(buf []byte) (*PushReply, []byte, bool) {

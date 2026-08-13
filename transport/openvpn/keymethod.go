@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
@@ -120,28 +121,82 @@ func ParseServerKeyMethod2RecordConsumed(packet []byte) (*KeyMethod2Record, int,
 	if err != nil {
 		return nil, 0, fmt.Errorf("read options: %w", err)
 	}
-	// Trailing username / password / peer-info are optional. A truncated
-	// length prefix is treated as "not present" rather than a hard error so
-	// a shortened 2.6 record still parses.
-	if record.Username, offset, err = readOpenVPNString(packet, offset); err != nil {
-		if errors.Is(err, ioStringEOF) {
-			return record, offset, nil
-		}
+	// Username / password / peer-info are written by OpenVPN 2.6 even when
+	// empty. Only stop early when the remaining bytes are a following TLS
+	// control message (PUSH_REPLY / AUTH_FAILED). A truncated length/value
+	// is not a shortened record — the caller must keep reading.
+	if record.Username, offset, err = readKM2TrailingString(packet, offset); err != nil {
 		return nil, 0, err
 	}
-	if record.Password, offset, err = readOpenVPNString(packet, offset); err != nil {
-		if errors.Is(err, ioStringEOF) {
-			return record, offset, nil
-		}
+	if record.Password, offset, err = readKM2TrailingString(packet, offset); err != nil {
 		return nil, 0, err
 	}
-	if record.PeerInfo, offset, err = readOpenVPNString(packet, offset); err != nil {
-		if errors.Is(err, ioStringEOF) {
-			return record, offset, nil
-		}
+	if record.PeerInfo, offset, err = readKM2TrailingString(packet, offset); err != nil {
 		return nil, 0, err
 	}
 	return record, offset, nil
+}
+
+func readKM2TrailingString(packet []byte, offset int) (string, int, error) {
+	s, next, err := readOpenVPNString(packet, offset)
+	if err == nil {
+		return s, next, nil
+	}
+	if errors.Is(err, ioStringEOF) && looksLikeFollowingTLSControl(packet[offset:]) {
+		return "", offset, nil
+	}
+	return "", offset, err
+}
+
+// RecordComplete reports whether a full key-method-2 server record is present,
+// and returns the consumed offset. It requires all four strings (OpenVPN 2.6
+// writes them even when empty) so a standard record fragmented across TLS
+// reads is not accepted prematurely.
+func RecordComplete(packet []byte) (complete bool, consumed int) {
+	if len(packet) < 4+1+keySourceRandomSize*2 {
+		return false, 0
+	}
+	if binary.BigEndian.Uint32(packet[:4]) != 0 {
+		return false, 0
+	}
+	if packet[4]&0x0f != KeyMethod2 {
+		return false, 0
+	}
+	offset := 5 + keySourceRandomSize*2
+	if !km2StrComplete(packet, offset) {
+		return false, 0
+	}
+	offset += 2 + int(binary.BigEndian.Uint16(packet[offset:offset+2]))
+	for i := 0; i < 3; i++ {
+		if !km2StrComplete(packet, offset) {
+			return false, 0
+		}
+		offset += 2 + int(binary.BigEndian.Uint16(packet[offset:offset+2]))
+	}
+	return true, offset
+}
+
+func km2StrComplete(packet []byte, offset int) bool {
+	if offset+2 > len(packet) {
+		return false
+	}
+	size := int(binary.BigEndian.Uint16(packet[offset : offset+2]))
+	if size == 0 {
+		return true
+	}
+	return offset+2+size <= len(packet)
+}
+
+func looksLikeFollowingTLSControl(b []byte) bool {
+	for len(b) > 0 && b[0] == 0 {
+		b = b[1:]
+	}
+	if len(b) == 0 {
+		return false
+	}
+	return bytes.HasPrefix(b, []byte("PUSH_REPLY")) ||
+		bytes.HasPrefix(b, []byte("AUTH_FAILED")) ||
+		bytes.HasPrefix(b, []byte("PUSH_REQUEST"))
 }
 
 func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID, cipherKeyLen int) (*KeyMaterial, error) {
