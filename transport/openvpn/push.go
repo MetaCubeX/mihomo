@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/netip"
 	"strconv"
@@ -25,9 +26,35 @@ type PushReply struct {
 	// Cipher is the single cipher pushed by the server via the "cipher"
 	// option (legacy or fallback).
 	Cipher string
+
+	// AuthToken is the most recently pushed auth-token / auth-token-user
+	// pair. Empty when the server does not rotate credentials.
+	AuthTokenUser string
+	AuthTokenPass string
 }
 
 func ParsePushReply(message string) (*PushReply, error) {
+	reply, err := parsePushReplyInner(message)
+	if err != nil {
+		return nil, err
+	}
+	if len(reply.Prefixes) == 0 {
+		return nil, fmt.Errorf("openvpn push reply missing ifconfig address")
+	}
+	return reply, nil
+}
+
+// ParsePushReplyFlexible accepts a PUSH_REPLY that may omit ifconfig, which
+// happens on some authenticated rekeys that only refresh auth-token.
+func ParsePushReplyFlexible(message string) (*PushReply, []byte, error) {
+	reply, err := parsePushReplyInner(message)
+	if err != nil {
+		return nil, nil, err
+	}
+	return reply, nil, nil
+}
+
+func parsePushReplyInner(message string) (*PushReply, error) {
 	message = strings.TrimRight(message, "\x00")
 	if !strings.HasPrefix(message, "PUSH_REPLY") {
 		return nil, fmt.Errorf("unexpected openvpn push message %q", message)
@@ -93,8 +120,6 @@ func ParsePushReply(message string) (*PushReply, error) {
 		case "block-ipv6":
 			reply.BlockIPv6 = true
 		case "data-ciphers", "ncp-ciphers":
-			// "data-ciphers" (OpenVPN 2.5+) or "ncp-ciphers" (2.4 legacy name).
-			// Value is a colon-separated list of cipher names.
 			if len(fields) >= 2 {
 				for _, c := range strings.Split(fields[1], ":") {
 					c = strings.TrimSpace(c)
@@ -104,16 +129,46 @@ func ParsePushReply(message string) (*PushReply, error) {
 				}
 			}
 		case "cipher":
-			// Legacy single cipher push, or fallback cipher.
 			if len(fields) >= 2 {
 				reply.Cipher = strings.TrimSpace(fields[1])
 			}
+		case "auth-token":
+			if len(fields) >= 2 {
+				reply.AuthTokenPass = strings.TrimSpace(fields[1])
+			}
+		case "auth-token-user":
+			if len(fields) >= 2 {
+				reply.AuthTokenUser = decodeAuthTokenUser(fields[1])
+			}
 		}
 	}
-	if len(reply.Prefixes) == 0 {
-		return nil, fmt.Errorf("openvpn push reply missing ifconfig address")
-	}
 	return reply, nil
+}
+
+func (p *PushReply) AuthToken() (user, pass string, ok bool) {
+	if p == nil || p.AuthTokenPass == "" {
+		return "", "", false
+	}
+	return p.AuthTokenUser, p.AuthTokenPass, true
+}
+
+func decodeAuthTokenUser(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if decoded, err := decodeBase64Auth(raw); err == nil && decoded != "" {
+		return decoded
+	}
+	return raw
+}
+
+func decodeBase64Auth(raw string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		data, err = base64.RawStdEncoding.DecodeString(raw)
+		if err != nil {
+			return "", err
+		}
+	}
+	return string(data), nil
 }
 
 func splitPushOptions(message string) []string {

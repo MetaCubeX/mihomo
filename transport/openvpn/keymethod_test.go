@@ -144,3 +144,28 @@ func TestParseServerKeyMethod2Record(t *testing.T) {
 		t.Fatalf("unexpected server randoms")
 	}
 }
+
+func TestParseServerKeyMethod2RecordShortenedPreservesTail(t *testing.T) {
+	var packet []byte
+	packet = binary.BigEndian.AppendUint32(packet, 0)
+	packet = append(packet, KeyMethod2)
+	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	packet = appendOpenVPNString(packet, "server-options")
+	packet = append(packet, []byte("PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0\x00")...)
+
+	record, consumed, err := ParseServerKeyMethod2RecordConsumed(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Options != "server-options" {
+		t.Fatalf("options = %q", record.Options)
+	}
+	if record.Username != "" || record.Password != "" || record.PeerInfo != "" {
+		t.Fatalf("optional strings should be empty: %#v", record)
+	}
+	tail := packet[consumed:]
+	if !bytes.HasPrefix(tail, []byte("PUSH_REPLY")) {
+		t.Fatalf("expected leftover PUSH_REPLY, got %q", tail)
+	}
+}

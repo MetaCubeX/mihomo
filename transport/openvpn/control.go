@@ -35,8 +35,12 @@ type ControlChannel struct {
 	ackPending    []uint32
 	pending       map[uint32]*ControlPacket
 	recvPending   map[uint32]*ControlPacket
-	readDeadline  time.Time
-	writeDeadline time.Time
+	// pendingSoftReset holds a server soft-reset that arrived while the
+	// current epoch was still doing TLS/key-method. waitForSoftReset
+	// consumes it so ControlConn.Read cannot swallow it.
+	pendingSoftReset *ControlPacket
+	readDeadline     time.Time
+	writeDeadline    time.Time
 }
 
 func NewControlChannel(io PacketIO, crypt ControlCryptor, local SessionID) *ControlChannel {
@@ -75,20 +79,71 @@ func (c *ControlChannel) SendReset(ctx context.Context) error {
 	return err
 }
 
-// SendSoftReset sends a P_CONTROL_SOFT_RESET_V1 and rotates the key ID.
-// Called during TLS renegotiation (rekey) to transition to a new key epoch.
-// The old pending/recvPending maps are cleared because they belong to the
-// previous key epoch; the message counters are reset for the new epoch.
-func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
+// NextKeyID returns the next OpenVPN key epoch id.
+// OpenVPN reserves 0 for the initial epoch and then advances
+// 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 1.
+func NextKeyID(current uint8) uint8 {
+	next := (current + 1) & KeyIDMask
+	if next == 0 {
+		return 1
+	}
+	return next
+}
+
+func (c *ControlChannel) KeyID() uint8 {
 	c.mu.Lock()
-	newKeyID := c.keyID ^ 1 // toggle 0<->1
-	c.keyID = newKeyID
+	defer c.mu.Unlock()
+	return c.keyID
+}
+
+func (c *ControlChannel) beginEpochLocked(keyID uint8) {
+	c.keyID = keyID & KeyIDMask
 	c.sendMessage = 0
 	c.recvMessage = 0
 	c.ackPending = nil
 	c.pending = make(map[uint32]*ControlPacket)
 	c.recvPending = make(map[uint32]*ControlPacket)
+}
+
+// RotateKeyID advances to the next local key epoch and resets reliable state.
+func (c *ControlChannel) RotateKeyID() uint8 {
+	c.mu.Lock()
+	c.beginEpochLocked(NextKeyID(c.keyID))
+	id := c.keyID
 	c.mu.Unlock()
+	return id
+}
+
+// AdoptKeyID switches to the key ID supplied by the peer's soft-reset packet.
+func (c *ControlChannel) AdoptKeyID(keyID uint8) {
+	c.mu.Lock()
+	c.beginEpochLocked(keyID)
+	c.mu.Unlock()
+}
+
+// QueueAck records a reliable message ID to be acknowledged on the next send.
+func (c *ControlChannel) QueueAck(messageID uint32) {
+	c.mu.Lock()
+	c.ackPending = appendAck(c.ackPending, messageID)
+	c.mu.Unlock()
+}
+
+// MarkReceived advances the reliable receive sequence past messageID.
+// Used after a server soft-reset has already been consumed by the watcher,
+// so the new epoch does not wait forever for message 0.
+func (c *ControlChannel) MarkReceived(messageID uint32) {
+	c.mu.Lock()
+	next := messageID + 1
+	if next > c.recvMessage {
+		c.recvMessage = next
+	}
+	delete(c.recvPending, messageID)
+	c.mu.Unlock()
+}
+
+// SendSoftReset sends a P_CONTROL_SOFT_RESET_V1 on the current key epoch.
+// Call AdoptKeyID or RotateKeyID first so the packet uses the new key ID.
+func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
 	_, err := c.Send(ctx, PControlSoftResetV1, nil)
 	return err
 }
@@ -142,17 +197,25 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 	return c.read(ctx, false)
 }
 
-func (c *ControlChannel) waitForSoftReset(ctx context.Context) error {
+func (c *ControlChannel) waitForSoftReset(ctx context.Context) (*ControlPacket, error) {
+	c.mu.Lock()
+	if c.pendingSoftReset != nil {
+		packet := c.pendingSoftReset
+		c.pendingSoftReset = nil
+		c.mu.Unlock()
+		return packet, nil
+	}
+	c.mu.Unlock()
 	for {
 		packet, err := c.read(ctx, true)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if packet.Opcode == PControlSoftResetV1 {
-			return nil
+			return packet, nil
 		}
 		if err := c.SendAck(ctx); err != nil {
-			return err
+			return nil, err
 		}
 	}
 }
@@ -191,6 +254,29 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 				continue
 			}
 			return nil, err
+		}
+
+		if !watchSoftReset {
+			c.mu.Lock()
+			curKey := c.keyID
+			sameSession := c.remote == (SessionID{}) || packet.LocalSession == c.remote
+			if packet.Opcode == PControlSoftResetV1 && packet.KeyID != curKey && sameSession {
+				if c.pendingSoftReset == nil {
+					c.pendingSoftReset = packet
+				}
+				for _, ackID := range packet.AckIDs {
+					delete(c.pending, ackID)
+				}
+				c.mu.Unlock()
+				continue
+			}
+			if packet.Opcode != PControlSoftResetV1 && packet.KeyID != curKey {
+				c.mu.Unlock()
+				// Drop control packets from a retiring key epoch so they
+				// cannot be fed into the new TLS session.
+				continue
+			}
+			c.mu.Unlock()
 		}
 
 		if watchSoftReset {
@@ -255,9 +341,8 @@ func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softR
 		return false, false
 	}
 	if packet.Opcode == PControlSoftResetV1 {
-		// Accept soft resets that carry a different key ID than the current
-		// active key epoch. This handles both server-initiated rekeys (new
-		// key ID) and the symmetric toggle between key ID 0 and 1.
+		// Accept a soft reset from the same session on a different key epoch.
+		// OpenVPN advances 0->1->...->7->1; do not invent the next ID locally.
 		return packet.KeyID != c.keyID, packet.KeyID != c.keyID
 	}
 	return false, packet.KeyID == c.keyID
@@ -370,6 +455,14 @@ func NewControlConn(channel *ControlChannel) *ControlConn {
 	return &ControlConn{channel: channel}
 }
 
+// Reset clears leftover TLS bytes so a new tls.Conn can reuse this adapter.
+func (c *ControlConn) Reset() {
+	c.mu.Lock()
+	c.closed = false
+	c.readBuf = nil
+	c.mu.Unlock()
+}
+
 func (c *ControlConn) Read(b []byte) (int, error) {
 	c.mu.Lock()
 	if c.closed {
@@ -427,13 +520,12 @@ func (c *ControlConn) Write(b []byte) (int, error) {
 
 func (c *ControlConn) Close() error {
 	c.mu.Lock()
-	if c.closed {
-		c.mu.Unlock()
-		return nil
-	}
 	c.closed = true
+	c.readBuf = nil
 	c.mu.Unlock()
-	return c.channel.io.Close()
+	// The control channel outlives a single TLS epoch. Closing the mux here
+	// would tear down the whole OpenVPN transport during a soft reset.
+	return nil
 }
 
 func (c *ControlConn) LocalAddr() net.Addr {

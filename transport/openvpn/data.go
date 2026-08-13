@@ -72,7 +72,7 @@ type DataChannel struct {
 	randOffset int
 }
 
-func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32) (*DataChannel, error) {
+func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32, keyID uint8) (*DataChannel, error) {
 	if keys == nil {
 		return nil, errors.New("nil openvpn key material")
 	}
@@ -91,8 +91,9 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 		d := &DataChannel{
 			sendAEAD: send,
 			recvAEAD: recv,
+			keyID:    keyID & KeyIDMask,
 			peerID:   peerID,
-			header:   dataHeader(peerID, 0),
+			header:   dataHeader(peerID, keyID),
 		}
 		copy(d.sendImplicitIV[4:], keys.SendHMACKey[:DataChannelIVSize-4])
 		copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:DataChannelIVSize-4])
@@ -121,8 +122,9 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 		recvHMACKey: append([]byte(nil), keys.RecvHMACKey[:authSize]...),
 		authHash:    authHash,
 		authSize:    authSize,
+		keyID:       keyID & KeyIDMask,
 		peerID:      peerID,
-		header:      dataHeader(peerID, 0),
+		header:      dataHeader(peerID, keyID),
 	}
 	d.sendMACPool.New = func() any {
 		return hmac.New(d.authHash, d.sendHMACKey)

@@ -18,7 +18,7 @@ func TestRenegotiateFailsWithoutTLS(t *testing.T) {
 	}
 	defer client.Close()
 
-	err = client.renegotiate()
+	err = client.renegotiate(nil)
 	if err == nil {
 		t.Fatal("expected error from renegotiate without TLS connection")
 	}
@@ -63,6 +63,7 @@ func TestSendSoftResetRotatesKeyID(t *testing.T) {
 	}
 
 	// Perform soft reset - should rotate to keyID=1 and reset counters.
+	client.RotateKeyID()
 	if err := client.SendSoftReset(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -91,9 +92,9 @@ func TestSendSoftResetRotatesKeyID(t *testing.T) {
 	}
 }
 
-// TestClassifyWatchAcceptsAlternatingSoftResets verifies that the soft reset
-// watcher correctly accepts rekeys on alternating key IDs (0->1->0->1).
-func TestClassifyWatchAcceptsAlternatingSoftResets(t *testing.T) {
+// TestClassifyWatchAcceptsNewEpochSoftResets verifies that the soft reset
+// watcher accepts a different key ID than the current epoch.
+func TestClassifyWatchAcceptsNewEpochSoftResets(t *testing.T) {
 	var serverID SessionID
 	copy(serverID[:], []byte("server01"))
 
@@ -165,4 +166,182 @@ func TestDataLockProtectsDataChannelSwap(t *testing.T) {
 // testCAPEM returns a minimal self-signed certificate for test configs.
 func testCAPEM() []byte {
 	return []byte(testCert)
+}
+
+func TestNextKeyIDFollowsOpenVPNSequence(t *testing.T) {
+	// 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 1
+	got := uint8(0)
+	want := []uint8{1, 2, 3, 4, 5, 6, 7, 1, 2}
+	for i, w := range want {
+		got = NextKeyID(got)
+		if got != w {
+			t.Fatalf("step %d: NextKeyID = %d, want %d", i+1, got, w)
+		}
+	}
+}
+
+func TestSoftResetAdvancesOpenVPNKeyID(t *testing.T) {
+	clientIO, _ := newMemoryPacketPair()
+	clientCrypt, err := NewTLSCrypt(testStaticKey(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	client := NewControlChannel(clientIO, clientCrypt, clientID)
+
+	if client.keyID != 0 {
+		t.Fatalf("initial key ID = %d; want 0", client.keyID)
+	}
+	client.RotateKeyID()
+	if client.keyID != 1 {
+		t.Fatalf("first soft reset key ID = %d; want 1", client.keyID)
+	}
+	client.RotateKeyID()
+	if client.keyID != 2 {
+		t.Fatalf("second soft reset key ID = %d; want 2", client.keyID)
+	}
+}
+
+func TestRekeyDataHeaderUsesActiveKeyID(t *testing.T) {
+	keys := &KeyMaterial{
+		SendCipherKey: make([]byte, 16),
+		SendHMACKey:   make([]byte, maxHMACKeyLength),
+		RecvCipherKey: make([]byte, 16),
+		RecvHMACKey:   make([]byte, maxHMACKeyLength),
+	}
+	for i := range keys.SendCipherKey {
+		keys.SendCipherKey[i] = 0x11
+		keys.RecvCipherKey[i] = 0x33
+	}
+	for i := range keys.SendHMACKey {
+		keys.SendHMACKey[i] = 0x22
+		keys.RecvHMACKey[i] = 0x44
+	}
+
+	initial, err := NewDataChannel(keys, CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(keys, CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := initial.Encrypt([]byte{0x45, 0, 0, 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(first[0]); keyID != 0 {
+		t.Fatalf("initial data packet key ID = %d; want 0", keyID)
+	}
+
+	second, err := rekeyed.Encrypt([]byte{0x45, 0, 0, 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(second[0]); keyID != 1 {
+		t.Fatalf("rekeyed data packet key ID = %d; want 1", keyID)
+	}
+}
+
+func TestParsePushReplyAuthToken(t *testing.T) {
+	msg := "PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0,auth-token SESS_ID_tok,auth-token-user dGVzdA=="
+	reply, err := ParsePushReply(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, pass, ok := reply.AuthToken()
+	if !ok || pass != "SESS_ID_tok" || user != "test" {
+		t.Fatalf("unexpected auth-token: user=%q pass=%q ok=%v", user, pass, ok)
+	}
+}
+
+func TestStashedSoftResetIsNotSwallowedByControlRead(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Current epoch is 1. Server starts epoch 2 while the client is still
+	// reading TLS records on epoch 1.
+	client.AdoptKeyID(1)
+	server.AdoptKeyID(2)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ordinary Read must not deliver or drop the next-epoch soft reset.
+	readCtx, readCancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer readCancel()
+	if pkt, err := client.Read(readCtx); err == nil {
+		t.Fatalf("Read delivered %s key=%d, want timeout", pkt.Opcode, pkt.KeyID)
+	}
+
+	got, err := client.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Opcode != PControlSoftResetV1 || got.KeyID != 2 {
+		t.Fatalf("stashed packet = %s key=%d", got.Opcode, got.KeyID)
+	}
+}
+
+func TestMarkReceivedUnblocksNextEpochControl(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Server starts a new epoch at key 1 with soft-reset message 0.
+	server.AdoptKeyID(1)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	pkt, err := client.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkt.KeyID != 1 || pkt.MessageID != 0 {
+		t.Fatalf("soft reset = key %d msg %d", pkt.KeyID, pkt.MessageID)
+	}
+
+	client.AdoptKeyID(1)
+	client.MarkReceived(pkt.MessageID)
+	client.QueueAck(pkt.MessageID)
+	if err := client.SendSoftReset(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// ServerHello is new-epoch message 1. Without MarkReceived the client
+	// would wait forever for message 0 and this Read would time out.
+	if _, err := server.Send(ctx, PControlV1, []byte("server-hello")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := client.Read(ctx)
+	if err != nil {
+		t.Fatalf("client did not receive post-rekey control: %v", err)
+	}
+	if got.MessageID != 1 || string(got.Payload) != "server-hello" {
+		t.Fatalf("unexpected packet: id=%d payload=%q", got.MessageID, got.Payload)
+	}
+}
+
+func TestCaptureAuthTokenUsedOnNextKeyMethod(t *testing.T) {
+	client := &Client{
+		config:   &ClientConfig{Username: "orig", Password: "origpass"},
+		authUser: "orig",
+		authPass: "origpass",
+	}
+	client.captureAuthToken(&PushReply{AuthTokenUser: "test", AuthTokenPass: "SESS_ID_next"})
+	if client.authUser != "test" || client.authPass != "SESS_ID_next" {
+		t.Fatalf("auth credentials not refreshed: %q/%q", client.authUser, client.authPass)
+	}
+	if client.lastAuthToken != "SESS_ID_next" {
+		t.Fatalf("lastAuthToken = %q", client.lastAuthToken)
+	}
 }

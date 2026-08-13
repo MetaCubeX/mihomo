@@ -88,14 +88,25 @@ func (r *KeyMethod2Record) MarshalClient() ([]byte, error) {
 }
 
 func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
+	record, _, err := ParseServerKeyMethod2RecordConsumed(packet)
+	return record, err
+}
+
+// ParseServerKeyMethod2RecordConsumed parses a server key-method-2 record and
+// reports how many bytes were consumed so following TLS control data
+// (PUSH_REPLY / AUTH_FAILED) can be preserved.
+//
+// OpenVPN 2.6 may omit the optional username, password and peer-info strings
+// after the mandatory options string.
+func ParseServerKeyMethod2RecordConsumed(packet []byte) (*KeyMethod2Record, int, error) {
 	if len(packet) < 4+1+keySourceRandomSize*2 {
-		return nil, errors.New("key method 2 packet too short")
+		return nil, 0, errors.New("key method 2 packet too short")
 	}
 	if binary.BigEndian.Uint32(packet[:4]) != 0 {
-		return nil, errors.New("invalid key method 2 prefix")
+		return nil, 0, errors.New("invalid key method 2 prefix")
 	}
 	if packet[4]&0x0f != KeyMethod2 {
-		return nil, fmt.Errorf("unsupported key method %d", packet[4])
+		return nil, 0, fmt.Errorf("unsupported key method %d", packet[4])
 	}
 	offset := 5
 	record := &KeyMethod2Record{}
@@ -107,12 +118,30 @@ func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
 	var err error
 	record.Options, offset, err = readOpenVPNString(packet, offset)
 	if err != nil {
-		return nil, fmt.Errorf("read options: %w", err)
+		return nil, 0, fmt.Errorf("read options: %w", err)
 	}
-	record.Username, offset, _ = readOpenVPNString(packet, offset)
-	record.Password, offset, _ = readOpenVPNString(packet, offset)
-	record.PeerInfo, _, _ = readOpenVPNString(packet, offset)
-	return record, nil
+	// Trailing username / password / peer-info are optional. A truncated
+	// length prefix is treated as "not present" rather than a hard error so
+	// a shortened 2.6 record still parses.
+	if record.Username, offset, err = readOpenVPNString(packet, offset); err != nil {
+		if errors.Is(err, ioStringEOF) {
+			return record, offset, nil
+		}
+		return nil, 0, err
+	}
+	if record.Password, offset, err = readOpenVPNString(packet, offset); err != nil {
+		if errors.Is(err, ioStringEOF) {
+			return record, offset, nil
+		}
+		return nil, 0, err
+	}
+	if record.PeerInfo, offset, err = readOpenVPNString(packet, offset); err != nil {
+		if errors.Is(err, ioStringEOF) {
+			return record, offset, nil
+		}
+		return nil, 0, err
+	}
+	return record, offset, nil
 }
 
 func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID, cipherKeyLen int) (*KeyMaterial, error) {
@@ -232,19 +261,18 @@ func readOpenVPNString(packet []byte, offset int) (string, int, error) {
 		return "", offset, ioStringEOF
 	}
 	size := int(binary.BigEndian.Uint16(packet[offset : offset+2]))
-	offset += 2
 	if size == 0 {
-		return "", offset, nil
+		return "", offset + 2, nil
 	}
-	if offset+size > len(packet) {
+	if offset+2+size > len(packet) {
+		// Do not consume the length prefix: leftover bytes may be PUSH_REPLY.
 		return "", offset, ioStringEOF
 	}
-	raw := packet[offset : offset+size]
-	offset += size
+	raw := packet[offset+2 : offset+2+size]
 	if raw[len(raw)-1] == 0 {
 		raw = raw[:len(raw)-1]
 	}
-	return string(raw), offset, nil
+	return string(raw), offset + 2 + size, nil
 }
 
 var ioStringEOF = errors.New("openvpn string truncated")
