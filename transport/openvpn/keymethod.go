@@ -174,6 +174,10 @@ func InstallScriptOptionsString(proto, cipher, auth string, compLZO string) stri
 }
 
 func InstallScriptPeerInfo(cipher string, dataCiphers []string, compLZO string, peerInfo map[string]string) string {
+	ivVer := "mihomo-openvpn"
+	if value, ok := peerInfo["IV_VER"]; ok {
+		ivVer = value
+	}
 	lzo := ""
 	if compLZO == CompLzoYes {
 		lzo = "IV_LZO=1\n"
@@ -188,11 +192,19 @@ func InstallScriptPeerInfo(cipher string, dataCiphers []string, compLZO string, 
 		}
 		ivCiphers = strings.Join(normalized, ":")
 	}
-	info := fmt.Sprintf("IV_VER=mihomo-openvpn\nIV_PROTO=6\n%sIV_CIPHERS=%s\n", lzo, ivCiphers)
+	info := fmt.Sprintf("IV_VER=%s\nIV_PROTO=6\n%sIV_CIPHERS=%s\n", ivVer, lzo, ivCiphers)
 	// Append user-defined peer-info entries (e.g. IV_HWADDR, UV_*) after the
 	// built-in fields. Keys are sorted so the output is deterministic.
 	keys := make([]string, 0, len(peerInfo))
 	for key := range peerInfo {
+		switch key {
+		case "IV_VER", "IV_PROTO", "IV_CIPHERS":
+			continue
+		case "IV_LZO":
+			if lzo != "" {
+				continue
+			}
+		}
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
