@@ -233,8 +233,12 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 		// Authenticated rekeys keep the previous ifconfig / peer-id.
 		// OpenVPN 2.6 often does not send another PUSH_REPLY here, but may
 		// push a fresh auth-token (send_push_reply_auth_token) that must be
-		// consumed to keep the next key-method-2 auth from expiring.
-		c.consumeRekeyPush()
+		// consumed to keep the next key-method-2 auth from expiring. If the
+		// server rejected the token (AUTH_FAILED), abort before installing a
+		// new data channel rather than proceeding with a stale credential.
+		if err := c.consumeRekeyPush(); err != nil {
+			return nil, fmt.Errorf("consume rekey push: %w", err)
+		}
 		push := c.push
 		negotiatedCipher, err := c.config.NegotiateCipher(push.DataCiphers, push.Cipher)
 		if err != nil {
@@ -296,7 +300,7 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 // rekey: it inherits the previous peer-id and applies any fresh auth-token
 // pushed by send_push_reply_auth_token. Must be called only when c.push is
 // non-nil (i.e. on rekey, not the initial handshake).
-func (c *Client) consumeRekeyPush() {
+func (c *Client) consumeRekeyPush() error {
 	base := *c.push
 	rekey := &PushReply{
 		PeerID: base.PeerID,
@@ -308,14 +312,23 @@ func (c *Client) consumeRekeyPush() {
 	if reply, rest, ok := takePushReply(c.leftoverTLS); ok {
 		c.leftoverTLS = rest
 		push = mergePushReply(push, reply)
+	} else if bytes.Contains(c.leftoverTLS, []byte("AUTH_FAILED")) {
+		return authFailedError(c.leftoverTLS)
 	} else if conn := c.tlsConn.Load(); conn != nil {
-		if reply, rest, ok := readTokenPushReply(conn, c.leftoverTLS); ok {
-			c.leftoverTLS = rest
+		reply, rest, err := readTokenPushReply(conn, c.leftoverTLS)
+		if err != nil {
+			return err
+		}
+		// Preserve buffered bytes even without a complete reply so a
+		// token-only PUSH_REPLY split across reads is not discarded.
+		c.leftoverTLS = rest
+		if reply != nil {
 			push = mergePushReply(push, reply)
 		}
 	}
 	c.push = push
 	c.captureAuthToken(push)
+	return nil
 }
 
 func (c *Client) installDataChannel(newData *DataChannel) {
@@ -704,33 +717,63 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 // blocks on it; a timeout keeps rekeys from stalling.
 const tokenPushReadTimeout = 300 * time.Millisecond
 
+// errAuthFailed is returned when a rekey's token exchange reports
+// AUTH_FAILED instead of a renewed token.
+var errAuthFailed = errors.New("openvpn authentication failed")
+
+// pushReadConn is the subset of tls.Conn that readTokenPushReply needs, so
+// tests can inject a deterministic byte-stream reader without a full TLS
+// handshake.
+type pushReadConn interface {
+	Read(p []byte) (int, error)
+	SetReadDeadline(t time.Time) error
+}
+
 // readTokenPushReply tries to consume a token-only PUSH_REPLY (an
 // auth-token renewal pushed by send_push_reply_auth_token) from the TLS
 // stream, without stalling a rekey. leftover holds bytes already read past
-// the server key-method-2 record. Returns the reply (if any), the updated
-// leftover, and whether a reply was found.
-func readTokenPushReply(conn *tls.Conn, leftover []byte) (*PushReply, []byte, bool) {
+// the server key-method-2 record.
+//
+// TLS is a byte stream: the reply may be split across reads, so the buffer
+// is parsed after every read including the final one. On timeout the
+// buffered bytes are preserved and a nil reply (no error) is returned, so a
+// partially-received reply is not lost. AUTH_FAILED is a hard error.
+func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte, error) {
 	buf := append([]byte(nil), leftover...)
 	tmp := make([]byte, 4096)
-	// Try leftover first, then read with a short deadline so a record
-	// arriving right after the key-method-2 record is still captured.
+	// Parse the already-buffered bytes first; a reply may be fully present.
+	if reply, rest, ok := takePushReply(buf); ok {
+		return reply, rest, nil
+	}
+	if bytes.Contains(buf, []byte("AUTH_FAILED")) {
+		return nil, buf, authFailedError(buf)
+	}
 	for attempt := 0; attempt < 2; attempt++ {
-		if reply, rest, ok := takePushReply(buf); ok {
-			return reply, rest, true
-		}
-		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
-			return nil, buf, false
-		}
 		_ = conn.SetReadDeadline(time.Now().Add(tokenPushReadTimeout))
 		n, err := conn.Read(tmp)
 		if err != nil {
 			// Timeout (or no more data): keep whatever was buffered.
 			_ = conn.SetReadDeadline(time.Time{})
-			return nil, buf, false
+			return nil, buf, nil
 		}
 		buf = append(buf, tmp[:n]...)
+		// Parse after every successful read, including the last allowed one.
+		if reply, rest, ok := takePushReply(buf); ok {
+			return reply, rest, nil
+		}
+		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
+			return nil, buf, authFailedError(buf)
+		}
 	}
-	return nil, buf, false
+	return nil, buf, nil
+}
+
+func authFailedError(buf []byte) error {
+	msg := string(buf)
+	if idx := strings.IndexByte(msg, 0); idx >= 0 {
+		msg = msg[:idx]
+	}
+	return fmt.Errorf("%w: %s", errAuthFailed, strings.TrimSpace(msg))
 }
 
 func takePushReply(buf []byte) (*PushReply, []byte, bool) {

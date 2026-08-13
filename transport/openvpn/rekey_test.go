@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"os"
 	"testing"
 	"time"
 )
@@ -450,10 +451,11 @@ func TestRekeyRetransmitsLostClientHello(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Drop the client-hello the first time it is sent; it must be
-	// retransmitted by the loop.
-	gotHello := false
-	for i := 0; i < 3; i++ {
+	// Drop the client-hello the first time it is sent; the retransmit loop
+	// must resend the same reliable message.
+	firstHello := uint32(^uint32(0))
+	gotRetransmit := false
+	for i := 0; i < 5 && !gotRetransmit; i++ {
 		raw, err := serverIO.ReadPacket(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -462,13 +464,227 @@ func TestRekeyRetransmitsLostClientHello(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if pkt.Opcode == PControlV1 && string(pkt.Payload) == "client-hello" {
-			gotHello = true
-			break
+		if pkt.Opcode != PControlV1 || string(pkt.Payload) != "client-hello" {
+			continue
+		}
+		if firstHello == ^uint32(0) {
+			// First copy: record its message ID and ignore it (the loss).
+			firstHello = pkt.MessageID
+			continue
+		}
+		// Second copy: same message ID (reliable retransmission), same payload.
+		if pkt.MessageID == firstHello {
+			gotRetransmit = true
 		}
 	}
-	if !gotHello {
-		t.Fatal("client-hello never retransmitted after loss")
+	if !gotRetransmit {
+		t.Fatal("client-hello was never retransmitted after loss")
+	}
+}
+
+// TestRekeyRetransmitKeepsResetACK verifies that a retransmitted client soft
+// reset still carries the ACK for the server's reset (merged, not replaced).
+func TestRekeyRetransmitKeepsResetACK(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	clientCrypt, err := NewTLSCrypt(testStaticKey(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverCrypt, err := NewTLSCrypt(testStaticKey(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+
+	client := NewControlChannel(clientIO, clientCrypt, clientID)
+	client.SetRemoteSessionID(serverID)
+	server := NewControlChannel(serverIO, serverCrypt, serverID)
+	server.SetRemoteSessionID(clientID)
+	client.clock = func() time.Time { return time.Unix(1714567890, 0) }
+	server.clock = func() time.Time { return time.Unix(1714567891, 0) }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Server starts epoch 1 with a soft reset (message 0). Client adopts the
+	// epoch, ACKs message 0, and replies with its own soft reset carrying that
+	// ACK.
+	server.AdoptKeyID(1)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	soft, err := client.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.AdoptKeyID(1)
+	client.MarkReceived(soft.MessageID)
+	client.QueueAck(soft.MessageID)
+	if err := client.SendSoftReset(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the first client soft reset; its ACK list must contain the server
+	// reset (message 0).
+	raw, err := serverIO.ReadPacket(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, _, err := DecodeControlPacket(serverCrypt, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Opcode != PControlSoftResetV1 {
+		t.Fatalf("first packet opcode = %s", first.Opcode)
+	}
+	foundResetAck := false
+	for _, ack := range first.AckIDs {
+		if ack == 0 {
+			foundResetAck = true
+		}
+	}
+	if !foundResetAck {
+		t.Fatalf("first client soft reset missing reset ACK: %v", first.AckIDs)
+	}
+
+	// Retransmit the client's pending messages; the retransmitted soft reset
+	// must STILL carry the reset ACK.
+	if err := client.RetransmitPending(ctx); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = serverIO.ReadPacket(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	re, _, _, err := DecodeControlPacket(serverCrypt, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if re.Opcode != PControlSoftResetV1 {
+		t.Fatalf("retransmitted opcode = %s", re.Opcode)
+	}
+	foundResetAck = false
+	for _, ack := range re.AckIDs {
+		if ack == 0 {
+			foundResetAck = true
+		}
+	}
+	if !foundResetAck {
+		t.Fatalf("retransmitted soft reset lost the reset ACK: %v", re.AckIDs)
+	}
+}
+
+// TestStaleSoftResetNotParked verifies that an ordinary control read does not
+// park a delayed soft reset from a retiring epoch (only the strictly-next key
+// ID may be parked), and that it mutates no ACK / pending state.
+func TestStaleSoftResetNotParked(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Client is on epoch 2. A delayed soft reset for the retiring epoch 1
+	// arrives while the client reads control packets (not the watcher).
+	client.AdoptKeyID(2)
+	server.AdoptKeyID(1)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// An ordinary read must NOT park the stale reset.
+	readCtx, readCancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer readCancel()
+	if pkt, err := client.Read(readCtx); err == nil {
+		t.Fatalf("Read delivered %s key=%d, want stale reset dropped", pkt.Opcode, pkt.KeyID)
+	}
+	if client.pendingSoftReset != nil {
+		t.Fatalf("stale soft reset was parked: key=%d", client.pendingSoftReset.KeyID)
+	}
+
+	// The watcher must not accept the stale epoch either; only the next one.
+	server.AdoptKeyID(3)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := client.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.KeyID != 3 {
+		t.Fatalf("watcher accepted stale epoch, got key=%d want 3", got.KeyID)
+	}
+}
+
+// TestConsumeRekeyPushAUTHFailed verifies that AUTH_FAILED during a rekey is a
+// hard error, not "no token".
+func TestConsumeRekeyPushAUTHFailed(t *testing.T) {
+	client := &Client{push: &PushReply{PeerID: 5, AuthTokenPass: "SESS_ID_old"}}
+	client.leftoverTLS = []byte("AUTH_FAILED,SESSION: auth-token expired\x00")
+	err := client.consumeRekeyPush()
+	if err == nil {
+		t.Fatal("consumeRekeyPush returned nil on AUTH_FAILED")
+	}
+	if !errors.Is(err, errAuthFailed) {
+		t.Fatalf("expected errAuthFailed, got %v", err)
+	}
+}
+
+// chunkConn serves a fixed byte stream one chunk per Read, then blocks
+// (returns a timeout-style error) once exhausted. Simulates TLS exposing a
+// byte stream whose boundaries do not match message boundaries.
+type chunkConn struct {
+	data [][]byte
+	idx  int
+}
+
+func (c *chunkConn) Read(p []byte) (int, error) {
+	if c.idx >= len(c.data) {
+		return 0, os.ErrDeadlineExceeded
+	}
+	n := copy(p, c.data[c.idx])
+	c.idx++
+	return n, nil
+}
+
+func (c *chunkConn) SetReadDeadline(t time.Time) error { return nil }
+
+// TestReadTokenPushReplySplitAcrossReads verifies that a token-only PUSH_REPLY
+// split across two reads is parsed (TLS is a byte stream).
+func TestReadTokenPushReplySplitAcrossReads(t *testing.T) {
+	conn := &chunkConn{data: [][]byte{
+		[]byte("PUSH_REPLY,auth-token "),
+		[]byte("SESS_ID_split\x00"),
+	}}
+	reply, rest, err := readTokenPushReply(conn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply == nil || reply.AuthTokenPass != "SESS_ID_split" {
+		t.Fatalf("split token not parsed: %#v", reply)
+	}
+	if len(rest) != 0 {
+		t.Fatalf("unexpected leftover: %q", rest)
+	}
+}
+
+// TestReadTokenPushReplyPartialPreserved verifies that a partial reply is
+// preserved (not discarded) when the stream ends without a complete message.
+func TestReadTokenPushReplyPartialPreserved(t *testing.T) {
+	conn := &chunkConn{data: [][]byte{[]byte("PUSH_REPLY,auth-token ")}}
+	reply, rest, err := readTokenPushReply(conn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply != nil {
+		t.Fatalf("unexpected reply for partial data: %#v", reply)
+	}
+	if string(rest) != "PUSH_REPLY,auth-token " {
+		t.Fatalf("partial bytes lost: %q", rest)
 	}
 }
 

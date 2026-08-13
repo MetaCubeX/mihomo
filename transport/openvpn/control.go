@@ -304,17 +304,23 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			c.mu.Lock()
 			curKey := c.keyID
 			sameSession := c.remote == (SessionID{}) || packet.LocalSession == c.remote
-			if packet.Opcode == PControlSoftResetV1 && packet.KeyID != curKey && sameSession {
-				if c.pendingSoftReset == nil {
-					c.pendingSoftReset = packet
-				}
-				for _, ackID := range packet.AckIDs {
-					delete(c.pending, ackID)
+			if packet.Opcode == PControlSoftResetV1 {
+				// Only park a soft reset for the strictly-next epoch. A
+				// delayed reset from a retiring epoch must not move the
+				// client backwards, and an invalid one must not mutate ACK /
+				// pending-message state.
+				if packet.KeyID == NextKeyID(curKey) && sameSession {
+					if c.pendingSoftReset == nil {
+						c.pendingSoftReset = packet
+					}
+					for _, ackID := range packet.AckIDs {
+						delete(c.pending, ackID)
+					}
 				}
 				c.mu.Unlock()
 				continue
 			}
-			if packet.Opcode != PControlSoftResetV1 && packet.KeyID != curKey {
+			if packet.KeyID != curKey {
 				c.mu.Unlock()
 				// Drop control packets from a retiring key epoch so they
 				// cannot be fed into the new TLS session.
@@ -406,7 +412,15 @@ func (c *ControlChannel) RetransmitPending(ctx context.Context) error {
 	packets := make([]*ControlPacket, 0, len(c.pending))
 	for _, packet := range c.pending {
 		cp := *packet
-		cp.AckIDs = append([]uint32(nil), c.ackPending...)
+		// Merge the packet's original ACKs (e.g. the soft-reset ACK for the
+		// server's reset) with any newly pending ACKs, instead of replacing
+		// them with the current list. Replacing would drop the ACK the first
+		// send carried once ackPending had been cleared.
+		acks := append([]uint32(nil), packet.AckIDs...)
+		for _, ack := range c.ackPending {
+			acks = appendAck(acks, ack)
+		}
+		cp.AckIDs = acks
 		cp.AckRemoteSession = c.remote
 		packets = append(packets, &cp)
 	}
