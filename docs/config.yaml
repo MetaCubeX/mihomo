@@ -1650,6 +1650,7 @@ proxies: # socks5
     password: "<your password>"
     # client-fingerprint: chrome
     udp: true
+    # client-metadata: "" # 发送给服务端的客户端元数据，由于这可能被用于统计客户端信息并区别对待，从v1.19.30开始默认再不发送该内容，如果需要请自行填写
     # idle-session-check-interval: 30 # seconds
     # idle-session-timeout: 30 # seconds
     # min-idle-session: 0

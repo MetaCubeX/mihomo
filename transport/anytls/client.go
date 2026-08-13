@@ -19,6 +19,7 @@ import (
 
 type ClientConfig struct {
 	Password                 string
+	ClientMetadata           string
 	IdleSessionCheckInterval time.Duration
 	IdleSessionTimeout       time.Duration
 	MinIdleSession           int
@@ -47,7 +48,7 @@ func NewClient(ctx context.Context, config ClientConfig) *Client {
 	}
 	// Initialize the padding state of this client
 	padding.UpdatePaddingScheme(padding.DefaultPaddingScheme, &c.padding)
-	c.sessionClient = session.NewClient(ctx, c.createOutboundTLSConnection, &c.padding, config.IdleSessionCheckInterval, config.IdleSessionTimeout, config.MinIdleSession, config.DisableReuse)
+	c.sessionClient = session.NewClient(ctx, c.createOutboundTLSConnection, &c.padding, config.ClientMetadata, config.IdleSessionCheckInterval, config.IdleSessionTimeout, config.MinIdleSession, config.DisableReuse)
 	return c
 }
 

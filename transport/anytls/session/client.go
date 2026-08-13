@@ -31,16 +31,18 @@ type Client struct {
 
 	padding *atomic.Pointer[padding.PaddingFactory]
 
+	clientMetadata     string
 	idleSessionTimeout time.Duration
 	minIdleSession     int
 	disableReuse       bool
 }
 
-func NewClient(ctx context.Context, dialOut util.DialOutFunc, _padding *atomic.Pointer[padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration, minIdleSession int, disableReuse bool) *Client {
+func NewClient(ctx context.Context, dialOut util.DialOutFunc, _padding *atomic.Pointer[padding.PaddingFactory], clientMetadata string, idleSessionCheckInterval, idleSessionTimeout time.Duration, minIdleSession int, disableReuse bool) *Client {
 	c := &Client{
 		sessions:           make(map[uint64]*Session),
 		dialOut:            dialOut,
 		padding:            _padding,
+		clientMetadata:     clientMetadata,
 		idleSessionTimeout: idleSessionTimeout,
 		minIdleSession:     minIdleSession,
 		disableReuse:       disableReuse,
@@ -126,7 +128,7 @@ func (c *Client) createSession(ctx context.Context) (*Session, error) {
 		return nil, err
 	}
 
-	session := NewClientSession(underlying, c.padding)
+	session := NewClientSession(underlying, c.padding, c.clientMetadata)
 	session.seq = c.sessionCounter.Add(1)
 	session.dieHook = func() {
 		if !c.disableReuse {
