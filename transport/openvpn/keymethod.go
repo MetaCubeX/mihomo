@@ -196,7 +196,14 @@ func looksLikeFollowingTLSControl(b []byte) bool {
 	}
 	return bytes.HasPrefix(b, []byte("PUSH_REPLY")) ||
 		bytes.HasPrefix(b, []byte("AUTH_FAILED")) ||
-		bytes.HasPrefix(b, []byte("PUSH_REQUEST"))
+		bytes.HasPrefix(b, []byte("PUSH_REQUEST")) ||
+		bytes.HasPrefix(b, []byte("AUTH_PENDING")) ||
+		bytes.HasPrefix(b, []byte("INFO_PRE")) ||
+		bytes.HasPrefix(b, []byte("INFO")) ||
+		bytes.HasPrefix(b, []byte("RESTART")) ||
+		bytes.HasPrefix(b, []byte("HALT")) ||
+		bytes.HasPrefix(b, []byte("EXIT")) ||
+		bytes.HasPrefix(b, []byte("CR_RESPONSE"))
 }
 
 func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID, cipherKeyLen int) (*KeyMaterial, error) {

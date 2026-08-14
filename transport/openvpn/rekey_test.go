@@ -229,6 +229,185 @@ func TestSoftResetAdvancesOpenVPNKeyID(t *testing.T) {
 // packets keep using the old (lame-duck) key until a packet labeled with the
 // new key ID decrypts successfully — the OpenVPN-equivalent signal that the
 // peer has activated the new key.
+// TestRekeyKeepsOldOutboundEvenIfNeverSent reproduces the review point 2: a
+// rekey on a quiet / receive-only tunnel (the old epoch never sent a packet)
+// must still keep the old key for outbound, because only the very first
+// handshake (old == nil) starts on the new key. The old key's send counter
+// is irrelevant.
+func TestRekeyKeepsOldOutboundEvenIfNeverSent(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	mk := func() *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = 0x11
+		}
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = 0x22
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+	initial, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Install initial, but NEVER send on it: the tunnel is quiet.
+	client.installDataChannel(initial)
+	client.installDataChannel(rekeyed)
+
+	// Outbound must still be the old key (id 0) — not the new key.
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, err := serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 0 {
+		t.Fatalf("outbound key ID after quiet rekey = %d; want 0 (old key kept)", keyID)
+	}
+}
+
+// TestFailedDecryptDoesNotPromote reproduces the review point 1: a packet
+// that fails decryption (malformed / forged) must not set peer evidence and
+// must not promote the new outbound key.
+func TestFailedDecryptDoesNotPromote(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	mk := func() *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = 0x11
+		}
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = 0x22
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+	initial, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(initial)
+	client.installDataChannel(rekeyed)
+
+	// A malformed packet labeled with the new key id must fail decryption and
+	// must NOT latch evidence (the review's in-memory regression: a one-byte
+	// P_DATA_V2 with the new key id).
+	bad := []byte{opcodeKeyID(PDataV2, 1)}
+	if _, err := client.decryptDataPacket(bad); err == nil {
+		t.Fatal("malformed new-key packet unexpectedly decrypted")
+	}
+	if rekeyed.PeerActive() {
+		t.Fatal("failed decryption latched peer evidence")
+	}
+
+	// Outbound stays on the old key after the failed decrypt.
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, err := serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 0 {
+		t.Fatalf("outbound key ID after failed decrypt = %d; want 0", keyID)
+	}
+}
+
+// TestOutboundPromotesAfterAuthDeferredExpire verifies the no-evidence
+// backstop mirrors OpenVPN's auth_deferred_expire window (~60s), not the old
+// key's destruction time: after the window elapses with no peer evidence, a
+// one-way tunnel still rotates outbound to the new key.
+func TestOutboundPromotesAfterAuthDeferredExpire(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	mk := func() *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = 0x11
+		}
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = 0x22
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+	initial, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(initial)
+	client.installDataChannel(rekeyed)
+
+	// Before the window elapses, outbound stays on the old key (no evidence).
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, _ := serverIO.ReadPacket(context.Background())
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 0 {
+		t.Fatalf("outbound before window = %d; want 0", keyID)
+	}
+
+	// Simulate the auth_deferred_expire window elapsing.
+	client.outboundStart = time.Now().Add(-authDeferredExpire - time.Second)
+
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, _ = serverIO.ReadPacket(context.Background())
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 1 {
+		t.Fatalf("outbound after window = %d; want 1", keyID)
+	}
+}
+
 func TestOutboundKeyStaysLameDuckUntilPeerEvidence(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
 	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)

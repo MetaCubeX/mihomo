@@ -40,6 +40,10 @@ type Client struct {
 	tlsConn     atomic.Pointer[tls.Conn]
 	data        *DataChannel
 	outboundKey *DataChannel
+	// outboundStart is when the current outbound-key selection began. It
+	// anchors the no-evidence promotion deadline (auth_deferred_expire)
+	// used by writeDataPacket when peer evidence never arrives.
+	outboundStart time.Time
 	// retiring is the previous data-channel epoch, kept during a rekey so
 	// packets still labeled with the old key ID can be decrypted.
 	retiring *DataChannel
@@ -339,11 +343,13 @@ func (c *Client) consumeRekeyPush() error {
 	return nil
 }
 
-// outboundPromoteGrace is the safety margin used to promote the outbound
-// data key just before the previous (lame-duck) epoch would stop being
-// accepted by the peer. It exists only as a backstop for asymmetric traffic:
-// the normal promotion path is receive-evidence of the new key.
-const outboundPromoteGrace = 60 * time.Second
+// authDeferredExpire is the no-evidence promotion window for the outbound
+// data key, mirroring OpenVPN's auth_deferred_expire_window
+// (ssl.c): min(handshake_window, reneg_seconds/2). With defaults that is
+// min(60, 1800) = 60s. tls_select_encryption_key switches outbound to the
+// new key once it is authenticated, which happens inside this window, so
+// this is the correct deadline for promoting without peer evidence.
+const authDeferredExpire = 60 * time.Second
 
 // installDataChannel records a freshly derived data epoch. Decryption can
 // immediately use the new key (the peer may label packets with it), but the
@@ -363,13 +369,21 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 	old := c.data
 	c.retiring = old
 	c.data = newData
-	// Outbound keeps the old epoch unless it was never activated (first
-	// handshake), in which case the new key is selected immediately.
-	if old != nil && old.Started() {
+	// Outbound keeps the previous epoch whenever one exists (OpenVPN
+	// key_state_soft_reset moves the old primary into the lame-duck slot and
+	// tls_select_encryption_key keeps selecting it until the new key is
+	// authenticated). Only the very first handshake (old == nil) starts on
+	// the new key immediately. An epoch's send counter is irrelevant: a
+	// quiet / receive-only tunnel never sends on the old key, but the old
+	// key is still the correct outbound candidate during deferred auth.
+	if old != nil {
 		c.outboundKey = old
 	} else {
 		c.outboundKey = newData
 	}
+	// The no-evidence promotion deadline starts when this outbound selection
+	// began (see writeDataPacket).
+	c.outboundStart = time.Now()
 	if c.dataByKey == nil {
 		c.dataByKey = make(map[uint8]*DataChannel)
 	}
@@ -426,7 +440,8 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	// the outbound key actually needs promoting, so data-plane reads and
 	// writes do not serialize on every packet.
 	backstop := func() bool {
-		return !c.retiringExpiry.IsZero() && time.Until(c.retiringExpiry) < outboundPromoteGrace
+		return !c.outboundStart.IsZero() &&
+			time.Since(c.outboundStart) >= authDeferredExpire
 	}
 	c.dataLock.RLock()
 	data := c.data
@@ -439,13 +454,15 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		outbound = data
 	}
 	// OpenVPN promotes the new key for outbound once the peer's key state
-	// is authenticated (tls_select_encryption_key). We cannot observe the
-	// peer's auth state directly, so we use the equivalent evidence: a data
-	// packet labeled with the new key ID decrypted successfully — the peer
-	// only labels outbound packets with a key whose auth completed. A
-	// just-before-expiry backstop promotes even in asymmetric traffic, so
-	// the lame-duck key is not used past the point the peer stops accepting
-	// it.
+	// is authenticated (tls_select_encryption_key), which happens within the
+	// new key's auth_deferred_expire window (min(handshake_window,
+	// reneg/2), ~60s with defaults). We cannot observe the peer's auth state
+	// directly, so we use the equivalent evidence: a data packet labeled
+	// with the new key ID decrypted successfully — the peer only labels
+	// outbound packets with a key whose auth completed. As a fallback for
+	// fully one-way tunnels where no evidence ever arrives, promote once the
+	// auth_deferred_expire window elapses, matching OpenVPN's selection
+	// transition — not the old key's destruction time.
 	needPromote := outbound != data && outbound != nil && (data.PeerActive() || backstop())
 	c.dataLock.RUnlock()
 	if needPromote {
@@ -455,6 +472,7 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		if c.outboundKey != c.data && c.outboundKey != nil &&
 			(c.data.PeerActive() || backstop()) {
 			c.outboundKey = c.data
+			c.outboundStart = time.Now()
 		}
 		outbound = c.outboundKey
 		c.dataLock.Unlock()
