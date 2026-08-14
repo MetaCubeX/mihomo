@@ -604,6 +604,147 @@ func TestAuthPendingDeadlineAnchoredAtObservation(t *testing.T) {
 	}
 }
 
+// TestAuthPendingUpdateCanShortenDeadline verifies a later AUTH_PENDING for
+// the same key replaces, rather than monotonically extends, the staged and
+// active data-epoch deadline, effective control deadline, outbound-key
+// backstop, and token reader's active operation deadline.
+func TestAuthPendingUpdateCanShortenDeadline(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.controlConn = NewControlConn(client.control)
+
+	long, err := parseAuthPendingTimeout("AUTH_PENDING,timeout 60")
+	if err != nil {
+		t.Fatal(err)
+	}
+	short, err := parseAuthPendingTimeout("AUTH_PENDING,timeout 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.applyAuthPendingTimeout(long)
+	client.applyAuthPendingTimeout(short)
+	client.control.mu.Lock()
+	transportRead := client.control.readDeadline
+	transportWrite := client.control.writeDeadline
+	client.control.mu.Unlock()
+	if !transportRead.Equal(short.authPendingUntil) || !transportWrite.Equal(short.authPendingUntil) {
+		t.Fatalf("later AUTH_PENDING did not replace transport deadline: read=%v write=%v want=%v",
+			transportRead, transportWrite, short.authPendingUntil)
+	}
+	client.dataLock.RLock()
+	staged := client.pendingDeferredUntil
+	client.dataLock.RUnlock()
+	if !staged.Equal(short.authPendingUntil) {
+		t.Fatalf("later AUTH_PENDING did not shorten staged deadline: got=%v want=%v",
+			staged, short.authPendingUntil)
+	}
+	fallback := time.Now().Add(30 * time.Second)
+	if effective := client.effectiveControlDeadline(fallback); !effective.Equal(short.authPendingUntil) {
+		t.Fatalf("effective deadline retained longer fallback: got=%v want=%v",
+			effective, short.authPendingUntil)
+	}
+
+	// Install the matching epoch and verify the same replacement reaches the
+	// outbound-key fallback, not only the pre-install staging fields.
+	mk := func(fill byte) *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = fill
+		}
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = fill + 1
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+	initial, err := NewDataChannel(mk(0x11), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := NewDataChannel(mk(0x22), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(initial)
+	client.control.AdoptKeyID(1)
+	client.applyAuthPendingTimeout(long)
+	client.applyAuthPendingTimeout(&PushReply{
+		AuthPendingTimeout: time.Second,
+		authPendingUntil:   time.Now().Add(-time.Millisecond),
+	})
+	client.installDataChannel(active)
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	packet, err := serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(packet[0]); keyID != 1 {
+		t.Fatalf("expired shorter AUTH_PENDING did not promote outbound key: got=%d want=1", keyID)
+	}
+
+	conn := &chunkConn{
+		data: [][]byte{
+			[]byte("AUTH_PENDING,timeout 60\x00"),
+			[]byte("AUTH_PENDING,timeout 1\x00"),
+			[]byte("PUSH_REPLY,auth-token SESS_ID_short\x00"),
+		},
+	}
+	if _, _, err := readTokenPushReply(conn, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(conn.operationDeadlines) < 2 {
+		t.Fatalf("AUTH_PENDING updates not propagated: %v", conn.operationDeadlines)
+	}
+	first := conn.operationDeadlines[0]
+	second := conn.operationDeadlines[1]
+	if !second.Before(first) {
+		t.Fatalf("reader ignored shorter AUTH_PENDING: first=%v second=%v", first, second)
+	}
+}
+
+// TestConsumeParkedRekeyPushClearsDeadline verifies a successful standalone
+// parked push cannot leave its AUTH_PENDING operation deadline on the
+// established connection's next waitForSoftReset cycle.
+func TestConsumeParkedRekeyPushClearsDeadline(t *testing.T) {
+	clientIO, _ := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.push = &PushReply{PeerID: 7}
+	client.controlConn = NewControlConn(client.control)
+	client.leftoverTLS = []byte("AUTH_PENDING,timeout 1\x00" +
+		"PUSH_REPLY,auth-token SESS_ID_parked\x00")
+
+	if err := client.consumeParkedRekeyPush(); err != nil {
+		t.Fatal(err)
+	}
+	client.control.mu.Lock()
+	readDeadline := client.control.readDeadline
+	writeDeadline := client.control.writeDeadline
+	client.control.mu.Unlock()
+	if !readDeadline.IsZero() || !writeDeadline.IsZero() {
+		t.Fatalf("successful parked push consume leaked operation deadline: read=%v write=%v",
+			readDeadline, writeDeadline)
+	}
+	if client.authPass != "SESS_ID_parked" {
+		t.Fatalf("parked auth token was not consumed: %q", client.authPass)
+	}
+}
+
 func TestStandaloneAuthPendingDoesNotCompletePush(t *testing.T) {
 	bareReply, _, bareOK := takePushReply([]byte("AUTH_PENDING\x00"))
 	if bareOK {
@@ -1276,9 +1417,11 @@ type chunkConn struct {
 	errs []error
 	idx  int
 	// lastDeadline records the most recent read deadline. lastWriteDeadline
-	// tracks the write side changed by SetDeadline.
-	lastDeadline      time.Time
-	lastWriteDeadline time.Time
+	// tracks the write side changed by SetDeadline; operationDeadlines retains
+	// each two-sided update so tests can verify later AUTH_PENDING replacement.
+	lastDeadline       time.Time
+	lastWriteDeadline  time.Time
+	operationDeadlines []time.Time
 }
 
 func (c *chunkConn) Read(p []byte) (int, error) {
@@ -1297,6 +1440,7 @@ func (c *chunkConn) Read(p []byte) (int, error) {
 func (c *chunkConn) SetDeadline(t time.Time) error {
 	c.lastDeadline = t
 	c.lastWriteDeadline = t
+	c.operationDeadlines = append(c.operationDeadlines, t)
 	return nil
 }
 

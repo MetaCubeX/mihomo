@@ -328,6 +328,11 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 // pushed by send_push_reply_auth_token. Must be called only when c.push is
 // non-nil (i.e. on rekey, not the initial handshake).
 func (c *Client) consumeRekeyPush() error {
+	// The token/deferred-push exchange owns every transport deadline installed
+	// while it runs. Clear them before returning so standalone parked-TLS calls
+	// cannot leak an operation deadline into the established-channel loop.
+	defer c.clearControlOperationDeadline()
+
 	base := *c.push
 	rekey := &PushReply{PeerID: base.PeerID}
 	push := mergePushReply(c.push, rekey)
@@ -397,6 +402,25 @@ func (c *Client) consumeRekeyPush() error {
 	return nil
 }
 
+func (c *Client) consumeParkedRekeyPush() error {
+	c.consumeQueuedControl()
+	if c.push != nil {
+		return c.consumeRekeyPush()
+	}
+	// Keep the ownership explicit even when no cached push exists.
+	c.clearControlOperationDeadline()
+	return nil
+}
+
+func (c *Client) clearControlOperationDeadline() {
+	if conn := c.tlsConn.Load(); conn != nil {
+		_ = conn.SetDeadline(time.Time{})
+	}
+	if c.controlConn != nil {
+		_ = c.controlConn.SetDeadline(time.Time{})
+	}
+}
+
 // applyAuthPendingTimeout records a server-advertised AUTH_PENDING,timeout N
 // so the outbound-key backstop does not promote the new key while the peer
 // is still in deferred authentication.
@@ -414,13 +438,13 @@ func (c *Client) applyAuthPendingTimeout(reply *PushReply) {
 	keyID := c.control.KeyID()
 	c.dataLock.Lock()
 	if c.data != nil && c.data.keyID == keyID {
-		if deadline.After(c.deferredUntil) {
-			c.deferredUntil = deadline
-		}
-	} else if !c.pendingDeferredSet || c.pendingDeferredKeyID != keyID ||
-		deadline.After(c.pendingDeferredUntil) {
+		// AUTH_PENDING is an update, not an extension-only hint: OpenVPN
+		// replaces the timeout for this authentication session even when the
+		// newly proposed deadline is shorter.
+		c.deferredUntil = deadline
+	} else {
 		// KM2/control has advanced to keyID but installDataChannel has not
-		// installed that data epoch. Stage the deadline with the key ID;
+		// installed that data epoch. Stage the latest deadline with the key ID;
 		// install will transfer it only to the matching epoch.
 		c.pendingDeferredKeyID = keyID
 		c.pendingDeferredUntil = deadline
@@ -440,16 +464,21 @@ func (c *Client) applyAuthPendingTimeout(reply *PushReply) {
 }
 
 func (c *Client) effectiveControlDeadline(fallback time.Time) time.Time {
+	keyID := c.control.KeyID()
 	c.dataLock.RLock()
 	deferred := c.deferredUntil
+	dataMatches := c.data != nil && c.data.keyID == keyID
 	pending := c.pendingDeferredUntil
-	pendingSet := c.pendingDeferredSet
+	pendingMatches := c.pendingDeferredSet && c.pendingDeferredKeyID == keyID
 	c.dataLock.RUnlock()
-	if deferred.After(fallback) {
-		fallback = deferred
+	// AUTH_PENDING replaces the operation timeout for its exact key epoch;
+	// it may extend or shorten the original context deadline. Pending state
+	// wins before installDataChannel, active state afterwards.
+	if pendingMatches {
+		return pending
 	}
-	if pendingSet && pending.After(fallback) {
-		fallback = pending
+	if dataMatches && !deferred.IsZero() {
+		return deferred
 	}
 	return fallback
 }
@@ -562,10 +591,10 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	backstop := func() bool {
 		// Never promote before the server-advertised deferred-auth deadline
 		// (AUTH_PENDING,timeout N); otherwise a still-deferred peer would
-		// drop the new-key packets. Without an advertisement, fall back to
-		// OpenVPN's auth_deferred_expire window.
+		// drop the new-key packets. The advertisement replaces the default and
+		// may shorten it; without one, use OpenVPN's auth_deferred_expire window.
 		deadline := c.outboundStart.Add(authDeferredExpire)
-		if c.deferredUntil.After(deadline) {
+		if !c.deferredUntil.IsZero() {
 			deadline = c.deferredUntil
 		}
 		return time.Now().After(deadline)
@@ -717,13 +746,12 @@ func (c *Client) watchControl() {
 				// A same-epoch TLS payload (token update / late AUTH_FAILED)
 				// was parked. Consume it now so a deferred authentication
 				// failure is surfaced immediately instead of waiting for the
-				// next soft reset (which may never come).
-				c.consumeQueuedControl()
-				if c.push != nil {
-					if err := c.consumeRekeyPush(); err != nil {
-						c.failControl(fmt.Errorf("consume parked rekey push: %w", err))
-						return
-					}
+				// next soft reset (which may never come). This is a standalone
+				// control operation, so clear every deadline it installs before
+				// returning to the established-channel wait loop.
+				if consumeErr := c.consumeParkedRekeyPush(); consumeErr != nil {
+					c.failControl(fmt.Errorf("consume parked rekey push: %w", consumeErr))
+					return
 				}
 				continue
 			}
@@ -1032,38 +1060,42 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 	if len(extended) > 0 {
 		waitUntil = extended[0]
 	}
-	deferredObserved := false
-	continuationObserved := false
+	var authPendingUntil time.Time
+	var continuationUntil time.Time
 	promoteWaitPolicy := func(reply *PushReply) {
 		if reply == nil {
 			return
 		}
 		now := time.Now()
-		if reply.AuthPendingTimeout > 0 && !deferredObserved {
+		if reply.AuthPendingTimeout > 0 {
 			deadline := reply.authPendingUntil
 			if deadline.IsZero() {
 				deadline = now.Add(reply.AuthPendingTimeout)
 				reply.authPendingUntil = deadline
 			}
-			if deadline.After(waitUntil) {
-				waitUntil = deadline
+			// AUTH_PENDING replaces the current deferred-auth timeout, even when
+			// it is shorter. A continuation deadline is an additional upper bound;
+			// the reader waits only until the earlier active operation deadline.
+			authPendingUntil = deadline
+			waitUntil = deadline
+			if !continuationUntil.IsZero() && continuationUntil.Before(waitUntil) {
+				waitUntil = continuationUntil
 			}
 			// ControlConn.Read ACKs each accepted reliable control packet before
 			// exposing its TLS payload. Extend both directions immediately: only
 			// changing the read side leaves those ACK writes on the expired rekey
 			// deadline and prevents the final payload from reaching TLS.
 			_ = conn.SetDeadline(waitUntil)
-			deferredObserved = true
 		}
-		if reply.PushContinuation == 2 && !continuationObserved {
-			deadline := now.Add(renegotiateTimeout)
-			if deadline.After(waitUntil) {
-				waitUntil = deadline
+		if reply.PushContinuation == 2 && continuationUntil.IsZero() {
+			continuationUntil = now.Add(renegotiateTimeout)
+			waitUntil = continuationUntil
+			if !authPendingUntil.IsZero() && authPendingUntil.Before(waitUntil) {
+				waitUntil = authPendingUntil
 			}
 			// A continued PUSH_REPLY is carried by the same reliable channel and
 			// therefore needs the same read+ACK-write deadline propagation.
 			_ = conn.SetDeadline(waitUntil)
-			continuationObserved = true
 		}
 	}
 	// Parse the already-buffered bytes first; a reply may be fully present.
