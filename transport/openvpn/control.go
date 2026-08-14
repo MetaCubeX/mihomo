@@ -33,8 +33,12 @@ type ControlChannel struct {
 	sendMessage   uint32
 	recvMessage   uint32
 	ackPending    []uint32
-	pending       map[uint32]*ControlPacket
-	recvPending   map[uint32]*ControlPacket
+	// lruAcks is the MRU of recently acknowledged packet IDs, mirroring
+	// OpenVPN's reliable_ack.lru_acks: acks are copied here when sent and
+	// kept so subsequent control packets repeat them until replaced.
+	lruAcks        []uint32
+	pending        map[uint32]*ControlPacket
+	recvPending    map[uint32]*ControlPacket
 	// pendingSoftReset holds a server soft-reset that arrived while the
 	// current epoch was still doing TLS/key-method. waitForSoftReset
 	// consumes it so ControlConn.Read cannot swallow it.
@@ -105,6 +109,7 @@ func (c *ControlChannel) beginEpochLocked(keyID uint8) {
 	c.sendMessage = 0
 	c.recvMessage = 0
 	c.ackPending = nil
+	c.lruAcks = nil
 	c.pending = make(map[uint32]*ControlPacket)
 	c.recvPending = make(map[uint32]*ControlPacket)
 	c.parkedTLS = nil
@@ -161,16 +166,19 @@ func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte
 	c.mu.Lock()
 	messageID := c.sendMessage
 	c.sendMessage++
+	// Copy pending acks into the MRU and take the ack list from the MRU,
+	// exactly like OpenVPN reliable_ack_write: recently acked IDs ride on
+	// this and subsequent packets until replaced.
+	ackIDs := c.takeAcksLocked()
 	packet := &ControlPacket{
 		Opcode:           opcode,
 		KeyID:            c.keyID,
 		LocalSession:     c.local,
-		AckIDs:           append([]uint32(nil), c.ackPending...),
+		AckIDs:           ackIDs,
 		AckRemoteSession: c.remote,
 		MessageID:        messageID,
 		Payload:          cloneBytes(payload),
 	}
-	c.ackPending = nil
 	c.pending[messageID] = packet
 	c.mu.Unlock()
 
@@ -180,20 +188,51 @@ func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte
 	return messageID, nil
 }
 
+// takeAcksLocked moves ackPending into the MRU and returns the ACK list to
+// place on the outgoing packet. Mirrors OpenVPN copy_acks_to_mru +
+// reliable_ack_write. Caller must hold c.mu.
+func (c *ControlChannel) takeAcksLocked() []uint32 {
+	// Move ackPending to the front of the MRU (newest first), dedup.
+	for i := len(c.ackPending) - 1; i >= 0; i-- {
+		id := c.ackPending[i]
+		if !containsUint32(c.lruAcks, id) {
+			c.lruAcks = append([]uint32{id}, c.lruAcks...)
+		}
+	}
+	c.ackPending = nil
+	// Cap at RELIABLE_ACK_SIZE.
+	if len(c.lruAcks) > reliableAckSize {
+		c.lruAcks = c.lruAcks[:reliableAckSize]
+	}
+	return append([]uint32(nil), c.lruAcks...)
+}
+
+func containsUint32(s []uint32, v uint32) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+// reliableAckSize mirrors RELIABLE_ACK_SIZE in OpenVPN reliable.h.
+const reliableAckSize = 8
+
 func (c *ControlChannel) SendAck(ctx context.Context) error {
 	c.mu.Lock()
 	if len(c.ackPending) == 0 {
 		c.mu.Unlock()
 		return nil
 	}
+	ackIDs := c.takeAcksLocked()
 	packet := &ControlPacket{
 		Opcode:           PAckV1,
 		KeyID:            c.keyID,
 		LocalSession:     c.local,
-		AckIDs:           append([]uint32(nil), c.ackPending...),
+		AckIDs:           ackIDs,
 		AckRemoteSession: c.remote,
 	}
-	c.ackPending = nil
 	c.mu.Unlock()
 	return c.writeControlPacket(ctx, packet)
 }
@@ -410,21 +449,17 @@ func (c *ControlChannel) PendingMessages() int {
 func (c *ControlChannel) RetransmitPending(ctx context.Context) error {
 	c.mu.Lock()
 	packets := make([]*ControlPacket, 0, len(c.pending))
+	// Pull current acks into the MRU once, so every retransmitted packet
+	// carries the same ack set (matching OpenVPN: retransmitted reliable
+	// packets reuse the original ack header, and the MRU keeps recently
+	// acked IDs alive across sends).
+	ackIDs := c.takeAcksLocked()
 	for _, packet := range c.pending {
 		cp := *packet
-		// Merge the packet's original ACKs (e.g. the soft-reset ACK for the
-		// server's reset) with any newly pending ACKs, instead of replacing
-		// them with the current list. Replacing would drop the ACK the first
-		// send carried once ackPending had been cleared.
-		acks := append([]uint32(nil), packet.AckIDs...)
-		for _, ack := range c.ackPending {
-			acks = appendAck(acks, ack)
-		}
-		cp.AckIDs = acks
+		cp.AckIDs = ackIDs
 		cp.AckRemoteSession = c.remote
 		packets = append(packets, &cp)
 	}
-	c.ackPending = nil
 	c.mu.Unlock()
 
 	for _, packet := range packets {

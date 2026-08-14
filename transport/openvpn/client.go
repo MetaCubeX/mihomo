@@ -474,10 +474,15 @@ func (c *Client) watchControl() {
 		}
 		// Token-only PUSH_REPLY parked since the last rekey must land in
 		// authPass before this key-method-2 exchange, otherwise the server
-		// rejects the expired token.
+		// rejects the expired token. A parked AUTH_FAILED (deferred auth) is
+		// a hard failure: surface it before starting the next epoch instead
+		// of replacing it with the next renegotiation result.
 		c.consumeQueuedControl()
 		if c.push != nil {
-			c.consumeRekeyPush()
+			if err := c.consumeRekeyPush(); err != nil {
+				c.failControl(fmt.Errorf("consume queued rekey push: %w", err))
+				return
+			}
 		}
 		if err := c.renegotiate(packet); err != nil {
 			c.failControl(fmt.Errorf("renegotiate: %w", err))
@@ -751,18 +756,29 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 	for attempt := 0; attempt < 2; attempt++ {
 		_ = conn.SetReadDeadline(time.Now().Add(tokenPushReadTimeout))
 		n, err := conn.Read(tmp)
+		// Process bytes before handling err: the io.Reader contract permits
+		// n > 0 with err != nil (e.g. tls.Conn returns (n, io.EOF) when app
+		// data is immediately followed by close_notify).
+		if n > 0 {
+			buf = append(buf, tmp[:n]...)
+			if reply, rest, ok := takePushReply(buf); ok {
+				return reply, rest, nil
+			}
+			if bytes.Contains(buf, []byte("AUTH_FAILED")) {
+				return nil, buf, authFailedError(buf)
+			}
+		}
 		if err != nil {
-			// Timeout (or no more data): keep whatever was buffered.
 			_ = conn.SetReadDeadline(time.Time{})
-			return nil, buf, nil
-		}
-		buf = append(buf, tmp[:n]...)
-		// Parse after every successful read, including the last allowed one.
-		if reply, rest, ok := takePushReply(buf); ok {
-			return reply, rest, nil
-		}
-		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
-			return nil, buf, authFailedError(buf)
+			// Only a real timeout is the optional "no token available yet"
+			// case. EOF, unexpected EOF, and TLS protocol errors must be
+			// surfaced so the rekey does not proceed on a dead control
+			// stream or lose a bundled authentication failure.
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				return nil, buf, nil
+			}
+			return nil, buf, err
 		}
 	}
 	return nil, buf, nil

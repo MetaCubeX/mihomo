@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -634,11 +636,13 @@ func TestConsumeRekeyPushAUTHFailed(t *testing.T) {
 	}
 }
 
-// chunkConn serves a fixed byte stream one chunk per Read, then blocks
-// (returns a timeout-style error) once exhausted. Simulates TLS exposing a
-// byte stream whose boundaries do not match message boundaries.
+// chunkConn serves a fixed byte stream one chunk per Read. Each chunk may
+// carry an error returned together with the bytes (mimicking tls.Conn's
+// (n, io.EOF) when app data is followed by close_notify). Once exhausted it
+// returns a timeout-style error.
 type chunkConn struct {
 	data [][]byte
+	errs []error
 	idx  int
 }
 
@@ -647,8 +651,12 @@ func (c *chunkConn) Read(p []byte) (int, error) {
 		return 0, os.ErrDeadlineExceeded
 	}
 	n := copy(p, c.data[c.idx])
+	var err error
+	if c.idx < len(c.errs) {
+		err = c.errs[c.idx]
+	}
 	c.idx++
-	return n, nil
+	return n, err
 }
 
 func (c *chunkConn) SetReadDeadline(t time.Time) error { return nil }
@@ -686,6 +694,168 @@ func TestReadTokenPushReplyPartialPreserved(t *testing.T) {
 	if string(rest) != "PUSH_REPLY,auth-token " {
 		t.Fatalf("partial bytes lost: %q", rest)
 	}
+}
+
+// TestReadTokenPushReplyAUTHFailedWithEOF verifies that AUTH_FAILED data
+// returned together with io.EOF (tls.Conn app-data + close_notify) is
+// surfaced as a hard error, not silently discarded.
+func TestReadTokenPushReplyAUTHFailedWithEOF(t *testing.T) {
+	conn := &chunkConn{
+		data: [][]byte{[]byte("AUTH_FAILED,SESSION: auth-token expired\x00")},
+		errs: []error{io.EOF},
+	}
+	reply, _, err := readTokenPushReply(conn, nil)
+	if err == nil {
+		t.Fatal("readTokenPushReply lost AUTH_FAILED returned with io.EOF")
+	}
+	if !errors.Is(err, errAuthFailed) {
+		t.Fatalf("expected errAuthFailed, got %v", err)
+	}
+	if reply != nil {
+		t.Fatalf("unexpected reply: %#v", reply)
+	}
+}
+
+// TestReadTokenPushReplyEOFPropagated verifies that a plain EOF (no complete
+// message) is propagated as an error, not treated as "no token".
+func TestReadTokenPushReplyEOFPropagated(t *testing.T) {
+	conn := &chunkConn{
+		data: [][]byte{[]byte("PUSH_REPLY,auth-token SESS")},
+		errs: []error{io.ErrUnexpectedEOF},
+	}
+	reply, _, err := readTokenPushReply(conn, nil)
+	if err == nil {
+		t.Fatal("EOF was suppressed")
+	}
+	if errors.Is(err, errAuthFailed) {
+		t.Fatalf("unexpected errAuthFailed: %v", err)
+	}
+	if reply != nil {
+		t.Fatalf("unexpected reply: %#v", reply)
+	}
+}
+
+// TestWatchControlSurfacesParkedAUTHFailed verifies that a parked or deferred
+// AUTH_FAILED is surfaced (failControl) instead of being swallowed by the next
+// renegotiation.
+func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
+	clientIO, _ := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	// watcher loop consumes a soft reset, then must abort on AUTH_FAILED.
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	client.control.SetRemoteSessionID(serverID)
+	client.push = &PushReply{PeerID: 1, AuthTokenPass: "SESS_ID_old"}
+	client.leftoverTLS = []byte("AUTH_FAILED,SESSION: auth-token expired\x00")
+	client.control.AdoptKeyID(1)
+	client.control.pendingSoftReset = &ControlPacket{
+		Opcode:       PControlSoftResetV1,
+		KeyID:        1,
+		LocalSession: serverID,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		client.watchControl()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("watchControl did not exit after AUTH_FAILED")
+	}
+	if rekeyErr := client.LastRekeyError(); rekeyErr == nil {
+		t.Fatal("watchControl swallowed parked AUTH_FAILED")
+	} else if !strings.Contains(rekeyErr.Error(), "auth") {
+		t.Fatalf("unexpected rekey error: %v", rekeyErr)
+	}
+}
+
+// TestMRUCarriesAckOnSubsequentSends verifies the MRU behavior: an ACK queued
+// once rides on this packet and the next (OpenVPN lru_acks), not just once.
+func TestMRUCarriesAckOnSubsequentSends(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	clientCrypt, err := NewTLSCrypt(testStaticKey(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverCrypt, err := NewTLSCrypt(testStaticKey(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+
+	client := NewControlChannel(clientIO, clientCrypt, clientID)
+	client.SetRemoteSessionID(serverID)
+	server := NewControlChannel(serverIO, serverCrypt, serverID)
+	server.SetRemoteSessionID(clientID)
+	client.clock = func() time.Time { return time.Unix(1714567890, 0) }
+	server.clock = func() time.Time { return time.Unix(1714567891, 0) }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Server sends message 5 (soft reset on epoch 1), client queues ACK 5.
+	server.AdoptKeyID(1)
+	if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	soft, err := client.waitForSoftReset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.AdoptKeyID(1)
+	client.MarkReceived(soft.MessageID)
+	client.QueueAck(soft.MessageID)
+
+	// First outbound packet carries ACK 5.
+	if err := client.SendSoftReset(ctx); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := serverIO.ReadPacket(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, _, err := DecodeControlPacket(serverCrypt, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasAck(first.AckIDs, soft.MessageID) {
+		t.Fatalf("first packet missing ACK %d: %v", soft.MessageID, first.AckIDs)
+	}
+
+	// Second outbound packet STILL carries ACK 5 (MRU).
+	if _, err := client.Send(ctx, PControlV1, []byte("second")); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = serverIO.ReadPacket(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, _, err := DecodeControlPacket(serverCrypt, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasAck(second.AckIDs, soft.MessageID) {
+		t.Fatalf("second packet lost ACK %d (MRU): %v", soft.MessageID, second.AckIDs)
+	}
+}
+
+func hasAck(acks []uint32, id uint32) bool {
+	for _, a := range acks {
+		if a == id {
+			return true
+		}
+	}
+	return false
 }
 
 func TestMarkReceivedUnblocksNextEpochControl(t *testing.T) {
