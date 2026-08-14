@@ -461,6 +461,14 @@ func (c *Client) decryptDataPacket(packet []byte) ([]byte, error) {
 	}
 	_, keyID := parseOpcodeKeyID(packet[0])
 	c.dataLock.RLock()
+	// The retiring (lame-duck) epoch is rejected once the transition window
+	// has elapsed, even though it still has a dataByKey entry (the map hit
+	// must not bypass the expiration check).
+	if c.retiring != nil && c.retiring.keyID == keyID &&
+		!c.retiringExpiry.IsZero() && time.Now().After(c.retiringExpiry) {
+		c.dataLock.RUnlock()
+		return nil, errors.New("openvpn data packet from expired retiring epoch")
+	}
 	// Route strictly by key ID. A packet labeled with an unknown epoch must
 	// be rejected, not silently decrypted with the current key (the CBC HMAC
 	// excludes the outer opcode/key-ID header, so a wrong key would still
@@ -469,11 +477,6 @@ func (c *Client) decryptDataPacket(packet []byte) ([]byte, error) {
 	if alt, ok := c.dataByKey[keyID]; ok {
 		data = alt
 	} else if c.retiring != nil && c.retiring.keyID == keyID {
-		if !c.retiringExpiry.IsZero() && time.Now().After(c.retiringExpiry) {
-			// Lame-duck key expired (transition_window elapsed): reject.
-			c.dataLock.RUnlock()
-			return nil, errors.New("openvpn data packet from expired retiring epoch")
-		}
 		data = c.retiring
 	}
 	c.dataLock.RUnlock()
@@ -790,6 +793,11 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 	if bytes.Contains(buf, []byte("AUTH_FAILED")) {
 		return nil, buf, authFailedError(buf)
 	}
+	// Clear the temporary read deadline on every return path; a successful
+	// parse must not leave a stale absolute deadline for the next
+	// waitForSoftReset read (the errParkedTLS path runs outside renegotiate's
+	// deadline cleanup).
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 	for attempt := 0; attempt < 2; attempt++ {
 		_ = conn.SetReadDeadline(time.Now().Add(tokenPushReadTimeout))
 		n, err := conn.Read(tmp)
@@ -812,7 +820,6 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 			return reply, rest, nil
 		}
 		if err != nil {
-			_ = conn.SetReadDeadline(time.Time{})
 			var netErr net.Error
 			if errors.As(err, &netErr) && netErr.Timeout() {
 				return nil, buf, nil

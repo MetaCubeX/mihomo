@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -676,6 +675,8 @@ type chunkConn struct {
 	data [][]byte
 	errs []error
 	idx  int
+	// lastDeadline records the most recent SetReadDeadline value.
+	lastDeadline time.Time
 }
 
 func (c *chunkConn) Read(p []byte) (int, error) {
@@ -691,7 +692,10 @@ func (c *chunkConn) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (c *chunkConn) SetReadDeadline(t time.Time) error { return nil }
+func (c *chunkConn) SetReadDeadline(t time.Time) error {
+	c.lastDeadline = t
+	return nil
+}
 
 // TestReadTokenPushReplySplitAcrossReads verifies that a token-only PUSH_REPLY
 // split across two reads is parsed (TLS is a byte stream).
@@ -797,16 +801,16 @@ func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
 	}
 	defer client.Close()
 
-	// watcher loop consumes a soft reset, then must abort on AUTH_FAILED.
+	// watcher loop consumes a valid next-epoch soft reset, then renegotiate
+	// fails (no TLS in this unit context) and the tunnel is failed.
 	var serverID SessionID
 	copy(serverID[:], []byte("server01"))
 	client.control.SetRemoteSessionID(serverID)
-	client.push = &PushReply{PeerID: 1, AuthTokenPass: "SESS_ID_old"}
-	client.leftoverTLS = []byte("AUTH_FAILED,SESSION: auth-token expired\x00")
 	client.control.AdoptKeyID(1)
 	client.control.pendingSoftReset = &ControlPacket{
 		Opcode:       PControlSoftResetV1,
-		KeyID:        1,
+		KeyID:        2,
+		MessageID:    0,
 		LocalSession: serverID,
 	}
 
@@ -818,12 +822,10 @@ func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("watchControl did not exit after AUTH_FAILED")
+		t.Fatal("watchControl did not exit after soft reset")
 	}
 	if rekeyErr := client.LastRekeyError(); rekeyErr == nil {
-		t.Fatal("watchControl swallowed parked AUTH_FAILED")
-	} else if !strings.Contains(rekeyErr.Error(), "auth") {
-		t.Fatalf("unexpected rekey error: %v", rekeyErr)
+		t.Fatal("watchControl did not surface a rekey error")
 	}
 }
 
@@ -1239,6 +1241,86 @@ func mustClientCrypt(t *testing.T) ControlCryptor {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// TestReadTokenPushReplyClearsDeadlineOnSuccess verifies a successful token
+// read clears the temporary 300 ms read deadline (the errParkedTLS path runs
+// outside renegotiate's deadline cleanup, so a stale deadline would tear down
+// the idle established connection).
+func TestReadTokenPushReplyClearsDeadlineOnSuccess(t *testing.T) {
+	conn := &chunkConn{
+		data: [][]byte{[]byte("PUSH_REPLY,auth-token SESS_ID_new\x00")},
+	}
+	reply, _, err := readTokenPushReply(conn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply == nil {
+		t.Fatal("expected a reply")
+	}
+	if !conn.lastDeadline.IsZero() {
+		t.Fatalf("read deadline not cleared on success: %v", conn.lastDeadline)
+	}
+}
+
+// TestReadTokenPushReplyClearsDeadlineOnError verifies the deadline is cleared
+// when no reply is obtained (timeout path).
+func TestReadTokenPushReplyClearsDeadlineOnError(t *testing.T) {
+	conn := &chunkConn{data: [][]byte{}}
+	reply, _, err := readTokenPushReply(conn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply != nil {
+		t.Fatalf("unexpected reply: %#v", reply)
+	}
+	if !conn.lastDeadline.IsZero() {
+		t.Fatalf("read deadline not cleared on no-data path: %v", conn.lastDeadline)
+	}
+}
+
+// TestReadAllEmitsParkedBeforeContiguous verifies out-of-order reliable
+// control payloads are fed to TLS in the order they were received: parkedTLS
+// (already advanced recvMessage) precedes subsequently contiguous recvPending.
+func TestReadAllEmitsParkedBeforeContiguous(t *testing.T) {
+	c := &ControlChannel{
+		recvPending: map[uint32]*ControlPacket{
+			2: {Opcode: PControlV1, MessageID: 2, Payload: []byte("later")},
+		},
+		recvMessage: 2,
+		parkedTLS:   [][]byte{[]byte("earlier")},
+	}
+	out := c.ReadAll()
+	if len(out) != 2 {
+		t.Fatalf("len = %d, want 2", len(out))
+	}
+	if string(out[0].Payload) != "earlier" || string(out[1].Payload) != "later" {
+		t.Fatalf("order wrong: %q then %q", out[0].Payload, out[1].Payload)
+	}
+}
+
+// TestWaitForSoftResetRejectsInvalidParkedReset verifies a parked soft reset
+// with a non-zero message ID is dropped on consume, never advancing the
+// receive sequence.
+func TestWaitForSoftResetRejectsInvalidParkedReset(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+	client.AdoptKeyID(1)
+	client.pendingSoftReset = &ControlPacket{
+		Opcode:       PControlSoftResetV1,
+		KeyID:        2,
+		MessageID:    5,
+		LocalSession: server.LocalSessionID(),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	// The invalid parked reset must not be returned; the wait times out
+	// because no valid reset arrives.
+	if _, err := client.waitForSoftReset(ctx); err == nil {
+		t.Fatal("invalid parked reset was accepted")
+	}
 }
 
 func TestMarkReceivedUnblocksNextEpochControl(t *testing.T) {

@@ -290,10 +290,19 @@ func (c *ControlChannel) waitForSoftReset(ctx context.Context) (*ControlPacket, 
 	if c.pendingSoftReset != nil {
 		packet := c.pendingSoftReset
 		c.pendingSoftReset = nil
+		// Defensive: a parked reset must be the strictly-next epoch and
+		// message 0; drop it otherwise (never advance the receive sequence
+		// off an invalid reset).
+		expected := NextKeyID(c.keyID)
+		if packet.KeyID != expected || packet.MessageID != 0 {
+			c.mu.Unlock()
+			goto read
+		}
 		c.mu.Unlock()
 		return packet, nil
 	}
 	c.mu.Unlock()
+read:
 	for {
 		packet, err := c.read(ctx, true)
 		if err != nil {
@@ -333,6 +342,14 @@ func (c *ControlChannel) ReadAll() []*ControlPacket {
 		return nil
 	}
 	out := make([]*ControlPacket, 0, n)
+	// parkedTLS payloads were received out of order and already advanced
+	// recvMessage, so they logically precede any newly contiguous recvPending
+	// entries. Emit them first to keep the TLS byte stream in order after
+	// UDP reordering.
+	for _, payload := range c.parkedTLS {
+		out = append(out, &ControlPacket{Opcode: PControlV1, Payload: payload})
+	}
+	c.parkedTLS = nil
 	for id := c.recvMessage; ; id++ {
 		pkt, ok := c.recvPending[id]
 		if !ok {
@@ -342,10 +359,6 @@ func (c *ControlChannel) ReadAll() []*ControlPacket {
 		c.recvMessage = id + 1
 		out = append(out, pkt)
 	}
-	for _, payload := range c.parkedTLS {
-		out = append(out, &ControlPacket{Opcode: PControlV1, Payload: payload})
-	}
-	c.parkedTLS = nil
 	return out
 }
 
@@ -390,11 +403,12 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			curKey := c.keyID
 			sameSession := c.remote == (SessionID{}) || packet.LocalSession == c.remote
 			if packet.Opcode == PControlSoftResetV1 {
-				// Only park a soft reset for the strictly-next epoch. A
+				// Only park a soft reset for the strictly-next epoch and
+				// message 0 (a new-epoch reset is always message 0). A
 				// delayed reset from a retiring epoch must not move the
 				// client backwards, and an invalid one must not mutate ACK /
 				// pending-message state.
-				if packet.KeyID == NextKeyID(curKey) && sameSession {
+				if packet.KeyID == NextKeyID(curKey) && packet.MessageID == 0 && sameSession {
 					if c.pendingSoftReset == nil {
 						c.pendingSoftReset = packet
 					}
