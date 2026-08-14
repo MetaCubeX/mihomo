@@ -328,6 +328,18 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 // pushed by send_push_reply_auth_token. Must be called only when c.push is
 // non-nil (i.e. on rekey, not the initial handshake).
 func (c *Client) consumeRekeyPush() error {
+	var conn pushReadConn
+	if tlsConn := c.tlsConn.Load(); tlsConn != nil {
+		conn = tlsConn
+	}
+	return c.consumeRekeyPushFrom(conn, readTokenPushReply)
+}
+
+// tokenPushReader is injected by deterministic lifecycle tests; production
+// always uses readTokenPushReply with the active TLS connection.
+type tokenPushReader func(pushReadConn, []byte, ...time.Time) (*PushReply, []byte, error)
+
+func (c *Client) consumeRekeyPushFrom(conn pushReadConn, readFinal tokenPushReader) error {
 	// The token/deferred-push exchange owns every transport deadline installed
 	// while it runs. Clear them before returning so standalone parked-TLS calls
 	// cannot leak an operation deadline into the established-channel loop.
@@ -366,25 +378,25 @@ func (c *Client) consumeRekeyPush() error {
 	// If no final PUSH_REPLY has arrived yet, probe the active TLS stream.
 	// This includes standalone AUTH_PENDING and intermediate continuation
 	// segments; neither is allowed to complete the rekey by itself.
-	if !complete {
-		if conn := c.tlsConn.Load(); conn != nil {
-			attemptedFinalRead = true
-			deadline := c.effectiveControlDeadline(time.Time{})
-			if deadline.IsZero() && c.pushContinuationPending {
-				deadline = time.Now().Add(renegotiateTimeout)
-			}
-			more, newRest, err := readTokenPushReply(conn, c.leftoverTLS, deadline)
-			if err != nil {
-				return err
-			}
-			c.leftoverTLS = newRest
-			if more != nil {
-				c.pushPending = mergePushReply(c.pushPending, more)
-				c.applyAuthPendingTimeout(more)
-				complete = more.HasPushReply && more.PushContinuation != 2
-				if complete {
-					c.pushContinuationPending = false
-				}
+	if !complete && conn != nil {
+		attemptedFinalRead = true
+		deadline := c.effectiveControlDeadline(time.Time{})
+		if deadline.IsZero() && c.pushContinuationPending {
+			deadline = time.Now().Add(renegotiateTimeout)
+		}
+		more, newRest, err := readFinal(conn, c.leftoverTLS, deadline)
+		if err != nil {
+			return err
+		}
+		c.leftoverTLS = newRest
+		if more != nil {
+			c.pushPending = mergePushReply(c.pushPending, more)
+			c.applyAuthPendingTimeout(more)
+			complete = more.HasPushReply && more.PushContinuation != 2
+			if more.HasPushReply {
+				// Persist continuation state regardless of whether it was already
+				// buffered or was first discovered inside the final reader.
+				c.pushContinuationPending = more.PushContinuation == 2
 			}
 		}
 	}

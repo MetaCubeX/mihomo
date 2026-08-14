@@ -745,6 +745,49 @@ func TestConsumeParkedRekeyPushClearsDeadline(t *testing.T) {
 	}
 }
 
+// TestConsumeRekeyPushRejectsContinuationDiscoveredByReader verifies an
+// intermediate continuation first seen inside the final probe remains marked
+// incomplete when that probe reaches its deadline without a final segment.
+func TestConsumeRekeyPushRejectsContinuationDiscoveredByReader(t *testing.T) {
+	clientIO, _ := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.push = &PushReply{PeerID: 7, AuthTokenPass: "SESS_ID_old"}
+	conn := &chunkConn{}
+	reader := func(got pushReadConn, leftover []byte, _ ...time.Time) (*PushReply, []byte, error) {
+		if got != conn {
+			t.Fatalf("reader received wrong connection: %T", got)
+		}
+		if len(leftover) != 0 {
+			t.Fatalf("unexpected initial leftover: %q", leftover)
+		}
+		return &PushReply{
+			PeerID:           PeerIDUnset,
+			HasPushReply:     true,
+			PushContinuation: 2,
+			Routes:           []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16")},
+		}, nil, nil
+	}
+
+	err = client.consumeRekeyPushFrom(conn, reader)
+	if err == nil || !strings.Contains(err.Error(), "deferred/continued push reply incomplete") {
+		t.Fatalf("reader-discovered continuation returned success: %v", err)
+	}
+	if !client.pushContinuationPending {
+		t.Fatal("reader-discovered continuation state was not persisted")
+	}
+	if client.pushPending == nil || client.pushPending.PushContinuation != 2 ||
+		len(client.pushPending.Routes) != 1 {
+		t.Fatalf("reader-discovered partial push was not retained: %#v", client.pushPending)
+	}
+	if client.push.AuthTokenPass != "SESS_ID_old" || len(client.push.Routes) != 0 {
+		t.Fatalf("partial continuation was committed to active push: %#v", client.push)
+	}
+}
+
 func TestStandaloneAuthPendingDoesNotCompletePush(t *testing.T) {
 	bareReply, _, bareOK := takePushReply([]byte("AUTH_PENDING\x00"))
 	if bareOK {
