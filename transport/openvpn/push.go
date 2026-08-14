@@ -44,6 +44,10 @@ type PushReply struct {
 	// AuthPendingTimeout is the deferred-auth window advertised by
 	// AUTH_PENDING,timeout N. Zero when no AUTH_PENDING was seen.
 	AuthPendingTimeout time.Duration
+	// authPendingUntil anchors that window to the instant AUTH_PENDING was
+	// processed. Keeping the absolute deadline prevents a later final
+	// PUSH_REPLY from restarting the server-advertised interval.
+	authPendingUntil time.Time
 }
 
 func ParsePushReply(message string) (*PushReply, error) {

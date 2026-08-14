@@ -530,6 +530,80 @@ func TestReadTokenPushReplyPromotesDynamicWait(t *testing.T) {
 	})
 }
 
+// TestReadTokenPushReplyExtendsReliableACKDeadline reproduces the dynamic
+// AUTH_PENDING path on an in-memory reliable ControlConn. AUTH_PENDING is
+// already decoded when the original operation deadline expires; the final
+// reliable packet still needs an ACK write before its TLS payload can be
+// delivered. The helper must therefore extend both deadline directions as
+// soon as it processes AUTH_PENDING.
+func TestReadTokenPushReplyExtendsReliableACKDeadline(t *testing.T) {
+	clientControl, serverControl := newTestChannels(t)
+	clientControl.SetRemoteSessionID(serverControl.LocalSessionID())
+	serverControl.SetRemoteSessionID(clientControl.LocalSessionID())
+	conn := NewControlConn(clientControl)
+	// Put AUTH_PENDING directly in the TLS adapter's already-decoded buffer,
+	// then reproduce the stale deadline left by the 30-second rekey context.
+	// The next reliable packet still needs a write-side ACK before delivery.
+	conn.UnsafeFeed([]byte("AUTH_PENDING,timeout 1\x00"))
+	if err := conn.SetDeadline(time.Now().Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := serverControl.Send(context.Background(), PControlV1,
+		[]byte("PUSH_REPLY,auth-token SESS_ID_after_deadline\x00")); err != nil {
+		t.Fatal(err)
+	}
+
+	reply, rest, err := readTokenPushReply(conn, nil)
+	if err != nil {
+		t.Fatalf("extended read could not deliver final reliable packet: %v", err)
+	}
+	if reply == nil || reply.AuthTokenPass != "SESS_ID_after_deadline" {
+		t.Fatalf("final PUSH_REPLY not delivered: %#v", reply)
+	}
+	if len(rest) != 0 {
+		t.Fatalf("unexpected rest: %q", rest)
+	}
+}
+
+// TestAuthPendingDeadlineAnchoredAtObservation verifies the final PUSH_REPLY
+// does not restart the full timeout interval. applyAuthPendingTimeout must use
+// the absolute deadline stamped when AUTH_PENDING was parsed.
+func TestAuthPendingDeadlineAnchoredAtObservation(t *testing.T) {
+	pending, _, ok := takePushReply([]byte("AUTH_PENDING,timeout 1\x00"))
+	if ok || pending == nil || pending.authPendingUntil.IsZero() {
+		t.Fatalf("AUTH_PENDING was not parsed as intermediate state: %#v", pending)
+	}
+	observedDeadline := pending.authPendingUntil
+
+	timer := time.NewTimer(150 * time.Millisecond)
+	<-timer.C
+	timer.Stop()
+	final, err := parsePushReplyInner("PUSH_REPLY,auth-token SESS_ID_anchored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged := mergePushReply(pending, final)
+	if !merged.authPendingUntil.Equal(observedDeadline) {
+		t.Fatalf("AUTH_PENDING deadline moved during final merge: got %v, want %v",
+			merged.authPendingUntil, observedDeadline)
+	}
+
+	clientIO, _ := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.applyAuthPendingTimeout(merged)
+	client.dataLock.RLock()
+	staged := client.pendingDeferredUntil
+	client.dataLock.RUnlock()
+	if !staged.Equal(observedDeadline) {
+		t.Fatalf("AUTH_PENDING timeout restarted after final PUSH_REPLY: got %v, want %v",
+			staged, observedDeadline)
+	}
+}
+
 func TestStandaloneAuthPendingDoesNotCompletePush(t *testing.T) {
 	bareReply, _, bareOK := takePushReply([]byte("AUTH_PENDING\x00"))
 	if bareOK {
@@ -1201,8 +1275,10 @@ type chunkConn struct {
 	data [][]byte
 	errs []error
 	idx  int
-	// lastDeadline records the most recent SetReadDeadline value.
-	lastDeadline time.Time
+	// lastDeadline records the most recent read deadline. lastWriteDeadline
+	// tracks the write side changed by SetDeadline.
+	lastDeadline      time.Time
+	lastWriteDeadline time.Time
 }
 
 func (c *chunkConn) Read(p []byte) (int, error) {
@@ -1216,6 +1292,12 @@ func (c *chunkConn) Read(p []byte) (int, error) {
 	}
 	c.idx++
 	return n, err
+}
+
+func (c *chunkConn) SetDeadline(t time.Time) error {
+	c.lastDeadline = t
+	c.lastWriteDeadline = t
+	return nil
 }
 
 func (c *chunkConn) SetReadDeadline(t time.Time) error {

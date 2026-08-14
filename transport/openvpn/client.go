@@ -404,7 +404,13 @@ func (c *Client) applyAuthPendingTimeout(reply *PushReply) {
 	if reply == nil || reply.AuthPendingTimeout == 0 {
 		return
 	}
-	deadline := time.Now().Add(reply.AuthPendingTimeout)
+	deadline := reply.authPendingUntil
+	if deadline.IsZero() {
+		// Backward-compatible fallback for internally constructed replies. Wire
+		// replies are stamped when AUTH_PENDING is parsed, so their timeout is
+		// never restarted by a later final PUSH_REPLY.
+		deadline = time.Now().Add(reply.AuthPendingTimeout)
+	}
 	keyID := c.control.KeyID()
 	c.dataLock.Lock()
 	if c.data != nil && c.data.keyID == keyID {
@@ -1005,6 +1011,7 @@ var errAuthFailed = errors.New("openvpn authentication failed")
 // handshake.
 type pushReadConn interface {
 	Read(p []byte) (int, error)
+	SetDeadline(t time.Time) error
 	SetReadDeadline(t time.Time) error
 }
 
@@ -1033,10 +1040,19 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 		}
 		now := time.Now()
 		if reply.AuthPendingTimeout > 0 && !deferredObserved {
-			deadline := now.Add(reply.AuthPendingTimeout)
+			deadline := reply.authPendingUntil
+			if deadline.IsZero() {
+				deadline = now.Add(reply.AuthPendingTimeout)
+				reply.authPendingUntil = deadline
+			}
 			if deadline.After(waitUntil) {
 				waitUntil = deadline
 			}
+			// ControlConn.Read ACKs each accepted reliable control packet before
+			// exposing its TLS payload. Extend both directions immediately: only
+			// changing the read side leaves those ACK writes on the expired rekey
+			// deadline and prevents the final payload from reaching TLS.
+			_ = conn.SetDeadline(waitUntil)
 			deferredObserved = true
 		}
 		if reply.PushContinuation == 2 && !continuationObserved {
@@ -1044,6 +1060,9 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 			if deadline.After(waitUntil) {
 				waitUntil = deadline
 			}
+			// A continued PUSH_REPLY is carried by the same reliable channel and
+			// therefore needs the same read+ACK-write deadline propagation.
+			_ = conn.SetDeadline(waitUntil)
 			continuationObserved = true
 		}
 	}
@@ -1060,9 +1079,11 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 	if authFailedMsg(buf) {
 		return nil, buf, authFailedError(buf)
 	}
-	// Clear the temporary read deadline on every return path; a successful
-	// parse must not leave a stale absolute deadline for the next
-	// waitForSoftReset read.
+	// Restore only the temporary read deadline on every return path. A
+	// successful parse must not leave a short probe deadline for the next
+	// waitForSoftReset read. SetDeadline above deliberately leaves the
+	// AUTH_PENDING/continuation write side extended so late reliable ACKs can
+	// still be emitted; the owner clears both sides when the operation ends.
 	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 	for attempt := 0; ; attempt++ {
 		readDeadline := time.Now().Add(tokenPushReadTimeout)
@@ -1214,6 +1235,7 @@ func parseAuthPendingTimeout(msg string) (*PushReply, error) {
 			}
 		}
 	}
+	reply.authPendingUntil = time.Now().Add(reply.AuthPendingTimeout)
 	return reply, nil
 }
 
@@ -1271,10 +1293,12 @@ func mergePushReply(prev, next *PushReply) *PushReply {
 			next.AuthTokenUser = prev.AuthTokenUser
 		}
 	}
-	// A deferred-auth timeout must survive merging: a later merge must not
-	// zero out an already-advertised timeout.
+	// A deferred-auth timeout must survive merging into a later non-pending
+	// PUSH_REPLY. Carry its observation-anchored deadline with the duration;
+	// a genuinely later AUTH_PENDING keeps its own newly observed deadline.
 	if next.AuthPendingTimeout == 0 {
 		next.AuthPendingTimeout = prev.AuthPendingTimeout
+		next.authPendingUntil = prev.authPendingUntil
 	}
 	next.HasPushReply = next.HasPushReply || prev.HasPushReply
 	return next
