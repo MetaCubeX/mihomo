@@ -40,13 +40,6 @@ type Client struct {
 	tlsConn     atomic.Pointer[tls.Conn]
 	data        *DataChannel
 	outboundKey *DataChannel
-	// newKeyEvidence latches true once a data packet labeled with the
-	// current (newest) key ID decrypted successfully. The peer only labels
-	// outbound packets with a key whose authentication completed
-	// (OpenVPN tls_pre_encrypt / handle_data_channel_packet require
-	// KS_AUTH_TRUE), so this is the reliable signal that the new key has
-	// been activated and can replace the lame-duck for outbound traffic.
-	newKeyEvidence bool
 	// retiring is the previous data-channel epoch, kept during a rekey so
 	// packets still labeled with the old key ID can be decrypted.
 	retiring *DataChannel
@@ -377,8 +370,6 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 	} else {
 		c.outboundKey = newData
 	}
-	// Each epoch starts without evidence of peer activation.
-	c.newKeyEvidence = false
 	if c.dataByKey == nil {
 		c.dataByKey = make(map[uint8]*DataChannel)
 	}
@@ -454,7 +445,7 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		if !c.retiringExpiry.IsZero() && time.Until(c.retiringExpiry) < outboundPromoteGrace {
 			backstop = true
 		}
-		if c.newKeyEvidence || backstop {
+		if data.PeerActive() || backstop {
 			c.outboundKey = data
 			outbound = data
 		}
@@ -533,7 +524,7 @@ func (c *Client) decryptDataPacket(packet []byte) ([]byte, error) {
 	// excludes the outer opcode/key-ID header, so a wrong key would still
 	// "authenticate").
 	var data *DataChannel
-	var isNewest bool
+	isNewest := false
 	if alt, ok := c.dataByKey[keyID]; ok {
 		data = alt
 		isNewest = alt == c.data
@@ -544,16 +535,20 @@ func (c *Client) decryptDataPacket(packet []byte) ([]byte, error) {
 	if data == nil {
 		return nil, errors.New("openvpn data packet with unknown key id")
 	}
+	// Decrypt first so a forged / corrupted packet does not latch evidence.
+	plain, err := data.Decrypt(packet)
+	if err != nil {
+		return nil, err
+	}
 	if isNewest {
 		// The peer labeled an outbound packet with the current key ID, so it
-		// has activated this epoch (OpenVPN only labels outbound with a
-		// key whose auth completed). Record the evidence under dataLock so
-		// writeDataPacket can promote the outbound key.
-		c.dataLock.Lock()
-		c.newKeyEvidence = true
-		c.dataLock.Unlock()
+		// has activated this epoch (OpenVPN only labels outbound with a key
+		// whose auth completed). Mark the epoch itself: even if a rekey
+		// swapped c.data between the RLock and here, the evidence stays on
+		// this epoch and cannot be attributed to a newer key.
+		data.MarkPeerActive()
 	}
-	return data.Decrypt(packet)
+	return plain, nil
 }
 
 // watchControl monitors the control channel for TLS renegotiation requests

@@ -66,9 +66,18 @@ type DataChannel struct {
 	// sendStarted is true once a packet has been encrypted with this key,
 	// i.e. the key was actually used for outbound data at least once.
 	sendStarted bool
-	recvHighest uint32
-	recvWindow  uint64
-	recvSeen    bool
+	// recvEvidence latches true once a data packet labeled with this key ID
+	// decrypted successfully. The peer only labels outbound packets with a
+	// key whose authentication completed (OpenVPN tls_pre_encrypt /
+	// handle_data_channel_packet require KS_AUTH_TRUE), so this is the
+	// reliable signal that this epoch has been activated by the peer and can
+	// replace the lame-duck for outbound traffic. Stored per-epoch so a
+	// back-to-back rekey cannot attribute an older epoch's evidence to a
+	// newer key. Guarded by d.mu.
+	recvEvidence bool
+	recvHighest  uint32
+	recvWindow   uint64
+	recvSeen     bool
 
 	randMu     sync.Mutex
 	randBuf    []byte
@@ -240,7 +249,7 @@ func (d *DataChannel) encryptCBC(packet []byte, packetID uint32) ([]byte, error)
 		ciphertext[i] = byte(padding)
 	}
 	cipher.NewCBCEncrypter(d.sendBlock, iv).CryptBlocks(ciphertext, ciphertext)
-	_ = d.hmacAppend(&d.sendMACPool, authenticated, out[len(header):len(header)])
+	d.hmacCopy(&d.sendMACPool, authenticated, out[len(header):])
 	return out, nil
 }
 
@@ -361,6 +370,21 @@ func (d *DataChannel) Started() bool {
 	return d.sendStarted
 }
 
+// MarkPeerActive records that a packet labeled with this key ID decrypted
+// successfully, i.e. the peer has activated this epoch.
+func (d *DataChannel) MarkPeerActive() {
+	d.mu.Lock()
+	d.recvEvidence = true
+	d.mu.Unlock()
+}
+
+// PeerActive reports whether the peer has activated this epoch.
+func (d *DataChannel) PeerActive() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.recvEvidence
+}
+
 func (d *DataChannel) acceptPacketID(packetID uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -450,6 +474,19 @@ func (d *DataChannel) hmacAppend(pool *sync.Pool, data, dst []byte) []byte {
 	mac.Reset()
 	_, _ = mac.Write(data)
 	return mac.Sum(dst)
+}
+
+// hmacCopy writes the HMAC of data into dst (which must have enough
+// capacity), returning the number of bytes written. Unlike hmacAppend it
+// does not rely on mac.Sum(dst) appending into dst's backing array — it
+// always writes the tag into dst explicitly.
+func (d *DataChannel) hmacCopy(pool *sync.Pool, data, dst []byte) int {
+	mac := pool.Get().(hash.Hash)
+	defer pool.Put(mac)
+	mac.Reset()
+	_, _ = mac.Write(data)
+	n := copy(dst, mac.Sum(nil))
+	return n
 }
 
 func pkcs7Pad(plain []byte, blockSize int) []byte {
