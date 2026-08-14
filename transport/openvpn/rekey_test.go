@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -219,6 +220,94 @@ func TestSoftResetAdvancesOpenVPNKeyID(t *testing.T) {
 	client.RotateKeyID()
 	if client.keyID != 2 {
 		t.Fatalf("second soft reset key ID = %d; want 2", client.keyID)
+	}
+}
+
+// TestOutboundKeyStaysLameDuckUntilPeerEvidence verifies the deferred-auth
+// outbound key selection: after a rekey installs a new data epoch, outbound
+// packets keep using the old (lame-duck) key until a packet labeled with the
+// new key ID decrypts successfully — the OpenVPN-equivalent signal that the
+// peer has activated the new key.
+func TestOutboundKeyStaysLameDuckUntilPeerEvidence(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	mkKeys := func() *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = 0x11
+		}
+		// Identical send/recv keys so a locally-encrypted packet decrypts
+		// through the peer path (the direction split is irrelevant here).
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = 0x22
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+
+	initial, err := NewDataChannel(mkKeys(), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(mkKeys(), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(initial)
+	// Activate the first epoch: outbound switches to it immediately.
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	// Drain that first packet.
+	if _, err := serverIO.ReadPacket(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(rekeyed)
+
+	// First outbound packet after the rekey must still use the old key ID 0
+	// (deferred auth: peer has not yet activated key ID 1).
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, err := serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 0 {
+		t.Fatalf("outbound key ID after rekey = %d; want 0 (lame duck)", keyID)
+	}
+
+	// Simulate the peer activating the new key: encrypt a data packet with the
+	// new key and decrypt it through the client, which latches newKeyEvidence.
+	peerPkt, err := rekeyed.Encrypt([]byte{0x45, 0, 0, 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.decryptDataPacket(peerPkt); err != nil {
+		t.Fatalf("decrypt new-key packet: %v", err)
+	}
+
+	// After evidence, outbound switches to key ID 1.
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, err = serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 1 {
+		t.Fatalf("outbound key ID after evidence = %d; want 1", keyID)
 	}
 }
 
@@ -443,7 +532,7 @@ func TestRekeyRetransmitsLostClientHello(t *testing.T) {
 	copy(serverID[:], []byte("server01"))
 
 	client, err := NewClient(&ClientConfig{
-		Proto:   ProtoUDP,
+		Proto:       ProtoUDP,
 		TLSCryptKey: testStaticKey(),
 	}, clientIO)
 	if err != nil {
@@ -699,6 +788,41 @@ func (c *chunkConn) SetReadDeadline(t time.Time) error {
 
 // TestReadTokenPushReplySplitAcrossReads verifies that a token-only PUSH_REPLY
 // split across two reads is parsed (TLS is a byte stream).
+// TestTakePushReplyAuthPendingBeforePush verifies the exact deferred-auth
+// stream from the review: AUTH_PENDING\0INFO_PRE,...\0PUSH_REPLY,...\0.
+// The token must be found even though PUSH_REPLY is not the first message.
+func TestTakePushReplyAuthPendingBeforePush(t *testing.T) {
+	stream := []byte("AUTH_PENDING,timeout 60\x00" +
+		"INFO_PRE,Auth-Message:OTAwODcxMjU5MTQ1MDExNjA3MjM=\x00" +
+		"PUSH_REPLY,auth-token SESS_ID_fresh\x00")
+	reply, rest, ok := takePushReply(stream)
+	if !ok {
+		t.Fatal("token PUSH_REPLY not found after AUTH_PENDING/INFO_PRE")
+	}
+	if reply == nil || reply.AuthTokenPass != "SESS_ID_fresh" {
+		t.Fatalf("token not parsed: %#v", reply)
+	}
+	if len(rest) != 0 {
+		t.Fatalf("unexpected leftover: %q", rest)
+	}
+}
+
+// TestReadTokenPushReplyDeferredAuth verifies the full reviewer scenario at
+// the readTokenPushReply level: AUTH_PENDING then token PUSH_REPLY in one
+// TLS read must yield the token.
+func TestReadTokenPushReplyDeferredAuth(t *testing.T) {
+	conn := &chunkConn{data: [][]byte{
+		[]byte("AUTH_PENDING,timeout 60\x00PUSH_REPLY,auth-token SESS_ID_deferred\x00"),
+	}}
+	reply, _, err := readTokenPushReply(conn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply == nil || reply.AuthTokenPass != "SESS_ID_deferred" {
+		t.Fatalf("deferred-auth token not parsed: %#v", reply)
+	}
+}
+
 func TestReadTokenPushReplySplitAcrossReads(t *testing.T) {
 	conn := &chunkConn{data: [][]byte{
 		[]byte("PUSH_REPLY,auth-token "),
@@ -801,18 +925,31 @@ func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
 	}
 	defer client.Close()
 
-	// watcher loop consumes a valid next-epoch soft reset, then renegotiate
-	// fails (no TLS in this unit context) and the tunnel is failed.
+	// The watcher loop consumes a parked same-epoch P_CONTROL_V1
+	// (errParkedTLS) whose TLS payload is an AUTH_FAILED message — a
+	// deferred authentication that failed. consumeRekeyPush must surface it
+	// as a hard error, not swallow it or wait for the next soft reset.
 	var serverID SessionID
 	copy(serverID[:], []byte("server01"))
 	client.control.SetRemoteSessionID(serverID)
 	client.control.AdoptKeyID(1)
-	client.control.pendingSoftReset = &ControlPacket{
-		Opcode:       PControlSoftResetV1,
-		KeyID:        2,
+	// Simulate an established session with a cached push (so the rekey path
+	// is taken) and a deferred-auth failure already buffered in the TLS
+	// plaintext stream (arrives as a same-epoch P_CONTROL_V1 payload).
+	client.push = &PushReply{PeerID: 1, AuthTokenPass: "SESS_ID_old"}
+	client.leftoverTLS = []byte("AUTH_FAILED,SESSION: auth-token expired\x00")
+	// Park a same-epoch P_CONTROL_V1 so waitForSoftReset returns errParkedTLS.
+	// Its payload is the deferred-auth plaintext, which in production is fed
+	// through the TLS layer and lands in leftoverTLS (set above).
+	client.control.mu.Lock()
+	client.control.recvPending[0] = &ControlPacket{
+		Opcode:       PControlV1,
+		KeyID:        1,
 		MessageID:    0,
 		LocalSession: serverID,
+		Payload:      []byte("deferred auth status"),
 	}
+	client.control.mu.Unlock()
 
 	done := make(chan struct{})
 	go func() {
@@ -822,10 +959,12 @@ func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("watchControl did not exit after soft reset")
+		t.Fatal("watchControl did not exit after parked AUTH_FAILED")
 	}
 	if rekeyErr := client.LastRekeyError(); rekeyErr == nil {
-		t.Fatal("watchControl did not surface a rekey error")
+		t.Fatal("watchControl swallowed parked AUTH_FAILED")
+	} else if !strings.Contains(rekeyErr.Error(), "auth") {
+		t.Fatalf("unexpected rekey error: %v", rekeyErr)
 	}
 }
 
@@ -875,12 +1014,12 @@ func TestDecryptRejectsExpiredRetiringKey(t *testing.T) {
 	current := &DataChannel{keyID: 2}
 	retiring := &DataChannel{keyID: 1}
 	c := &Client{
-		data:          current,
-		retiring:      retiring,
+		data:           current,
+		retiring:       retiring,
 		retiringExpiry: time.Now().Add(-time.Second),
-		dataByKey:     map[uint8]*DataChannel{1: retiring, 2: current},
+		dataByKey:      map[uint8]*DataChannel{1: retiring, 2: current},
 	}
-	_, err := c.decryptDataPacket([]byte{byte(PDataV2 << OpcodeShift) | 1})
+	_, err := c.decryptDataPacket([]byte{byte(PDataV2<<OpcodeShift) | 1})
 	if err == nil {
 		t.Fatal("expired retiring key was accepted")
 	}
@@ -899,7 +1038,7 @@ func TestDecryptAcceptsRetiringKeyBeforeExpiry(t *testing.T) {
 	}
 	// Decryption will fail on the packet (no keys), but the key routing must
 	// NOT reject it as unknown/expired.
-	_, err := c.decryptDataPacket([]byte{byte(PDataV2 << OpcodeShift) | 1})
+	_, err := c.decryptDataPacket([]byte{byte(PDataV2<<OpcodeShift) | 1})
 	if err != nil && err.Error() == "openvpn data packet with unknown key id" {
 		t.Fatalf("retiring key rejected before expiry: %v", err)
 	}

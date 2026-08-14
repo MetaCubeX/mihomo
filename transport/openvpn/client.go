@@ -37,17 +37,25 @@ type Client struct {
 	control *ControlChannel
 	// tlsConn is the active TLS session; swapped on each rekey by the
 	// watchControl goroutine and read by Close. Atomic to avoid racing.
-	tlsConn atomic.Pointer[tls.Conn]
-	data    *DataChannel
+	tlsConn     atomic.Pointer[tls.Conn]
+	data        *DataChannel
+	outboundKey *DataChannel
+	// newKeyEvidence latches true once a data packet labeled with the
+	// current (newest) key ID decrypted successfully. The peer only labels
+	// outbound packets with a key whose authentication completed
+	// (OpenVPN tls_pre_encrypt / handle_data_channel_packet require
+	// KS_AUTH_TRUE), so this is the reliable signal that the new key has
+	// been activated and can replace the lame-duck for outbound traffic.
+	newKeyEvidence bool
 	// retiring is the previous data-channel epoch, kept during a rekey so
 	// packets still labeled with the old key ID can be decrypted.
 	retiring *DataChannel
 	// retiringExpiry is when the retiring epoch is no longer accepted,
 	// mirroring OpenVPN's lame-duck transition_window (default 3600s).
 	retiringExpiry time.Time
-	push     *PushReply
-	authUser string
-	authPass string
+	push           *PushReply
+	authUser       string
+	authPass       string
 	// leftoverTLS is unread TLS control bytes after a key-method-2 record.
 	leftoverTLS []byte
 	// lastRekeyErr is the original renegotiation failure, preserved because
@@ -63,8 +71,8 @@ type Client struct {
 	// recent key exchange.
 	negotiatedCipher string
 
-	// dataLock protects c.data during TLS renegotiation (rekey), where the
-	// DataChannel is atomically replaced.
+	// dataLock protects c.data / c.outboundKey during TLS renegotiation
+	// (rekey), where the DataChannel is atomically replaced.
 	dataLock sync.RWMutex
 
 	runCtx context.Context
@@ -319,7 +327,7 @@ func (c *Client) consumeRekeyPush() error {
 	if reply, rest, ok := takePushReply(c.leftoverTLS); ok {
 		c.leftoverTLS = rest
 		push = mergePushReply(push, reply)
-	} else if bytes.Contains(c.leftoverTLS, []byte("AUTH_FAILED")) {
+	} else if authFailedMsg(c.leftoverTLS) {
 		return authFailedError(c.leftoverTLS)
 	} else if conn := c.tlsConn.Load(); conn != nil {
 		reply, rest, err := readTokenPushReply(conn, c.leftoverTLS)
@@ -338,11 +346,39 @@ func (c *Client) consumeRekeyPush() error {
 	return nil
 }
 
+// outboundPromoteGrace is the safety margin used to promote the outbound
+// data key just before the previous (lame-duck) epoch would stop being
+// accepted by the peer. It exists only as a backstop for asymmetric traffic:
+// the normal promotion path is receive-evidence of the new key.
+const outboundPromoteGrace = 60 * time.Second
+
+// installDataChannel records a freshly derived data epoch. Decryption can
+// immediately use the new key (the peer may label packets with it), but the
+// outbound key is deliberately kept on the previous epoch until there is
+// evidence the peer has activated the new one, mirroring OpenVPN's deferred
+// auth key selection.
+//
+// OpenVPN (ssl.c: tls_select_encryption_key / key_state_soft_reset) only
+// selects a key for outbound encryption once it is KS_AUTH_TRUE. During
+// deferred authentication the new key stays KS_AUTH_DEFERRED — the server
+// sends its key-method-2 record before generating its data key — so the
+// lame-duck key keeps encrypting outbound traffic. Switching outbound to the
+// new key immediately would send packets the server drops ("not authorized
+// (deferred)").
 func (c *Client) installDataChannel(newData *DataChannel) {
 	c.dataLock.Lock()
 	old := c.data
 	c.retiring = old
 	c.data = newData
+	// Outbound keeps the old epoch unless it was never activated (first
+	// handshake), in which case the new key is selected immediately.
+	if old != nil && old.Started() {
+		c.outboundKey = old
+	} else {
+		c.outboundKey = newData
+	}
+	// Each epoch starts without evidence of peer activation.
+	c.newKeyEvidence = false
 	if c.dataByKey == nil {
 		c.dataByKey = make(map[uint8]*DataChannel)
 	}
@@ -393,14 +429,37 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		return err
 	}
 	defer c.writeSem.Release(1)
-	// Acquire the data channel after securing the write semaphore, since a
-	// rekey may swap c.data while Acquire is blocked.
-	c.dataLock.RLock()
+	// Acquire the outbound key after securing the write semaphore, since a
+	// rekey may swap c.data / c.outboundKey while Acquire is blocked.
+	c.dataLock.Lock()
 	data := c.data
-	c.dataLock.RUnlock()
 	if data == nil {
+		c.dataLock.Unlock()
 		return errors.New("openvpn data channel is not ready")
 	}
+	outbound := c.outboundKey
+	if outbound == nil {
+		outbound = data
+	}
+	// OpenVPN promotes the new key for outbound once the peer's key state
+	// is authenticated (tls_select_encryption_key). We cannot observe the
+	// peer's auth state directly, so we use the equivalent evidence: a data
+	// packet labeled with the new key ID decrypted successfully — the peer
+	// only labels outbound packets with a key whose auth completed. A
+	// just-before-expiry backstop promotes even in asymmetric traffic, so
+	// the lame-duck key is not used past the point the peer stops accepting
+	// it.
+	if outbound != data && outbound != nil {
+		backstop := false
+		if !c.retiringExpiry.IsZero() && time.Until(c.retiringExpiry) < outboundPromoteGrace {
+			backstop = true
+		}
+		if c.newKeyEvidence || backstop {
+			c.outboundKey = data
+			outbound = data
+		}
+	}
+	c.dataLock.Unlock()
 	if compress && c.config.CompLZO == CompLzoYes {
 		compressed, err := lzo1xCompressSafe(packet)
 		if err != nil {
@@ -408,7 +467,7 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		}
 		packet = compressed
 	}
-	encrypted, err := data.Encrypt(packet)
+	encrypted, err := outbound.Encrypt(packet)
 	if err != nil {
 		return err
 	}
@@ -474,14 +533,25 @@ func (c *Client) decryptDataPacket(packet []byte) ([]byte, error) {
 	// excludes the outer opcode/key-ID header, so a wrong key would still
 	// "authenticate").
 	var data *DataChannel
+	var isNewest bool
 	if alt, ok := c.dataByKey[keyID]; ok {
 		data = alt
+		isNewest = alt == c.data
 	} else if c.retiring != nil && c.retiring.keyID == keyID {
 		data = c.retiring
 	}
 	c.dataLock.RUnlock()
 	if data == nil {
 		return nil, errors.New("openvpn data packet with unknown key id")
+	}
+	if isNewest {
+		// The peer labeled an outbound packet with the current key ID, so it
+		// has activated this epoch (OpenVPN only labels outbound with a
+		// key whose auth completed). Record the evidence under dataLock so
+		// writeDataPacket can promote the outbound key.
+		c.dataLock.Lock()
+		c.newKeyEvidence = true
+		c.dataLock.Unlock()
 	}
 	return data.Decrypt(packet)
 }
@@ -729,12 +799,10 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 	c.leftoverTLS = nil
 	tmp := make([]byte, 4096)
 	for {
-		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
-			msg := string(buf)
-			if idx := strings.IndexByte(msg, 0); idx >= 0 {
-				msg = msg[:idx]
-			}
-			return nil, fmt.Errorf("openvpn authentication failed: %s", strings.TrimSpace(msg))
+		if authFailedMsg(buf) {
+			// Surface the complete AUTH_FAILED message, not the whole
+			// buffer (which may also contain unrelated control messages).
+			return nil, authFailedError(buf)
 		}
 		if reply, rest, ok := takePushReply(buf); ok {
 			c.leftoverTLS = rest
@@ -790,7 +858,7 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 	if reply, rest, ok := takePushReply(buf); ok {
 		return reply, rest, nil
 	}
-	if bytes.Contains(buf, []byte("AUTH_FAILED")) {
+	if authFailedMsg(buf) {
 		return nil, buf, authFailedError(buf)
 	}
 	// Clear the temporary read deadline on every return path; a successful
@@ -809,7 +877,7 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 			buf = append(buf, tmp[:n]...)
 		}
 		// AUTH_FAILED always takes precedence so its diagnostic is kept.
-		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
+		if authFailedMsg(buf) {
 			return nil, buf, authFailedError(buf)
 		}
 		// A complete reply is accepted regardless of a bundled err: the
@@ -830,6 +898,18 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 	return nil, buf, nil
 }
 
+// authFailedMsg reports whether the TLS plaintext buffer contains a complete
+// AUTH_FAILED control message (not a partial prefix).
+func authFailedMsg(buf []byte) bool {
+	msgs, _ := splitControlMessages(buf)
+	for _, m := range msgs {
+		if bytes.HasPrefix(m, []byte("AUTH_FAILED")) {
+			return true
+		}
+	}
+	return false
+}
+
 func authFailedError(buf []byte) error {
 	msg := string(buf)
 	if idx := strings.IndexByte(msg, 0); idx >= 0 {
@@ -839,36 +919,70 @@ func authFailedError(buf []byte) error {
 }
 
 func takePushReply(buf []byte) (*PushReply, []byte, bool) {
-	if len(buf) == 0 {
-		return nil, nil, false
+	// A single caller handles both the happy path (PUSH_REPLY) and the
+	// failure path (AUTH_FAILED). Walk complete NUL-delimited control
+	// messages in order so a stream like
+	//   AUTH_PENDING\0INFO_PRE,...\0PUSH_REPLY,auth-token ...\0
+	// yields the token even though PUSH_REPLY is not first.
+	msgs, rest := splitControlMessages(buf)
+	if len(msgs) == 0 {
+		return nil, rest, false
 	}
-	// AUTH_FAILED may arrive instead of PUSH_REPLY.
-	if bytes.Contains(buf, []byte("AUTH_FAILED")) {
-		msg := string(buf)
-		if idx := strings.IndexByte(msg, 0); idx >= 0 {
-			msg = msg[:idx]
+	// Scan in order: AUTH_FAILED wins (hard failure), otherwise merge every
+	// complete PUSH_REPLY (OpenVPN may split a push across multiple
+	// messages). Non-push messages (AUTH_PENDING, INFO_PRE, INFO, RESTART,
+	// HALT, ...) are consumed and ignored by the rekey path.
+	var authFailed []byte
+	var reply *PushReply
+	parsed := false
+	for _, m := range msgs {
+		if bytes.HasPrefix(m, []byte("AUTH_FAILED")) {
+			authFailed = m
+			continue
 		}
-		return nil, nil, false
+		if bytes.HasPrefix(m, []byte("PUSH_REPLY")) {
+			r, err := parsePushReplyInner(string(m))
+			if err == nil {
+				reply = mergePushReply(reply, r)
+				parsed = true
+				continue
+			}
+		}
+		// Other complete control messages are deliberately consumed.
 	}
-	if !bytes.Contains(buf, []byte("PUSH_REPLY")) {
-		return nil, nil, false
+	if authFailed != nil {
+		// Surface the failure to callers (readTokenPushReply /
+		// consumeRekeyPush / readPushReply) via the rest-of-buffer, since
+		// takePushReply's ok=false is also used for "not complete yet".
+		return nil, rest, false
 	}
-	// The message is only complete once a NUL terminator is present. A
-	// PUSH_REPLY fragmented across TLS reads must not be committed early
-	// (e.g. right after "ifconfig") or later route / DNS / cipher / token
-	// options would be lost. This matches the reference client, which parses
-	// the full PUSH message after it is fully received.
-	idx := bytes.IndexByte(buf, 0)
-	if idx < 0 {
-		return nil, nil, false
-	}
-	msg := string(buf[:idx])
-	rest := append([]byte(nil), buf[idx+1:]...)
-	reply, err := parsePushReplyInner(msg)
-	if err != nil {
-		return nil, nil, false
+	if !parsed {
+		return nil, rest, false
 	}
 	return reply, rest, true
+}
+
+// splitControlMessages splits a TLS plaintext byte stream into complete
+// NUL-terminated control messages and returns the trailing bytes that do not
+// yet form a complete message. OpenVPN frames every control message with a
+// trailing NUL (send_control_channel_string_dowork), and the client parses
+// them one by one (forward.c check_incoming_control_channel /
+// extract_command_buffer). The trailing incomplete message is returned as
+// rest so it can be re-merged when the next TLS read arrives.
+func splitControlMessages(buf []byte) ([][]byte, []byte) {
+	if len(buf) == 0 {
+		return nil, nil
+	}
+	var msgs [][]byte
+	for {
+		idx := bytes.IndexByte(buf, 0)
+		if idx < 0 {
+			break
+		}
+		msgs = append(msgs, buf[:idx])
+		buf = buf[idx+1:]
+	}
+	return msgs, buf
 }
 
 func mergePushReply(prev, next *PushReply) *PushReply {

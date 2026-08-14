@@ -63,9 +63,12 @@ type DataChannel struct {
 
 	mu           sync.Mutex
 	sendPacketID uint32
-	recvHighest  uint32
-	recvWindow   uint64
-	recvSeen     bool
+	// sendStarted is true once a packet has been encrypted with this key,
+	// i.e. the key was actually used for outbound data at least once.
+	sendStarted bool
+	recvHighest uint32
+	recvWindow  uint64
+	recvSeen    bool
 
 	randMu     sync.Mutex
 	randBuf    []byte
@@ -345,7 +348,17 @@ func (d *DataChannel) nextPacketID() uint32 {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.sendPacketID++
+	d.sendStarted = true
 	return d.sendPacketID
+}
+
+// Started reports whether this key has encrypted at least one outbound
+// packet. Guarded by d.mu so it is safe to call while another goroutine is
+// encrypting.
+func (d *DataChannel) Started() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.sendStarted
 }
 
 func (d *DataChannel) acceptPacketID(packetID uint32) error {

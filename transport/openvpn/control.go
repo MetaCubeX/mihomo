@@ -28,17 +28,17 @@ type ControlChannel struct {
 	local  SessionID
 	remote SessionID
 
-	mu            sync.Mutex
-	sendPacketID  uint32
-	sendMessage   uint32
-	recvMessage   uint32
-	ackPending    []uint32
+	mu           sync.Mutex
+	sendPacketID uint32
+	sendMessage  uint32
+	recvMessage  uint32
+	ackPending   []uint32
 	// lruAcks is the MRU of recently acknowledged packet IDs, mirroring
 	// OpenVPN's reliable_ack.lru_acks: acks are copied here when sent and
 	// kept so subsequent control packets repeat them until replaced.
-	lruAcks        []uint32
-	pending        map[uint32]*ControlPacket
-	recvPending    map[uint32]*ControlPacket
+	lruAcks     []uint32
+	pending     map[uint32]*ControlPacket
+	recvPending map[uint32]*ControlPacket
 	// pendingSoftReset holds a server soft-reset that arrived while the
 	// current epoch was still doing TLS/key-method. waitForSoftReset
 	// consumes it so ControlConn.Read cannot swallow it.
@@ -46,8 +46,8 @@ type ControlChannel struct {
 	// parkedTLS holds same-epoch P_CONTROL_V1 payloads that arrived while
 	// the watcher was waiting for a soft reset (typically a token-only
 	// PUSH_REPLY). ReadAll drains them into leftoverTLS / tls.Conn.
-	parkedTLS    [][]byte
-	readDeadline time.Time
+	parkedTLS     [][]byte
+	readDeadline  time.Time
 	writeDeadline time.Time
 }
 
