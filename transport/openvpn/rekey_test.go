@@ -797,6 +797,83 @@ func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
 
 // TestMRUCarriesAckOnSubsequentSends verifies the MRU behavior: an ACK queued
 // once rides on this packet and the next (OpenVPN lru_acks), not just once.
+// TestRetransmitPendingEmptyDoesNotConsumeAcks verifies that retransmitting
+// with no pending packets does not consume queued ACKs (they must survive for
+// the next real send).
+func TestRetransmitPendingEmptyDoesNotConsumeAcks(t *testing.T) {
+	clientIO, _ := newMemoryPacketPair()
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	client := NewControlChannel(clientIO, nil, clientID)
+	client.SetRemoteSessionID(serverID)
+	client.clock = func() time.Time { return time.Unix(1714567890, 0) }
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	client.QueueAck(42)
+	if err := client.RetransmitPending(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// ACK 42 must still be pending (nothing was sent, so it was not consumed).
+	if len(client.ackPending) != 1 || client.ackPending[0] != 42 {
+		t.Fatalf("ackPending after empty retransmit = %v, want [42]", client.ackPending)
+	}
+}
+
+// TestDecryptRejectsUnknownKeyID verifies a data packet labeled with an
+// unknown key epoch is rejected instead of being decrypted with the current
+// key (CBC HMAC excludes the outer header, so wrong-key "authentication" must
+// not be accepted).
+func TestDecryptRejectsUnknownKeyID(t *testing.T) {
+	c := &Client{dataByKey: make(map[uint8]*DataChannel)}
+	// No current data channel: any key ID is unknown.
+	if _, err := c.decryptDataPacket([]byte{byte(PDataV2 << OpcodeShift)}); err == nil {
+		t.Fatal("unknown key id was accepted")
+	}
+}
+
+// TestDecryptRejectsExpiredRetiringKey verifies a data packet from a
+// lame-duck epoch is rejected once the transition window has elapsed.
+func TestDecryptRejectsExpiredRetiringKey(t *testing.T) {
+	current := &DataChannel{keyID: 2}
+	retiring := &DataChannel{keyID: 1}
+	c := &Client{
+		data:          current,
+		retiring:      retiring,
+		retiringExpiry: time.Now().Add(-time.Second),
+		dataByKey:     map[uint8]*DataChannel{1: retiring, 2: current},
+	}
+	_, err := c.decryptDataPacket([]byte{byte(PDataV2 << OpcodeShift) | 1})
+	if err == nil {
+		t.Fatal("expired retiring key was accepted")
+	}
+}
+
+// TestDecryptAcceptsRetiringKeyBeforeExpiry verifies the lame-duck epoch is
+// still accepted within the transition window.
+func TestDecryptAcceptsRetiringKeyBeforeExpiry(t *testing.T) {
+	current := &DataChannel{keyID: 2}
+	retiring := &DataChannel{keyID: 1}
+	c := &Client{
+		data:           current,
+		retiring:       retiring,
+		retiringExpiry: time.Now().Add(time.Hour),
+		dataByKey:      map[uint8]*DataChannel{1: retiring, 2: current},
+	}
+	// Decryption will fail on the packet (no keys), but the key routing must
+	// NOT reject it as unknown/expired.
+	_, err := c.decryptDataPacket([]byte{byte(PDataV2 << OpcodeShift) | 1})
+	if err != nil && err.Error() == "openvpn data packet with unknown key id" {
+		t.Fatalf("retiring key rejected before expiry: %v", err)
+	}
+	if err != nil && err.Error() == "openvpn data packet from expired retiring epoch" {
+		t.Fatalf("retiring key rejected as expired before expiry: %v", err)
+	}
+}
+
 func TestMRUCarriesAckOnSubsequentSends(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
 	clientCrypt, err := NewTLSCrypt(testStaticKey(), true)
@@ -1220,7 +1297,8 @@ func TestWaitForSoftResetParksLateControlPayload(t *testing.T) {
 	server.AdoptKeyID(1)
 
 	// Late token-only PUSH_REPLY on the current epoch, then a next-epoch
-	// soft reset. The watcher must park the token, not drop it.
+	// soft reset. The watcher must park the token (and surface it now), not
+	// drop it or wait for the next soft reset.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		_, _ = server.Send(ctx, PControlV1, []byte("PUSH_REPLY,auth-token SESS_ID_parked\x00"))
@@ -1229,16 +1307,24 @@ func TestWaitForSoftResetParksLateControlPayload(t *testing.T) {
 		_, _ = server.Send(ctx, PControlSoftResetV1, nil)
 	}()
 
+	// First wait surfaces the parked TLS payload so the caller consumes it
+	// immediately (a late AUTH_FAILED must not wait for the next soft reset).
+	_, err := client.waitForSoftReset(ctx)
+	if !errors.Is(err, errParkedTLS) {
+		t.Fatalf("expected errParkedTLS, got %v", err)
+	}
+	queued := client.ReadAll()
+	if len(queued) != 1 || string(queued[0].Payload) != "PUSH_REPLY,auth-token SESS_ID_parked\x00" {
+		t.Fatalf("parked payload lost: %#v", queued)
+	}
+
+	// Then the soft reset is delivered.
 	got, err := client.waitForSoftReset(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Opcode != PControlSoftResetV1 || got.KeyID != 2 {
 		t.Fatalf("got %s key=%d", got.Opcode, got.KeyID)
-	}
-	queued := client.ReadAll()
-	if len(queued) != 1 || string(queued[0].Payload) != "PUSH_REPLY,auth-token SESS_ID_parked\x00" {
-		t.Fatalf("parked payload lost: %#v", queued)
 	}
 }
 

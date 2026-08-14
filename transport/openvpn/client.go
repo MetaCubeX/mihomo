@@ -24,6 +24,10 @@ const (
 	// (rekey) cycle. OpenVPN servers typically rekey every hour; the
 	// renegotiation itself should complete in seconds.
 	renegotiateTimeout = 30 * time.Second
+
+	// transitionWindow is how long a retiring (lame-duck) data epoch is
+	// accepted after a rekey, mirroring OpenVPN's default transition-window.
+	transitionWindow = 3600 * time.Second
 )
 
 type Client struct {
@@ -38,6 +42,9 @@ type Client struct {
 	// retiring is the previous data-channel epoch, kept during a rekey so
 	// packets still labeled with the old key ID can be decrypted.
 	retiring *DataChannel
+	// retiringExpiry is when the retiring epoch is no longer accepted,
+	// mirroring OpenVPN's lame-duck transition_window (default 3600s).
+	retiringExpiry time.Time
 	push     *PushReply
 	authUser string
 	authPass string
@@ -343,6 +350,13 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 		c.dataByKey[old.keyID] = old
 	}
 	c.dataByKey[newData.keyID] = newData
+	// The previous epoch is a lame-duck key: keep it only for the OpenVPN
+	// transition_window (default 3600s), then it must not be accepted.
+	if old != nil {
+		c.retiringExpiry = time.Now().Add(transitionWindow)
+	} else {
+		c.retiringExpiry = time.Time{}
+	}
 	// Keep at most the current and previous epoch.
 	for id := range c.dataByKey {
 		if id != newData.keyID && (old == nil || id != old.keyID) {
@@ -447,15 +461,24 @@ func (c *Client) decryptDataPacket(packet []byte) ([]byte, error) {
 	}
 	_, keyID := parseOpcodeKeyID(packet[0])
 	c.dataLock.RLock()
-	data := c.data
+	// Route strictly by key ID. A packet labeled with an unknown epoch must
+	// be rejected, not silently decrypted with the current key (the CBC HMAC
+	// excludes the outer opcode/key-ID header, so a wrong key would still
+	// "authenticate").
+	var data *DataChannel
 	if alt, ok := c.dataByKey[keyID]; ok {
 		data = alt
 	} else if c.retiring != nil && c.retiring.keyID == keyID {
+		if !c.retiringExpiry.IsZero() && time.Now().After(c.retiringExpiry) {
+			// Lame-duck key expired (transition_window elapsed): reject.
+			c.dataLock.RUnlock()
+			return nil, errors.New("openvpn data packet from expired retiring epoch")
+		}
 		data = c.retiring
 	}
 	c.dataLock.RUnlock()
 	if data == nil {
-		return nil, errors.New("openvpn data channel is not ready")
+		return nil, errors.New("openvpn data packet with unknown key id")
 	}
 	return data.Decrypt(packet)
 }
@@ -469,6 +492,20 @@ func (c *Client) watchControl() {
 	for {
 		packet, err := c.control.waitForSoftReset(c.runCtx)
 		if err != nil {
+			if errors.Is(err, errParkedTLS) {
+				// A same-epoch TLS payload (token update / late AUTH_FAILED)
+				// was parked. Consume it now so a deferred authentication
+				// failure is surfaced immediately instead of waiting for the
+				// next soft reset (which may never come).
+				c.consumeQueuedControl()
+				if c.push != nil {
+					if err := c.consumeRekeyPush(); err != nil {
+						c.failControl(fmt.Errorf("consume parked rekey push: %w", err))
+						return
+					}
+				}
+				continue
+			}
 			c.failControl(fmt.Errorf("wait for soft reset: %w", err))
 			return
 		}

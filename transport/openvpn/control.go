@@ -280,6 +280,11 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 	return c.read(ctx, false)
 }
 
+// errParkedTLS is returned by waitForSoftReset when it parked a same-epoch
+// TLS control payload (token update / AUTH_FAILED) that must be consumed
+// before continuing to wait for the next soft reset.
+var errParkedTLS = errors.New("parked tls control payload")
+
 func (c *ControlChannel) waitForSoftReset(ctx context.Context) (*ControlPacket, error) {
 	c.mu.Lock()
 	if c.pendingSoftReset != nil {
@@ -299,12 +304,14 @@ func (c *ControlChannel) waitForSoftReset(ctx context.Context) (*ControlPacket, 
 		}
 		// Same-epoch P_CONTROL_V1 after a rekey is typically a token-only
 		// PUSH_REPLY (send_push_reply_auth_token). Park the TLS payload for
-		// ReadAll instead of ACK-and-dropping it. read() already ACKed.
+		// ReadAll instead of ACK-and-dropping it, and return so the caller
+		// consumes it immediately (a late AUTH_FAILED must not wait for the
+		// next soft reset). read() already ACKed.
 		if packet.Opcode == PControlV1 && len(packet.Payload) > 0 {
 			c.mu.Lock()
 			c.parkedTLS = append(c.parkedTLS, append([]byte(nil), packet.Payload...))
 			c.mu.Unlock()
-			continue
+			return nil, errParkedTLS
 		}
 		if err := c.SendAck(ctx); err != nil {
 			return nil, err
@@ -487,6 +494,12 @@ func (c *ControlChannel) PendingMessages() int {
 
 func (c *ControlChannel) RetransmitPending(ctx context.Context) error {
 	c.mu.Lock()
+	// Nothing to retransmit: do not consume pending ACKs (moving them into
+	// the MRU without emitting a packet would drop them).
+	if len(c.pending) == 0 {
+		c.mu.Unlock()
+		return nil
+	}
 	packets := make([]*ControlPacket, 0, len(c.pending))
 	// Pull current acks into the MRU once, so every retransmitted packet
 	// carries the same ack set (matching OpenVPN: retransmitted reliable
