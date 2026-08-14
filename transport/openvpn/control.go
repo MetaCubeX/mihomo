@@ -195,9 +195,17 @@ func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte
 // not evicted when the MRU is full. The MRU keeps its full capacity; max only
 // bounds what is serialized on this packet. Caller must hold c.mu.
 func (c *ControlChannel) takeAcksLocked(max int) []uint32 {
-	// Move ackPending (newest last) into the MRU front, preserving their
+	// Consume only the pending ACKs that can be serialized now (like
+	// reliable_ack_write): move ackPending[:n] into the MRU front and keep
+	// the remainder pending for the next packet. This preserves ACKs that
+	// the per-packet cap would otherwise drop.
+	n := len(c.ackPending)
+	if n > max {
+		n = max
+	}
+	// Move ackPending[:n] (newest last) into the MRU front, preserving their
 	// relative order, exactly like copy_acks_to_mru's backward loop.
-	for i := len(c.ackPending) - 1; i >= 0; i-- {
+	for i := n - 1; i >= 0; i-- {
 		id := c.ackPending[i]
 		move := id
 		found := false
@@ -214,16 +222,21 @@ func (c *ControlChannel) takeAcksLocked(max int) []uint32 {
 			c.lruAcks = append(c.lruAcks, move)
 		}
 	}
-	c.ackPending = nil
+	// Retain the unconsumed tail for the next send.
+	c.ackPending = c.ackPending[n:]
+	if len(c.ackPending) == 0 {
+		c.ackPending = nil
+	}
 	// Cap the MRU at RELIABLE_ACK_SIZE (move-to-front never grows past it).
 	if len(c.lruAcks) > reliableAckSize {
 		c.lruAcks = c.lruAcks[:reliableAckSize]
 	}
-	n := len(c.lruAcks)
-	if n > max {
-		n = max
+	// Serialize from the MRU: up to max, but never more than the MRU holds.
+	k := len(c.lruAcks)
+	if k > max {
+		k = max
 	}
-	return append([]uint32(nil), c.lruAcks[:n]...)
+	return append([]uint32(nil), c.lruAcks[:k]...)
 }
 
 // reliableAckSize mirrors RELIABLE_ACK_SIZE in OpenVPN reliable.h.

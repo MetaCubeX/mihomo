@@ -736,21 +736,20 @@ func TestReadTokenPushReplyEOFPropagated(t *testing.T) {
 }
 
 // TestReadTokenPushReplyCompleteReplyWithEOF verifies that a complete token
-// reply returned together with io.EOF is still surfaced as an error: the TLS
-// stream has closed, so the rekey must not proceed.
+// reply returned together with io.EOF is accepted: the bytes are valid and
+// must be processed before the terminal error (tls.Conn returns (n, io.EOF)
+// when app data is immediately followed by close_notify). Success must not
+// depend on read-ahead boundaries.
 func TestReadTokenPushReplyCompleteReplyWithEOF(t *testing.T) {
 	conn := &chunkConn{
 		data: [][]byte{[]byte("PUSH_REPLY,auth-token SESS_ID_new\x00")},
 		errs: []error{io.EOF},
 	}
 	reply, _, err := readTokenPushReply(conn, nil)
-	if err == nil {
-		t.Fatal("complete reply with EOF was treated as success")
+	if err != nil {
+		t.Fatalf("complete reply with EOF should be accepted: %v", err)
 	}
-	if errors.Is(err, errAuthFailed) {
-		t.Fatalf("unexpected errAuthFailed: %v", err)
-	}
-	if reply != nil {
+	if reply == nil || reply.AuthTokenPass != "SESS_ID_new" {
 		t.Fatalf("unexpected reply: %#v", reply)
 	}
 }
@@ -909,6 +908,76 @@ func TestMRUMoveToFrontMatchesReference(t *testing.T) {
 // reliable control packets (incl. retransmits) carry <= CONTROL_SEND_ACK_MAX
 // (4); a dedicated ACK carries <= RELIABLE_ACK_SIZE (8), and <= 4 when the
 // channel is unprotected (SoftEther compat).
+// TestAckCapRetainsUnsentPending verifies the reference behavior: a packet
+// capped at 4 ACKs consumes only the first 4 pending, and the fifth ACK stays
+// pending and appears on the next packet (reliable_ack_write retains the
+// remainder).
+func TestAckCapRetainsUnsentPending(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	client := NewControlChannel(clientIO, nil, clientID)
+	client.SetRemoteSessionID(serverID)
+	client.clock = func() time.Time { return time.Unix(1714567890, 0) }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Five pending ACKs, dedicated-ack cap on a plain channel is 4.
+	for i := 1; i <= 5; i++ {
+		client.QueueAck(uint32(i))
+	}
+	if err := client.SendAck(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// First dedicated ACK serializes [1 2 3 4]; ACK 5 stays pending.
+	raw, err := serverIO.ReadPacket(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, _, err := DecodeControlPacket(nil, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantFirst := []uint32{1, 2, 3, 4}
+	if len(first.AckIDs) != len(wantFirst) {
+		t.Fatalf("first packet acks = %v, want %v", first.AckIDs, wantFirst)
+	}
+	for i := range wantFirst {
+		if first.AckIDs[i] != wantFirst[i] {
+			t.Fatalf("first packet acks = %v, want %v", first.AckIDs, wantFirst)
+		}
+	}
+	if len(client.ackPending) != 1 || client.ackPending[0] != 5 {
+		t.Fatalf("ackPending after first send = %v, want [5]", client.ackPending)
+	}
+
+	// A second dedicated ACK flushes the retained ACK 5.
+	if err := client.SendAck(ctx); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = serverIO.ReadPacket(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, _, err := DecodeControlPacket(nil, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found5 := false
+	for _, a := range second.AckIDs {
+		if a == 5 {
+			found5 = true
+		}
+	}
+	if !found5 {
+		t.Fatalf("second packet missing retained ACK 5: %v", second.AckIDs)
+	}
+}
+
 func TestAckSerializationCaps(t *testing.T) {
 	cases := []struct {
 		name    string

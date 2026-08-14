@@ -758,7 +758,8 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 		n, err := conn.Read(tmp)
 		// Process bytes before handling err: the io.Reader contract permits
 		// n > 0 with err != nil (e.g. tls.Conn returns (n, io.EOF) when app
-		// data is immediately followed by close_notify).
+		// data is immediately followed by close_notify). The bytes are valid
+		// and must be processed before the terminal error.
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)
 		}
@@ -766,27 +767,20 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
 			return nil, buf, authFailedError(buf)
 		}
-		// Retain a complete reply but still classify err before returning:
-		// a real timeout may carry the reply; EOF / other TLS errors must
-		// be propagated, not hidden by a successful parse.
-		var reply *PushReply
-		var rest []byte
-		if parsed, parsedRest, ok := takePushReply(buf); ok {
-			reply, rest = parsed, parsedRest
+		// A complete reply is accepted regardless of a bundled err: the
+		// logical message is present, so success must not depend on whether
+		// an earlier read happened to read ahead into it (TLS is a byte
+		// stream). EOF is propagated only when no complete message exists.
+		if reply, rest, ok := takePushReply(buf); ok {
+			return reply, rest, nil
 		}
 		if err != nil {
 			_ = conn.SetReadDeadline(time.Time{})
 			var netErr net.Error
 			if errors.As(err, &netErr) && netErr.Timeout() {
-				if reply != nil {
-					return reply, rest, nil
-				}
 				return nil, buf, nil
 			}
 			return nil, buf, err
-		}
-		if reply != nil {
-			return reply, rest, nil
 		}
 	}
 	return nil, buf, nil
