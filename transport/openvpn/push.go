@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const PushRequest = "PUSH_REQUEST"
@@ -31,6 +32,15 @@ type PushReply struct {
 	// pair. Empty when the server does not rotate credentials.
 	AuthTokenUser string
 	AuthTokenPass string
+
+	// PushContinuation mirrors OpenVPN's "push-continuation N": 2 marks an
+	// intermediate multi-segment PUSH_REPLY, 1 marks the final segment, 0
+	// means a single segment.
+	PushContinuation int
+
+	// AuthPendingTimeout is the deferred-auth window advertised by
+	// AUTH_PENDING,timeout N. Zero when no AUTH_PENDING was seen.
+	AuthPendingTimeout time.Duration
 }
 
 func ParsePushReply(message string) (*PushReply, error) {
@@ -139,6 +149,12 @@ func parsePushReplyInner(message string) (*PushReply, error) {
 		case "auth-token-user":
 			if len(fields) >= 2 {
 				reply.AuthTokenUser = decodeAuthTokenUser(fields[1])
+			}
+		case "push-continuation":
+			if len(fields) >= 2 {
+				if n, err := strconv.Atoi(fields[1]); err == nil {
+					reply.PushContinuation = n
+				}
 			}
 		}
 	}

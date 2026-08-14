@@ -120,6 +120,56 @@ func TestRecvPendingBounded(t *testing.T) {
 	}
 }
 
+// TestOutOfWindowPacketNotAcked verifies the review point 3: a control packet
+// whose message ID breaks the receive window is neither buffered nor
+// acknowledged, so the sender keeps it for retransmission instead of dropping
+// it and leaving a permanent hole.
+func TestOutOfWindowPacketNotAcked(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+
+	// client expects message 0; a packet with message 12 is at the window
+	// edge (recvMessage+reliableCapacity) and must be rejected, not ACKed.
+	client.recvMessage = 0
+	pkt := &ControlPacket{
+		Opcode:       PControlV1,
+		KeyID:        0,
+		LocalSession: server.LocalSessionID(),
+		MessageID:    12,
+		Payload:      []byte("hello"),
+	}
+	raw, err := pkt.Encode(server.crypt, 1, uint32(client.clock().Unix()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.io.WritePacket(context.Background(), raw)
+
+	// read() consumes the out-of-window packet and (correctly) does not
+	// deliver it; it keeps reading, so bound the read with a short timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, err = client.read(ctx, false)
+	if err == nil {
+		t.Fatal("expected timeout while waiting after rejected window packet")
+	}
+	// No ACK must have been sent: ackPending stays empty and nothing goes out.
+	client.mu.Lock()
+	acked := len(client.ackPending)
+	client.mu.Unlock()
+	if acked != 0 {
+		t.Fatalf("out-of-window message was ACKed (ackPending=%d)", acked)
+	}
+	// The other direction (client's outbound) must not contain an ACK packet:
+	// nothing may have been written toward the server.
+	serverIO := server.io.(*memoryPacketIO)
+	select {
+	case p := <-serverIO.in:
+		t.Fatalf("unexpected outbound packet after rejected window: %x", p)
+	default:
+	}
+}
+
 func TestCheckReplayAntiReplay(t *testing.T) {
 	c := &ControlChannel{}
 	// First packet initializes the window.

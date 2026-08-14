@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +46,14 @@ type Client struct {
 	// anchors the no-evidence promotion deadline (auth_deferred_expire)
 	// used by writeDataPacket when peer evidence never arrives.
 	outboundStart time.Time
+	// deferredUntil extends the no-evidence promotion deadline when the
+	// server advertised AUTH_PENDING,timeout N (see receive_auth_pending in
+	// OpenVPN push.c): mihomo must not promote the new outbound key while
+	// the peer's key is still KS_AUTH_DEFERRED.
+	deferredUntil time.Time
+	// pushPending accumulates intermediate push-continuation segments across
+	// TLS reads until the final segment arrives.
+	pushPending *PushReply
 	// retiring is the previous data-channel epoch, kept during a rekey so
 	// packets still labeled with the old key ID can be decrypted.
 	retiring *DataChannel
@@ -321,9 +331,21 @@ func (c *Client) consumeRekeyPush() error {
 	// A token-only PUSH_REPLY may already be buffered in leftoverTLS
 	// (it follows the server key-method-2 record on the TLS stream),
 	// or arrive in the next control record right after it.
-	if reply, rest, ok := takePushReply(c.leftoverTLS); ok {
+	reply, rest, ok := takePushReply(c.leftoverTLS)
+	if ok {
 		c.leftoverTLS = rest
+		c.pushPending = nil
 		push = mergePushReply(push, reply)
+		c.applyAuthPendingTimeout(reply)
+	} else if reply != nil {
+		// Intermediate continuation segment(s) or an AUTH_PENDING signal:
+		// accumulate across reads until the final segment arrives.
+		c.leftoverTLS = rest
+		c.pushPending = mergePushReply(c.pushPending, reply)
+		c.applyAuthPendingTimeout(reply)
+		if authFailedMsg(c.leftoverTLS) {
+			return authFailedError(c.leftoverTLS)
+		}
 	} else if authFailedMsg(c.leftoverTLS) {
 		return authFailedError(c.leftoverTLS)
 	} else if conn := c.tlsConn.Load(); conn != nil {
@@ -335,12 +357,28 @@ func (c *Client) consumeRekeyPush() error {
 		// token-only PUSH_REPLY split across reads is not discarded.
 		c.leftoverTLS = rest
 		if reply != nil {
-			push = mergePushReply(push, reply)
+			c.pushPending = mergePushReply(c.pushPending, reply)
+			c.applyAuthPendingTimeout(reply)
+			push = mergePushReply(push, c.pushPending)
+			c.pushPending = nil
 		}
 	}
 	c.push = push
 	c.captureAuthToken(push)
 	return nil
+}
+
+// applyAuthPendingTimeout records a server-advertised AUTH_PENDING,timeout N
+// so the outbound-key backstop does not promote the new key while the peer
+// is still in deferred authentication.
+func (c *Client) applyAuthPendingTimeout(reply *PushReply) {
+	if reply == nil || reply.AuthPendingTimeout == 0 {
+		return
+	}
+	deadline := time.Now().Add(reply.AuthPendingTimeout)
+	if deadline.After(c.deferredUntil) {
+		c.deferredUntil = deadline
+	}
 }
 
 // authDeferredExpire is the no-evidence promotion window for the outbound
@@ -382,8 +420,10 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 		c.outboundKey = newData
 	}
 	// The no-evidence promotion deadline starts when this outbound selection
-	// began (see writeDataPacket).
+	// began (see writeDataPacket). Any previously advertised deferred-auth
+	// timeout belongs to the previous epoch and must not carry over.
 	c.outboundStart = time.Now()
+	c.deferredUntil = time.Time{}
 	if c.dataByKey == nil {
 		c.dataByKey = make(map[uint8]*DataChannel)
 	}
@@ -440,8 +480,15 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	// the outbound key actually needs promoting, so data-plane reads and
 	// writes do not serialize on every packet.
 	backstop := func() bool {
-		return !c.outboundStart.IsZero() &&
-			time.Since(c.outboundStart) >= authDeferredExpire
+		// Never promote before the server-advertised deferred-auth deadline
+		// (AUTH_PENDING,timeout N); otherwise a still-deferred peer would
+		// drop the new-key packets. Without an advertisement, fall back to
+		// OpenVPN's auth_deferred_expire window.
+		deadline := c.outboundStart.Add(authDeferredExpire)
+		if c.deferredUntil.After(deadline) {
+			deadline = c.deferredUntil
+		}
+		return time.Now().After(deadline)
 	}
 	c.dataLock.RLock()
 	data := c.data
@@ -825,9 +872,23 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 			// buffer (which may also contain unrelated control messages).
 			return nil, authFailedError(buf)
 		}
-		if reply, rest, ok := takePushReply(buf); ok {
+		reply, rest, ok := takePushReply(buf)
+		if ok {
 			c.leftoverTLS = rest
+			if c.pushPending != nil {
+				reply = mergePushReply(c.pushPending, reply)
+				c.pushPending = nil
+			}
+			c.applyAuthPendingTimeout(reply)
 			return reply, nil
+		}
+		if reply != nil {
+			// Intermediate continuation segment(s) or AUTH_PENDING seen but
+			// the final PUSH_REPLY segment has not arrived: accumulate and
+			// keep reading.
+			buf = append([]byte(nil), rest...)
+			c.pushPending = mergePushReply(c.pushPending, reply)
+			c.applyAuthPendingTimeout(reply)
 		}
 		if deadline, ok := ctx.Deadline(); ok {
 			_ = c.tlsConn.Load().SetReadDeadline(deadline)
@@ -875,9 +936,15 @@ type pushReadConn interface {
 func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte, error) {
 	buf := append([]byte(nil), leftover...)
 	tmp := make([]byte, 4096)
+	var acc *PushReply
 	// Parse the already-buffered bytes first; a reply may be fully present.
+	// Intermediate push-continuation segments are accumulated in acc until
+	// the final segment arrives.
 	if reply, rest, ok := takePushReply(buf); ok {
-		return reply, rest, nil
+		return mergePushReply(acc, reply), rest, nil
+	} else if reply != nil {
+		acc = mergePushReply(acc, reply)
+		buf = append([]byte(nil), rest...)
 	}
 	if authFailedMsg(buf) {
 		return nil, buf, authFailedError(buf)
@@ -905,8 +972,15 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 		// logical message is present, so success must not depend on whether
 		// an earlier read happened to read ahead into it (TLS is a byte
 		// stream). EOF is propagated only when no complete message exists.
-		if reply, rest, ok := takePushReply(buf); ok {
-			return reply, rest, nil
+		// Intermediate push-continuation segments are accumulated until the
+		// final segment completes the reply.
+		reply, rest, ok := takePushReply(buf)
+		if reply != nil {
+			acc = mergePushReply(acc, reply)
+			buf = append([]byte(nil), rest...)
+		}
+		if ok {
+			return acc, rest, nil
 		}
 		if err != nil {
 			var netErr net.Error
@@ -915,6 +989,11 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 			}
 			return nil, buf, err
 		}
+	}
+	// If the accumulation holds a reply (e.g. a lone AUTH_PENDING signal),
+	// surface it so the caller records the deferred-auth timeout.
+	if acc != nil {
+		return acc, buf, nil
 	}
 	return nil, buf, nil
 }
@@ -940,25 +1019,35 @@ func authFailedError(buf []byte) error {
 }
 
 func takePushReply(buf []byte) (*PushReply, []byte, bool) {
-	// A single caller handles both the happy path (PUSH_REPLY) and the
-	// failure path (AUTH_FAILED). Walk complete NUL-delimited control
-	// messages in order so a stream like
-	//   AUTH_PENDING\0INFO_PRE,...\0PUSH_REPLY,auth-token ...\0
+	// A single caller handles the happy path (PUSH_REPLY), the failure path
+	// (AUTH_FAILED) and the deferred-auth signal (AUTH_PENDING,timeout N).
+	// Walk complete NUL-delimited control messages in order so a stream like
+	//   AUTH_PENDING,timeout 60\0INFO_PRE,...\0PUSH_REPLY,auth-token ...\0
 	// yields the token even though PUSH_REPLY is not first.
 	msgs, rest := splitControlMessages(buf)
 	if len(msgs) == 0 {
 		return nil, rest, false
 	}
-	// Scan in order: AUTH_FAILED wins (hard failure), otherwise merge every
-	// complete PUSH_REPLY (OpenVPN may split a push across multiple
-	// messages). Non-push messages (AUTH_PENDING, INFO_PRE, INFO, RESTART,
-	// HALT, ...) are consumed and ignored by the rekey path.
 	var authFailed []byte
 	var reply *PushReply
 	parsed := false
+	// continuationPending is true when the most recent PUSH_REPLY was an
+	// intermediate segment (push-continuation 2) and the final segment has
+	// not arrived yet.
+	continuationPending := false
 	for _, m := range msgs {
 		if bytes.HasPrefix(m, []byte("AUTH_FAILED")) {
 			authFailed = m
+			continue
+		}
+		if bytes.HasPrefix(m, []byte("AUTH_PENDING")) {
+			// OpenVPN send_auth_pending_messages / receive_auth_pending:
+			// AUTH_PENDING,timeout N extends the deferred-auth window. Parse
+			// the advertised timeout so the outbound-key backstop respects it.
+			if r, err := parseAuthPendingTimeout(string(m)); err == nil {
+				reply = mergePushReply(reply, r)
+				parsed = true
+			}
 			continue
 		}
 		if bytes.HasPrefix(m, []byte("PUSH_REPLY")) {
@@ -966,10 +1055,15 @@ func takePushReply(buf []byte) (*PushReply, []byte, bool) {
 			if err == nil {
 				reply = mergePushReply(reply, r)
 				parsed = true
+				// An intermediate continuation segment (push-continuation 2)
+				// means more segments follow; only the final segment (1 or
+				// absent) completes the reply.
+				continuationPending = r.PushContinuation == 2
 				continue
 			}
 		}
-		// Other complete control messages are deliberately consumed.
+		// Other complete control messages (INFO_PRE, INFO, RESTART, HALT,
+		// EXIT, CR_RESPONSE, ...) are deliberately consumed.
 	}
 	if authFailed != nil {
 		// Surface the failure to callers (readTokenPushReply /
@@ -977,10 +1071,35 @@ func takePushReply(buf []byte) (*PushReply, []byte, bool) {
 		// takePushReply's ok=false is also used for "not complete yet".
 		return nil, rest, false
 	}
-	if !parsed {
-		return nil, rest, false
+	if !parsed || continuationPending {
+		// Nothing usable, or only intermediate continuation segments so far:
+		// not a complete reply. The parsed reply (with the intermediate
+		// segments merged and the AUTH_PENDING timeout) is returned so the
+		// caller can accumulate it across reads.
+		return reply, rest, false
 	}
 	return reply, rest, true
+}
+
+// parseAuthPendingTimeout parses an AUTH_PENDING[,timeout N] control message
+// and returns a PushReply carrying the advertised deferred-auth timeout.
+func parseAuthPendingTimeout(msg string) (*PushReply, error) {
+	reply := &PushReply{}
+	if !strings.HasPrefix(msg, "AUTH_PENDING") {
+		return nil, errors.New("not an auth pending message")
+	}
+	rest := strings.TrimPrefix(msg, "AUTH_PENDING")
+	rest = strings.TrimPrefix(rest, ",")
+	// AUTH_PENDING,timeout 300
+	for _, part := range strings.Split(rest, ",") {
+		fields := strings.Fields(part)
+		if len(fields) == 2 && fields[0] == "timeout" {
+			if n, err := strconv.Atoi(fields[1]); err == nil && n > 0 {
+				reply.AuthPendingTimeout = time.Duration(n) * time.Second
+			}
+		}
+	}
+	return reply, nil
 }
 
 // splitControlMessages splits a TLS plaintext byte stream into complete
@@ -1013,23 +1132,17 @@ func mergePushReply(prev, next *PushReply) *PushReply {
 	if prev == nil {
 		return next
 	}
-	if len(next.Prefixes) == 0 {
-		next.Prefixes = prev.Prefixes
-	}
-	if len(next.Routes) == 0 {
-		next.Routes = prev.Routes
-	}
-	if len(next.DNS) == 0 {
-		next.DNS = prev.DNS
-	}
+	// Repeatable fields are appended in wire order, deduplicated, so a
+	// continuation segment that repeats an option does not double it.
+	next.Prefixes = appendUniquePrefixes(prev.Prefixes, next.Prefixes)
+	next.Routes = appendUniquePrefixes(prev.Routes, next.Routes)
+	next.DNS = appendUniqueAddrs(prev.DNS, next.DNS)
+	next.DataCiphers = appendUniqueStrings(prev.DataCiphers, next.DataCiphers)
 	if next.PeerID == PeerIDUnset {
 		next.PeerID = prev.PeerID
 	}
 	if next.Cipher == "" {
 		next.Cipher = prev.Cipher
-	}
-	if len(next.DataCiphers) == 0 {
-		next.DataCiphers = prev.DataCiphers
 	}
 	if !next.Redirect {
 		next.Redirect = prev.Redirect
@@ -1044,6 +1157,72 @@ func mergePushReply(prev, next *PushReply) *PushReply {
 		}
 	}
 	return next
+}
+
+func appendUniquePrefixes(prev, next []netip.Prefix) []netip.Prefix {
+	if len(prev) == 0 {
+		return next
+	}
+	out := append([]netip.Prefix(nil), next...)
+	for _, p := range prev {
+		if !containsPrefix(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func containsPrefix(list []netip.Prefix, p netip.Prefix) bool {
+	for _, q := range list {
+		if q == p {
+			return true
+		}
+	}
+	return false
+}
+
+func appendUniqueAddrs(prev, next []netip.Addr) []netip.Addr {
+	if len(prev) == 0 {
+		return next
+	}
+	out := append([]netip.Addr(nil), next...)
+	for _, a := range prev {
+		if !containsAddr(out, a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func containsAddr(list []netip.Addr, a netip.Addr) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func appendUniqueStrings(prev, next []string) []string {
+	if len(prev) == 0 {
+		return next
+	}
+	out := append([]string(nil), next...)
+	for _, s := range prev {
+		if !containsString(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func containsString(list []string, s string) bool {
+	for _, t := range list {
+		if t == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) tlsConfig() (*tls.Config, error) {

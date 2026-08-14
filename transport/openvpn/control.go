@@ -582,31 +582,39 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 		for _, ackID := range packet.AckIDs {
 			delete(c.pending, ackID)
 		}
-		if packet.Opcode.HasMessageID() {
-			c.ackPending = appendAck(c.ackPending, packet.MessageID)
-		}
 
+		// OpenVPN read_control_auth: a message ID is acknowledged only when
+		// the packet is accepted into the receive window (reliable_wont_break
+		// _sequentiality succeeds), whether it is new or an in-window replay.
+		// A packet that would break the receive window is neither buffered nor
+		// acknowledged, so the sender keeps it for retransmission and the
+		// reliable stream never develops a permanent hole.
 		switch {
 		case packet.Opcode == PAckV1:
 		case !packet.Opcode.HasMessageID():
 			deliver = packet
 		case packet.MessageID < c.recvMessage:
+			// In-window replay of an already-delivered packet: acknowledge so
+			// the sender stops retransmitting, but do not redeliver.
+			c.ackPending = appendAck(c.ackPending, packet.MessageID)
 			sendAck = true
 		case packet.MessageID == c.recvMessage:
+			// The expected next message: deliver and advance.
+			c.ackPending = appendAck(c.ackPending, packet.MessageID)
 			deliver = packet
 			c.recvMessage++
 			sendAck = true
 		default:
-			// Buffer the out-of-order packet for later sequential delivery.
-			// Bound the buffer like OpenVPN's rec_reliable (TLS_RELIABLE_N_REC_BUFFERS
-			// / RELIABLE_CAPACITY = 12): refuse to store packets that would
-			// overflow the window, so a peer flooding high message IDs cannot
-			// grow recvPending without bound. Replays are already ACKed below.
+			// Out-of-order packet ahead of recvMessage. Buffer it only if it
+			// fits the bounded window (like OpenVPN's rec_reliable); only an
+			// accepted packet is acknowledged. A rejected one stays with the
+			// sender for retransmission.
 			if _, exists := c.recvPending[packet.MessageID]; !exists &&
 				recvWindowOK(c.recvMessage, packet.MessageID, len(c.recvPending)) {
 				c.recvPending[packet.MessageID] = packet
+				c.ackPending = appendAck(c.ackPending, packet.MessageID)
+				sendAck = true
 			}
-			sendAck = true
 		}
 		c.mu.Unlock()
 

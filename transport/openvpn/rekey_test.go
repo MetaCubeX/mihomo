@@ -408,6 +408,95 @@ func TestOutboundPromotesAfterAuthDeferredExpire(t *testing.T) {
 	}
 }
 
+// TestAuthPendingTimeoutRespected verifies the review point 1: when the
+// server advertises AUTH_PENDING,timeout N, the no-evidence promotion
+// deadline is extended past the fixed authDeferredExpire window, so mihomo
+// does not promote the new outbound key while the peer is still deferred.
+func TestAuthPendingTimeoutRespected(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	mk := func() *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = 0x11
+		}
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = 0x22
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+	initial, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(mk(), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(initial)
+	client.installDataChannel(rekeyed)
+	// Server advertises AUTH_PENDING,timeout 300 for the deferred epoch.
+	client.applyAuthPendingTimeout(&PushReply{AuthPendingTimeout: 300 * time.Second})
+	// Simulate the fixed authDeferredExpire window elapsing (61s).
+	client.outboundStart = time.Now().Add(-authDeferredExpire - time.Second)
+
+	// The advertised deadline (300s) has NOT elapsed, so outbound must stay
+	// on the old key.
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, err := serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 0 {
+		t.Fatalf("outbound with pending AUTH_PENDING = %d; want 0 (still lame duck)", keyID)
+	}
+}
+
+// TestTakePushReplyContinuation verifies the review point 2: an intermediate
+// push-continuation 2 segment is not a complete reply, and the final segment
+// merges repeatable fields (routes / dns) across segments in wire order.
+func TestTakePushReplyContinuation(t *testing.T) {
+	// Only an intermediate segment: not complete.
+	intermediate := []byte("PUSH_REPLY,route 10.2.0.0 255.255.0.0,push-continuation 2\x00")
+	reply, _, ok := takePushReply(intermediate)
+	if ok {
+		t.Fatal("intermediate push-continuation segment treated as complete")
+	}
+	if reply == nil || len(reply.Routes) != 1 {
+		t.Fatalf("intermediate segment routes not parsed: %#v", reply)
+	}
+	// Intermediate + final in one buffer: complete, routes/dns merged.
+	full := []byte("PUSH_REPLY,route 10.2.0.0 255.255.0.0,push-continuation 2\x00" +
+		"PUSH_REPLY,dhcp-option DNS 8.8.8.8,ifconfig 10.8.0.2 255.255.255.0,route 10.3.0.0 255.255.0.0\x00")
+	reply, _, ok = takePushReply(full)
+	if !ok {
+		t.Fatal("final push-continuation segment not complete")
+	}
+	if len(reply.Routes) != 2 {
+		t.Fatalf("continuation routes lost: %v", reply.Routes)
+	}
+	if len(reply.DNS) != 1 || reply.DNS[0].String() != "8.8.8.8" {
+		t.Fatalf("continuation dns lost: %v", reply.DNS)
+	}
+	if len(reply.Prefixes) != 1 {
+		t.Fatalf("continuation ifconfig lost: %v", reply.Prefixes)
+	}
+}
+
 func TestOutboundKeyStaysLameDuckUntilPeerEvidence(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
 	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
