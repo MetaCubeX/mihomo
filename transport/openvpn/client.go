@@ -761,24 +761,32 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 		// data is immediately followed by close_notify).
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)
-			if reply, rest, ok := takePushReply(buf); ok {
-				return reply, rest, nil
-			}
-			if bytes.Contains(buf, []byte("AUTH_FAILED")) {
-				return nil, buf, authFailedError(buf)
-			}
+		}
+		// AUTH_FAILED always takes precedence so its diagnostic is kept.
+		if bytes.Contains(buf, []byte("AUTH_FAILED")) {
+			return nil, buf, authFailedError(buf)
+		}
+		// Retain a complete reply but still classify err before returning:
+		// a real timeout may carry the reply; EOF / other TLS errors must
+		// be propagated, not hidden by a successful parse.
+		var reply *PushReply
+		var rest []byte
+		if parsed, parsedRest, ok := takePushReply(buf); ok {
+			reply, rest = parsed, parsedRest
 		}
 		if err != nil {
 			_ = conn.SetReadDeadline(time.Time{})
-			// Only a real timeout is the optional "no token available yet"
-			// case. EOF, unexpected EOF, and TLS protocol errors must be
-			// surfaced so the rekey does not proceed on a dead control
-			// stream or lose a bundled authentication failure.
 			var netErr net.Error
 			if errors.As(err, &netErr) && netErr.Timeout() {
+				if reply != nil {
+					return reply, rest, nil
+				}
 				return nil, buf, nil
 			}
 			return nil, buf, err
+		}
+		if reply != nil {
+			return reply, rest, nil
 		}
 	}
 	return nil, buf, nil

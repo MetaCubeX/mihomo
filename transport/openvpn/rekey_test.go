@@ -735,6 +735,26 @@ func TestReadTokenPushReplyEOFPropagated(t *testing.T) {
 	}
 }
 
+// TestReadTokenPushReplyCompleteReplyWithEOF verifies that a complete token
+// reply returned together with io.EOF is still surfaced as an error: the TLS
+// stream has closed, so the rekey must not proceed.
+func TestReadTokenPushReplyCompleteReplyWithEOF(t *testing.T) {
+	conn := &chunkConn{
+		data: [][]byte{[]byte("PUSH_REPLY,auth-token SESS_ID_new\x00")},
+		errs: []error{io.EOF},
+	}
+	reply, _, err := readTokenPushReply(conn, nil)
+	if err == nil {
+		t.Fatal("complete reply with EOF was treated as success")
+	}
+	if errors.Is(err, errAuthFailed) {
+		t.Fatalf("unexpected errAuthFailed: %v", err)
+	}
+	if reply != nil {
+		t.Fatalf("unexpected reply: %#v", reply)
+	}
+}
+
 // TestWatchControlSurfacesParkedAUTHFailed verifies that a parked or deferred
 // AUTH_FAILED is surfaced (failControl) instead of being swallowed by the next
 // renegotiation.
