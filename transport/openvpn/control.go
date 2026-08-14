@@ -88,6 +88,25 @@ func (c *ControlChannel) resetReplayLocked(packetID, unixTime uint32) {
 	}
 }
 
+// recvWindowOK reports whether an out-of-order control packet with the given
+// message ID fits the receive window, mirroring OpenVPN's
+// reliable_wont_break_sequentiality + reliable_can_get over the fixed
+// rec_reliable buffer: the id must be strictly ahead of recvMessage, within
+// reliableCapacity of it, and the buffer must not already hold that many
+// outstanding packets.
+func recvWindowOK(recvMessage, messageID uint32, buffered int) bool {
+	if messageID < recvMessage {
+		return false
+	}
+	if messageID >= recvMessage+reliableCapacity {
+		return false
+	}
+	if buffered >= reliableCapacity {
+		return false
+	}
+	return true
+}
+
 // checkReplay validates a protected control packet's packet-id/timestamp
 // against the anti-replay window. Returns an error for replayed or stale
 // packets. Must be called with c.mu held.
@@ -329,6 +348,12 @@ func (c *ControlChannel) takeAcksLocked(max int) []uint32 {
 
 // reliableAckSize mirrors RELIABLE_ACK_SIZE in OpenVPN reliable.h.
 const reliableAckSize = 8
+
+// reliableCapacity mirrors the receive reliable buffer capacity in OpenVPN:
+// TLS_RELIABLE_N_REC_BUFFERS with RELIABLE_CAPACITY=12. It bounds how many
+// out-of-order control packets mihomo will buffer before they can be
+// delivered in sequence.
+const reliableCapacity = 12
 
 // controlSendAckMax mirrors CONTROL_SEND_ACK_MAX in OpenVPN ssl.h: reliable
 // control packets carry at most this many ACKs.
@@ -572,7 +597,13 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			c.recvMessage++
 			sendAck = true
 		default:
-			if _, exists := c.recvPending[packet.MessageID]; !exists {
+			// Buffer the out-of-order packet for later sequential delivery.
+			// Bound the buffer like OpenVPN's rec_reliable (TLS_RELIABLE_N_REC_BUFFERS
+			// / RELIABLE_CAPACITY = 12): refuse to store packets that would
+			// overflow the window, so a peer flooding high message IDs cannot
+			// grow recvPending without bound. Replays are already ACKed below.
+			if _, exists := c.recvPending[packet.MessageID]; !exists &&
+				recvWindowOK(c.recvMessage, packet.MessageID, len(c.recvPending)) {
 				c.recvPending[packet.MessageID] = packet
 			}
 			sendAck = true

@@ -90,6 +90,36 @@ func newTestChannels(t *testing.T) (*ControlChannel, *ControlChannel) {
 // TestCheckReplayAntiReplay verifies the protected-control anti-replay window
 // accepts advancing ids, rejects replays and stale/timestamp-backtracking
 // packets, and resets on a new second.
+// TestRecvPendingBounded verifies the out-of-order receive buffer does not
+// grow without bound: packets whose message ID falls outside
+// [recvMessage, recvMessage+reliableCapacity) are not buffered, and the
+// buffer stops filling once it holds reliableCapacity packets.
+func TestRecvPendingBounded(t *testing.T) {
+	const base = uint32(100)
+	// In-window ids are storable up to the capacity.
+	for i := uint32(1); i < reliableCapacity; i++ {
+		if !recvWindowOK(base, base+i, int(i-1)) {
+			t.Fatalf("in-window id %d refused", base+i)
+		}
+	}
+	// At capacity, further ids are refused even if in-window.
+	if recvWindowOK(base, base+1, reliableCapacity) {
+		t.Fatal("buffered==capacity should refuse")
+	}
+	// Past the window refused.
+	if recvWindowOK(base, base+reliableCapacity, 0) {
+		t.Fatal("id at window edge accepted")
+	}
+	if recvWindowOK(base, base+reliableCapacity+1, 0) {
+		t.Fatal("id past window accepted")
+	}
+	// Below recvMessage refused (handled as replay earlier, but window must
+	// not accept it).
+	if recvWindowOK(base, base-1, 0) {
+		t.Fatal("id below recvMessage accepted")
+	}
+}
+
 func TestCheckReplayAntiReplay(t *testing.T) {
 	c := &ControlChannel{}
 	// First packet initializes the window.
