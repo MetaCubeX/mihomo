@@ -846,14 +846,17 @@ func takePushReply(buf []byte) (*PushReply, []byte, bool) {
 	if !bytes.Contains(buf, []byte("PUSH_REPLY")) {
 		return nil, nil, false
 	}
-	msg := string(buf)
-	rest := []byte(nil)
-	if idx := strings.IndexByte(msg, 0); idx >= 0 {
-		rest = append([]byte(nil), buf[idx+1:]...)
-		msg = msg[:idx]
-	} else if !bytes.Contains(buf, []byte("ifconfig")) {
+	// The message is only complete once a NUL terminator is present. A
+	// PUSH_REPLY fragmented across TLS reads must not be committed early
+	// (e.g. right after "ifconfig") or later route / DNS / cipher / token
+	// options would be lost. This matches the reference client, which parses
+	// the full PUSH message after it is fully received.
+	idx := bytes.IndexByte(buf, 0)
+	if idx < 0 {
 		return nil, nil, false
 	}
+	msg := string(buf[:idx])
+	rest := append([]byte(nil), buf[idx+1:]...)
 	reply, err := parsePushReplyInner(msg)
 	if err != nil {
 		return nil, nil, false

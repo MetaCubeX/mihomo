@@ -141,6 +141,14 @@ func TestClassifyWatchAcceptsNextEpochSoftReset(t *testing.T) {
 	if !softReset || !valid {
 		t.Fatalf("expected next-epoch soft reset keyID=2 to be accepted when current keyID=1")
 	}
+
+	// A new-epoch reset is always message 0; any other message ID would
+	// corrupt the receive sequence and must be rejected.
+	pktBadMsg := &ControlPacket{Opcode: PControlSoftResetV1, KeyID: 2, MessageID: 5, LocalSession: serverID}
+	softReset, valid = client.classifyWatchPacketLocked(pktBadMsg)
+	if softReset || valid {
+		t.Fatalf("expected soft reset with message id 5 to be rejected")
+	}
 }
 
 // TestDataLockProtectsDataChannelSwap verifies that the dataLock allows
@@ -315,6 +323,30 @@ func TestParseShortenedKM2OnlyWhenTLSControlFollows(t *testing.T) {
 	full = appendOpenVPNString(full, "IV_VER=server\n")
 	if _, _, err := ParseServerKeyMethod2RecordConsumed(full); err != nil {
 		t.Fatalf("standard full record should parse: %v", err)
+	}
+}
+
+// TestTakePushReplyRequiresTerminator verifies a PUSH_REPLY is not committed
+// until its NUL terminator arrives: a fragment ending after "ifconfig" must
+// not lose later route / DNS / cipher / token options (matching the reference
+// client, which parses the full message).
+func TestTakePushReplyRequiresTerminator(t *testing.T) {
+	// Fragment ending after ifconfig, no terminator: must not be accepted.
+	frag := []byte("PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0")
+	if _, _, ok := takePushReply(frag); ok {
+		t.Fatal("unterminated PUSH_REPLY was accepted")
+	}
+	// Once the terminator (and a later option) arrives, it is parsed fully.
+	full := append(append([]byte(nil), frag...), []byte(",route-gateway 10.8.0.1\x00")...)
+	reply, rest, ok := takePushReply(full)
+	if !ok {
+		t.Fatal("terminated PUSH_REPLY was not accepted")
+	}
+	if len(reply.Prefixes) != 1 {
+		t.Fatalf("prefixes not parsed: %v", reply.Prefixes)
+	}
+	if len(rest) != 0 {
+		t.Fatalf("unexpected leftover: %q", rest)
 	}
 }
 

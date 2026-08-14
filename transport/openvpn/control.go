@@ -479,9 +479,12 @@ func (c *ControlChannel) classifyWatchPacketLocked(packet *ControlPacket) (softR
 	if packet.Opcode == PControlSoftResetV1 {
 		// OpenVPN advances 0 -> 1 -> ... -> 7 -> 1. Reject stale or invalid
 		// epochs: a delayed reset from a retiring epoch, or key ID 0 after
-		// the initial epoch, must not move the client backwards.
+		// the initial epoch, must not move the client backwards. A new-epoch
+		// reset is always message 0 (the fresh reliable layer starts at 0);
+		// any other ID would corrupt the receive sequence and is invalid.
 		expected := NextKeyID(c.keyID)
-		return packet.KeyID == expected, packet.KeyID == expected
+		return packet.KeyID == expected && packet.MessageID == 0,
+			packet.KeyID == expected && packet.MessageID == 0
 	}
 	return false, packet.KeyID == c.keyID
 }
