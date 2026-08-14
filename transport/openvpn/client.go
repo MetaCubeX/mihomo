@@ -421,11 +421,17 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	}
 	defer c.writeSem.Release(1)
 	// Acquire the outbound key after securing the write semaphore, since a
-	// rekey may swap c.data / c.outboundKey while Acquire is blocked.
-	c.dataLock.Lock()
+	// rekey may swap c.data / c.outboundKey while Acquire is blocked. Use a
+	// read lock for the common path and only upgrade to the write lock when
+	// the outbound key actually needs promoting, so data-plane reads and
+	// writes do not serialize on every packet.
+	backstop := func() bool {
+		return !c.retiringExpiry.IsZero() && time.Until(c.retiringExpiry) < outboundPromoteGrace
+	}
+	c.dataLock.RLock()
 	data := c.data
 	if data == nil {
-		c.dataLock.Unlock()
+		c.dataLock.RUnlock()
 		return errors.New("openvpn data channel is not ready")
 	}
 	outbound := c.outboundKey
@@ -440,17 +446,19 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	// just-before-expiry backstop promotes even in asymmetric traffic, so
 	// the lame-duck key is not used past the point the peer stops accepting
 	// it.
-	if outbound != data && outbound != nil {
-		backstop := false
-		if !c.retiringExpiry.IsZero() && time.Until(c.retiringExpiry) < outboundPromoteGrace {
-			backstop = true
+	needPromote := outbound != data && outbound != nil && (data.PeerActive() || backstop())
+	c.dataLock.RUnlock()
+	if needPromote {
+		// Upgrade to the write lock and re-check: a rekey may have completed
+		// between the read and the write lock.
+		c.dataLock.Lock()
+		if c.outboundKey != c.data && c.outboundKey != nil &&
+			(c.data.PeerActive() || backstop()) {
+			c.outboundKey = c.data
 		}
-		if data.PeerActive() || backstop {
-			c.outboundKey = data
-			outbound = data
-		}
+		outbound = c.outboundKey
+		c.dataLock.Unlock()
 	}
-	c.dataLock.Unlock()
 	if compress && c.config.CompLZO == CompLzoYes {
 		compressed, err := lzo1xCompressSafe(packet)
 		if err != nil {
@@ -993,6 +1001,9 @@ func mergePushReply(prev, next *PushReply) *PushReply {
 	if len(next.Routes) == 0 {
 		next.Routes = prev.Routes
 	}
+	if len(next.DNS) == 0 {
+		next.DNS = prev.DNS
+	}
 	if next.PeerID == PeerIDUnset {
 		next.PeerID = prev.PeerID
 	}
@@ -1001,6 +1012,12 @@ func mergePushReply(prev, next *PushReply) *PushReply {
 	}
 	if len(next.DataCiphers) == 0 {
 		next.DataCiphers = prev.DataCiphers
+	}
+	if !next.Redirect {
+		next.Redirect = prev.Redirect
+	}
+	if !next.BlockIPv6 {
+		next.BlockIPv6 = prev.BlockIPv6
 	}
 	if next.AuthTokenPass == "" {
 		next.AuthTokenPass = prev.AuthTokenPass

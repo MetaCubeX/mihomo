@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"net/netip"
 	"os"
 	"strings"
 	"testing"
@@ -308,6 +309,38 @@ func TestOutboundKeyStaysLameDuckUntilPeerEvidence(t *testing.T) {
 	}
 	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 1 {
 		t.Fatalf("outbound key ID after evidence = %d; want 1", keyID)
+	}
+}
+
+// TestMergePushReplyContinuation verifies multi-segment PUSH_REPLY
+// (push-continuation) merging carries every field across segments.
+func TestMergePushReplyContinuation(t *testing.T) {
+	seg1 := &PushReply{
+		DNS:    []netip.Addr{netip.MustParseAddr("8.8.8.8")},
+		PeerID: 7,
+		Cipher: "AES-128-GCM",
+	}
+	seg2 := &PushReply{
+		PeerID:   PeerIDUnset,
+		Prefixes: []netip.Prefix{netip.MustParsePrefix("10.8.0.2/24")},
+		Routes:   []netip.Prefix{netip.MustParsePrefix("0.0.0.0/1")},
+		Redirect: true,
+	}
+	merged := mergePushReply(seg1, seg2)
+	if len(merged.DNS) != 1 || merged.DNS[0] != seg1.DNS[0] {
+		t.Fatalf("DNS not inherited: %v", merged.DNS)
+	}
+	if merged.PeerID != 7 {
+		t.Fatalf("PeerID not inherited: %d", merged.PeerID)
+	}
+	if merged.Cipher != "AES-128-GCM" {
+		t.Fatalf("Cipher not inherited: %q", merged.Cipher)
+	}
+	if len(merged.Prefixes) != 1 || len(merged.Routes) != 1 {
+		t.Fatalf("seg2 fields missing: prefixes=%v routes=%v", merged.Prefixes, merged.Routes)
+	}
+	if !merged.Redirect {
+		t.Fatal("Redirect not inherited")
 	}
 }
 

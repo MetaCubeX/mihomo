@@ -49,6 +49,93 @@ type ControlChannel struct {
 	parkedTLS     [][]byte
 	readDeadline  time.Time
 	writeDeadline time.Time
+	// recReplay is the anti-replay window for tls-auth / tls-crypt
+	// protected control packets, mirroring OpenVPN's packet_id_rec
+	// (packet_id_test backtrack mode). Reset at each new key epoch.
+	recReplay replayState
+}
+
+// replayState is the receive-side anti-replay window for protected control
+// packets. Each packet carries [packet-id][timestamp] (unix seconds); the
+// window accepts ids that advance within the current second and rejects
+// replayed or time-traveling packets, matching OpenVPN packet_id_test.
+type replayState struct {
+	// time is the current window timestamp (seconds). Any packet with an
+	// older timestamp is rejected.
+	time uint32
+	// highID is the highest packet id seen in the current window.
+	highID uint32
+	// window is a bitmask of recently seen ids: bit i set means
+	// (highID - i) was already accepted.
+	window uint64
+	// seen reports whether the window has been initialized for this epoch.
+	seen bool
+}
+
+// controlReplayWindow mirrors OpenVPN's REPLAY_WINDOW (64) used for the
+// control-channel packet_id_rec seq_backtrack.
+const controlReplayWindow = 64
+
+// resetReplayLocked re-initializes the anti-replay window for a new key
+// epoch, seeding it with the first packet's id/timestamp. Must be called
+// with c.mu held.
+func (c *ControlChannel) resetReplayLocked(packetID, unixTime uint32) {
+	c.recReplay = replayState{
+		seen:   true,
+		time:   unixTime,
+		highID: packetID,
+		window: 1,
+	}
+}
+
+// checkReplay validates a protected control packet's packet-id/timestamp
+// against the anti-replay window. Returns an error for replayed or stale
+// packets. Must be called with c.mu held.
+func (c *ControlChannel) checkReplayLocked(packetID, unixTime uint32) error {
+	r := &c.recReplay
+	// OpenVPN packet_id_test (backtrack mode):
+	//   pin.time < rec.time           -> reject (time backtrack)
+	//   pin.time == rec.time          -> sliding-window id check
+	//   pin.time > rec.time           -> accept, reset window
+	if !r.seen {
+		r.seen = true
+		r.time = unixTime
+		r.highID = packetID
+		r.window = 1
+		return nil
+	}
+	if unixTime < r.time {
+		return fmt.Errorf("openvpn control replay: timestamp backtrack %d < %d", unixTime, r.time)
+	}
+	if unixTime > r.time {
+		// New second: the sender restarts its sequence. OpenVPN accepts and
+		// resets the window here.
+		r.time = unixTime
+		r.highID = packetID
+		r.window = 1
+		return nil
+	}
+	// Same second: sliding-window id check.
+	if packetID > r.highID {
+		shift := packetID - r.highID
+		if shift >= controlReplayWindow {
+			r.window = 1
+		} else {
+			r.window = r.window<<shift | 1
+		}
+		r.highID = packetID
+		return nil
+	}
+	diff := r.highID - packetID
+	if diff >= controlReplayWindow {
+		return fmt.Errorf("openvpn control replay: stale packet id %d", packetID)
+	}
+	mask := uint64(1) << diff
+	if r.window&mask != 0 {
+		return fmt.Errorf("openvpn control replay: replayed packet id %d", packetID)
+	}
+	r.window |= mask
+	return nil
 }
 
 func NewControlChannel(io PacketIO, crypt ControlCryptor, local SessionID) *ControlChannel {
@@ -113,6 +200,7 @@ func (c *ControlChannel) beginEpochLocked(keyID uint8) {
 	c.pending = make(map[uint32]*ControlPacket)
 	c.recvPending = make(map[uint32]*ControlPacket)
 	c.parkedTLS = nil
+	c.recReplay = replayState{}
 }
 
 // RotateKeyID advances to the next local key epoch and resets reliable state.
@@ -390,7 +478,7 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 		if err != nil {
 			return nil, err
 		}
-		packet, _, _, err := DecodeControlPacket(c.crypt, raw)
+		packet, packetID, unixTime, err := DecodeControlPacket(c.crypt, raw)
 		if err != nil {
 			if watchSoftReset {
 				continue
@@ -409,6 +497,9 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 				// client backwards, and an invalid one must not mutate ACK /
 				// pending-message state.
 				if packet.KeyID == NextKeyID(curKey) && packet.MessageID == 0 && sameSession {
+					// A valid next-epoch reset starts a fresh anti-replay
+					// window (the server restarts its packet-id sequence).
+					c.resetReplayLocked(packetID, unixTime)
 					if c.pendingSoftReset == nil {
 						c.pendingSoftReset = packet
 					}
@@ -425,19 +516,35 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 				// cannot be fed into the new TLS session.
 				continue
 			}
+			if c.crypt != nil {
+				if err := c.checkReplayLocked(packetID, unixTime); err != nil {
+					c.mu.Unlock()
+					continue
+				}
+			}
 			c.mu.Unlock()
 		}
 
 		if watchSoftReset {
 			c.mu.Lock()
 			softReset, valid := c.classifyWatchPacketLocked(packet)
-			c.mu.Unlock()
 			if !valid {
+				c.mu.Unlock()
 				continue
 			}
 			if softReset {
+				// Valid next-epoch reset: start a fresh anti-replay window.
+				c.resetReplayLocked(packetID, unixTime)
+				c.mu.Unlock()
 				return packet, nil
 			}
+			if c.crypt != nil {
+				if err := c.checkReplayLocked(packetID, unixTime); err != nil {
+					c.mu.Unlock()
+					continue
+				}
+			}
+			c.mu.Unlock()
 		}
 
 		var deliver *ControlPacket

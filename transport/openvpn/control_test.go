@@ -87,6 +87,54 @@ func newTestChannels(t *testing.T) (*ControlChannel, *ControlChannel) {
 	return client, server
 }
 
+// TestCheckReplayAntiReplay verifies the protected-control anti-replay window
+// accepts advancing ids, rejects replays and stale/timestamp-backtracking
+// packets, and resets on a new second.
+func TestCheckReplayAntiReplay(t *testing.T) {
+	c := &ControlChannel{}
+	// First packet initializes the window.
+	if err := c.checkReplayLocked(1, 1000); err != nil {
+		t.Fatalf("first packet rejected: %v", err)
+	}
+	// Advancing id accepted.
+	for _, id := range []uint32{2, 3, 5} {
+		if err := c.checkReplayLocked(id, 1000); err != nil {
+			t.Fatalf("advancing id %d rejected: %v", id, err)
+		}
+	}
+	// Out-of-order within window accepted.
+	if err := c.checkReplayLocked(4, 1000); err != nil {
+		t.Fatalf("out-of-order id 4 rejected: %v", err)
+	}
+	// Exact replay rejected.
+	if err := c.checkReplayLocked(4, 1000); err == nil {
+		t.Fatal("replayed id 4 accepted")
+	}
+	// Stale id beyond window rejected.
+	if err := c.checkReplayLocked(1, 1000); err == nil {
+		t.Fatal("stale id 1 accepted")
+	}
+	// Timestamp backtrack rejected.
+	if err := c.checkReplayLocked(10, 999); err == nil {
+		t.Fatal("timestamp backtrack accepted")
+	}
+	// New second resets and accepts.
+	if err := c.checkReplayLocked(1, 1001); err != nil {
+		t.Fatalf("new second id 1 rejected: %v", err)
+	}
+	if err := c.checkReplayLocked(1, 1001); err == nil {
+		t.Fatal("replay after reset accepted")
+	}
+	// resetReplayLocked seeds a fresh window.
+	c.resetReplayLocked(1, 2000)
+	if err := c.checkReplayLocked(1, 2000); err == nil {
+		t.Fatal("duplicate of seed id accepted")
+	}
+	if err := c.checkReplayLocked(2, 2000); err != nil {
+		t.Fatalf("advancing id after reset rejected: %v", err)
+	}
+}
+
 func TestControlChannelResetAndAck(t *testing.T) {
 	client, server := newTestChannels(t)
 
