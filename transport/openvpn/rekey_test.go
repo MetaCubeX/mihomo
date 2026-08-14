@@ -864,7 +864,7 @@ func hasAck(acks []uint32, id uint32) bool {
 func TestMRUMoveToFrontMatchesReference(t *testing.T) {
 	c := &ControlChannel{lruAcks: []uint32{1, 2, 3, 4, 5, 6, 7, 8}}
 	c.ackPending = []uint32{8, 9}
-	got := c.takeAcksLocked()
+	got := c.takeAcksLocked(reliableAckSize)
 	want := []uint32{8, 9, 1, 2, 3, 4, 5, 6}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d: %v", len(got), len(want), got)
@@ -883,6 +883,164 @@ func TestMRUMoveToFrontMatchesReference(t *testing.T) {
 			t.Fatalf("mru got %v want %v", c.lruAcks, want)
 		}
 	}
+}
+
+// TestAckSerializationCaps verifies per-packet ACK caps match OpenVPN:
+// reliable control packets (incl. retransmits) carry <= CONTROL_SEND_ACK_MAX
+// (4); a dedicated ACK carries <= RELIABLE_ACK_SIZE (8), and <= 4 when the
+// channel is unprotected (SoftEther compat).
+func TestAckSerializationCaps(t *testing.T) {
+	cases := []struct {
+		name    string
+		crypt   ControlCryptor
+		path    func(ctx context.Context, c *ControlChannel) error
+		reads   int
+		wantMax int
+	}{
+		{
+			name:  "reliable-control-with-tls",
+			crypt: mustClientCrypt(t),
+			path: func(ctx context.Context, c *ControlChannel) error {
+				c.QueueAck(1)
+				c.QueueAck(2)
+				c.QueueAck(3)
+				c.QueueAck(4)
+				c.QueueAck(5)
+				_, err := c.Send(ctx, PControlV1, []byte("data"))
+				return err
+			},
+			wantMax: 4,
+		},
+		{
+			name:  "reliable-control-plain",
+			crypt: nil,
+			path: func(ctx context.Context, c *ControlChannel) error {
+				c.QueueAck(1)
+				c.QueueAck(2)
+				c.QueueAck(3)
+				c.QueueAck(4)
+				c.QueueAck(5)
+				_, err := c.Send(ctx, PControlV1, []byte("data"))
+				return err
+			},
+			wantMax: 4,
+		},
+		{
+			name:  "dedicated-ack-with-tls",
+			crypt: mustClientCrypt(t),
+			path: func(ctx context.Context, c *ControlChannel) error {
+				for i := 0; i < 5; i++ {
+					c.QueueAck(uint32(i))
+				}
+				return c.SendAck(ctx)
+			},
+			wantMax: 5,
+		},
+		{
+			name:  "dedicated-ack-plain",
+			crypt: nil,
+			path: func(ctx context.Context, c *ControlChannel) error {
+				for i := 0; i < 5; i++ {
+					c.QueueAck(uint32(i))
+				}
+				return c.SendAck(ctx)
+			},
+			wantMax: 4,
+		},
+		{
+			name:  "retransmit-with-tls",
+			crypt: mustClientCrypt(t),
+			path: func(ctx context.Context, c *ControlChannel) error {
+				// Prime a pending reliable message, queue 5 acks, then
+				// retransmit: the retransmitted reliable packet must carry
+				// at most CONTROL_SEND_ACK_MAX acks.
+				if _, err := c.Send(ctx, PControlV1, []byte("data")); err != nil {
+					return err
+				}
+				for i := 0; i < 5; i++ {
+					c.QueueAck(uint32(i))
+				}
+				return c.RetransmitPending(ctx)
+			},
+			reads:   2,
+			wantMax: 4,
+		},
+		{
+			name:  "retransmit-plain",
+			crypt: nil,
+			path: func(ctx context.Context, c *ControlChannel) error {
+				if _, err := c.Send(ctx, PControlV1, []byte("data")); err != nil {
+					return err
+				}
+				for i := 0; i < 5; i++ {
+					c.QueueAck(uint32(i))
+				}
+				return c.RetransmitPending(ctx)
+			},
+			reads:   2,
+			wantMax: 4,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clientIO, serverIO := newMemoryPacketPair()
+			var clientID SessionID
+			copy(clientID[:], []byte("client01"))
+			var serverID SessionID
+			copy(serverID[:], []byte("server01"))
+			client := NewControlChannel(clientIO, tc.crypt, clientID)
+			client.SetRemoteSessionID(serverID)
+			client.clock = func() time.Time { return time.Unix(1714567890, 0) }
+
+			// The peer decodes client->server with the server-direction crypt.
+			var peerCrypt ControlCryptor
+			if tc.crypt != nil {
+				var err error
+				peerCrypt, err = NewTLSCrypt(testStaticKey(), false)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			if err := tc.path(ctx, client); err != nil {
+				t.Fatal(err)
+			}
+			reads := tc.reads
+			if reads == 0 {
+				reads = 1
+			}
+			var pkt *ControlPacket
+			for i := 0; i < reads; i++ {
+				raw, err := serverIO.ReadPacket(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				pkt, _, _, err = DecodeControlPacket(peerCrypt, raw)
+				if err != nil {
+					t.Fatalf("decode: %v", err)
+				}
+			}
+			if len(pkt.AckIDs) > tc.wantMax {
+				t.Fatalf("serialized %d acks, want <= %d: %v", len(pkt.AckIDs), tc.wantMax, pkt.AckIDs)
+			}
+			if len(pkt.AckIDs) == 0 {
+				t.Fatal("expected at least one ack")
+			}
+		})
+	}
+}
+
+func mustClientCrypt(t *testing.T) ControlCryptor {
+	t.Helper()
+	c, err := NewTLSCrypt(testStaticKey(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func TestMarkReceivedUnblocksNextEpochControl(t *testing.T) {

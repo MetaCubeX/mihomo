@@ -166,10 +166,10 @@ func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte
 	c.mu.Lock()
 	messageID := c.sendMessage
 	c.sendMessage++
-	// Copy pending acks into the MRU and take the ack list from the MRU,
-	// exactly like OpenVPN reliable_ack_write: recently acked IDs ride on
-	// this and subsequent packets until replaced.
-	ackIDs := c.takeAcksLocked()
+	// Copy pending acks into the MRU and take up to CONTROL_SEND_ACK_MAX
+	// for a reliable control packet, exactly like OpenVPN reliable_ack_write
+	// with CONTROL_SEND_ACK_MAX.
+	ackIDs := c.takeAcksLocked(controlSendAckMax)
 	packet := &ControlPacket{
 		Opcode:           opcode,
 		KeyID:            c.keyID,
@@ -188,12 +188,13 @@ func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte
 	return messageID, nil
 }
 
-// takeAcksLocked moves ackPending into the MRU and returns the ACK list to
-// place on the outgoing packet. Mirrors OpenVPN copy_acks_to_mru +
+// takeAcksLocked moves ackPending into the MRU and returns up to max ACK IDs
+// to place on the outgoing packet. Mirrors OpenVPN copy_acks_to_mru +
 // reliable_ack_write: each pending ID is moved to the front of the MRU
 // (existing entries shift right; a duplicate is removed), so re-acked IDs are
-// not evicted when the MRU is full. Caller must hold c.mu.
-func (c *ControlChannel) takeAcksLocked() []uint32 {
+// not evicted when the MRU is full. The MRU keeps its full capacity; max only
+// bounds what is serialized on this packet. Caller must hold c.mu.
+func (c *ControlChannel) takeAcksLocked(max int) []uint32 {
 	// Move ackPending (newest last) into the MRU front, preserving their
 	// relative order, exactly like copy_acks_to_mru's backward loop.
 	for i := len(c.ackPending) - 1; i >= 0; i-- {
@@ -214,15 +215,35 @@ func (c *ControlChannel) takeAcksLocked() []uint32 {
 		}
 	}
 	c.ackPending = nil
-	// Cap at RELIABLE_ACK_SIZE (move-to-front never grows past it).
+	// Cap the MRU at RELIABLE_ACK_SIZE (move-to-front never grows past it).
 	if len(c.lruAcks) > reliableAckSize {
 		c.lruAcks = c.lruAcks[:reliableAckSize]
 	}
-	return append([]uint32(nil), c.lruAcks...)
+	n := len(c.lruAcks)
+	if n > max {
+		n = max
+	}
+	return append([]uint32(nil), c.lruAcks[:n]...)
 }
 
 // reliableAckSize mirrors RELIABLE_ACK_SIZE in OpenVPN reliable.h.
 const reliableAckSize = 8
+
+// controlSendAckMax mirrors CONTROL_SEND_ACK_MAX in OpenVPN ssl.h: reliable
+// control packets carry at most this many ACKs.
+const controlSendAckMax = 4
+
+// dedicatedAckMax is the ACK cap for a dedicated P_ACK_V1 packet. OpenVPN
+// uses RELIABLE_ACK_SIZE (8) but caps it at 4 when the channel is unprotected
+// (TLS_WRAP_NONE, no tls-auth/tls-crypt) for SoftEther compatibility. mihomo
+// does not advertise TLS key-material export, so the same cap applies when
+// there is no control cryptor.
+func (c *ControlChannel) dedicatedAckMax() int {
+	if c.crypt == nil {
+		return controlSendAckMax
+	}
+	return reliableAckSize
+}
 
 func (c *ControlChannel) SendAck(ctx context.Context) error {
 	c.mu.Lock()
@@ -230,7 +251,7 @@ func (c *ControlChannel) SendAck(ctx context.Context) error {
 		c.mu.Unlock()
 		return nil
 	}
-	ackIDs := c.takeAcksLocked()
+	ackIDs := c.takeAcksLocked(c.dedicatedAckMax())
 	packet := &ControlPacket{
 		Opcode:           PAckV1,
 		KeyID:            c.keyID,
@@ -458,7 +479,7 @@ func (c *ControlChannel) RetransmitPending(ctx context.Context) error {
 	// carries the same ack set (matching OpenVPN: retransmitted reliable
 	// packets reuse the original ack header, and the MRU keeps recently
 	// acked IDs alive across sends).
-	ackIDs := c.takeAcksLocked()
+	ackIDs := c.takeAcksLocked(controlSendAckMax)
 	for _, packet := range c.pending {
 		cp := *packet
 		cp.AckIDs = ackIDs
