@@ -401,9 +401,15 @@ func (c *Client) consumeRekeyPushFrom(conn pushReadConn, readFinal tokenPushRead
 		}
 	}
 
-	if attemptedFinalRead && (c.pushContinuationPending ||
-		(c.pushPending != nil && !complete && c.pushPending.AuthPendingTimeout > 0)) {
-		return errors.New("openvpn deferred/continued push reply incomplete")
+	if attemptedFinalRead && c.pushContinuationPending {
+		return errors.New("openvpn continued push reply incomplete")
+	}
+	if !complete && c.pushPending != nil && !c.pushPending.HasPushReply {
+		// AUTH_PENDING is standalone metadata, not the first half of a push.
+		// A deferred-auth rekey without auth-gen-token legally has no final
+		// PUSH_REPLY. Its deadline has already been staged for this key epoch;
+		// discard only the accumulator metadata and retain the cached push.
+		c.pushPending = nil
 	}
 	if complete && c.pushPending != nil {
 		push = mergePushReply(push, c.pushPending)

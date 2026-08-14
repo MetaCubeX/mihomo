@@ -773,7 +773,7 @@ func TestConsumeRekeyPushRejectsContinuationDiscoveredByReader(t *testing.T) {
 	}
 
 	err = client.consumeRekeyPushFrom(conn, reader)
-	if err == nil || !strings.Contains(err.Error(), "deferred/continued push reply incomplete") {
+	if err == nil || !strings.Contains(err.Error(), "continued push reply incomplete") {
 		t.Fatalf("reader-discovered continuation returned success: %v", err)
 	}
 	if !client.pushContinuationPending {
@@ -785,6 +785,100 @@ func TestConsumeRekeyPushRejectsContinuationDiscoveredByReader(t *testing.T) {
 	}
 	if client.push.AuthTokenPass != "SESS_ID_old" || len(client.push.Routes) != 0 {
 		t.Fatalf("partial continuation was committed to active push: %#v", client.push)
+	}
+}
+
+// TestConsumeRekeyPushAllowsAuthPendingWithoutFinalPush verifies deferred
+// authentication does not require the optional token-only PUSH_REPLY. A server
+// without auth-gen-token can send AUTH_PENDING, authenticate the new key, and
+// generate data keys without sending any further push message.
+func TestConsumeRekeyPushAllowsAuthPendingWithoutFinalPush(t *testing.T) {
+	clientIO, _ := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	mk := func(fill byte) *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = fill
+		}
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = fill + 1
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+	initial, err := NewDataChannel(mk(0x11), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(mk(0x22), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(initial)
+	client.control.AdoptKeyID(1)
+	client.push = &PushReply{
+		PeerID:        7,
+		Cipher:        CipherAES128GCM,
+		AuthTokenPass: "",
+		Routes:        []netip.Prefix{netip.MustParsePrefix("10.8.0.0/24")},
+	}
+	conn := &chunkConn{}
+	pending, err := parseAuthPendingTimeout("AUTH_PENDING,timeout 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := func(got pushReadConn, leftover []byte, _ ...time.Time) (*PushReply, []byte, error) {
+		if got != conn {
+			t.Fatalf("reader received wrong connection: %T", got)
+		}
+		if len(leftover) != 0 {
+			t.Fatalf("unexpected initial leftover: %q", leftover)
+		}
+		return pending, nil, nil
+	}
+
+	if err := client.consumeRekeyPushFrom(conn, reader); err != nil {
+		t.Fatalf("standalone AUTH_PENDING required a final PUSH_REPLY: %v", err)
+	}
+	if client.push.PeerID != 7 || client.push.Cipher != CipherAES128GCM ||
+		len(client.push.Routes) != 1 || client.push.Routes[0].String() != "10.8.0.0/24" {
+		t.Fatalf("cached push changed without a final PUSH_REPLY: %#v", client.push)
+	}
+	if client.pushPending != nil || client.pushContinuationPending {
+		t.Fatalf("standalone AUTH_PENDING left incomplete push state: pending=%#v continuation=%v",
+			client.pushPending, client.pushContinuationPending)
+	}
+	client.dataLock.RLock()
+	staged := client.pendingDeferredUntil
+	stagedKey := client.pendingDeferredKeyID
+	stagedSet := client.pendingDeferredSet
+	client.dataLock.RUnlock()
+	if !stagedSet || stagedKey != client.control.KeyID() || !staged.Equal(pending.authPendingUntil) {
+		t.Fatalf("AUTH_PENDING epoch deadline not retained: set=%v key=%d deadline=%v want=%v",
+			stagedSet, stagedKey, staged, pending.authPendingUntil)
+	}
+	client.installDataChannel(rekeyed)
+	client.dataLock.RLock()
+	active := client.data
+	outbound := client.outboundKey
+	deferred := client.deferredUntil
+	client.dataLock.RUnlock()
+	if active != rekeyed || outbound != initial {
+		t.Fatalf("valid deferred epoch was not installable: active=%p outbound=%p", active, outbound)
+	}
+	if !deferred.Equal(pending.authPendingUntil) {
+		t.Fatalf("staged deferred deadline not transferred to installed epoch: got=%v want=%v",
+			deferred, pending.authPendingUntil)
 	}
 }
 
