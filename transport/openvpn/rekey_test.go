@@ -446,11 +446,19 @@ func TestAuthPendingTimeoutRespected(t *testing.T) {
 		t.Fatal(err)
 	}
 	client.installDataChannel(initial)
-	client.installDataChannel(rekeyed)
-	// Server advertises AUTH_PENDING,timeout 300 for the deferred epoch.
+	// Production order: the control epoch advances, AUTH_PENDING is parsed
+	// after KM2 but BEFORE the matching data channel is installed.
+	client.control.AdoptKeyID(1)
 	client.applyAuthPendingTimeout(&PushReply{AuthPendingTimeout: 300 * time.Second})
+	client.installDataChannel(rekeyed)
 	// Simulate the fixed authDeferredExpire window elapsing (61s).
+	client.dataLock.Lock()
 	client.outboundStart = time.Now().Add(-authDeferredExpire - time.Second)
+	deferred := client.deferredUntil
+	client.dataLock.Unlock()
+	if time.Until(deferred) < 290*time.Second {
+		t.Fatalf("epoch install discarded AUTH_PENDING deadline: %v", deferred)
+	}
 
 	// The advertised deadline (300s) has NOT elapsed, so outbound must stay
 	// on the old key.
@@ -469,6 +477,75 @@ func TestAuthPendingTimeoutRespected(t *testing.T) {
 // TestTakePushReplyContinuation verifies the review point 2: an intermediate
 // push-continuation 2 segment is not a complete reply, and the final segment
 // merges repeatable fields (routes / dns) across segments in wire order.
+// TestStandaloneAuthPendingDoesNotCompletePush verifies AUTH_PENDING updates
+// timeout state but does not complete PUSH parsing before a final PUSH_REPLY.
+func TestStandaloneAuthPendingDoesNotCompletePush(t *testing.T) {
+	pending := []byte("AUTH_PENDING,timeout 300\x00")
+	reply, rest, ok := takePushReply(pending)
+	if ok {
+		t.Fatal("AUTH_PENDING alone completed PUSH parsing")
+	}
+	if len(rest) != 0 {
+		t.Fatalf("unexpected rest: %q", rest)
+	}
+	if reply == nil || reply.AuthPendingTimeout != 300*time.Second {
+		t.Fatalf("AUTH_PENDING timeout not parsed: %#v", reply)
+	}
+
+	coalesced := []byte("AUTH_PENDING,timeout 300\x00" +
+		"PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0\x00")
+	reply, _, ok = takePushReply(coalesced)
+	if !ok {
+		t.Fatal("final PUSH_REPLY did not complete parsing")
+	}
+	if reply.AuthPendingTimeout != 300*time.Second {
+		t.Fatalf("AUTH_PENDING timeout lost during merge: got %v, want 5m", reply.AuthPendingTimeout)
+	}
+}
+
+// TestPushContinuationWireOrderAndCrossCall verifies repeatable fields retain
+// wire order and an intermediate segment survives until a final segment in a
+// later consumeRekeyPush call.
+func TestPushContinuationWireOrderAndCrossCall(t *testing.T) {
+	full := []byte("PUSH_REPLY,route 10.1.0.0 255.255.0.0,dhcp-option DNS 1.1.1.1,data-ciphers AES-256-GCM,push-continuation 2\x00" +
+		"PUSH_REPLY,route 10.2.0.0 255.255.0.0,dhcp-option DNS 8.8.8.8,data-ciphers AES-128-GCM\x00")
+	reply, _, ok := takePushReply(full)
+	if !ok {
+		t.Fatal("coalesced continuation did not complete")
+	}
+	if got := []string{reply.Routes[0].String(), reply.Routes[1].String()}; got[0] != "10.1.0.0/16" || got[1] != "10.2.0.0/16" {
+		t.Fatalf("route wire order changed: %v", got)
+	}
+	if got := []string{reply.DNS[0].String(), reply.DNS[1].String()}; got[0] != "1.1.1.1" || got[1] != "8.8.8.8" {
+		t.Fatalf("DNS wire order changed: %v", got)
+	}
+	if len(reply.DataCiphers) != 2 || reply.DataCiphers[0] != "AES-256-GCM" || reply.DataCiphers[1] != "AES-128-GCM" {
+		t.Fatalf("cipher wire order changed: %v", reply.DataCiphers)
+	}
+
+	clientIO, _ := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	client.push = &PushReply{PeerID: 7}
+	client.leftoverTLS = []byte("PUSH_REPLY,route 10.1.0.0 255.255.0.0,push-continuation 2\x00")
+	if err := client.consumeRekeyPush(); err != nil {
+		t.Fatal(err)
+	}
+	if client.pushPending == nil || len(client.pushPending.Routes) != 1 {
+		t.Fatalf("intermediate continuation not retained: %#v", client.pushPending)
+	}
+	client.leftoverTLS = []byte("PUSH_REPLY,route 10.2.0.0 255.255.0.0\x00")
+	if err := client.consumeRekeyPush(); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.push.Routes) != 2 || client.push.Routes[0].String() != "10.1.0.0/16" || client.push.Routes[1].String() != "10.2.0.0/16" {
+		t.Fatalf("intermediate continuation discarded across calls: %v", client.push.Routes)
+	}
+}
+
 func TestTakePushReplyContinuation(t *testing.T) {
 	// Only an intermediate segment: not complete.
 	intermediate := []byte("PUSH_REPLY,route 10.2.0.0 255.255.0.0,push-continuation 2\x00")

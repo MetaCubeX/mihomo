@@ -605,12 +605,15 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			c.recvMessage++
 			sendAck = true
 		default:
-			// Out-of-order packet ahead of recvMessage. Buffer it only if it
-			// fits the bounded window (like OpenVPN's rec_reliable); only an
-			// accepted packet is acknowledged. A rejected one stays with the
-			// sender for retransmission.
-			if _, exists := c.recvPending[packet.MessageID]; !exists &&
-				recvWindowOK(c.recvMessage, packet.MessageID, len(c.recvPending)) {
+			// Out-of-order packet ahead of recvMessage. A duplicate already
+			// buffered inside the receive window must be re-ACKed (its first
+			// ACK may have been lost) without re-inserting it. A new packet is
+			// buffered and ACKed only if it fits the bounded window; a rejected
+			// out-of-window packet is neither buffered nor ACKed.
+			if _, exists := c.recvPending[packet.MessageID]; exists {
+				c.ackPending = appendAck(c.ackPending, packet.MessageID)
+				sendAck = true
+			} else if recvWindowOK(c.recvMessage, packet.MessageID, len(c.recvPending)) {
 				c.recvPending[packet.MessageID] = packet
 				c.ackPending = appendAck(c.ackPending, packet.MessageID)
 				sendAck = true

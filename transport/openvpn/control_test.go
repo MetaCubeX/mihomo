@@ -124,6 +124,63 @@ func TestRecvPendingBounded(t *testing.T) {
 // whose message ID breaks the receive window is neither buffered nor
 // acknowledged, so the sender keeps it for retransmission instead of dropping
 // it and leaving a permanent hole.
+// TestBufferedDuplicateReAcked verifies a retransmitted, already-buffered
+// in-window packet is ACKed again without re-insertion or delivery. Its first
+// ACK may have been lost, so suppressing the second ACK keeps the sender's
+// reliable slot occupied indefinitely.
+func TestBufferedDuplicateReAcked(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+	serverIO := server.io.(*memoryPacketIO)
+
+	inner := &ControlPacket{
+		Opcode:       PControlV1,
+		KeyID:        0,
+		LocalSession: server.LocalSessionID(),
+		MessageID:    1, // client expects 0: valid out-of-order, buffered
+		Payload:      []byte("buffer me"),
+	}
+	sendAndRead := func(outerPID uint32) *ControlPacket {
+		raw, err := inner.Encode(server.crypt, outerPID, uint32(server.clock().Unix()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := server.io.WritePacket(context.Background(), raw); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		_, _ = client.read(ctx, false) // remains waiting for message 0
+		select {
+		case ackRaw := <-serverIO.in:
+			ack, _, _, err := DecodeControlPacket(server.crypt, ackRaw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return ack
+		default:
+			t.Fatal("buffered in-window duplicate was not re-ACKed")
+		}
+		return nil
+	}
+
+	first := sendAndRead(1)
+	if len(first.AckIDs) == 0 || first.AckIDs[0] != 1 {
+		t.Fatalf("first ACK missing message 1: %v", first.AckIDs)
+	}
+	if len(client.recvPending) != 1 {
+		t.Fatalf("message 1 not buffered: %d", len(client.recvPending))
+	}
+	second := sendAndRead(2)
+	if len(second.AckIDs) == 0 || second.AckIDs[0] != 1 {
+		t.Fatalf("duplicate ACK missing message 1: %v", second.AckIDs)
+	}
+	if len(client.recvPending) != 1 {
+		t.Fatalf("duplicate was re-inserted: %d", len(client.recvPending))
+	}
+}
+
 func TestOutOfWindowPacketNotAcked(t *testing.T) {
 	client, server := newTestChannels(t)
 	client.SetRemoteSessionID(server.LocalSessionID())

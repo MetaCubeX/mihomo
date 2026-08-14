@@ -46,14 +46,19 @@ type Client struct {
 	// anchors the no-evidence promotion deadline (auth_deferred_expire)
 	// used by writeDataPacket when peer evidence never arrives.
 	outboundStart time.Time
-	// deferredUntil extends the no-evidence promotion deadline when the
-	// server advertised AUTH_PENDING,timeout N (see receive_auth_pending in
-	// OpenVPN push.c): mihomo must not promote the new outbound key while
-	// the peer's key is still KS_AUTH_DEFERRED.
-	deferredUntil time.Time
+	// deferredUntil is the active data epoch's AUTH_PENDING deadline.
+	// pendingDeferred* temporarily stores a deadline received after KM2 but
+	// before installDataChannel creates that epoch. All are protected by
+	// dataLock so packet writes and control-message processing agree on the
+	// same epoch-bound deadline.
+	deferredUntil        time.Time
+	pendingDeferredUntil time.Time
+	pendingDeferredKeyID uint8
+	pendingDeferredSet   bool
 	// pushPending accumulates intermediate push-continuation segments across
 	// TLS reads until the final segment arrives.
-	pushPending *PushReply
+	pushPending             *PushReply
+	pushContinuationPending bool
 	// retiring is the previous data-channel epoch, kept during a rekey so
 	// packets still labeled with the old key ID can be decrypted.
 	retiring *DataChannel
@@ -324,44 +329,68 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 // non-nil (i.e. on rekey, not the initial handshake).
 func (c *Client) consumeRekeyPush() error {
 	base := *c.push
-	rekey := &PushReply{
-		PeerID: base.PeerID,
-	}
+	rekey := &PushReply{PeerID: base.PeerID}
 	push := mergePushReply(c.push, rekey)
-	// A token-only PUSH_REPLY may already be buffered in leftoverTLS
-	// (it follows the server key-method-2 record on the TLS stream),
-	// or arrive in the next control record right after it.
+	complete := false
+	attemptedFinalRead := false
+
+	// AUTH_FAILED has priority over all other coalesced control messages.
+	// Check the original buffer before splitControlMessages consumes it.
+	if authFailedMsg(c.leftoverTLS) {
+		return authFailedError(c.leftoverTLS)
+	}
+
+	// First consume complete messages already read past KM2.
 	reply, rest, ok := takePushReply(c.leftoverTLS)
-	if ok {
-		c.leftoverTLS = rest
-		c.pushPending = nil
-		push = mergePushReply(push, reply)
-		c.applyAuthPendingTimeout(reply)
-	} else if reply != nil {
-		// Intermediate continuation segment(s) or an AUTH_PENDING signal:
-		// accumulate across reads until the final segment arrives.
-		c.leftoverTLS = rest
+	c.leftoverTLS = rest
+	if reply != nil {
 		c.pushPending = mergePushReply(c.pushPending, reply)
 		c.applyAuthPendingTimeout(reply)
-		if authFailedMsg(c.leftoverTLS) {
-			return authFailedError(c.leftoverTLS)
+		if reply.PushContinuation == 2 {
+			c.pushContinuationPending = true
 		}
-	} else if authFailedMsg(c.leftoverTLS) {
+	}
+	if ok {
+		complete = true
+		c.pushContinuationPending = false
+	}
+	if authFailedMsg(c.leftoverTLS) {
 		return authFailedError(c.leftoverTLS)
-	} else if conn := c.tlsConn.Load(); conn != nil {
-		reply, rest, err := readTokenPushReply(conn, c.leftoverTLS)
-		if err != nil {
-			return err
+	}
+
+	// If no final PUSH_REPLY has arrived yet, probe the active TLS stream.
+	// This includes standalone AUTH_PENDING and intermediate continuation
+	// segments; neither is allowed to complete the rekey by itself.
+	if !complete {
+		if conn := c.tlsConn.Load(); conn != nil {
+			attemptedFinalRead = true
+			deadline := c.effectiveControlDeadline(time.Time{})
+			if deadline.IsZero() && c.pushContinuationPending {
+				deadline = time.Now().Add(renegotiateTimeout)
+			}
+			more, newRest, err := readTokenPushReply(conn, c.leftoverTLS, deadline)
+			if err != nil {
+				return err
+			}
+			c.leftoverTLS = newRest
+			if more != nil {
+				c.pushPending = mergePushReply(c.pushPending, more)
+				c.applyAuthPendingTimeout(more)
+				complete = more.HasPushReply && more.PushContinuation != 2
+				if complete {
+					c.pushContinuationPending = false
+				}
+			}
 		}
-		// Preserve buffered bytes even without a complete reply so a
-		// token-only PUSH_REPLY split across reads is not discarded.
-		c.leftoverTLS = rest
-		if reply != nil {
-			c.pushPending = mergePushReply(c.pushPending, reply)
-			c.applyAuthPendingTimeout(reply)
-			push = mergePushReply(push, c.pushPending)
-			c.pushPending = nil
-		}
+	}
+
+	if attemptedFinalRead && (c.pushContinuationPending ||
+		(c.pushPending != nil && !complete && c.pushPending.AuthPendingTimeout > 0)) {
+		return errors.New("openvpn deferred/continued push reply incomplete")
+	}
+	if complete && c.pushPending != nil {
+		push = mergePushReply(push, c.pushPending)
+		c.pushPending = nil
 	}
 	c.push = push
 	c.captureAuthToken(push)
@@ -376,9 +405,47 @@ func (c *Client) applyAuthPendingTimeout(reply *PushReply) {
 		return
 	}
 	deadline := time.Now().Add(reply.AuthPendingTimeout)
-	if deadline.After(c.deferredUntil) {
-		c.deferredUntil = deadline
+	keyID := c.control.KeyID()
+	c.dataLock.Lock()
+	if c.data != nil && c.data.keyID == keyID {
+		if deadline.After(c.deferredUntil) {
+			c.deferredUntil = deadline
+		}
+	} else if !c.pendingDeferredSet || c.pendingDeferredKeyID != keyID ||
+		deadline.After(c.pendingDeferredUntil) {
+		// KM2/control has advanced to keyID but installDataChannel has not
+		// installed that data epoch. Stage the deadline with the key ID;
+		// install will transfer it only to the matching epoch.
+		c.pendingDeferredKeyID = keyID
+		c.pendingDeferredUntil = deadline
+		c.pendingDeferredSet = true
 	}
+	c.dataLock.Unlock()
+
+	// AUTH_PENDING extends the control/deferred-auth operation too. The
+	// original renegotiation deadline may be only 30s; leaving it in place
+	// would make a valid timeout=300 flow fail before the final PUSH_REPLY.
+	if conn := c.tlsConn.Load(); conn != nil {
+		_ = conn.SetDeadline(deadline)
+	}
+	if c.controlConn != nil {
+		_ = c.controlConn.SetDeadline(deadline)
+	}
+}
+
+func (c *Client) effectiveControlDeadline(fallback time.Time) time.Time {
+	c.dataLock.RLock()
+	deferred := c.deferredUntil
+	pending := c.pendingDeferredUntil
+	pendingSet := c.pendingDeferredSet
+	c.dataLock.RUnlock()
+	if deferred.After(fallback) {
+		fallback = deferred
+	}
+	if pendingSet && pending.After(fallback) {
+		fallback = pending
+	}
+	return fallback
 }
 
 // authDeferredExpire is the no-evidence promotion window for the outbound
@@ -420,10 +487,17 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 		c.outboundKey = newData
 	}
 	// The no-evidence promotion deadline starts when this outbound selection
-	// began (see writeDataPacket). Any previously advertised deferred-auth
-	// timeout belongs to the previous epoch and must not carry over.
+	// began. If AUTH_PENDING arrived after KM2 but before the data channel was
+	// installed, transfer only the deadline explicitly tagged for this key
+	// ID; an older epoch's deadline can never carry over.
 	c.outboundStart = time.Now()
 	c.deferredUntil = time.Time{}
+	if c.pendingDeferredSet && c.pendingDeferredKeyID == newData.keyID {
+		c.deferredUntil = c.pendingDeferredUntil
+	}
+	c.pendingDeferredUntil = time.Time{}
+	c.pendingDeferredKeyID = 0
+	c.pendingDeferredSet = false
 	if c.dataByKey == nil {
 		c.dataByKey = make(map[uint8]*DataChannel)
 	}
@@ -851,7 +925,12 @@ func (c *Client) readServerKeyMethod(ctx context.Context) (*KeyMethod2Record, er
 			c.leftoverTLS = append([]byte(nil), buf[consumed:]...)
 			return record, nil
 		}
-		if deadline, ok := ctx.Deadline(); ok {
+		deadline := time.Time{}
+		if d, ok := ctx.Deadline(); ok {
+			deadline = d
+		}
+		deadline = c.effectiveControlDeadline(deadline)
+		if !deadline.IsZero() {
 			_ = c.tlsConn.Load().SetReadDeadline(deadline)
 		}
 		n, err := c.tlsConn.Load().Read(tmp)
@@ -890,7 +969,12 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 			c.pushPending = mergePushReply(c.pushPending, reply)
 			c.applyAuthPendingTimeout(reply)
 		}
-		if deadline, ok := ctx.Deadline(); ok {
+		deadline := time.Time{}
+		if d, ok := ctx.Deadline(); ok {
+			deadline = d
+		}
+		deadline = c.effectiveControlDeadline(deadline)
+		if !deadline.IsZero() {
 			_ = c.tlsConn.Load().SetReadDeadline(deadline)
 		}
 		n, err := c.tlsConn.Load().Read(tmp)
@@ -933,10 +1017,14 @@ type pushReadConn interface {
 // is parsed after every read including the final one. On timeout the
 // buffered bytes are preserved and a nil reply (no error) is returned, so a
 // partially-received reply is not lost. AUTH_FAILED is a hard error.
-func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte, error) {
+func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Time) (*PushReply, []byte, error) {
 	buf := append([]byte(nil), leftover...)
 	tmp := make([]byte, 4096)
 	var acc *PushReply
+	var waitUntil time.Time
+	if len(extended) > 0 {
+		waitUntil = extended[0]
+	}
 	// Parse the already-buffered bytes first; a reply may be fully present.
 	// Intermediate push-continuation segments are accumulated in acc until
 	// the final segment arrives.
@@ -951,29 +1039,23 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 	}
 	// Clear the temporary read deadline on every return path; a successful
 	// parse must not leave a stale absolute deadline for the next
-	// waitForSoftReset read (the errParkedTLS path runs outside renegotiate's
-	// deadline cleanup).
+	// waitForSoftReset read.
 	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
-	for attempt := 0; attempt < 2; attempt++ {
-		_ = conn.SetReadDeadline(time.Now().Add(tokenPushReadTimeout))
+	for attempt := 0; ; attempt++ {
+		readDeadline := time.Now().Add(tokenPushReadTimeout)
+		if !waitUntil.IsZero() && waitUntil.Before(readDeadline) {
+			readDeadline = waitUntil
+		}
+		_ = conn.SetReadDeadline(readDeadline)
 		n, err := conn.Read(tmp)
 		// Process bytes before handling err: the io.Reader contract permits
-		// n > 0 with err != nil (e.g. tls.Conn returns (n, io.EOF) when app
-		// data is immediately followed by close_notify). The bytes are valid
-		// and must be processed before the terminal error.
+		// n > 0 with err != nil. The bytes are valid before the terminal error.
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)
 		}
-		// AUTH_FAILED always takes precedence so its diagnostic is kept.
 		if authFailedMsg(buf) {
 			return nil, buf, authFailedError(buf)
 		}
-		// A complete reply is accepted regardless of a bundled err: the
-		// logical message is present, so success must not depend on whether
-		// an earlier read happened to read ahead into it (TLS is a byte
-		// stream). EOF is propagated only when no complete message exists.
-		// Intermediate push-continuation segments are accumulated until the
-		// final segment completes the reply.
 		reply, rest, ok := takePushReply(buf)
 		if reply != nil {
 			acc = mergePushReply(acc, reply)
@@ -985,17 +1067,22 @@ func readTokenPushReply(conn pushReadConn, leftover []byte) (*PushReply, []byte,
 		if err != nil {
 			var netErr net.Error
 			if errors.As(err, &netErr) && netErr.Timeout() {
-				return nil, buf, nil
+				if !waitUntil.IsZero() && time.Now().Before(waitUntil) {
+					continue
+				}
+				return acc, buf, nil
 			}
 			return nil, buf, err
 		}
+		// Normal token refresh is a short probe. Explicit AUTH_PENDING uses
+		// waitUntil and continues until the server-advertised deadline.
+		if waitUntil.IsZero() && attempt+1 >= 2 {
+			return acc, buf, nil
+		}
+		if !waitUntil.IsZero() && !time.Now().Before(waitUntil) {
+			return acc, buf, nil
+		}
 	}
-	// If the accumulation holds a reply (e.g. a lone AUTH_PENDING signal),
-	// surface it so the caller records the deferred-auth timeout.
-	if acc != nil {
-		return acc, buf, nil
-	}
-	return nil, buf, nil
 }
 
 // authFailedMsg reports whether the TLS plaintext buffer contains a complete
@@ -1043,10 +1130,11 @@ func takePushReply(buf []byte) (*PushReply, []byte, bool) {
 		if bytes.HasPrefix(m, []byte("AUTH_PENDING")) {
 			// OpenVPN send_auth_pending_messages / receive_auth_pending:
 			// AUTH_PENDING,timeout N extends the deferred-auth window. Parse
-			// the advertised timeout so the outbound-key backstop respects it.
+			// the advertised timeout so the outbound-key backstop respects
+			// it. AUTH_PENDING alone is NOT a complete push reply — the
+			// reply is only complete once a final PUSH_REPLY arrives.
 			if r, err := parseAuthPendingTimeout(string(m)); err == nil {
 				reply = mergePushReply(reply, r)
-				parsed = true
 			}
 			continue
 		}
@@ -1084,7 +1172,7 @@ func takePushReply(buf []byte) (*PushReply, []byte, bool) {
 // parseAuthPendingTimeout parses an AUTH_PENDING[,timeout N] control message
 // and returns a PushReply carrying the advertised deferred-auth timeout.
 func parseAuthPendingTimeout(msg string) (*PushReply, error) {
-	reply := &PushReply{}
+	reply := &PushReply{PeerID: PeerIDUnset}
 	if !strings.HasPrefix(msg, "AUTH_PENDING") {
 		return nil, errors.New("not an auth pending message")
 	}
@@ -1132,8 +1220,8 @@ func mergePushReply(prev, next *PushReply) *PushReply {
 	if prev == nil {
 		return next
 	}
-	// Repeatable fields are appended in wire order, deduplicated, so a
-	// continuation segment that repeats an option does not double it.
+	// Repeatable fields are appended in wire order (prev first, then next),
+	// deduplicated, so continuation segments preserve their arrival order.
 	next.Prefixes = appendUniquePrefixes(prev.Prefixes, next.Prefixes)
 	next.Routes = appendUniquePrefixes(prev.Routes, next.Routes)
 	next.DNS = appendUniqueAddrs(prev.DNS, next.DNS)
@@ -1156,15 +1244,23 @@ func mergePushReply(prev, next *PushReply) *PushReply {
 			next.AuthTokenUser = prev.AuthTokenUser
 		}
 	}
+	// A deferred-auth timeout must survive merging: a later merge must not
+	// zero out an already-advertised timeout.
+	if next.AuthPendingTimeout == 0 {
+		next.AuthPendingTimeout = prev.AuthPendingTimeout
+	}
+	next.HasPushReply = next.HasPushReply || prev.HasPushReply
 	return next
 }
 
+// appendUniquePrefixes returns prev followed by the elements of next that are
+// not already present, preserving wire order (prev arrived first).
 func appendUniquePrefixes(prev, next []netip.Prefix) []netip.Prefix {
 	if len(prev) == 0 {
 		return next
 	}
-	out := append([]netip.Prefix(nil), next...)
-	for _, p := range prev {
+	out := append([]netip.Prefix(nil), prev...)
+	for _, p := range next {
 		if !containsPrefix(out, p) {
 			out = append(out, p)
 		}
@@ -1185,8 +1281,8 @@ func appendUniqueAddrs(prev, next []netip.Addr) []netip.Addr {
 	if len(prev) == 0 {
 		return next
 	}
-	out := append([]netip.Addr(nil), next...)
-	for _, a := range prev {
+	out := append([]netip.Addr(nil), prev...)
+	for _, a := range next {
 		if !containsAddr(out, a) {
 			out = append(out, a)
 		}
@@ -1207,8 +1303,8 @@ func appendUniqueStrings(prev, next []string) []string {
 	if len(prev) == 0 {
 		return next
 	}
-	out := append([]string(nil), next...)
-	for _, s := range prev {
+	out := append([]string(nil), prev...)
+	for _, s := range next {
 		if !containsString(out, s) {
 			out = append(out, s)
 		}

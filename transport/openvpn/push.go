@@ -37,6 +37,9 @@ type PushReply struct {
 	// intermediate multi-segment PUSH_REPLY, 1 marks the final segment, 0
 	// means a single segment.
 	PushContinuation int
+	// HasPushReply distinguishes a parsed PUSH_REPLY from standalone control
+	// metadata such as AUTH_PENDING carried in the same accumulator.
+	HasPushReply bool
 
 	// AuthPendingTimeout is the deferred-auth window advertised by
 	// AUTH_PENDING,timeout N. Zero when no AUTH_PENDING was seen.
@@ -70,8 +73,9 @@ func parsePushReplyInner(message string) (*PushReply, error) {
 		return nil, fmt.Errorf("unexpected openvpn push message %q", message)
 	}
 	reply := &PushReply{
-		Raw:    message,
-		PeerID: PeerIDUnset,
+		Raw:          message,
+		PeerID:       PeerIDUnset,
+		HasPushReply: true,
 	}
 	for _, option := range splitPushOptions(message) {
 		fields := strings.Fields(option)
