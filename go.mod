@@ -45,7 +45,7 @@ require (
 	github.com/metacubex/ssh v0.1.0
 	github.com/metacubex/tailscale v0.0.0-20260807072706-a4fb5feabcbb
 	github.com/metacubex/tfo-go v0.0.0-20260623020846-376a77860b8c
-	github.com/metacubex/tls v0.1.7
+	github.com/metacubex/tls v0.1.8
 	github.com/metacubex/utls v1.8.7
 	github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f
 	github.com/metacubex/zerotier-go v0.0.0-20260813124750-13fa6f45da5f
