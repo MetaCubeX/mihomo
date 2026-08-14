@@ -190,30 +190,35 @@ func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte
 
 // takeAcksLocked moves ackPending into the MRU and returns the ACK list to
 // place on the outgoing packet. Mirrors OpenVPN copy_acks_to_mru +
-// reliable_ack_write. Caller must hold c.mu.
+// reliable_ack_write: each pending ID is moved to the front of the MRU
+// (existing entries shift right; a duplicate is removed), so re-acked IDs are
+// not evicted when the MRU is full. Caller must hold c.mu.
 func (c *ControlChannel) takeAcksLocked() []uint32 {
-	// Move ackPending to the front of the MRU (newest first), dedup.
+	// Move ackPending (newest last) into the MRU front, preserving their
+	// relative order, exactly like copy_acks_to_mru's backward loop.
 	for i := len(c.ackPending) - 1; i >= 0; i-- {
 		id := c.ackPending[i]
-		if !containsUint32(c.lruAcks, id) {
-			c.lruAcks = append([]uint32{id}, c.lruAcks...)
+		move := id
+		found := false
+		for j := 0; j < len(c.lruAcks); j++ {
+			tmp := c.lruAcks[j]
+			c.lruAcks[j] = move
+			move = tmp
+			if move == id {
+				found = true
+				break
+			}
+		}
+		if !found && len(c.lruAcks) < reliableAckSize {
+			c.lruAcks = append(c.lruAcks, move)
 		}
 	}
 	c.ackPending = nil
-	// Cap at RELIABLE_ACK_SIZE.
+	// Cap at RELIABLE_ACK_SIZE (move-to-front never grows past it).
 	if len(c.lruAcks) > reliableAckSize {
 		c.lruAcks = c.lruAcks[:reliableAckSize]
 	}
 	return append([]uint32(nil), c.lruAcks...)
-}
-
-func containsUint32(s []uint32, v uint32) bool {
-	for _, x := range s {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }
 
 // reliableAckSize mirrors RELIABLE_ACK_SIZE in OpenVPN reliable.h.

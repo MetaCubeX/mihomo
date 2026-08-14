@@ -858,6 +858,33 @@ func hasAck(acks []uint32, id uint32) bool {
 	return false
 }
 
+// TestMRUMoveToFrontMatchesReference verifies the exact copy_acks_to_mru
+// behavior on a full MRU: an already-present ID that is re-acked is moved to
+// the front instead of being evicted. MRU [1..8], pending [8 9] -> [8 9 1 2 3 4 5 6].
+func TestMRUMoveToFrontMatchesReference(t *testing.T) {
+	c := &ControlChannel{lruAcks: []uint32{1, 2, 3, 4, 5, 6, 7, 8}}
+	c.ackPending = []uint32{8, 9}
+	got := c.takeAcksLocked()
+	want := []uint32{8, 9, 1, 2, 3, 4, 5, 6}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+	// The MRU itself must hold the same move-to-front result.
+	if len(c.lruAcks) != len(want) {
+		t.Fatalf("mru len=%d want %d: %v", len(c.lruAcks), len(want), c.lruAcks)
+	}
+	for i := range want {
+		if c.lruAcks[i] != want[i] {
+			t.Fatalf("mru got %v want %v", c.lruAcks, want)
+		}
+	}
+}
+
 func TestMarkReceivedUnblocksNextEpochControl(t *testing.T) {
 	client, server := newTestChannels(t)
 	client.SetRemoteSessionID(server.LocalSessionID())
