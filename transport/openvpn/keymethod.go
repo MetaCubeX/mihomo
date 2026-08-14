@@ -283,7 +283,11 @@ func InstallScriptPeerInfo(cipher string, dataCiphers []string, compLZO string, 
 		}
 		ivCiphers = strings.Join(normalized, ":")
 	}
-	info := fmt.Sprintf("IV_VER=%s\nIV_PROTO=6\n%sIV_CIPHERS=%s\n", ivVer, lzo, ivCiphers)
+	// IV_PROTO advertises DATA_V2 (bit 1), REQUEST_PUSH (bit 2) and
+	// AUTH_PENDING keyword support (bit 4). The parser supports
+	// AUTH_PENDING,timeout N, so capability and behavior must agree.
+	const ivProto = (1 << 1) | (1 << 2) | (1 << 4) // 22
+	info := fmt.Sprintf("IV_VER=%s\nIV_PROTO=%d\n%sIV_CIPHERS=%s\n", ivVer, ivProto, lzo, ivCiphers)
 	// Append user-defined peer-info entries (e.g. IV_HWADDR, UV_*) after the
 	// built-in fields. Keys are sorted so the output is deterministic.
 	keys := make([]string, 0, len(peerInfo))

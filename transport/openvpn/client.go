@@ -1025,6 +1025,28 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 	if len(extended) > 0 {
 		waitUntil = extended[0]
 	}
+	deferredObserved := false
+	continuationObserved := false
+	promoteWaitPolicy := func(reply *PushReply) {
+		if reply == nil {
+			return
+		}
+		now := time.Now()
+		if reply.AuthPendingTimeout > 0 && !deferredObserved {
+			deadline := now.Add(reply.AuthPendingTimeout)
+			if deadline.After(waitUntil) {
+				waitUntil = deadline
+			}
+			deferredObserved = true
+		}
+		if reply.PushContinuation == 2 && !continuationObserved {
+			deadline := now.Add(renegotiateTimeout)
+			if deadline.After(waitUntil) {
+				waitUntil = deadline
+			}
+			continuationObserved = true
+		}
+	}
 	// Parse the already-buffered bytes first; a reply may be fully present.
 	// Intermediate push-continuation segments are accumulated in acc until
 	// the final segment arrives.
@@ -1032,6 +1054,7 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 		return mergePushReply(acc, reply), rest, nil
 	} else if reply != nil {
 		acc = mergePushReply(acc, reply)
+		promoteWaitPolicy(reply)
 		buf = append([]byte(nil), rest...)
 	}
 	if authFailedMsg(buf) {
@@ -1059,6 +1082,7 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 		reply, rest, ok := takePushReply(buf)
 		if reply != nil {
 			acc = mergePushReply(acc, reply)
+			promoteWaitPolicy(reply)
 			buf = append([]byte(nil), rest...)
 		}
 		if ok {
@@ -1172,7 +1196,10 @@ func takePushReply(buf []byte) (*PushReply, []byte, bool) {
 // parseAuthPendingTimeout parses an AUTH_PENDING[,timeout N] control message
 // and returns a PushReply carrying the advertised deferred-auth timeout.
 func parseAuthPendingTimeout(msg string) (*PushReply, error) {
-	reply := &PushReply{PeerID: PeerIDUnset}
+	reply := &PushReply{
+		PeerID:             PeerIDUnset,
+		AuthPendingTimeout: authDeferredExpire, // bare AUTH_PENDING fallback
+	}
 	if !strings.HasPrefix(msg, "AUTH_PENDING") {
 		return nil, errors.New("not an auth pending message")
 	}

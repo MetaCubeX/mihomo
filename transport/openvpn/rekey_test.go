@@ -479,7 +479,66 @@ func TestAuthPendingTimeoutRespected(t *testing.T) {
 // merges repeatable fields (routes / dns) across segments in wire order.
 // TestStandaloneAuthPendingDoesNotCompletePush verifies AUTH_PENDING updates
 // timeout state but does not complete PUSH parsing before a final PUSH_REPLY.
+// TestReadTokenPushReplyPromotesDynamicWait verifies state discovered inside
+// the reader (not pre-buffered) upgrades the active wait policy across a
+// short timeout until the final PUSH_REPLY arrives.
+func TestReadTokenPushReplyPromotesDynamicWait(t *testing.T) {
+	t.Run("AUTH_PENDING", func(t *testing.T) {
+		conn := &chunkConn{
+			data: [][]byte{
+				[]byte("AUTH_PENDING,timeout 1\x00"),
+				nil,
+				[]byte("PUSH_REPLY,auth-token SESS_ID_dynamic\x00"),
+			},
+			errs: []error{nil, os.ErrDeadlineExceeded, nil},
+		}
+		reply, rest, err := readTokenPushReply(conn, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if conn.idx != 3 {
+			t.Fatalf("reader returned before final PUSH_REPLY: reads=%d", conn.idx)
+		}
+		if reply == nil || reply.AuthTokenPass != "SESS_ID_dynamic" || reply.AuthPendingTimeout != time.Second {
+			t.Fatalf("dynamic AUTH_PENDING/final state lost: %#v", reply)
+		}
+		if len(rest) != 0 {
+			t.Fatalf("unexpected rest: %q", rest)
+		}
+	})
+
+	t.Run("push-continuation", func(t *testing.T) {
+		conn := &chunkConn{
+			data: [][]byte{
+				[]byte("PUSH_REPLY,route 10.1.0.0 255.255.0.0,push-continuation 2\x00"),
+				nil,
+				[]byte("PUSH_REPLY,route 10.2.0.0 255.255.0.0\x00"),
+			},
+			errs: []error{nil, os.ErrDeadlineExceeded, nil},
+		}
+		reply, _, err := readTokenPushReply(conn, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if conn.idx != 3 {
+			t.Fatalf("reader returned before final continuation: reads=%d", conn.idx)
+		}
+		if reply == nil || len(reply.Routes) != 2 ||
+			reply.Routes[0].String() != "10.1.0.0/16" || reply.Routes[1].String() != "10.2.0.0/16" {
+			t.Fatalf("continuation state lost: %#v", reply)
+		}
+	})
+}
+
 func TestStandaloneAuthPendingDoesNotCompletePush(t *testing.T) {
+	bareReply, _, bareOK := takePushReply([]byte("AUTH_PENDING\x00"))
+	if bareOK {
+		t.Fatal("bare AUTH_PENDING alone completed PUSH parsing")
+	}
+	if bareReply == nil || bareReply.AuthPendingTimeout != authDeferredExpire {
+		t.Fatalf("bare AUTH_PENDING did not receive default timeout: %#v", bareReply)
+	}
+
 	pending := []byte("AUTH_PENDING,timeout 300\x00")
 	reply, rest, ok := takePushReply(pending)
 	if ok {

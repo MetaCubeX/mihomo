@@ -94,7 +94,7 @@ func TestInstallScriptOptionsCBCSHA1(t *testing.T) {
 func TestInstallScriptPeerInfo(t *testing.T) {
 	// Without user-defined peer-info the output is unchanged (backward compatible).
 	base := InstallScriptPeerInfo(CipherAES128GCM, nil, "", nil)
-	if base != "IV_VER=mihomo-openvpn\nIV_PROTO=6\nIV_CIPHERS=AES-128-GCM\n" {
+	if base != "IV_VER=mihomo-openvpn\nIV_PROTO=22\nIV_CIPHERS=AES-128-GCM\n" {
 		t.Fatalf("unexpected default peer-info: %q", base)
 	}
 
@@ -116,7 +116,7 @@ func TestInstallScriptPeerInfo(t *testing.T) {
 		"IV_LZO":     "0",
 		"IV_CIPHERS": "AES-256-CBC",
 	})
-	want = "IV_VER=custom-client/1.0\nIV_PROTO=6\nIV_LZO=1\nIV_CIPHERS=AES-128-GCM\n"
+	want = "IV_VER=custom-client/1.0\nIV_PROTO=22\nIV_LZO=1\nIV_CIPHERS=AES-128-GCM\n"
 	if overridden != want {
 		t.Fatalf("unexpected overridden peer-info:\n got %q\nwant %q", overridden, want)
 	}
