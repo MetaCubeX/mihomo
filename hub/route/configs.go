@@ -2,6 +2,7 @@ package route
 
 import (
 	"net/netip"
+	"os"
 	"path/filepath"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -27,6 +28,7 @@ func configRouter() http.Handler {
 	r.Get("/", getConfigs)
 	if !embedMode { // disallow update/patch configs in embed mode
 		r.Put("/", updateConfigs)
+		r.Put("/file", updateConfigFile)
 		r.Post("/geo", updateGeoDatabases)
 		r.Patch("/", patchConfigs)
 	}
@@ -437,6 +439,77 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 
 	executor.ApplyConfig(cfg, force)
 	render.NoContent(w, r)
+}
+
+// updateConfigFile validates a full configuration given as inline payload,
+// persists it to the default config file (atomic write: temp file + rename,
+// preserving the existing file mode) and applies it to the running core.
+//
+// Unlike PUT /configs with a payload — which only applies the config in
+// memory — this endpoint makes the configuration survive a restart, which is
+// required for remote config management (e.g. web panels).
+func updateConfigFile(w http.ResponseWriter, r *http.Request) {
+	req := struct {
+		Payload string `json:"payload"`
+	}{}
+	if err := render.DecodeJSON(r.Body, &req); err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+	if req.Payload == "" {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("payload is required"))
+		return
+	}
+
+	// validate before touching the file on disk
+	cfg, err := executor.ParseWithBytes([]byte(req.Payload))
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
+
+	cfgPath := C.Path.Resolve(C.Path.Config())
+	if err := saveConfigFile(cfgPath, []byte(req.Payload)); err != nil {
+		log.Errorln("[CONFIG] persist config to %s failed: %v", cfgPath, err)
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
+
+	force := r.URL.Query().Get("force") == "true"
+	executor.ApplyConfig(cfg, force)
+	render.NoContent(w, r)
+}
+
+// saveConfigFile writes data to path atomically: a temp file in the same
+// directory is written and renamed over the target, so a crash mid-write can
+// never leave a truncated config behind.
+func saveConfigFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	perm := os.FileMode(0o644)
+	if stat, err := os.Stat(path); err == nil {
+		perm = stat.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(dir, ".config-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op after a successful rename
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
