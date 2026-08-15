@@ -359,12 +359,18 @@ func dataPacketHeaderSize(packet []byte) (int, error) {
 	}
 }
 
-var errDataPacketIDExhausted = errors.New("openvpn data packet id exhausted")
+const dataPacketIDRekeyThreshold = uint32(0xFF000000)
+
+var errDataPacketIDExhausted = errors.New("openvpn data packet id reached rekey threshold")
 
 func (d *DataChannel) nextPacketID() (uint32, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.sendPacketID == ^uint32(0) {
+	// OpenVPN starts a soft reset once packet_id_close_to_wrapping reaches
+	// this threshold. This client cannot initiate that reset yet, so surface
+	// the condition and let the adapter reconnect instead of silently
+	// blackholing packets or approaching nonce reuse.
+	if d.sendPacketID >= dataPacketIDRekeyThreshold {
 		return 0, errDataPacketIDExhausted
 	}
 	d.sendPacketID++

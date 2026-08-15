@@ -173,6 +173,9 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 			}
 			client.negotiatedCipher = CipherAES128GCM
 			client.controlConn = NewControlConn(client.control)
+			// A rekey starts with an established previous epoch. Production must
+			// clear this value, then capture a fresh anchor only after server KM2.
+			client.controlEstablishedAt = time.Now().Add(-time.Hour)
 
 			server.AdoptKeyID(1)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -188,6 +191,8 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 			client.stageRetiringWindow(retiringExpiry)
 
 			serverErr := make(chan error, 1)
+			clientKM2Read := make(chan time.Time, 1)
+			releaseServerKM2 := make(chan struct{})
 			go func() {
 				// ControlChannel is a client-side production type. The test peer
 				// consumes the client's reset here, then hands the same reliable
@@ -223,6 +228,13 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 					serverErr <- fmt.Errorf("read client KM2: %w", err)
 					return
 				}
+				clientKM2Read <- time.Now()
+				select {
+				case <-releaseServerKM2:
+				case <-ctx.Done():
+					serverErr <- ctx.Err()
+					return
+				}
 				if _, err := serverTLS.Write(serverKM2); err != nil {
 					serverErr <- fmt.Errorf("write server KM2: %w", err)
 					return
@@ -240,13 +252,37 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 			}()
 
 			started := time.Now()
-			if err := client.renegotiate(reset, retiringExpiry); err != nil {
-				select {
-				case serverFailure := <-serverErr:
-					t.Fatalf("client rekey: %v; server: %v", err, serverFailure)
-				default:
-					t.Fatal(err)
+			rekeyErr := make(chan error, 1)
+			go func() {
+				rekeyErr <- client.renegotiate(reset, retiringExpiry)
+			}()
+			var clientKM2ReadAt time.Time
+			select {
+			case clientKM2ReadAt = <-clientKM2Read:
+			case err := <-rekeyErr:
+				t.Fatalf("client rekey ended before sending KM2: %v", err)
+			case err := <-serverErr:
+				t.Fatalf("server ended before reading client KM2: %v", err)
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			if !client.controlEstablishedAt.IsZero() {
+				t.Fatalf("AUTH_PENDING anchor captured before server KM2: %v", client.controlEstablishedAt)
+			}
+			serverKM2ReleasedAt := time.Now()
+			close(releaseServerKM2)
+			select {
+			case err := <-rekeyErr:
+				if err != nil {
+					select {
+					case serverFailure := <-serverErr:
+						t.Fatalf("client rekey: %v; server: %v", err, serverFailure)
+					default:
+						t.Fatal(err)
+					}
 				}
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
 			}
 			if elapsed := time.Since(started); elapsed < client.rekeyTimeout() {
 				t.Fatalf("rekey completed before deferred auth delay: %v", elapsed)
@@ -254,11 +290,19 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 			if err := <-serverErr; err != nil {
 				t.Fatal(err)
 			}
+			establishedAt := client.controlEstablishedAt
+			if establishedAt.Before(serverKM2ReleasedAt) || establishedAt.Before(clientKM2ReadAt) {
+				t.Fatalf("AUTH_PENDING anchor %v predates KM2 activation (read %v, released %v)", establishedAt, clientKM2ReadAt, serverKM2ReleasedAt)
+			}
 			client.dataLock.RLock()
 			activeKeyID := client.data.keyID
+			deferredUntil := client.deferredUntil
 			client.dataLock.RUnlock()
 			if activeKeyID != 1 {
 				t.Fatalf("active data key ID = %d, want 1", activeKeyID)
+			}
+			if want := establishedAt.Add(2 * time.Second); !deferredUntil.Equal(want) {
+				t.Fatalf("AUTH_PENDING deadline = %v, want KM2 anchor deadline %v", deferredUntil, want)
 			}
 			if client.authPass != "SESS_ID_rotated" {
 				t.Fatalf("rotated auth token = %q", client.authPass)
@@ -267,7 +311,7 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 	}
 }
 
-func TestClientDropsExhaustedDataPacketsUntilRekey(t *testing.T) {
+func TestClientPropagatesDataPacketIDExhaustion(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
 	client, err := NewClient(&ClientConfig{}, clientIO)
 	if err != nil {
@@ -284,18 +328,16 @@ func TestClientDropsExhaustedDataPacketsUntilRekey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data.sendPacketID = ^uint32(0)
+	data.sendPacketID = dataPacketIDRekeyThreshold
 	client.installDataChannel(data)
-	if err := client.WriteIPPacket(context.Background(), []byte{0x45, 0, 0, 20}); err != nil {
-		t.Fatalf("exhausted packet should be dropped without tearing down the client: %v", err)
+	err = client.WriteIPPacket(context.Background(), []byte{0x45, 0, 0, 20})
+	if !errors.Is(err, errDataPacketIDExhausted) {
+		t.Fatalf("exhausted packet returned %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	if _, err := serverIO.ReadPacket(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("exhausted packet reached transport: %v", err)
-	}
-	if client.runCtx.Err() != nil {
-		t.Fatalf("packet exhaustion closed client: %v", client.runCtx.Err())
 	}
 }
 

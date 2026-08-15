@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/sha1"
 	"encoding/binary"
+	"errors"
 	"testing"
 )
 
@@ -241,7 +242,7 @@ func TestDataChannelAESCBCSHA1V2RoundTrip(t *testing.T) {
 	}
 }
 
-func TestDataChannelRejectsPacketIDRollover(t *testing.T) {
+func TestDataChannelStopsAtPacketIDRekeyThreshold(t *testing.T) {
 	for _, cipher := range []string{CipherAES128GCM, CipherAES128CBC, CipherChaCha20Poly1305} {
 		t.Run(cipher, func(t *testing.T) {
 			keys := &KeyMaterial{
@@ -254,9 +255,15 @@ func TestDataChannelRejectsPacketIDRollover(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			channel.sendPacketID = ^uint32(0)
-			if _, err := channel.Encrypt([]byte{0x45, 0, 0, 20}); err == nil {
-				t.Fatal("packet ID rollover was encrypted under the old key")
+			channel.sendPacketID = dataPacketIDRekeyThreshold - 1
+			if _, err := channel.Encrypt([]byte{0x45, 0, 0, 20}); err != nil {
+				t.Fatalf("final packet before rekey threshold: %v", err)
+			}
+			if _, err := channel.Encrypt([]byte{0x45, 0, 0, 20}); !errors.Is(err, errDataPacketIDExhausted) {
+				t.Fatalf("packet at rekey threshold returned %v", err)
+			}
+			if packetID := channel.sendPacketID; packetID != dataPacketIDRekeyThreshold {
+				t.Fatalf("packet ID advanced after threshold: got %#x", packetID)
 			}
 		})
 	}

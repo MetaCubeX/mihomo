@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/contextutils"
-	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/tls"
 	"golang.org/x/sync/semaphore"
 )
@@ -40,7 +39,9 @@ type Client struct {
 	// tlsConn is the active TLS session; swapped on each rekey by the
 	// watchControl goroutine and read by Close. Atomic to avoid racing.
 	tlsConn atomic.Pointer[tls.Conn]
-	// controlEstablishedAt anchors AUTH_PENDING like OpenVPN key_state.established.
+	// controlEstablishedAt anchors AUTH_PENDING like OpenVPN
+	// key_state.established. It is captured after the server KM2 record is
+	// parsed and its key material is derived, before deferred-auth messages.
 	// Only the handshake/control goroutine reads or replaces it.
 	controlEstablishedAt time.Time
 	// rekeyHandshakeTimeout bounds TLS/KM2 progress before the server
@@ -99,9 +100,8 @@ type Client struct {
 	// (rekey), where the DataChannel is atomically replaced.
 	dataLock sync.RWMutex
 
-	runCtx                    context.Context
-	cancel                    context.CancelFunc
-	dataPacketExhaustedLogged atomic.Bool
+	runCtx context.Context
+	cancel context.CancelFunc
 
 	writeSem *semaphore.Weighted
 
@@ -220,6 +220,9 @@ func (c *Client) startTLSEpoch(ctx context.Context) error {
 		c.tlsConn.Store(nil)
 	}
 	c.controlConn.Reset()
+	// The previous epoch's establishment time must never anchor deferred
+	// authentication for this TLS/KM2 epoch.
+	c.controlEstablishedAt = time.Time{}
 	c.leftoverTLS = nil
 	conn := tls.Client(c.controlConn, tlsConfig)
 	c.tlsConn.Store(conn)
@@ -229,7 +232,6 @@ func (c *Client) startTLSEpoch(ctx context.Context) error {
 	if err := conn.HandshakeContext(ctx); err != nil {
 		return fmt.Errorf("openvpn tls handshake: %w", err)
 	}
-	c.controlEstablishedAt = time.Now()
 	// Drain any control packets that arrived on the new epoch while the
 	// handshake was reading, so they are not acknowledged and dropped by a
 	// raw ControlChannel read. A TLS-encrypted P_CONTROL_V1 token update
@@ -292,6 +294,9 @@ func (c *Client) doKeyExchange(ctx context.Context) (*PushReply, error) {
 	if err != nil {
 		return nil, fmt.Errorf("derive data channel keys: %w", err)
 	}
+	// OpenVPN starts AUTH_PENDING from key_state.established, after the peer's
+	// KM2 record has been accepted and the new key material is ready.
+	c.controlEstablishedAt = time.Now()
 
 	if c.push != nil {
 		// Authenticated rekeys keep the previous ifconfig / peer-id.
@@ -609,7 +614,6 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 		c.outboundStart = c.pendingOutboundStart
 	}
 	c.pendingOutboundStart = time.Time{}
-	c.dataPacketExhaustedLogged.Store(false)
 	c.deferredUntil = time.Time{}
 	if c.pendingDeferredSet && c.pendingDeferredKeyID == newData.keyID {
 		c.deferredUntil = c.pendingDeferredUntil
@@ -762,12 +766,6 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		encrypted, err := outbound.Encrypt(packet)
 		c.dataLock.RUnlock()
 		if err != nil {
-			if errors.Is(err, errDataPacketIDExhausted) {
-				if c.dataPacketExhaustedLogged.CompareAndSwap(false, true) {
-					log.Warnln("[OpenVPN] data packet ID exhausted for key %d; dropping until the peer starts a new key epoch", outbound.keyID)
-				}
-				return nil
-			}
 			return err
 		}
 		// Once encryption completed under the epoch lock, the packet is an
