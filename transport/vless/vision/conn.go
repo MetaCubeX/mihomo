@@ -171,8 +171,10 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 			}
 			if vc.input == nil && vc.rawInput == nil {
 				vc.readProcess = false
-				vc.ExtendedReader = N.NewExtendedReader(vc.netConn)
-				log.Debugln("XTLS Vision direct read start")
+				if vc.netConn != nil { // non-RAW transport: keep relaying on the existing stream
+					vc.ExtendedReader = N.NewExtendedReader(vc.netConn)
+					log.Debugln("XTLS Vision direct read start")
+				}
 			}
 			if needReturn {
 				return nil
@@ -228,8 +230,10 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) (err error) {
 				return
 			}
 			if command == commandPaddingDirect {
-				vc.ExtendedWriter = N.NewExtendedWriter(vc.netConn)
-				log.Debugln("XTLS Vision direct write start")
+				if vc.netConn != nil { // non-RAW transport: keep relaying on the existing stream
+					vc.ExtendedWriter = N.NewExtendedWriter(vc.netConn)
+					log.Debugln("XTLS Vision direct write start")
+				}
 				//time.Sleep(5 * time.Millisecond)
 			}
 		}
@@ -246,7 +250,7 @@ func (vc *Conn) FrontHeadroom() int {
 	if vc.readFilterUUID || vc.writeOnceUserUUID != nil {
 		fontHeadroom = PaddingHeaderLen
 	}
-	if vc.writeFilterApplicationData { // The writer may be replaced, add the required value for vc.netConn
+	if vc.writeFilterApplicationData && vc.netConn != nil { // The writer may be replaced, add the required value for vc.netConn
 		if abs := N.CalculateFrontHeadroom(vc.netConn) - N.CalculateFrontHeadroom(vc.Conn); abs > 0 {
 			fontHeadroom += abs
 		}
@@ -256,7 +260,7 @@ func (vc *Conn) FrontHeadroom() int {
 
 func (vc *Conn) RearHeadroom() int {
 	rearHeadroom := 500 + 900
-	if vc.writeFilterApplicationData { // The writer may be replaced, add the required value for vc.netConn
+	if vc.writeFilterApplicationData && vc.netConn != nil { // The writer may be replaced, add the required value for vc.netConn
 		if abs := N.CalculateRearHeadroom(vc.netConn) - N.CalculateRearHeadroom(vc.Conn); abs > 0 {
 			rearHeadroom += abs
 		}
@@ -273,8 +277,8 @@ func (vc *Conn) NeedAdditionalReadDeadline() bool {
 }
 
 func (vc *Conn) Upstream() any {
-	if vc.writeDirect ||
-		vc.readLastCommand == commandPaddingDirect {
+	if (vc.writeDirect ||
+		vc.readLastCommand == commandPaddingDirect) && vc.netConn != nil {
 		return vc.netConn
 	}
 	return vc.Conn
@@ -304,7 +308,7 @@ func (vc *Conn) WriterReplaceable() bool {
 }
 
 func (vc *Conn) Close() error {
-	if vc.ReaderReplaceable() || vc.WriterReplaceable() { // ignore send closeNotify alert in tls.Conn
+	if (vc.ReaderReplaceable() || vc.WriterReplaceable()) && vc.netConn != nil { // ignore send closeNotify alert in tls.Conn
 		return vc.netConn.Close()
 	}
 	return vc.Conn.Close()

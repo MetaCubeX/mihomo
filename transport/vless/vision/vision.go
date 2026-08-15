@@ -7,7 +7,6 @@ import (
 	"bytes"
 	gotls "crypto/tls"
 	"errors"
-	"fmt"
 	"net"
 	"reflect"
 	"unsafe"
@@ -91,8 +90,13 @@ func NewConn(conn net.Conn, tlsConn net.Conn, userUUID uuid.UUID) (*Conn, error)
 		}
 	}
 	if t == nil || p == nil {
-		log.Warnln("vision: not a valid supported TLS connection: %s", reflect.TypeOf(tlsConn))
-		return nil, fmt.Errorf(`failed to use vision, maybe "tls" is not enable and "encryption" is empty`)
+		// Non-RAW transports (XHTTP, WebSocket, gRPC, ...) do not expose the
+		// underlying TLS/REALITY conn internals, so XTLS penetration is not
+		// possible. Vision still works in padding-only mode: the traffic is
+		// padded/filtered as usual, and after the inner TLS handshake both
+		// sides keep relaying raw bytes over the existing stream.
+		log.Debugln("vision: transport is not RAW (no TLS/REALITY penetration), %s", reflect.TypeOf(tlsConn))
+		return c, nil
 	}
 
 	if err := checkTLSVersion(tlsConn); err != nil {
