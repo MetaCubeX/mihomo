@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/contextutils"
 	"github.com/metacubex/mihomo/common/pool"
 )
 
@@ -564,6 +565,11 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 						}
 					}
 					packet.receivedAt = time.Now()
+					// Only one future key state can be negotiated at a time. A
+					// second distinct reset would require the peer to advance again
+					// before this epoch completed; keep the first trigger and drop
+					// that theoretical protocol violation. Retransmissions of the
+					// same reset are acknowledged through the normal ACK state.
 					if c.pendingSoftReset == nil {
 						c.pendingSoftReset = packet
 					}
@@ -887,13 +893,17 @@ func (c *ControlChannel) scheduleWriteDeadlineLocked() {
 		return
 	}
 	c.writeTimer = time.AfterFunc(delay, func() {
-		c.mu.Lock()
-		if c.writeGeneration == writeGeneration &&
-			c.writeDeadlineGeneration == deadlineGeneration && c.writeCancel != nil {
-			cancel()
-		}
-		c.mu.Unlock()
+		c.cancelWriteGeneration(writeGeneration, deadlineGeneration, cancel)
 	})
+}
+
+func (c *ControlChannel) cancelWriteGeneration(writeGeneration, deadlineGeneration uint64, cancel context.CancelFunc) {
+	c.mu.Lock()
+	if c.writeGeneration == writeGeneration &&
+		c.writeDeadlineGeneration == deadlineGeneration && c.writeCancel != nil {
+		cancel()
+	}
+	c.mu.Unlock()
 }
 
 func (c *ControlChannel) finishWrite(generation uint64, cancel context.CancelFunc) {
@@ -1340,7 +1350,7 @@ func interruptConnReadOnDone(ctx context.Context, conn net.Conn, mu *sync.Mutex,
 		return func() {}
 	}
 	done := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() {
+	stop := contextutils.AfterFunc(ctx, func() {
 		mu.Lock()
 		now := time.Now()
 		_ = conn.SetReadDeadline(now)
@@ -1360,7 +1370,7 @@ func interruptConnWriteOnDone(ctx context.Context, conn net.Conn, mu *sync.Mutex
 		return func() {}
 	}
 	done := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() {
+	stop := contextutils.AfterFunc(ctx, func() {
 		mu.Lock()
 		now := time.Now()
 		_ = conn.SetWriteDeadline(now)

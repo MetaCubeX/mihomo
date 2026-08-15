@@ -65,16 +65,6 @@ func ParsePushReply(message string) (*PushReply, error) {
 	return reply, nil
 }
 
-// ParsePushReplyFlexible accepts a PUSH_REPLY that may omit ifconfig, which
-// happens on some authenticated rekeys that only refresh auth-token.
-func ParsePushReplyFlexible(message string) (*PushReply, []byte, error) {
-	reply, err := parsePushReplyInner(message)
-	if err != nil {
-		return nil, nil, err
-	}
-	return reply, nil, nil
-}
-
 func parsePushReplyInner(message string) (*PushReply, error) {
 	message = strings.TrimRight(message, "\x00")
 	if !strings.HasPrefix(message, "PUSH_REPLY") {

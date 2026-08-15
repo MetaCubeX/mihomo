@@ -1249,15 +1249,19 @@ func TestControlWriteDeadlineExtensionIgnoresOldTimer(t *testing.T) {
 		errCh <- err
 	}()
 	<-packetIO.entered
-	if err := conn.SetWriteDeadline(time.Now().Add(20 * time.Millisecond)); err != nil {
+	if err := conn.SetWriteDeadline(time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(5 * time.Millisecond)
 	channel.mu.Lock()
-	time.Sleep(25 * time.Millisecond) // old timer fires and waits on channel.mu
-	channel.writeDeadline = time.Now().Add(time.Hour)
-	channel.scheduleWriteDeadlineLocked()
+	oldWriteGeneration := channel.writeGeneration
+	oldDeadlineGeneration := channel.writeDeadlineGeneration
+	oldCancel := channel.writeCancel
 	channel.mu.Unlock()
+	if err := conn.SetWriteDeadline(time.Now().Add(2 * time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	// Invoke the superseded callback deterministically after the extension.
+	channel.cancelWriteGeneration(oldWriteGeneration, oldDeadlineGeneration, oldCancel)
 	select {
 	case err := <-errCh:
 		t.Fatalf("superseded deadline canceled write: %v", err)

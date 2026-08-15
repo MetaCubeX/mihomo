@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/metacubex/mihomo/common/contextutils"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/tls"
 	"golang.org/x/sync/semaphore"
 )
@@ -21,9 +23,8 @@ import (
 const (
 	ControlRetransmitDelay = time.Second
 
-	// renegotiateTimeout is the maximum time allowed for a TLS renegotiation
-	// (rekey) cycle. OpenVPN servers typically rekey every hour; the
-	// renegotiation itself should complete in seconds.
+	// renegotiateTimeout bounds initial TLS/KM2 progress. AUTH_PENDING and a
+	// continued PUSH_REPLY replace it with their protocol/transition deadline.
 	renegotiateTimeout = 30 * time.Second
 
 	// transitionWindow is how long a retiring (lame-duck) data epoch is
@@ -42,8 +43,11 @@ type Client struct {
 	// controlEstablishedAt anchors AUTH_PENDING like OpenVPN key_state.established.
 	// Only the handshake/control goroutine reads or replaces it.
 	controlEstablishedAt time.Time
-	data                 *DataChannel
-	outboundKey          *DataChannel
+	// rekeyHandshakeTimeout bounds TLS/KM2 progress before the server
+	// advertises a longer AUTH_PENDING or continuation deadline.
+	rekeyHandshakeTimeout time.Duration
+	data                  *DataChannel
+	outboundKey           *DataChannel
 	// outboundStart is when the current outbound-key selection began. It
 	// anchors the no-evidence promotion deadline (auth_deferred_expire)
 	// used by writeDataPacket when peer evidence never arrives.
@@ -95,8 +99,9 @@ type Client struct {
 	// (rekey), where the DataChannel is atomically replaced.
 	dataLock sync.RWMutex
 
-	runCtx context.Context
-	cancel context.CancelFunc
+	runCtx                    context.Context
+	cancel                    context.CancelFunc
+	dataPacketExhaustedLogged atomic.Bool
 
 	writeSem *semaphore.Weighted
 
@@ -139,16 +144,17 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	mux := NewPacketMux(io)
 	go mux.Run(runCtx)
 	client := &Client{
-		config:      config,
-		mux:         mux,
-		control:     NewControlChannel(mux, crypt, local),
-		runCtx:      runCtx,
-		cancel:      cancel,
-		writeSem:    semaphore.NewWeighted(1),
-		authUser:    strings.TrimSpace(config.Username),
-		authPass:    config.Password,
-		dataByKey:   make(map[uint8]*DataChannel),
-		dataChanged: make(chan struct{}),
+		config:                config,
+		mux:                   mux,
+		control:               NewControlChannel(mux, crypt, local),
+		runCtx:                runCtx,
+		cancel:                cancel,
+		writeSem:              semaphore.NewWeighted(1),
+		authUser:              strings.TrimSpace(config.Username),
+		authPass:              config.Password,
+		dataByKey:             make(map[uint8]*DataChannel),
+		dataChanged:           make(chan struct{}),
+		rekeyHandshakeTimeout: renegotiateTimeout,
 	}
 	client.control.transientWriteIsLoss = config.Proto == ProtoUDP
 	client.markSend()
@@ -411,11 +417,12 @@ func (c *Client) consumeRekeyPushFrom(conn pushReadConn, readFinal tokenPushRead
 	// segments; neither is allowed to complete the rekey by itself.
 	if !complete && conn != nil {
 		attemptedFinalRead = true
+		continuationLimit := c.rekeyWaitDeadline(time.Now())
 		deadline := time.Time{}
 		if c.pushContinuationPending {
-			deadline = time.Now().Add(renegotiateTimeout)
+			deadline = continuationLimit
 		}
-		more, newRest, err := readFinal(conn, c.leftoverTLS, deadline, c.controlEstablishedAt)
+		more, newRest, err := readFinal(conn, c.leftoverTLS, deadline, c.controlEstablishedAt, continuationLimit)
 		if err != nil {
 			return err
 		}
@@ -602,6 +609,7 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 		c.outboundStart = c.pendingOutboundStart
 	}
 	c.pendingOutboundStart = time.Time{}
+	c.dataPacketExhaustedLogged.Store(false)
 	c.deferredUntil = time.Time{}
 	if c.pendingDeferredSet && c.pendingDeferredKeyID == newData.keyID {
 		c.deferredUntil = c.pendingDeferredUntil
@@ -754,6 +762,12 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		encrypted, err := outbound.Encrypt(packet)
 		c.dataLock.RUnlock()
 		if err != nil {
+			if errors.Is(err, errDataPacketIDExhausted) {
+				if c.dataPacketExhaustedLogged.CompareAndSwap(false, true) {
+					log.Warnln("[OpenVPN] data packet ID exhausted for key %d; dropping until the peer starts a new key epoch", outbound.keyID)
+				}
+				return nil
+			}
 			return err
 		}
 		// Once encryption completed under the epoch lock, the packet is an
@@ -899,6 +913,11 @@ func (c *Client) watchControl() {
 		}
 		if err := c.renegotiate(packet, retiringExpiry); err != nil {
 			if c.runCtx.Err() == nil {
+				// A soft reset has already advanced the reliable control epoch and
+				// started a new TLS byte stream, so rolling back is not safe. Keep
+				// carrying data on the retiring key while advertised auth/push
+				// deadlines remain valid; after those deadlines, fail closed rather
+				// than leave a half-transitioned control channel alive indefinitely.
 				c.failControl(fmt.Errorf("renegotiate: %w", err))
 			}
 			return
@@ -916,18 +935,16 @@ func (c *Client) failControl(err error) {
 // connection has been established.
 var errRenegotiateNoTLS = errors.New("cannot renegotiate: tls connection not established")
 
-// renegotiate performs a single TLS renegotiation cycle:
+// renegotiate performs a single TLS epoch restart:
 // 1. Send our own soft reset to acknowledge the server's rekey request
-// 2. Renegotiate the TLS session on the existing tlsConn
+// 2. Start a fresh TLS session over the existing reliable ControlConn
 // 3. Exchange fresh key method 2 records and derive new data channel keys
 // 4. Atomically replace c.data with the new DataChannel
 func (c *Client) renegotiate(serverReset *ControlPacket, retiringExpiry time.Time) error {
 	if c.tlsConn.Load() == nil && c.controlConn == nil {
 		return errRenegotiateNoTLS
 	}
-	timeoutCtx, timeoutCancel := context.WithTimeout(c.runCtx, renegotiateTimeout)
-	defer timeoutCancel()
-	renegCtx, cancelReneg := context.WithCancelCause(timeoutCtx)
+	renegCtx, cancelReneg := context.WithCancelCause(c.runCtx)
 	defer cancelReneg(nil)
 	interrupt := c.interruptTLSOnDone(renegCtx)
 	defer interrupt()
@@ -936,6 +953,9 @@ func (c *Client) renegotiate(serverReset *ControlPacket, retiringExpiry time.Tim
 			_ = c.controlConn.SetDeadline(time.Time{})
 		}
 	}()
+	if c.controlConn != nil {
+		_ = c.controlConn.SetDeadline(time.Now().Add(c.rekeyTimeout()))
+	}
 
 	// The watcher captures this absolute deadline as soon as it accepts the
 	// peer's soft reset, before probing the previous TLS stream. Stage that
@@ -969,7 +989,7 @@ func (c *Client) renegotiate(serverReset *ControlPacket, retiringExpiry time.Tim
 	// On UDP, the client soft reset, TLS ClientHello and the TLS control
 	// records are reliable control messages. Retransmit them while the
 	// rekey is in flight; losing any single datagram would otherwise stall
-	// the rekey until the 30s timeout.
+	// the rekey until the current protocol deadline.
 	var retransmitStop func()
 	defer func() {
 		if retransmitStop != nil {
@@ -1034,6 +1054,24 @@ func (c *Client) retransmitControl(ctx context.Context, fail ...context.CancelCa
 	}
 }
 
+func (c *Client) rekeyTimeout() time.Duration {
+	if c.rekeyHandshakeTimeout > 0 {
+		return c.rekeyHandshakeTimeout
+	}
+	return renegotiateTimeout
+}
+
+func (c *Client) rekeyWaitDeadline(now time.Time) time.Time {
+	deadline := now.Add(c.rekeyTimeout())
+	c.dataLock.RLock()
+	retiringExpiry := c.pendingRetiringExpiry
+	c.dataLock.RUnlock()
+	if retiringExpiry.After(deadline) {
+		deadline = retiringExpiry
+	}
+	return deadline
+}
+
 func retryableControlWriteError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary())
@@ -1049,7 +1087,7 @@ func operationContextError(ctx context.Context, fallback error) error {
 // interruptTLSOnDone makes cancellation observable to tls.Conn reads backed
 // by ControlConn, whose packet read otherwise has no context parameter.
 func (c *Client) interruptTLSOnDone(ctx context.Context) func() {
-	stop := context.AfterFunc(ctx, func() {
+	stop := contextutils.AfterFunc(ctx, func() {
 		if conn := c.tlsConn.Load(); conn != nil {
 			_ = conn.SetDeadline(time.Now())
 		}
@@ -1178,7 +1216,7 @@ func (c *Client) readServerKeyMethodFrom(ctx context.Context, conn pushReadConn)
 		}
 		deadline = c.effectiveControlDeadline(deadline)
 		if !deadline.IsZero() {
-			_ = conn.SetReadDeadline(deadline)
+			_ = conn.SetDeadline(deadline)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -1206,6 +1244,7 @@ func (c *Client) readPushReplyFrom(ctx context.Context, conn pushReadConn) (*Pus
 	}
 	tmp := make([]byte, 4096)
 	var readErr error
+	var continuationDeadline time.Time
 	for {
 		if err := controlMessageError(buf); err != nil {
 			return nil, err
@@ -1223,10 +1262,14 @@ func (c *Client) readPushReplyFrom(ctx context.Context, conn pushReadConn) (*Pus
 		if reply != nil {
 			// Intermediate continuation segment(s) or AUTH_PENDING seen but
 			// the final PUSH_REPLY segment has not arrived: accumulate and
-			// keep reading.
+			// keep reading. During rekey this deadline reaches the retiring
+			// key's transition expiry instead of the initial 30-second bound.
 			buf = append([]byte(nil), rest...)
 			c.pushPending = mergePushReply(c.pushPending, reply)
 			c.applyAuthPendingTimeout(reply)
+			if reply.PushContinuation == 2 && continuationDeadline.IsZero() {
+				continuationDeadline = c.rekeyWaitDeadline(time.Now())
+			}
 		}
 		if readErr != nil {
 			return nil, fmt.Errorf("read push reply: %w", readErr)
@@ -1236,8 +1279,11 @@ func (c *Client) readPushReplyFrom(ctx context.Context, conn pushReadConn) (*Pus
 			deadline = d
 		}
 		deadline = c.effectiveControlDeadline(deadline)
+		if !continuationDeadline.IsZero() && (deadline.IsZero() || continuationDeadline.Before(deadline)) {
+			deadline = continuationDeadline
+		}
 		if !deadline.IsZero() {
-			_ = conn.SetReadDeadline(deadline)
+			_ = conn.SetDeadline(deadline)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -1298,6 +1344,10 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 	if len(extended) > 1 {
 		establishedAt = extended[1]
 	}
+	continuationLimit := time.Time{}
+	if len(extended) > 2 {
+		continuationLimit = extended[2]
+	}
 	var authPendingUntil time.Time
 	promoteWaitPolicy := func(reply *PushReply) {
 		if reply == nil {
@@ -1317,7 +1367,10 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 			_ = conn.SetDeadline(deadline)
 		}
 		if reply.PushContinuation == 2 && continuationUntil.IsZero() {
-			continuationUntil = now.Add(renegotiateTimeout)
+			continuationUntil = continuationLimit
+			if continuationUntil.IsZero() {
+				continuationUntil = now.Add(renegotiateTimeout)
+			}
 			waitUntil = continuationUntil
 			if !authPendingUntil.IsZero() && authPendingUntil.Before(waitUntil) {
 				waitUntil = authPendingUntil

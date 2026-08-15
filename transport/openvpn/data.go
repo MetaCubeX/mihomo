@@ -63,9 +63,6 @@ type DataChannel struct {
 
 	mu           sync.Mutex
 	sendPacketID uint32
-	// sendStarted is true once a packet has been encrypted with this key,
-	// i.e. the key was actually used for outbound data at least once.
-	sendStarted bool
 	// recvEvidence latches true once a data packet labeled with this key ID
 	// decrypted successfully. The peer only labels outbound packets with a
 	// key whose authentication completed (OpenVPN tls_pre_encrypt /
@@ -215,9 +212,6 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	d.mu.Lock()
-	d.sendStarted = true
-	d.mu.Unlock()
 	return encrypted, nil
 }
 
@@ -365,23 +359,16 @@ func dataPacketHeaderSize(packet []byte) (int, error) {
 	}
 }
 
+var errDataPacketIDExhausted = errors.New("openvpn data packet id exhausted")
+
 func (d *DataChannel) nextPacketID() (uint32, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.sendPacketID == ^uint32(0) {
-		return 0, errors.New("openvpn data packet id exhausted; rekey required")
+		return 0, errDataPacketIDExhausted
 	}
 	d.sendPacketID++
 	return d.sendPacketID, nil
-}
-
-// Started reports whether this key has encrypted at least one outbound
-// packet. Guarded by d.mu so it is safe to call while another goroutine is
-// encrypting.
-func (d *DataChannel) Started() bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.sendStarted
 }
 
 // MarkPeerActive records that a packet labeled with this key ID decrypted

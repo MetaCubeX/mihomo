@@ -3,10 +3,17 @@ package openvpn
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/binary"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +23,281 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/metacubex/tls"
 )
+
+func newTestTLSServerCertificate(t *testing.T) (tls.Certificate, []byte) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "mihomo-openvpn-test"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return certificate, certPEM
+}
+
+func marshalTestServerKeyMethod(t *testing.T) []byte {
+	t.Helper()
+	var random1, random2 [keySourceRandomSize]byte
+	if _, err := rand.Read(random1[:]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rand.Read(random2[:]); err != nil {
+		t.Fatal(err)
+	}
+	out := binary.BigEndian.AppendUint32(nil, 0)
+	out = append(out, KeyMethod2)
+	out = append(out, random1[:]...)
+	out = append(out, random2[:]...)
+	out = appendOpenVPNString(out, InstallScriptOptionsString(ProtoUDP, CipherAES128GCM, AuthSHA256, ""))
+	out = appendOpenVPNString(out, "")
+	out = appendOpenVPNString(out, "")
+	out = appendOpenVPNString(out, "")
+	return out
+}
+
+func clientKeyMethodComplete(packet []byte) bool {
+	const fixed = 4 + 1 + keySourcePreMasterSize + keySourceRandomSize*2
+	if len(packet) < fixed {
+		return false
+	}
+	offset := fixed
+	for i := 0; i < 4; i++ {
+		if !km2StrComplete(packet, offset) {
+			return false
+		}
+		offset += 2 + int(binary.BigEndian.Uint16(packet[offset:offset+2]))
+	}
+	return true
+}
+
+func readTestClientKeyMethod(conn net.Conn) error {
+	buf := make([]byte, 0, 1024)
+	tmp := make([]byte, 1024)
+	for !clientKeyMethodComplete(buf) {
+		n, err := conn.Read(tmp)
+		if n > 0 {
+			buf = append(buf, tmp[:n]...)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
+	for _, useTLSAuth := range []bool{false, true} {
+		name := "plain"
+		if useTLSAuth {
+			name = "tls-auth"
+		}
+		t.Run(name, func(t *testing.T) {
+			clientIO, serverIO := newMemoryPacketPair()
+			certificate, caPEM := newTestTLSServerCertificate(t)
+			serverKM2 := marshalTestServerKeyMethod(t)
+			config := &ClientConfig{
+				Proto:               ProtoUDP,
+				Cipher:              CipherAES128GCM,
+				Auth:                AuthSHA256,
+				CA:                  caPEM,
+				Username:            "test",
+				TransitionWindow:    time.Minute,
+				TransitionWindowSet: true,
+			}
+			var serverCrypt ControlCryptor
+			if useTLSAuth {
+				staticKey := bytes.Repeat([]byte{0x42}, staticKeySize)
+				config.TLSAuthKey = staticKey
+				config.KeyDirection = "1"
+				var err error
+				serverCrypt, err = NewTLSAuth(staticKey, "0")
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			client, err := NewClient(config, clientIO)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			client.rekeyHandshakeTimeout = 250 * time.Millisecond
+
+			var serverID SessionID
+			copy(serverID[:], []byte("server01"))
+			client.control.SetRemoteSessionID(serverID)
+			server := NewControlChannel(serverIO, serverCrypt, serverID)
+			server.SetRemoteSessionID(client.control.LocalSessionID())
+
+			keys := &KeyMaterial{
+				SendCipherKey: bytes.Repeat([]byte{0x11}, 16),
+				SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+				RecvCipherKey: bytes.Repeat([]byte{0x33}, 16),
+				RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+			}
+			oldData, err := NewDataChannel(keys, CipherAES128GCM, AuthSHA256, 0, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.installDataChannel(oldData)
+			client.push = &PushReply{
+				Prefixes:     []netip.Prefix{netip.MustParsePrefix("10.8.0.2/24")},
+				PeerID:       0,
+				Cipher:       CipherAES128GCM,
+				HasPushReply: true,
+			}
+			client.negotiatedCipher = CipherAES128GCM
+			client.controlConn = NewControlConn(client.control)
+
+			server.AdoptKeyID(1)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if _, err := server.Send(ctx, PControlSoftResetV1, nil); err != nil {
+				t.Fatal(err)
+			}
+			reset, err := client.control.waitForSoftReset(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			retiringExpiry := client.retiringWindowDeadline(reset)
+			client.stageRetiringWindow(retiringExpiry)
+
+			serverErr := make(chan error, 1)
+			go func() {
+				// ControlChannel is a client-side production type. The test peer
+				// consumes the client's reset here, then hands the same reliable
+				// stream to tls.Server for the actual TLS/KM2/PUSH exchange.
+				rawReset, err := serverIO.ReadPacket(ctx)
+				if err != nil {
+					serverErr <- fmt.Errorf("read client soft reset: %w", err)
+					return
+				}
+				clientReset, _, _, err := DecodeControlPacket(serverCrypt, rawReset)
+				if err != nil {
+					serverErr <- fmt.Errorf("decode client soft reset: %w", err)
+					return
+				}
+				if clientReset.Opcode != PControlSoftResetV1 || clientReset.KeyID != 1 || clientReset.MessageID != 0 {
+					serverErr <- fmt.Errorf("unexpected client reset: opcode=%s key=%d message=%d", clientReset.Opcode, clientReset.KeyID, clientReset.MessageID)
+					return
+				}
+				server.mu.Lock()
+				for _, ackID := range clientReset.AckIDs {
+					delete(server.pending, ackID)
+				}
+				server.recvMessage = 1
+				server.ackPending = appendAck(server.ackPending, clientReset.MessageID)
+				server.mu.Unlock()
+				serverConn := NewControlConn(server)
+				serverTLS := tls.Server(serverConn, &tls.Config{Certificates: []tls.Certificate{certificate}})
+				if err := serverTLS.HandshakeContext(ctx); err != nil {
+					serverErr <- fmt.Errorf("server TLS handshake: %w", err)
+					return
+				}
+				if err := readTestClientKeyMethod(serverTLS); err != nil {
+					serverErr <- fmt.Errorf("read client KM2: %w", err)
+					return
+				}
+				if _, err := serverTLS.Write(serverKM2); err != nil {
+					serverErr <- fmt.Errorf("write server KM2: %w", err)
+					return
+				}
+				if _, err := serverTLS.Write([]byte("AUTH_PENDING,timeout 2\x00PUSH_REPLY,push-continuation 2\x00")); err != nil {
+					serverErr <- fmt.Errorf("write deferred push: %w", err)
+					return
+				}
+				time.Sleep(500 * time.Millisecond)
+				if _, err := serverTLS.Write([]byte("PUSH_REPLY,auth-token SESS_ID_rotated,push-continuation 1\x00")); err != nil {
+					serverErr <- fmt.Errorf("write final push: %w", err)
+					return
+				}
+				serverErr <- nil
+			}()
+
+			started := time.Now()
+			if err := client.renegotiate(reset, retiringExpiry); err != nil {
+				select {
+				case serverFailure := <-serverErr:
+					t.Fatalf("client rekey: %v; server: %v", err, serverFailure)
+				default:
+					t.Fatal(err)
+				}
+			}
+			if elapsed := time.Since(started); elapsed < client.rekeyTimeout() {
+				t.Fatalf("rekey completed before deferred auth delay: %v", elapsed)
+			}
+			if err := <-serverErr; err != nil {
+				t.Fatal(err)
+			}
+			client.dataLock.RLock()
+			activeKeyID := client.data.keyID
+			client.dataLock.RUnlock()
+			if activeKeyID != 1 {
+				t.Fatalf("active data key ID = %d, want 1", activeKeyID)
+			}
+			if client.authPass != "SESS_ID_rotated" {
+				t.Fatalf("rotated auth token = %q", client.authPass)
+			}
+		})
+	}
+}
+
+func TestClientDropsExhaustedDataPacketsUntilRekey(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	keys := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x11}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x33}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+	}
+	data, err := NewDataChannel(keys, CipherAES128GCM, AuthSHA256, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data.sendPacketID = ^uint32(0)
+	client.installDataChannel(data)
+	if err := client.WriteIPPacket(context.Background(), []byte{0x45, 0, 0, 20}); err != nil {
+		t.Fatalf("exhausted packet should be dropped without tearing down the client: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := serverIO.ReadPacket(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("exhausted packet reached transport: %v", err)
+	}
+	if client.runCtx.Err() != nil {
+		t.Fatalf("packet exhaustion closed client: %v", client.runCtx.Err())
+	}
+}
 
 // TestRenegotiateFailsWithoutTLS verifies that renegotiate() returns an error
 // (instead of panicking) when no TLS connection has been established.
@@ -2133,6 +2414,27 @@ func (c *chunkConn) SetDeadline(t time.Time) error {
 func (c *chunkConn) SetReadDeadline(t time.Time) error {
 	c.lastDeadline = t
 	return nil
+}
+
+func TestReadTokenPushReplyUsesExtendedContinuationDeadline(t *testing.T) {
+	limit := time.Now().Add(time.Hour)
+	conn := &chunkConn{data: [][]byte{
+		[]byte("PUSH_REPLY,push-continuation 2\x00"),
+		[]byte("PUSH_REPLY,auth-token SESS_ID_final,push-continuation 1\x00"),
+	}}
+	reply, rest, err := readTokenPushReply(conn, nil, time.Time{}, time.Time{}, limit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rest) != 0 || reply == nil || reply.PushContinuation != 1 {
+		t.Fatalf("continued reply = %+v rest=%q", reply, rest)
+	}
+	if conn.lastWriteDeadline != limit || len(conn.operationDeadlines) == 0 || conn.operationDeadlines[0] != limit {
+		t.Fatalf("continuation deadline = write %v operations %v, want %v", conn.lastWriteDeadline, conn.operationDeadlines, limit)
+	}
+	if !conn.lastDeadline.IsZero() {
+		t.Fatalf("temporary read deadline was not cleared: %v", conn.lastDeadline)
+	}
 }
 
 // TestReadTokenPushReplySplitAcrossReads verifies that a token-only PUSH_REPLY
