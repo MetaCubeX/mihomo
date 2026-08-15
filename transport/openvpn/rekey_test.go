@@ -408,11 +408,10 @@ func TestOutboundPromotesAfterAuthDeferredExpire(t *testing.T) {
 	}
 }
 
-// TestAuthPendingTimeoutRespected verifies the review point 1: when the
-// server advertises AUTH_PENDING,timeout N, the no-evidence promotion
-// deadline is extended past the fixed authDeferredExpire window, so mihomo
-// does not promote the new outbound key while the peer is still deferred.
-func TestAuthPendingTimeoutRespected(t *testing.T) {
+// TestAuthPendingTimeoutDoesNotExtendOutboundSelection verifies AUTH_PENDING
+// remains control/deferred-auth metadata and cannot replace the independent
+// outbound auth_deferred_expire selection window.
+func TestAuthPendingTimeoutDoesNotExtendOutboundSelection(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
 	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
@@ -451,7 +450,8 @@ func TestAuthPendingTimeoutRespected(t *testing.T) {
 	client.control.AdoptKeyID(1)
 	client.applyAuthPendingTimeout(&PushReply{AuthPendingTimeout: 300 * time.Second})
 	client.installDataChannel(rekeyed)
-	// Simulate the fixed authDeferredExpire window elapsing (61s).
+	// Simulate the independent auth_deferred_expire selection window elapsing
+	// while the advertised pending deadline remains far in the future.
 	client.dataLock.Lock()
 	client.outboundStart = time.Now().Add(-authDeferredExpire - time.Second)
 	deferred := client.deferredUntil
@@ -460,8 +460,8 @@ func TestAuthPendingTimeoutRespected(t *testing.T) {
 		t.Fatalf("epoch install discarded AUTH_PENDING deadline: %v", deferred)
 	}
 
-	// The advertised deadline (300s) has NOT elapsed, so outbound must stay
-	// on the old key.
+	// AUTH_PENDING remains staged on the active epoch, but it must not extend
+	// old-key transmission beyond the independent selection window.
 	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
 		t.Fatal(err)
 	}
@@ -469,8 +469,95 @@ func TestAuthPendingTimeoutRespected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 0 {
-		t.Fatalf("outbound with pending AUTH_PENDING = %d; want 0 (still lame duck)", keyID)
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 1 {
+		t.Fatalf("AUTH_PENDING extended outbound selection: got key=%d want=1", keyID)
+	}
+}
+
+// TestRetiringWindowAnchoredBeforeInstall verifies TLS/KM2 time is charged to
+// the old key's configured transition lifetime rather than restarting the
+// window when the new data channel is finally installed.
+func TestRetiringWindowAnchoredBeforeInstall(t *testing.T) {
+	clientIO, _ := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{TransitionWindow: 10 * time.Second}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	initial := &DataChannel{keyID: 0}
+	rekeyed := &DataChannel{keyID: 1}
+	client.installDataChannel(initial)
+
+	anchored := client.beginRetiringWindow()
+	if until := time.Until(anchored); until < 9*time.Second || until > 11*time.Second {
+		t.Fatalf("configured transition window not anchored: %v", until)
+	}
+	// Deterministically model four seconds spent in TLS/KM2 before install.
+	expected := anchored.Add(-4 * time.Second)
+	client.dataLock.Lock()
+	client.pendingRetiringExpiry = expected
+	client.dataLock.Unlock()
+	client.installDataChannel(rekeyed)
+	client.dataLock.RLock()
+	got := client.retiringExpiry
+	client.dataLock.RUnlock()
+	if !got.Equal(expected) {
+		t.Fatalf("install restarted transition window: got=%v want=%v", got, expected)
+	}
+}
+
+// TestRetiringExpiryForcesOutboundPromotion verifies the previous epoch is
+// never selected for transmit after its transition lifetime, even when there
+// is no peer evidence and the AUTH_PENDING deadline is still in the future.
+func TestRetiringExpiryForcesOutboundPromotion(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	client, err := NewClient(&ClientConfig{}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	mk := func(fill byte) *KeyMaterial {
+		k := &KeyMaterial{
+			SendCipherKey: make([]byte, 16),
+			SendHMACKey:   make([]byte, maxHMACKeyLength),
+			RecvCipherKey: make([]byte, 16),
+			RecvHMACKey:   make([]byte, maxHMACKeyLength),
+		}
+		for i := range k.SendCipherKey {
+			k.SendCipherKey[i] = fill
+		}
+		copy(k.RecvCipherKey, k.SendCipherKey)
+		for i := range k.SendHMACKey {
+			k.SendHMACKey[i] = fill + 1
+		}
+		copy(k.RecvHMACKey, k.SendHMACKey)
+		return k
+	}
+	initial, err := NewDataChannel(mk(0x11), CipherAES128GCM, AuthSHA256, 7, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rekeyed, err := NewDataChannel(mk(0x22), CipherAES128GCM, AuthSHA256, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.installDataChannel(initial)
+	client.config.TransitionWindow = 10 * time.Second
+	client.installDataChannel(rekeyed)
+	client.dataLock.Lock()
+	client.retiringExpiry = time.Now().Add(-time.Millisecond)
+	client.outboundStart = time.Now() // independent 60s window has not elapsed
+	client.dataLock.Unlock()
+
+	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
+		t.Fatal(err)
+	}
+	pkt, err := serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(pkt[0]); keyID != 1 {
+		t.Fatalf("expired retiring key remained outbound: got=%d want=1", keyID)
 	}
 }
 
@@ -615,10 +702,10 @@ func TestAuthPendingDeadlineAnchoredAtObservation(t *testing.T) {
 
 // TestAuthPendingUpdateCanShortenDeadline verifies a later AUTH_PENDING for
 // the same key replaces, rather than monotonically extends, the staged and
-// active data-epoch deadline, effective control deadline, outbound-key
-// backstop, and token reader's active operation deadline.
+// active data-epoch deadline, effective control deadline, transport deadline,
+// and token reader's active operation deadline.
 func TestAuthPendingUpdateCanShortenDeadline(t *testing.T) {
-	clientIO, serverIO := newMemoryPacketPair()
+	clientIO, _ := newMemoryPacketPair()
 	client, err := NewClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
@@ -657,8 +744,9 @@ func TestAuthPendingUpdateCanShortenDeadline(t *testing.T) {
 			effective, short.authPendingUntil)
 	}
 
-	// Install the matching epoch and verify the same replacement reaches the
-	// outbound-key fallback, not only the pre-install staging fields.
+	// Install the matching epoch and verify the shortened metadata deadline is
+	// transferred to that epoch without affecting the independent outbound
+	// selection window.
 	mk := func(fill byte) *KeyMaterial {
 		k := &KeyMaterial{
 			SendCipherKey: make([]byte, 16),
@@ -692,15 +780,15 @@ func TestAuthPendingUpdateCanShortenDeadline(t *testing.T) {
 		authPendingUntil:   time.Now().Add(-time.Millisecond),
 	})
 	client.installDataChannel(active)
-	if err := client.writeDataPacket(context.Background(), []byte{0x45, 0, 0, 20}, false); err != nil {
-		t.Fatal(err)
+	client.dataLock.RLock()
+	activeDeferred := client.deferredUntil
+	activeOutbound := client.outboundKey
+	client.dataLock.RUnlock()
+	if !activeDeferred.Before(time.Now()) {
+		t.Fatalf("shorter AUTH_PENDING deadline not transferred to active epoch: %v", activeDeferred)
 	}
-	packet, err := serverIO.ReadPacket(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, keyID := parseOpcodeKeyID(packet[0]); keyID != 1 {
-		t.Fatalf("expired shorter AUTH_PENDING did not promote outbound key: got=%d want=1", keyID)
+	if activeOutbound != initial {
+		t.Fatal("AUTH_PENDING metadata changed independent outbound selection")
 	}
 
 	conn := &chunkConn{

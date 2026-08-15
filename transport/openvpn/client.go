@@ -63,11 +63,14 @@ type Client struct {
 	// packets still labeled with the old key ID can be decrypted.
 	retiring *DataChannel
 	// retiringExpiry is when the retiring epoch is no longer accepted,
-	// mirroring OpenVPN's lame-duck transition_window (default 3600s).
-	retiringExpiry time.Time
-	push           *PushReply
-	authUser       string
-	authPass       string
+	// mirroring OpenVPN's lame-duck transition_window. pendingRetiringExpiry
+	// anchors that lifetime when soft reset starts; installDataChannel must not
+	// restart it after TLS/KM2 work has already consumed part of the window.
+	retiringExpiry        time.Time
+	pendingRetiringExpiry time.Time
+	push                  *PushReply
+	authUser              string
+	authPass              string
 	// leftoverTLS is unread TLS control bytes after a key-method-2 record.
 	leftoverTLS []byte
 	// lastRekeyErr is the original renegotiation failure, preserved because
@@ -509,6 +512,22 @@ func (c *Client) effectiveControlDeadline(fallback time.Time) time.Time {
 // this is the correct deadline for promoting without peer evidence.
 const authDeferredExpire = 60 * time.Second
 
+func (c *Client) transitionWindow() time.Duration {
+	window := transitionWindow
+	if c.config != nil && c.config.TransitionWindow > 0 {
+		window = c.config.TransitionWindow
+	}
+	return window
+}
+
+func (c *Client) beginRetiringWindow() time.Time {
+	deadline := time.Now().Add(c.transitionWindow())
+	c.dataLock.Lock()
+	c.pendingRetiringExpiry = deadline
+	c.dataLock.Unlock()
+	return deadline
+}
+
 // installDataChannel records a freshly derived data epoch. Decryption can
 // immediately use the new key (the peer may label packets with it), but the
 // outbound key is deliberately kept on the previous epoch until there is
@@ -558,13 +577,18 @@ func (c *Client) installDataChannel(newData *DataChannel) {
 		c.dataByKey[old.keyID] = old
 	}
 	c.dataByKey[newData.keyID] = newData
-	// The previous epoch is a lame-duck key: keep it only for the OpenVPN
-	// transition_window (default 3600s), then it must not be accepted.
+	// The previous epoch is a lame-duck key: keep it only for the configured
+	// OpenVPN transition_window. Zero selects OpenVPN's 3600-second default.
 	if old != nil {
-		c.retiringExpiry = time.Now().Add(transitionWindow)
+		if !c.pendingRetiringExpiry.IsZero() {
+			c.retiringExpiry = c.pendingRetiringExpiry
+		} else {
+			c.retiringExpiry = time.Now().Add(c.transitionWindow())
+		}
 	} else {
 		c.retiringExpiry = time.Time{}
 	}
+	c.pendingRetiringExpiry = time.Time{}
 	// Keep at most the current and previous epoch.
 	for id := range c.dataByKey {
 		if id != newData.keyID && (old == nil || id != old.keyID) {
@@ -606,16 +630,15 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	// read lock for the common path and only upgrade to the write lock when
 	// the outbound key actually needs promoting, so data-plane reads and
 	// writes do not serialize on every packet.
-	backstop := func() bool {
-		// Never promote before the server-advertised deferred-auth deadline
-		// (AUTH_PENDING,timeout N); otherwise a still-deferred peer would
-		// drop the new-key packets. The advertisement replaces the default and
-		// may shorten it; without one, use OpenVPN's auth_deferred_expire window.
-		deadline := c.outboundStart.Add(authDeferredExpire)
-		if !c.deferredUntil.IsZero() {
-			deadline = c.deferredUntil
-		}
-		return time.Now().After(deadline)
+	// The no-evidence selection window is independent of AUTH_PENDING. The
+	// server-advertised timeout controls deferred authentication/push handling;
+	// it cannot keep a retiring data key selected past auth_deferred_expire.
+	selectionExpired := func() bool {
+		return time.Now().After(c.outboundStart.Add(authDeferredExpire))
+	}
+	retiringExpired := func() bool {
+		return c.retiring != nil && c.outboundKey == c.retiring &&
+			!c.retiringExpiry.IsZero() && time.Now().After(c.retiringExpiry)
 	}
 	c.dataLock.RLock()
 	data := c.data
@@ -629,22 +652,20 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	}
 	// OpenVPN promotes the new key for outbound once the peer's key state
 	// is authenticated (tls_select_encryption_key), which happens within the
-	// new key's auth_deferred_expire window (min(handshake_window,
-	// reneg/2), ~60s with defaults). We cannot observe the peer's auth state
-	// directly, so we use the equivalent evidence: a data packet labeled
-	// with the new key ID decrypted successfully — the peer only labels
-	// outbound packets with a key whose auth completed. As a fallback for
-	// fully one-way tunnels where no evidence ever arrives, promote once the
-	// auth_deferred_expire window elapses, matching OpenVPN's selection
-	// transition — not the old key's destruction time.
-	needPromote := outbound != data && outbound != nil && (data.PeerActive() || backstop())
+	// new key's independent auth_deferred_expire window. We cannot observe
+	// that state directly, so successful new-key traffic is early evidence;
+	// fully one-way tunnels fall back to auth_deferred_expire. The retiring
+	// key's transition expiry is a separate hard upper bound: once expired,
+	// continuing to transmit with it is never valid.
+	needPromote := outbound != data && outbound != nil &&
+		(data.PeerActive() || selectionExpired() || retiringExpired())
 	c.dataLock.RUnlock()
 	if needPromote {
 		// Upgrade to the write lock and re-check: a rekey may have completed
 		// between the read and the write lock.
 		c.dataLock.Lock()
 		if c.outboundKey != c.data && c.outboundKey != nil &&
-			(c.data.PeerActive() || backstop()) {
+			(c.data.PeerActive() || selectionExpired() || retiringExpired()) {
 			c.outboundKey = c.data
 			c.outboundStart = time.Now()
 		}
@@ -823,6 +844,11 @@ func (c *Client) renegotiate(serverReset *ControlPacket) error {
 			_ = c.controlConn.SetDeadline(time.Time{})
 		}
 	}()
+
+	// OpenVPN starts the lame-duck transition window at soft reset, before
+	// TLS and KM2 processing. Anchor it here so data-channel installation
+	// cannot restart the old key's usable lifetime.
+	c.beginRetiringWindow()
 
 	keyID := NextKeyID(c.control.KeyID())
 	if serverReset != nil {

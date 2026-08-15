@@ -56,8 +56,9 @@ type ClientConfig struct {
 
 	PeerInfo map[string]string
 
-	PingInterval time.Duration
-	PingRestart  time.Duration
+	PingInterval     time.Duration
+	PingRestart      time.Duration
+	TransitionWindow time.Duration
 
 	TLSCryptKey []byte
 	TLSAuthKey  []byte
@@ -323,6 +324,9 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	}
 	if c.PingRestart < 0 {
 		return errors.New("openvpn ping restart must be positive")
+	}
+	if c.TransitionWindow < 0 {
+		return errors.New("openvpn transition window must be positive")
 	}
 	return nil
 }
