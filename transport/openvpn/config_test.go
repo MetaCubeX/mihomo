@@ -3,6 +3,7 @@ package openvpn
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 const testCert = `-----BEGIN CERTIFICATE-----
@@ -86,6 +87,14 @@ func TestClientConfigRejectsUnsupportedProto(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unsupported openvpn proto") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClientConfigRejectsNegativeTransitionWindow(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TransitionWindow = -time.Second
+	if err := cfg.Prepare(); err == nil || !strings.Contains(err.Error(), "transition window") {
+		t.Fatalf("negative transition window accepted: %v", err)
 	}
 }
 

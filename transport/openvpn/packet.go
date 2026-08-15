@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type ControlCryptor interface {
@@ -94,6 +95,9 @@ type ControlPacket struct {
 
 	MessageID uint32
 	Payload   []byte
+	// receivedAt is local-only metadata recording when a valid soft reset was
+	// accepted. It is never serialized.
+	receivedAt time.Time
 }
 
 func opcodeKeyID(opcode Opcode, keyID uint8) byte {
@@ -108,7 +112,7 @@ func (p ControlPacket) EncodePlain() ([]byte, error) {
 	if !p.Opcode.IsControl() {
 		return nil, fmt.Errorf("opcode %s is not a control opcode", p.Opcode)
 	}
-	if len(p.AckIDs) > 255 {
+	if len(p.AckIDs) > reliableAckSize {
 		return nil, fmt.Errorf("too many ack ids: %d", len(p.AckIDs))
 	}
 
@@ -143,6 +147,9 @@ func DecodeControlPlain(opcode Opcode, plain []byte) (ackIDs []uint32, ackRemote
 		return nil, SessionID{}, 0, nil, errors.New("control payload too short")
 	}
 	ackLen := int(plain[0])
+	if ackLen > reliableAckSize {
+		return nil, SessionID{}, 0, nil, fmt.Errorf("control ack array exceeds %d entries", reliableAckSize)
+	}
 	offset := 1
 	if len(plain) < offset+ackLen*4 {
 		return nil, SessionID{}, 0, nil, errors.New("control ack array truncated")

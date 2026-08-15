@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
@@ -87,15 +88,28 @@ func (r *KeyMethod2Record) MarshalClient() ([]byte, error) {
 	return out, nil
 }
 
+var errKeyMethodPacketTooShort = errors.New("key method 2 packet too short")
+
 func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
+	record, _, err := ParseServerKeyMethod2RecordConsumed(packet)
+	return record, err
+}
+
+// ParseServerKeyMethod2RecordConsumed parses a server key-method-2 record and
+// reports how many bytes were consumed so following TLS control data
+// (PUSH_REPLY / AUTH_FAILED) can be preserved.
+//
+// OpenVPN 2.6 may omit the optional username, password and peer-info strings
+// after the mandatory options string.
+func ParseServerKeyMethod2RecordConsumed(packet []byte) (*KeyMethod2Record, int, error) {
 	if len(packet) < 4+1+keySourceRandomSize*2 {
-		return nil, errors.New("key method 2 packet too short")
+		return nil, 0, errKeyMethodPacketTooShort
 	}
 	if binary.BigEndian.Uint32(packet[:4]) != 0 {
-		return nil, errors.New("invalid key method 2 prefix")
+		return nil, 0, errors.New("invalid key method 2 prefix")
 	}
 	if packet[4]&0x0f != KeyMethod2 {
-		return nil, fmt.Errorf("unsupported key method %d", packet[4])
+		return nil, 0, fmt.Errorf("unsupported key method %d", packet[4])
 	}
 	offset := 5
 	record := &KeyMethod2Record{}
@@ -107,12 +121,91 @@ func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
 	var err error
 	record.Options, offset, err = readOpenVPNString(packet, offset)
 	if err != nil {
-		return nil, fmt.Errorf("read options: %w", err)
+		return nil, 0, fmt.Errorf("read options: %w", err)
 	}
-	record.Username, offset, _ = readOpenVPNString(packet, offset)
-	record.Password, offset, _ = readOpenVPNString(packet, offset)
-	record.PeerInfo, _, _ = readOpenVPNString(packet, offset)
-	return record, nil
+	// Username / password / peer-info are written by OpenVPN 2.6 even when
+	// empty. Only stop early when the remaining bytes are a following TLS
+	// control message (PUSH_REPLY / AUTH_FAILED). A truncated length/value
+	// is not a shortened record — the caller must keep reading.
+	if record.Username, offset, err = readKM2TrailingString(packet, offset); err != nil {
+		return nil, 0, err
+	}
+	if record.Password, offset, err = readKM2TrailingString(packet, offset); err != nil {
+		return nil, 0, err
+	}
+	if record.PeerInfo, offset, err = readKM2TrailingString(packet, offset); err != nil {
+		return nil, 0, err
+	}
+	return record, offset, nil
+}
+
+func readKM2TrailingString(packet []byte, offset int) (string, int, error) {
+	s, next, err := readOpenVPNString(packet, offset)
+	if err == nil {
+		return s, next, nil
+	}
+	if errors.Is(err, ioStringEOF) && looksLikeFollowingTLSControl(packet[offset:]) {
+		return "", offset, nil
+	}
+	return "", offset, err
+}
+
+// RecordComplete reports whether a full key-method-2 server record is present,
+// and returns the consumed offset. It requires all four strings (OpenVPN 2.6
+// writes them even when empty) so a standard record fragmented across TLS
+// reads is not accepted prematurely.
+func RecordComplete(packet []byte) (complete bool, consumed int) {
+	if len(packet) < 4+1+keySourceRandomSize*2 {
+		return false, 0
+	}
+	if binary.BigEndian.Uint32(packet[:4]) != 0 {
+		return false, 0
+	}
+	if packet[4]&0x0f != KeyMethod2 {
+		return false, 0
+	}
+	offset := 5 + keySourceRandomSize*2
+	if !km2StrComplete(packet, offset) {
+		return false, 0
+	}
+	offset += 2 + int(binary.BigEndian.Uint16(packet[offset:offset+2]))
+	for i := 0; i < 3; i++ {
+		if !km2StrComplete(packet, offset) {
+			return false, 0
+		}
+		offset += 2 + int(binary.BigEndian.Uint16(packet[offset:offset+2]))
+	}
+	return true, offset
+}
+
+func km2StrComplete(packet []byte, offset int) bool {
+	if offset+2 > len(packet) {
+		return false
+	}
+	size := int(binary.BigEndian.Uint16(packet[offset : offset+2]))
+	if size == 0 {
+		return true
+	}
+	return offset+2+size <= len(packet)
+}
+
+func looksLikeFollowingTLSControl(b []byte) bool {
+	for len(b) > 0 && b[0] == 0 {
+		b = b[1:]
+	}
+	if len(b) == 0 {
+		return false
+	}
+	return bytes.HasPrefix(b, []byte("PUSH_REPLY")) ||
+		bytes.HasPrefix(b, []byte("AUTH_FAILED")) ||
+		bytes.HasPrefix(b, []byte("PUSH_REQUEST")) ||
+		bytes.HasPrefix(b, []byte("AUTH_PENDING")) ||
+		bytes.HasPrefix(b, []byte("INFO_PRE")) ||
+		bytes.HasPrefix(b, []byte("INFO")) ||
+		bytes.HasPrefix(b, []byte("RESTART")) ||
+		bytes.HasPrefix(b, []byte("HALT")) ||
+		bytes.HasPrefix(b, []byte("EXIT")) ||
+		bytes.HasPrefix(b, []byte("CR_RESPONSE"))
 }
 
 func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID, cipherKeyLen int) (*KeyMaterial, error) {
@@ -192,7 +285,11 @@ func InstallScriptPeerInfo(cipher string, dataCiphers []string, compLZO string, 
 		}
 		ivCiphers = strings.Join(normalized, ":")
 	}
-	info := fmt.Sprintf("IV_VER=%s\nIV_PROTO=6\n%sIV_CIPHERS=%s\n", ivVer, lzo, ivCiphers)
+	// IV_PROTO advertises DATA_V2 (bit 1), REQUEST_PUSH (bit 2) and
+	// AUTH_PENDING keyword support (bit 4). The parser supports
+	// AUTH_PENDING,timeout N, so capability and behavior must agree.
+	const ivProto = (1 << 1) | (1 << 2) | (1 << 4) // 22
+	info := fmt.Sprintf("IV_VER=%s\nIV_PROTO=%d\n%sIV_CIPHERS=%s\n", ivVer, ivProto, lzo, ivCiphers)
 	// Append user-defined peer-info entries (e.g. IV_HWADDR, UV_*) after the
 	// built-in fields. Keys are sorted so the output is deterministic.
 	keys := make([]string, 0, len(peerInfo))
@@ -232,19 +329,18 @@ func readOpenVPNString(packet []byte, offset int) (string, int, error) {
 		return "", offset, ioStringEOF
 	}
 	size := int(binary.BigEndian.Uint16(packet[offset : offset+2]))
-	offset += 2
 	if size == 0 {
-		return "", offset, nil
+		return "", offset + 2, nil
 	}
-	if offset+size > len(packet) {
+	if offset+2+size > len(packet) {
+		// Do not consume the length prefix: leftover bytes may be PUSH_REPLY.
 		return "", offset, ioStringEOF
 	}
-	raw := packet[offset : offset+size]
-	offset += size
+	raw := packet[offset+2 : offset+2+size]
 	if raw[len(raw)-1] == 0 {
 		raw = raw[:len(raw)-1]
 	}
-	return string(raw), offset, nil
+	return string(raw), offset + 2 + size, nil
 }
 
 var ioStringEOF = errors.New("openvpn string truncated")

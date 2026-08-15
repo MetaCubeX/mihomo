@@ -131,7 +131,7 @@ func TestParsePushReplyNcpCiphers(t *testing.T) {
 
 func TestInstallScriptPeerInfoWithDataCiphers(t *testing.T) {
 	info := InstallScriptPeerInfo(CipherAES128GCM, []string{CipherAES256GCM, CipherAES128GCM, CipherChaCha20Poly1305}, "", nil)
-	want := "IV_VER=mihomo-openvpn\nIV_PROTO=6\nIV_CIPHERS=AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305\n"
+	want := "IV_VER=mihomo-openvpn\nIV_PROTO=22\nIV_CIPHERS=AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305\n"
 	if info != want {
 		t.Fatalf("unexpected peer-info:\n got %q\nwant %q", info, want)
 	}

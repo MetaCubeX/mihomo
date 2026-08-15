@@ -94,7 +94,7 @@ func TestInstallScriptOptionsCBCSHA1(t *testing.T) {
 func TestInstallScriptPeerInfo(t *testing.T) {
 	// Without user-defined peer-info the output is unchanged (backward compatible).
 	base := InstallScriptPeerInfo(CipherAES128GCM, nil, "", nil)
-	if base != "IV_VER=mihomo-openvpn\nIV_PROTO=6\nIV_CIPHERS=AES-128-GCM\n" {
+	if base != "IV_VER=mihomo-openvpn\nIV_PROTO=22\nIV_CIPHERS=AES-128-GCM\n" {
 		t.Fatalf("unexpected default peer-info: %q", base)
 	}
 
@@ -116,7 +116,7 @@ func TestInstallScriptPeerInfo(t *testing.T) {
 		"IV_LZO":     "0",
 		"IV_CIPHERS": "AES-256-CBC",
 	})
-	want = "IV_VER=custom-client/1.0\nIV_PROTO=6\nIV_LZO=1\nIV_CIPHERS=AES-128-GCM\n"
+	want = "IV_VER=custom-client/1.0\nIV_PROTO=22\nIV_LZO=1\nIV_CIPHERS=AES-128-GCM\n"
 	if overridden != want {
 		t.Fatalf("unexpected overridden peer-info:\n got %q\nwant %q", overridden, want)
 	}
@@ -142,5 +142,30 @@ func TestParseServerKeyMethod2Record(t *testing.T) {
 	}
 	if record.Sources.Server.Random1[0] != 1 || record.Sources.Server.Random2[0] != 2 {
 		t.Fatalf("unexpected server randoms")
+	}
+}
+
+func TestParseServerKeyMethod2RecordShortenedPreservesTail(t *testing.T) {
+	var packet []byte
+	packet = binary.BigEndian.AppendUint32(packet, 0)
+	packet = append(packet, KeyMethod2)
+	packet = append(packet, bytes.Repeat([]byte{1}, keySourceRandomSize)...)
+	packet = append(packet, bytes.Repeat([]byte{2}, keySourceRandomSize)...)
+	packet = appendOpenVPNString(packet, "server-options")
+	packet = append(packet, []byte("PUSH_REPLY,ifconfig 10.8.0.2 255.255.255.0\x00")...)
+
+	record, consumed, err := ParseServerKeyMethod2RecordConsumed(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Options != "server-options" {
+		t.Fatalf("options = %q", record.Options)
+	}
+	if record.Username != "" || record.Password != "" || record.PeerInfo != "" {
+		t.Fatalf("optional strings should be empty: %#v", record)
+	}
+	tail := packet[consumed:]
+	if !bytes.HasPrefix(tail, []byte("PUSH_REPLY")) {
+		t.Fatalf("expected leftover PUSH_REPLY, got %q", tail)
 	}
 }

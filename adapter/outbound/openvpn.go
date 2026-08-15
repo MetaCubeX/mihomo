@@ -61,6 +61,7 @@ type OpenVPNOption struct {
 	PeerInfo           map[string]string `proxy:"peer-info,omitempty"`
 	Ping               int               `proxy:"ping,omitempty"`
 	PingRestart        int               `proxy:"ping-restart,omitempty"`
+	TranWindow         *int              `proxy:"tran-window,omitempty"`
 	HandshakeTimeout   int               `proxy:"handshake-timeout,omitempty"`
 	MTU                int               `proxy:"mtu,omitempty"`
 	UDP                bool              `proxy:"udp,omitempty"`
@@ -71,36 +72,55 @@ type OpenVPNOption struct {
 	Dns              []string `proxy:"dns,omitempty"`
 }
 
+func openVPNTransitionWindow(value *int) (time.Duration, bool, error) {
+	if value == nil {
+		return 0, false, nil
+	}
+	if *value < 0 {
+		return 0, false, errors.New("openvpn tran-window must be non-negative")
+	}
+	if int64(*value) > int64((time.Duration(1<<63-1))/time.Second) {
+		return 0, false, errors.New("openvpn tran-window is too large")
+	}
+	return time.Duration(*value) * time.Second, true, nil
+}
+
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 	if option.HandshakeTimeout < 0 {
 		return nil, errors.New("openvpn handshake timeout must be non-negative")
+	}
+	transitionWindow, transitionWindowSet, err := openVPNTransitionWindow(option.TranWindow)
+	if err != nil {
+		return nil, err
 	}
 	option.IPStack.normalize()
 	if err := option.IPStack.validate(); err != nil {
 		return nil, err
 	}
 	cfg := &ovpn.ClientConfig{
-		RemoteHost:     option.Server,
-		RemotePort:     uint16(option.Port),
-		Proto:          option.Proto,
-		Dev:            option.Dev,
-		Cipher:         option.Cipher,
-		DataCiphers:    option.DataCiphers,
-		FallbackCipher: option.DataCipherFallback,
-		Auth:           option.Auth,
-		CompLZO:        option.CompLZO,
-		CA:             []byte(option.CA),
-		Cert:           []byte(option.Cert),
-		Key:            []byte(option.Key),
-		TLSAuth:        []byte(option.TLSAuth),
-		KeyDirection:   option.KeyDirection,
-		TLSCrypt:       []byte(option.TLSCrypt),
-		TLSCryptV2:     []byte(option.TLSCryptV2),
-		Username:       option.Username,
-		Password:       option.Password,
-		PeerInfo:       option.PeerInfo,
-		PingInterval:   time.Duration(option.Ping) * time.Second,
-		PingRestart:    time.Duration(option.PingRestart) * time.Second,
+		RemoteHost:          option.Server,
+		RemotePort:          uint16(option.Port),
+		Proto:               option.Proto,
+		Dev:                 option.Dev,
+		Cipher:              option.Cipher,
+		DataCiphers:         option.DataCiphers,
+		FallbackCipher:      option.DataCipherFallback,
+		Auth:                option.Auth,
+		CompLZO:             option.CompLZO,
+		CA:                  []byte(option.CA),
+		Cert:                []byte(option.Cert),
+		Key:                 []byte(option.Key),
+		TLSAuth:             []byte(option.TLSAuth),
+		KeyDirection:        option.KeyDirection,
+		TLSCrypt:            []byte(option.TLSCrypt),
+		TLSCryptV2:          []byte(option.TLSCryptV2),
+		Username:            option.Username,
+		Password:            option.Password,
+		PeerInfo:            option.PeerInfo,
+		PingInterval:        time.Duration(option.Ping) * time.Second,
+		PingRestart:         time.Duration(option.PingRestart) * time.Second,
+		TransitionWindow:    transitionWindow,
+		TransitionWindowSet: transitionWindowSet,
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
