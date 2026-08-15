@@ -474,39 +474,48 @@ func TestAuthPendingTimeoutRespected(t *testing.T) {
 	}
 }
 
+// TestStandaloneAuthPendingKeepsTokenProbeShort verifies dynamically observed
+// AUTH_PENDING updates the transport deadline but does not hold data-epoch
+// installation until the full advertised timeout. A later token update is
+// consumed by the established parked-TLS watcher.
+func TestStandaloneAuthPendingKeepsTokenProbeShort(t *testing.T) {
+	conn := &chunkConn{
+		data: [][]byte{
+			[]byte("AUTH_PENDING,timeout 60\x00"),
+			nil,
+			[]byte("PUSH_REPLY,auth-token SESS_ID_late\x00"),
+		},
+		errs: []error{nil, os.ErrDeadlineExceeded, nil},
+	}
+	reply, rest, err := readTokenPushReply(conn, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conn.idx != 2 {
+		t.Fatalf("standalone AUTH_PENDING waited for optional final push: reads=%d", conn.idx)
+	}
+	if reply == nil || reply.AuthPendingTimeout != 60*time.Second || reply.HasPushReply {
+		t.Fatalf("standalone AUTH_PENDING metadata lost: %#v", reply)
+	}
+	if len(rest) != 0 {
+		t.Fatalf("unexpected rest: %q", rest)
+	}
+	if len(conn.operationDeadlines) == 0 ||
+		time.Until(conn.operationDeadlines[0]) < 50*time.Second {
+		t.Fatalf("AUTH_PENDING transport deadline not propagated: %v", conn.operationDeadlines)
+	}
+}
+
 // TestTakePushReplyContinuation verifies the review point 2: an intermediate
 // push-continuation 2 segment is not a complete reply, and the final segment
 // merges repeatable fields (routes / dns) across segments in wire order.
 // TestStandaloneAuthPendingDoesNotCompletePush verifies AUTH_PENDING updates
 // timeout state but does not complete PUSH parsing before a final PUSH_REPLY.
-// TestReadTokenPushReplyPromotesDynamicWait verifies state discovered inside
-// the reader (not pre-buffered) upgrades the active wait policy across a
-// short timeout until the final PUSH_REPLY arrives.
+// TestReadTokenPushReplyPromotesDynamicWait verifies dynamically discovered
+// push-continuation state upgrades the active wait policy across a short
+// timeout until the final segment arrives. Standalone AUTH_PENDING is covered
+// separately: it updates deadline metadata without extending the token probe.
 func TestReadTokenPushReplyPromotesDynamicWait(t *testing.T) {
-	t.Run("AUTH_PENDING", func(t *testing.T) {
-		conn := &chunkConn{
-			data: [][]byte{
-				[]byte("AUTH_PENDING,timeout 1\x00"),
-				nil,
-				[]byte("PUSH_REPLY,auth-token SESS_ID_dynamic\x00"),
-			},
-			errs: []error{nil, os.ErrDeadlineExceeded, nil},
-		}
-		reply, rest, err := readTokenPushReply(conn, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if conn.idx != 3 {
-			t.Fatalf("reader returned before final PUSH_REPLY: reads=%d", conn.idx)
-		}
-		if reply == nil || reply.AuthTokenPass != "SESS_ID_dynamic" || reply.AuthPendingTimeout != time.Second {
-			t.Fatalf("dynamic AUTH_PENDING/final state lost: %#v", reply)
-		}
-		if len(rest) != 0 {
-			t.Fatalf("unexpected rest: %q", rest)
-		}
-	})
-
 	t.Run("push-continuation", func(t *testing.T) {
 		conn := &chunkConn{
 			data: [][]byte{

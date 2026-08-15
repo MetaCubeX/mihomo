@@ -380,8 +380,8 @@ func (c *Client) consumeRekeyPushFrom(conn pushReadConn, readFinal tokenPushRead
 	// segments; neither is allowed to complete the rekey by itself.
 	if !complete && conn != nil {
 		attemptedFinalRead = true
-		deadline := c.effectiveControlDeadline(time.Time{})
-		if deadline.IsZero() && c.pushContinuationPending {
+		deadline := time.Time{}
+		if c.pushContinuationPending {
 			deadline = time.Now().Add(renegotiateTimeout)
 		}
 		more, newRest, err := readFinal(conn, c.leftoverTLS, deadline)
@@ -1075,11 +1075,12 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 	tmp := make([]byte, 4096)
 	var acc *PushReply
 	var waitUntil time.Time
+	var continuationUntil time.Time
 	if len(extended) > 0 {
-		waitUntil = extended[0]
+		continuationUntil = extended[0]
+		waitUntil = continuationUntil
 	}
 	var authPendingUntil time.Time
-	var continuationUntil time.Time
 	promoteWaitPolicy := func(reply *PushReply) {
 		if reply == nil {
 			return
@@ -1091,19 +1092,21 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 				deadline = now.Add(reply.AuthPendingTimeout)
 				reply.authPendingUntil = deadline
 			}
-			// AUTH_PENDING replaces the current deferred-auth timeout, even when
-			// it is shorter. A continuation deadline is an additional upper bound;
-			// the reader waits only until the earlier active operation deadline.
+			// AUTH_PENDING replaces the deferred-auth/transport deadline, even
+			// when shorter, but it does not make the optional token probe wait out
+			// that entire window. Without an unfinished continuation, return after
+			// the normal short probe so the new receive epoch can be installed.
 			authPendingUntil = deadline
-			waitUntil = deadline
-			if !continuationUntil.IsZero() && continuationUntil.Before(waitUntil) {
+			if !continuationUntil.IsZero() {
 				waitUntil = continuationUntil
+				if authPendingUntil.Before(waitUntil) {
+					waitUntil = authPendingUntil
+				}
 			}
 			// ControlConn.Read ACKs each accepted reliable control packet before
-			// exposing its TLS payload. Extend both directions immediately: only
-			// changing the read side leaves those ACK writes on the expired rekey
-			// deadline and prevents the final payload from reaching TLS.
-			_ = conn.SetDeadline(waitUntil)
+			// exposing its TLS payload. Apply the AUTH_PENDING deadline itself in
+			// both directions; waitUntil remains only the local probe policy.
+			_ = conn.SetDeadline(deadline)
 		}
 		if reply.PushContinuation == 2 && continuationUntil.IsZero() {
 			continuationUntil = now.Add(renegotiateTimeout)
@@ -1162,19 +1165,19 @@ func readTokenPushReply(conn pushReadConn, leftover []byte, extended ...time.Tim
 		if err != nil {
 			var netErr net.Error
 			if errors.As(err, &netErr) && netErr.Timeout() {
-				if !waitUntil.IsZero() && time.Now().Before(waitUntil) {
+				if !continuationUntil.IsZero() && time.Now().Before(waitUntil) {
 					continue
 				}
 				return acc, buf, nil
 			}
 			return nil, buf, err
 		}
-		// Normal token refresh is a short probe. Explicit AUTH_PENDING uses
-		// waitUntil and continues until the server-advertised deadline.
-		if waitUntil.IsZero() && attempt+1 >= 2 {
+		// Normal token refresh, including standalone AUTH_PENDING metadata, is
+		// a short probe. Only an unfinished continuation waits until waitUntil.
+		if continuationUntil.IsZero() && attempt+1 >= 2 {
 			return acc, buf, nil
 		}
-		if !waitUntil.IsZero() && !time.Now().Before(waitUntil) {
+		if !continuationUntil.IsZero() && !time.Now().Before(waitUntil) {
 			return acc, buf, nil
 		}
 	}
