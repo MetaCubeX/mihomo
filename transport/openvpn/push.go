@@ -1,10 +1,13 @@
 package openvpn
 
 import (
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/netip"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const PushRequest = "PUSH_REQUEST"
@@ -25,16 +28,52 @@ type PushReply struct {
 	// Cipher is the single cipher pushed by the server via the "cipher"
 	// option (legacy or fallback).
 	Cipher string
+
+	// AuthToken is the most recently pushed auth-token / auth-token-user
+	// pair. Empty when the server does not rotate credentials.
+	AuthTokenUser string
+	AuthTokenPass string
+
+	// PushContinuation mirrors OpenVPN's "push-continuation N": 2 marks an
+	// intermediate multi-segment PUSH_REPLY, 1 marks the final segment, 0
+	// means a single segment.
+	PushContinuation int
+	// HasPushReply distinguishes a parsed PUSH_REPLY from standalone control
+	// metadata such as AUTH_PENDING carried in the same accumulator.
+	HasPushReply bool
+
+	// AuthPendingTimeout is the deferred-auth window advertised by
+	// AUTH_PENDING,timeout N. Zero when no AUTH_PENDING was seen.
+	AuthPendingTimeout time.Duration
+	// authPendingUntil anchors that window to the TLS key establishment time,
+	// matching OpenVPN key_state.established and preventing delayed messages or
+	// later final PUSH_REPLY segments from restarting it.
+	authPendingUntil time.Time
+	// hasAuthPending distinguishes an explicit timeout of zero from no
+	// AUTH_PENDING message.
+	hasAuthPending bool
 }
 
 func ParsePushReply(message string) (*PushReply, error) {
+	reply, err := parsePushReplyInner(message)
+	if err != nil {
+		return nil, err
+	}
+	if len(reply.Prefixes) == 0 {
+		return nil, fmt.Errorf("openvpn push reply missing ifconfig address")
+	}
+	return reply, nil
+}
+
+func parsePushReplyInner(message string) (*PushReply, error) {
 	message = strings.TrimRight(message, "\x00")
 	if !strings.HasPrefix(message, "PUSH_REPLY") {
 		return nil, fmt.Errorf("unexpected openvpn push message %q", message)
 	}
 	reply := &PushReply{
-		Raw:    message,
-		PeerID: PeerIDUnset,
+		Raw:          message,
+		PeerID:       PeerIDUnset,
+		HasPushReply: true,
 	}
 	for _, option := range splitPushOptions(message) {
 		fields := strings.Fields(option)
@@ -93,8 +132,6 @@ func ParsePushReply(message string) (*PushReply, error) {
 		case "block-ipv6":
 			reply.BlockIPv6 = true
 		case "data-ciphers", "ncp-ciphers":
-			// "data-ciphers" (OpenVPN 2.5+) or "ncp-ciphers" (2.4 legacy name).
-			// Value is a colon-separated list of cipher names.
 			if len(fields) >= 2 {
 				for _, c := range strings.Split(fields[1], ":") {
 					c = strings.TrimSpace(c)
@@ -104,16 +141,60 @@ func ParsePushReply(message string) (*PushReply, error) {
 				}
 			}
 		case "cipher":
-			// Legacy single cipher push, or fallback cipher.
 			if len(fields) >= 2 {
 				reply.Cipher = strings.TrimSpace(fields[1])
 			}
+		case "auth-token":
+			if len(fields) >= 2 {
+				reply.AuthTokenPass = strings.TrimSpace(fields[1])
+			}
+		case "auth-token-user":
+			if len(fields) >= 2 {
+				user, err := decodeAuthTokenUser(fields[1])
+				if err != nil {
+					return nil, fmt.Errorf("decode auth-token-user: %w", err)
+				}
+				reply.AuthTokenUser = user
+			}
+		case "push-continuation":
+			if len(fields) != 2 {
+				return nil, errors.New("invalid push-continuation")
+			}
+			n, err := strconv.Atoi(fields[1])
+			if err != nil || n < 0 || n > 2 {
+				return nil, fmt.Errorf("invalid push-continuation %q", fields[1])
+			}
+			reply.PushContinuation = n
 		}
 	}
-	if len(reply.Prefixes) == 0 {
-		return nil, fmt.Errorf("openvpn push reply missing ifconfig address")
-	}
 	return reply, nil
+}
+
+func (p *PushReply) AuthToken() (user, pass string, ok bool) {
+	if p == nil || p.AuthTokenPass == "" {
+		return "", "", false
+	}
+	return p.AuthTokenUser, p.AuthTokenPass, true
+}
+
+func decodeAuthTokenUser(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	decoded, err := decodeBase64Auth(raw)
+	if err != nil {
+		return "", err
+	}
+	return decoded, nil
+}
+
+func decodeBase64Auth(raw string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		data, err = base64.RawStdEncoding.DecodeString(raw)
+		if err != nil {
+			return "", err
+		}
+	}
+	return string(data), nil
 }
 
 func splitPushOptions(message string) []string {

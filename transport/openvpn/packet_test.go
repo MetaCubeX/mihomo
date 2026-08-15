@@ -157,3 +157,18 @@ func TestAckPacketRejectsTrailingPayload(t *testing.T) {
 		t.Fatal("expected trailing payload error")
 	}
 }
+
+func TestControlPacketRejectsOversizedACKArray(t *testing.T) {
+	packet := ControlPacket{
+		Opcode: PAckV1,
+		AckIDs: make([]uint32, reliableAckSize+1),
+	}
+	if _, err := packet.EncodePlain(); err == nil {
+		t.Fatal("oversized ACK array encoded")
+	}
+	plain := make([]byte, 1+(reliableAckSize+1)*4+SessionIDSize)
+	plain[0] = reliableAckSize + 1
+	if _, _, _, _, err := DecodeControlPlain(PAckV1, plain); err == nil {
+		t.Fatal("oversized ACK array decoded")
+	}
+}

@@ -63,6 +63,15 @@ type DataChannel struct {
 
 	mu           sync.Mutex
 	sendPacketID uint32
+	// recvEvidence latches true once a data packet labeled with this key ID
+	// decrypted successfully. The peer only labels outbound packets with a
+	// key whose authentication completed (OpenVPN tls_pre_encrypt /
+	// handle_data_channel_packet require KS_AUTH_TRUE), so this is the
+	// reliable signal that this epoch has been activated by the peer and can
+	// replace the lame-duck for outbound traffic. Stored per-epoch so a
+	// back-to-back rekey cannot attribute an older epoch's evidence to a
+	// newer key. Guarded by d.mu.
+	recvEvidence bool
 	recvHighest  uint32
 	recvWindow   uint64
 	recvSeen     bool
@@ -72,7 +81,7 @@ type DataChannel struct {
 	randOffset int
 }
 
-func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32) (*DataChannel, error) {
+func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32, keyID uint8) (*DataChannel, error) {
 	if keys == nil {
 		return nil, errors.New("nil openvpn key material")
 	}
@@ -91,8 +100,9 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 		d := &DataChannel{
 			sendAEAD: send,
 			recvAEAD: recv,
+			keyID:    keyID & KeyIDMask,
 			peerID:   peerID,
-			header:   dataHeader(peerID, 0),
+			header:   dataHeader(peerID, keyID),
 		}
 		copy(d.sendImplicitIV[4:], keys.SendHMACKey[:DataChannelIVSize-4])
 		copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:DataChannelIVSize-4])
@@ -121,8 +131,9 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 		recvHMACKey: append([]byte(nil), keys.RecvHMACKey[:authSize]...),
 		authHash:    authHash,
 		authSize:    authSize,
+		keyID:       keyID & KeyIDMask,
 		peerID:      peerID,
-		header:      dataHeader(peerID, 0),
+		header:      dataHeader(peerID, keyID),
 	}
 	d.sendMACPool.New = func() any {
 		return hmac.New(d.authHash, d.sendHMACKey)
@@ -188,11 +199,20 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 		return nil, errors.New("nil openvpn data channel")
 	}
 
-	packetID := d.nextPacketID()
-	if d.sendAEAD != nil {
-		return d.encryptAEAD(packet, packetID)
+	packetID, err := d.nextPacketID()
+	if err != nil {
+		return nil, err
 	}
-	return d.encryptCBC(packet, packetID)
+	var encrypted []byte
+	if d.sendAEAD != nil {
+		encrypted, err = d.encryptAEAD(packet, packetID)
+	} else {
+		encrypted, err = d.encryptCBC(packet, packetID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return encrypted, nil
 }
 
 func (d *DataChannel) encryptAEAD(packet []byte, packetID uint32) ([]byte, error) {
@@ -235,7 +255,7 @@ func (d *DataChannel) encryptCBC(packet []byte, packetID uint32) ([]byte, error)
 		ciphertext[i] = byte(padding)
 	}
 	cipher.NewCBCEncrypter(d.sendBlock, iv).CryptBlocks(ciphertext, ciphertext)
-	_ = d.hmacAppend(&d.sendMACPool, authenticated, out[len(header):len(header)])
+	d.hmacCopy(&d.sendMACPool, authenticated, out[len(header):])
 	return out, nil
 }
 
@@ -339,11 +359,37 @@ func dataPacketHeaderSize(packet []byte) (int, error) {
 	}
 }
 
-func (d *DataChannel) nextPacketID() uint32 {
+const dataPacketIDRekeyThreshold = uint32(0xFF000000)
+
+var errDataPacketIDExhausted = errors.New("openvpn data packet id reached rekey threshold")
+
+func (d *DataChannel) nextPacketID() (uint32, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	// OpenVPN starts a soft reset once packet_id_close_to_wrapping reaches
+	// this threshold. This client cannot initiate that reset yet, so surface
+	// the condition and let the adapter reconnect instead of silently
+	// blackholing packets or approaching nonce reuse.
+	if d.sendPacketID >= dataPacketIDRekeyThreshold {
+		return 0, errDataPacketIDExhausted
+	}
 	d.sendPacketID++
-	return d.sendPacketID
+	return d.sendPacketID, nil
+}
+
+// MarkPeerActive records that a packet labeled with this key ID decrypted
+// successfully, i.e. the peer has activated this epoch.
+func (d *DataChannel) MarkPeerActive() {
+	d.mu.Lock()
+	d.recvEvidence = true
+	d.mu.Unlock()
+}
+
+// PeerActive reports whether the peer has activated this epoch.
+func (d *DataChannel) PeerActive() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.recvEvidence
 }
 
 func (d *DataChannel) acceptPacketID(packetID uint32) error {
@@ -419,16 +465,6 @@ func (d *DataChannel) fillCBCIV(iv []byte) error {
 	return nil
 }
 
-func dataChannelHMAC(newHash func() hash.Hash, key, data []byte) []byte {
-	return dataChannelHMACAppend(newHash, key, data, nil)
-}
-
-func dataChannelHMACAppend(newHash func() hash.Hash, key, data, dst []byte) []byte {
-	mac := hmac.New(newHash, key)
-	_, _ = mac.Write(data)
-	return mac.Sum(dst)
-}
-
 func (d *DataChannel) hmacAppend(pool *sync.Pool, data, dst []byte) []byte {
 	mac := pool.Get().(hash.Hash)
 	defer pool.Put(mac)
@@ -437,17 +473,17 @@ func (d *DataChannel) hmacAppend(pool *sync.Pool, data, dst []byte) []byte {
 	return mac.Sum(dst)
 }
 
-func pkcs7Pad(plain []byte, blockSize int) []byte {
-	padding := blockSize - len(plain)%blockSize
-	if padding == 0 {
-		padding = blockSize
-	}
-	out := make([]byte, len(plain)+padding)
-	copy(out, plain)
-	for i := len(plain); i < len(out); i++ {
-		out[i] = byte(padding)
-	}
-	return out
+// hmacCopy writes the HMAC of data into dst (which must have enough
+// capacity), returning the number of bytes written. Unlike hmacAppend it
+// does not rely on mac.Sum(dst) appending into dst's backing array — it
+// always writes the tag into dst explicitly.
+func (d *DataChannel) hmacCopy(pool *sync.Pool, data, dst []byte) int {
+	mac := pool.Get().(hash.Hash)
+	defer pool.Put(mac)
+	mac.Reset()
+	_, _ = mac.Write(data)
+	n := copy(dst, mac.Sum(nil))
+	return n
 }
 
 func pkcs7Unpad(padded []byte, blockSize int) ([]byte, error) {

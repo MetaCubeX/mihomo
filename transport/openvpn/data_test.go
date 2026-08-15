@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/sha1"
 	"encoding/binary"
+	"errors"
 	"testing"
 )
 
@@ -21,11 +22,11 @@ func TestDataChannelAESGCMV2RoundTrip(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7)
+	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7)
+	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,11 +76,11 @@ func TestDataChannelAcceptsOutOfOrderPacketsWithinReplayWindow(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7)
+	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7)
+	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,11 +155,11 @@ func TestDataChannelChaCha20Poly1305V2RoundTrip(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherChaCha20Poly1305, AuthSHA256, 7)
+	client, err := NewDataChannel(clientKeys, CipherChaCha20Poly1305, AuthSHA256, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherChaCha20Poly1305, AuthSHA256, 7)
+	server, err := NewDataChannel(serverKeys, CipherChaCha20Poly1305, AuthSHA256, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,11 +195,11 @@ func TestDataChannelAESCBCSHA1V2RoundTrip(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherAES128CBC, AuthSHA1, 7)
+	client, err := NewDataChannel(clientKeys, CipherAES128CBC, AuthSHA1, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherAES128CBC, AuthSHA1, 7)
+	server, err := NewDataChannel(serverKeys, CipherAES128CBC, AuthSHA1, 7, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,5 +239,32 @@ func TestDataChannelAESCBCSHA1V2RoundTrip(t *testing.T) {
 	encrypted[headerSize+sha1.Size] ^= 0xff
 	if _, err := server.Decrypt(encrypted); err == nil {
 		t.Fatal("expected HMAC authentication failure after IV tamper")
+	}
+}
+
+func TestDataChannelStopsAtPacketIDRekeyThreshold(t *testing.T) {
+	for _, cipher := range []string{CipherAES128GCM, CipherAES128CBC, CipherChaCha20Poly1305} {
+		t.Run(cipher, func(t *testing.T) {
+			keys := &KeyMaterial{
+				SendCipherKey: bytes.Repeat([]byte{0x11}, 32),
+				SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+				RecvCipherKey: bytes.Repeat([]byte{0x33}, 32),
+				RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+			}
+			channel, err := NewDataChannel(keys, cipher, AuthSHA256, 7, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			channel.sendPacketID = dataPacketIDRekeyThreshold - 1
+			if _, err := channel.Encrypt([]byte{0x45, 0, 0, 20}); err != nil {
+				t.Fatalf("final packet before rekey threshold: %v", err)
+			}
+			if _, err := channel.Encrypt([]byte{0x45, 0, 0, 20}); !errors.Is(err, errDataPacketIDExhausted) {
+				t.Fatalf("packet at rekey threshold returned %v", err)
+			}
+			if packetID := channel.sendPacketID; packetID != dataPacketIDRekeyThreshold {
+				t.Fatalf("packet ID advanced after threshold: got %#x", packetID)
+			}
+		})
 	}
 }
