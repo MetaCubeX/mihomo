@@ -104,20 +104,46 @@ func (f *Fallback) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
+
+	// Tracked during the same pass so the members are walked once: if nothing
+	// is alive, a member whose alive flag is merely stale (e.g. it was checked
+	// before its provider finished loading) is still a better bet than one
+	// currently resolving to REJECT, which would silently blackhole traffic.
+	var firstNotBlackholed C.Proxy
+
 	for _, proxy := range proxies {
+		// AliveForTestUrl first: it is a plain flag read, while resolvesToReject
+		// may walk a whole sub-group. Short-circuiting on it keeps the common
+		// case cheap and avoids unwrapping members that are dead anyway.
+		usable := false
+		if proxy.AliveForTestUrl(f.testUrl) {
+			if !resolvesToReject(proxy) {
+				usable = true
+				if firstNotBlackholed == nil {
+					firstNotBlackholed = proxy
+				}
+			}
+		} else if firstNotBlackholed == nil && !resolvesToReject(proxy) {
+			firstNotBlackholed = proxy
+		}
+
 		if len(f.selected) == 0 {
-			if proxy.AliveForTestUrl(f.testUrl) {
+			if usable {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				if proxy.AliveForTestUrl(f.testUrl) {
+				if usable {
 					return proxy
 				} else {
 					f.selected = ""
 				}
 			}
 		}
+	}
+
+	if firstNotBlackholed != nil {
+		return firstNotBlackholed
 	}
 
 	return proxies[0]
