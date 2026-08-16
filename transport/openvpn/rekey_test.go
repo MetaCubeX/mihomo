@@ -15,8 +15,6 @@ import (
 	"io"
 	"math/big"
 	"net"
-	"net/http"
-	"net/http/httptest"
 	"net/netip"
 	"os"
 	"strings"
@@ -1801,9 +1799,7 @@ func TestReadAllKeepsPendingSoftReset(t *testing.T) {
 }
 func TestInitialHandshakeRetransmitsLostClientHello(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	caServer := httptest.NewTLSServer(http.NotFoundHandler())
-	defer caServer.Close()
-	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caServer.Certificate().Raw})
+	_, caPEM := newTestTLSServerCertificate(t)
 	config := &ClientConfig{
 		Proto:      ProtoUDP,
 		CA:         caPEM,
