@@ -1339,6 +1339,8 @@ proxies: # socks5
     #   reject-after-time: 180                            # AmneziaWG v3+
     #   keepalive-timeout: 10                             # AmneziaWG v3+
     #   max-handshake-attempts: 18                        # AmneziaWG v3+
+    #   random-trailers: true                             # AmneziaWG v3.1+
+    #   disable-cookies: true                             # AmneziaWG v3.1+
 
   # tailscale
   - name: "tailscale"
