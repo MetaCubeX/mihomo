@@ -585,7 +585,9 @@ func NewResolver(config Config) (rs Resolvers) {
 				if triePolicy == nil {
 					triePolicy = trie.New[[]dnsClient]()
 				}
-				_ = triePolicy.Insert(policy.Domain, cacheTransform(policy.NameServers))
+				if err := triePolicy.Insert(policy.Domain, cacheTransform(policy.NameServers)); err != nil {
+					log.Warnln("[DNS] skip invalid nameserver policy: %s", err)
+				}
 			}
 		}
 		insertPolicy(nil)

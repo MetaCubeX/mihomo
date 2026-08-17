@@ -1169,7 +1169,9 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 					node = tree.Search(node.Data().Domain)
 				}
 			}
-			_ = tree.Insert(domain, value)
+			if err := tree.Insert(domain, value); err != nil {
+				log.Warnln("skip invalid hosts entry: %s", err)
+			}
 		}
 	}
 	tree.Optimize()
@@ -1323,7 +1325,7 @@ func parsePureDNSServer(server string) string {
 	}
 }
 
-func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]P.RuleProvider, respectRules bool, preferH3 bool) ([]dns.Policy, error) {
+func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], adapterName string, ruleProviders map[string]P.RuleProvider, respectRules bool, preferH3 bool) ([]dns.Policy, error) {
 	var policy []dns.Policy
 
 	for pair := nsPolicy.Oldest(); pair != nil; pair = pair.Next() {
@@ -1376,21 +1378,21 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 
 		if strings.HasPrefix(domain, "rule-set:") {
 			domainSetName := domain[9:]
-			matcher, err := parseDomainRuleSet(domainSetName, "dns.nameserver-policy", ruleProviders)
+			matcher, err := parseDomainRuleSet(domainSetName, adapterName, ruleProviders)
 			if err != nil {
 				return nil, err
 			}
 			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
 		} else if strings.HasPrefix(domain, "geosite:") {
 			country := domain[8:]
-			matcher, err := RC.NewGEOSITE(country, "dns.nameserver-policy")
+			matcher, err := RC.NewGEOSITE(country, adapterName)
 			if err != nil {
 				return nil, err
 			}
 			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
 		} else {
-			if _, valid := trie.ValidAndSplitDomain(domain); !valid {
-				return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
+			if _, err := trie.ValidAndSplitDomain(domain); err != nil {
+				return nil, fmt.Errorf("%s[%d]: %w", adapterName, idx, err)
 			}
 		}
 	}
@@ -1430,7 +1432,7 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 		return nil, err
 	}
 
-	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, ruleProviders, cfg.RespectRules, cfg.PreferH3); err != nil {
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, "dns.nameserver-policy", ruleProviders, cfg.RespectRules, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
@@ -1438,7 +1440,7 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 		return nil, err
 	}
 
-	if dnsCfg.ProxyServerPolicy, err = parseNameServerPolicy(cfg.ProxyServerNameserverPolicy, ruleProviders, false, cfg.PreferH3); err != nil {
+	if dnsCfg.ProxyServerPolicy, err = parseNameServerPolicy(cfg.ProxyServerNameserverPolicy, "dns.proxy-server-nameserver-policy", ruleProviders, false, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 	if len(dnsCfg.ProxyServerPolicy) != 0 && len(dnsCfg.ProxyServerNameserver) == 0 {
@@ -1500,7 +1502,9 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 				if net.ParseIP(fb.Addr) != nil {
 					continue
 				}
-				_ = fakeIPTrie.Insert(fb.Addr, struct{}{})
+				if err := fakeIPTrie.Insert(fb.Addr, struct{}{}); err != nil {
+					log.Warnln("skip fallback nameserver in fake-ip filter: %s", err)
+				}
 			}
 		}
 
@@ -1816,7 +1820,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]P.RuleProvider
 
 	forceDomain, err := parseDomain(snifferRaw.ForceDomain, nil, "sniffer.force-domain", ruleProviders)
 	if err != nil {
-		return nil, fmt.Errorf("error in force-domain, error:%w", err)
+		return nil, err
 	}
 	snifferConfig.ForceDomain = forceDomain
 
@@ -1834,7 +1838,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]P.RuleProvider
 
 	skipDomain, err := parseDomain(snifferRaw.SkipDomain, nil, "sniffer.skip-domain", ruleProviders)
 	if err != nil {
-		return nil, fmt.Errorf("error in skip-domain, error:%w", err)
+		return nil, err
 	}
 	snifferConfig.SkipDomain = skipDomain
 
@@ -1890,7 +1894,7 @@ func parseIPCIDR(addresses []string, cidrSet *cidr.IpCidrSet, adapterName string
 
 func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapterName string, ruleProviders map[string]P.RuleProvider) (matchers []C.DomainMatcher, err error) {
 	var matcher C.DomainMatcher
-	for _, domain := range domains {
+	for idx, domain := range domains {
 		domainLower := strings.ToLower(domain)
 		if strings.HasPrefix(domainLower, "geosite:") {
 			subkeys := strings.Split(domain, ":")
@@ -1899,7 +1903,7 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapte
 			for _, country := range subkeys {
 				matcher, err = RC.NewGEOSITE(country, adapterName)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("%s[%d] %q: %w", adapterName, idx, domain, err)
 				}
 				matchers = append(matchers, matcher)
 			}
@@ -1910,7 +1914,7 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapte
 			for _, domainSetName := range subkeys {
 				matcher, err = parseDomainRuleSet(domainSetName, adapterName, ruleProviders)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("%s[%d] %q: %w", adapterName, idx, domain, err)
 				}
 				matchers = append(matchers, matcher)
 			}
@@ -1920,7 +1924,7 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapte
 			}
 			err = domainTrie.Insert(domain, struct{}{})
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%s[%d]: %w", adapterName, idx, err)
 			}
 		}
 	}

@@ -39,12 +39,12 @@ func (d *domainStrategy) Reset() {
 
 func (d *domainStrategy) Insert(rule string) {
 	if strings.ContainsRune(rule, '/') {
-		log.Warnln("invalid domain:[%s]", rule)
+		log.Warnln("skip invalid domain from rule provider: invalid domain %q: slash is not allowed", rule)
 		return
 	}
 	err := d.domainTrie.Insert(rule, struct{}{})
 	if err != nil {
-		log.Warnln("invalid domain:[%s]", rule)
+		log.Warnln("skip invalid domain from rule provider: %s", err)
 	} else {
 		d.count++
 	}
