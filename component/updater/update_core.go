@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -81,6 +80,10 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
+	currentExePath, err = filepath.EvalSymlinks(currentExePath)
+	if err != nil {
+		return fmt.Errorf("resolve currentExePath: %w", err)
+	}
 	info, err := os.Stat(currentExePath)
 	if err != nil {
 		return fmt.Errorf("check currentExePath %q: %w", currentExePath, err)
@@ -145,6 +148,12 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 	updateExePath := filepath.Join(updateDir, updateExeName)
 	backupExePath := filepath.Join(backupDir, filepath.Base(currentExePath))
 
+	if err = os.RemoveAll(updateDir); err != nil {
+		return fmt.Errorf("cleaning stale update directory: %w", err)
+	}
+	if cleanupErr := cleanStagedFiles(currentExePath); cleanupErr != nil {
+		log.Warnln("updater: cleaning stale replacement files: %v", cleanupErr)
+	}
 	defer u.clean(updateDir)
 
 	err = u.download(updateDir, packagePath, packageURL)
@@ -157,13 +166,29 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 		return fmt.Errorf("unpacking: %w", err)
 	}
 
-	err = u.backup(currentExePath, backupExePath, backupDir)
+	metadata := metadataFromFileInfo(info)
+	fileOps := defaultFileOperations()
+	stagedPath, err := stageFile(updateExePath, currentExePath, metadata, true, fileOps)
+	if err != nil {
+		return fmt.Errorf("staging replacement: %w", err)
+	}
+	defer func() {
+		_ = os.Remove(stagedPath)
+	}()
+
+	currentMoved, err := u.backup(currentExePath, backupExePath, backupDir, fileOps)
 	if err != nil {
 		return fmt.Errorf("backuping: %w", err)
 	}
 
-	err = u.copyFile(updateExePath, currentExePath)
+	replaced, err := commitStagedFile(stagedPath, currentExePath, fileOps)
 	if err != nil {
+		if currentMoved || replaced {
+			rollbackErr := u.rollback(backupExePath, currentExePath, metadata, fileOps)
+			if rollbackErr != nil {
+				return fmt.Errorf("replacing: %w; rollback failed: %v", err, rollbackErr)
+			}
+		}
 		return fmt.Errorf("replacing: %w", err)
 	}
 
@@ -268,23 +293,46 @@ func (u *CoreUpdater) unpack(updateDir, packagePath string, fileMode os.FileMode
 }
 
 // backup creates a backup of the current executable file.
-func (u *CoreUpdater) backup(currentExePath, backupExePath, backupDir string) (err error) {
+func (u *CoreUpdater) backup(currentExePath, backupExePath, backupDir string, fileOps fileOperations) (currentMoved bool, err error) {
 	log.Infoln("updater: backing up current ExecFile:%s to %s", currentExePath, backupExePath)
-	_ = os.Mkdir(backupDir, 0o755)
+	err = os.MkdirAll(backupDir, 0o755)
+	if err != nil {
+		return false, fmt.Errorf("creating backup directory: %w", err)
+	}
 
 	// On Windows, since the running executable cannot be overwritten or deleted, it uses os.Rename to move the file to the backup path.
 	// On other platforms, it copies the file to the backup path, preserving the original file and its permissions.
 	// The backup directory is created if it does not exist.
 	if runtime.GOOS == "windows" {
-		err = os.Rename(currentExePath, backupExePath)
+		err = os.Remove(backupExePath)
+		if err != nil && !os.IsNotExist(err) {
+			return false, fmt.Errorf("removing previous backup: %w", err)
+		}
+		err = fileOps.rename(currentExePath, backupExePath)
+		if err == nil {
+			currentMoved = true
+		}
 	} else {
-		err = u.copyFile(currentExePath, backupExePath)
+		_, err = atomicCopyFile(currentExePath, backupExePath, fileOps)
 	}
 	if err != nil {
-		return err
+		return currentMoved, err
 	}
 
-	return nil
+	return currentMoved, nil
+}
+
+// rollback restores the complete backup when replacement changed or moved the
+// current executable before a later operation failed.
+func (u *CoreUpdater) rollback(backupExePath, currentExePath string, metadata fileMetadata, fileOps fileOperations) error {
+	log.Warnln("updater: rolling back %s from %s", currentExePath, backupExePath)
+
+	if runtime.GOOS == "windows" {
+		return fileOps.rename(backupExePath, currentExePath)
+	}
+
+	_, err := atomicReplaceFile(backupExePath, currentExePath, metadata, false, fileOps)
+	return err
 }
 
 // clean removes the temporary directory itself and all it's contents.
@@ -412,63 +460,4 @@ func (u *CoreUpdater) zipFileUnpack(zipfile, outDir string, fileMode os.FileMode
 	}
 
 	return outputName, nil
-}
-
-// Copy file on disk
-func (u *CoreUpdater) copyFile(src, dst string) (err error) {
-	rc, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("os.Open(%s): %w", src, err)
-	}
-
-	defer func() {
-		closeErr := rc.Close()
-		if closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	info, err := rc.Stat()
-	if err != nil {
-		return fmt.Errorf("rc.Stat(): %w", err)
-	}
-
-	// Create the output file
-	// If the file does not exist, creates it with permissions perm (before umask);
-	// otherwise truncates it before writing, without changing permissions.
-	wc, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
-	if err != nil {
-		// On some file system (such as Android's /data) maybe return error: "text file busy"
-		// Let's delete the target file and recreate it
-		err = os.Remove(dst)
-		if err != nil {
-			return fmt.Errorf("os.Remove(%s): %w", dst, err)
-		}
-		wc, err = os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
-		if err != nil {
-			return fmt.Errorf("os.OpenFile(%s): %w", dst, err)
-		}
-	}
-
-	defer func() {
-		closeErr := wc.Close()
-		if closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	_, err = io.Copy(wc, rc)
-	if err != nil {
-		return fmt.Errorf("io.Copy(): %w", err)
-	}
-
-	if runtime.GOOS == "darwin" {
-		err = exec.Command("/usr/bin/codesign", "--sign", "-", dst).Run()
-		if err != nil {
-			log.Warnln("codesign failed: %v", err)
-		}
-	}
-
-	log.Infoln("updater: copy: %s to %s", src, dst)
-	return nil
 }
