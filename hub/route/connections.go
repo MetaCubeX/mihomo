@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/metacubex/chi"
@@ -28,18 +29,11 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, _, err := wsUpgrade(r, w)
-	if err != nil {
-		return
-	}
-	snapshotStream := statistic.DefaultManager.NewSnapshotStream()
-	defer snapshotStream.Close()
-
 	intervalStr := r.URL.Query().Get("interval")
 	interval := 1000
 	if intervalStr != "" {
 		t, err := strconv.Atoi(intervalStr)
-		if err != nil {
+		if err != nil || t <= 0 {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, ErrBadRequest)
 			return
@@ -48,11 +42,22 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 		interval = t
 	}
 
+	conn, _, err := wsUpgrade(r, w)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	snapshotStream := statistic.DefaultManager.NewSnapshotStream()
+	defer snapshotStream.Close()
+
 	buf := &bytes.Buffer{}
 	sendSnapshot := func() error {
 		buf.Reset()
 		snapshot := snapshotStream.Snapshot()
 		if err := json.NewEncoder(buf).Encode(snapshot); err != nil {
+			return err
+		}
+		if err := conn.SetWriteDeadline(time.Now().Add(C.DefaultTCPTimeout)); err != nil {
 			return err
 		}
 
