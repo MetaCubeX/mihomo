@@ -58,6 +58,12 @@ func (m *Manager) Leave(c Tracker) {
 	m.snapshotMu.Lock()
 	if len(m.snapshotStreams) != 0 {
 		m.closedConnections.PushBack(tracker.Info())
+		for stream := range m.snapshotStreams {
+			select {
+			case stream.updates <- struct{}{}:
+			default:
+			}
+		}
 	}
 	m.snapshotMu.Unlock()
 }
@@ -116,6 +122,7 @@ func (m *Manager) Snapshot() *Snapshot {
 type SnapshotStream struct {
 	manager *Manager
 	cursor  int
+	updates chan struct{}
 }
 
 func (m *Manager) NewSnapshotStream() *SnapshotStream {
@@ -125,6 +132,7 @@ func (m *Manager) NewSnapshotStream() *SnapshotStream {
 	stream := &SnapshotStream{
 		manager: m,
 		cursor:  m.closedConnections.Len(),
+		updates: make(chan struct{}, 1),
 	}
 	if m.snapshotStreams == nil {
 		m.snapshotStreams = map[*SnapshotStream]struct{}{}
@@ -139,6 +147,10 @@ func (s *SnapshotStream) Snapshot() *Snapshot {
 	m.snapshotMu.Lock()
 
 	closedCount := m.closedConnections.Len()
+	select {
+	case <-s.updates:
+	default:
+	}
 	if s.cursor == closedCount {
 		m.snapshotMu.Unlock()
 		return snapshot
@@ -162,6 +174,11 @@ func (s *SnapshotStream) Snapshot() *Snapshot {
 		}
 	}
 	return snapshot
+}
+
+// Updates reports when closed connections are ready for the next snapshot.
+func (s *SnapshotStream) Updates() <-chan struct{} {
+	return s.updates
 }
 
 func (s *SnapshotStream) Close() {

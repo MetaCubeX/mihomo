@@ -30,16 +30,17 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	intervalStr := r.URL.Query().Get("interval")
-	interval := 1000
+	interval := time.Second
 	if intervalStr != "" {
-		t, err := strconv.Atoi(intervalStr)
-		if err != nil || t <= 0 {
+		const maxIntervalMilliseconds = (1<<63 - 1) / int64(time.Millisecond)
+		milliseconds, err := strconv.ParseInt(intervalStr, 10, 64)
+		if err != nil || milliseconds <= 0 || milliseconds > maxIntervalMilliseconds {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, ErrBadRequest)
 			return
 		}
 
-		interval = t
+		interval = time.Duration(milliseconds) * time.Millisecond
 	}
 
 	conn, _, err := wsUpgrade(r, w)
@@ -68,9 +69,13 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tick := time.NewTicker(time.Millisecond * time.Duration(interval))
+	tick := time.NewTicker(interval)
 	defer tick.Stop()
-	for range tick.C {
+	for {
+		select {
+		case <-tick.C:
+		case <-snapshotStream.Updates():
+		}
 		if err := sendSnapshot(); err != nil {
 			break
 		}
