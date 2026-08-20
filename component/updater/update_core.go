@@ -178,7 +178,7 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 
 	currentMoved, err := u.backup(currentExePath, backupExePath, backupDir, fileOps)
 	if err != nil {
-		return fmt.Errorf("backuping: %w", err)
+		return fmt.Errorf("backing up: %w", err)
 	}
 
 	replaced, err := commitStagedFile(stagedPath, currentExePath, fileOps)
