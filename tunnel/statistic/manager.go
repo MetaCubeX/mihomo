@@ -2,11 +2,14 @@ package statistic
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/xsync"
 	"github.com/metacubex/mihomo/component/memory"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 var DefaultManager *Manager
@@ -35,6 +38,9 @@ type Manager struct {
 	downloadTotal atomic.Int64
 	pid           int32
 	memory        uint64
+
+	snapshotStreamsMu sync.RWMutex
+	snapshotStreams   map[*SnapshotStream]struct{}
 }
 
 func (m *Manager) Join(c Tracker) {
@@ -42,7 +48,17 @@ func (m *Manager) Join(c Tracker) {
 }
 
 func (m *Manager) Leave(c Tracker) {
-	m.connections.Delete(c.ID())
+	tracker, loaded := m.connections.LoadAndDelete(c.ID())
+	if !loaded {
+		return
+	}
+
+	info := tracker.Info()
+	m.snapshotStreamsMu.RLock()
+	defer m.snapshotStreamsMu.RUnlock()
+	for stream := range m.snapshotStreams {
+		stream.pushClosed(info)
+	}
 }
 
 func (m *Manager) Get(id string) (c Tracker) {
@@ -93,6 +109,60 @@ func (m *Manager) Snapshot() *Snapshot {
 		Connections:   connections,
 		Memory:        m.memory,
 	}
+}
+
+// SnapshotStream includes connections closed between snapshots in the next snapshot.
+type SnapshotStream struct {
+	manager *Manager
+	mu      sync.Mutex
+	pending []*TrackerInfo
+}
+
+func (m *Manager) NewSnapshotStream() *SnapshotStream {
+	stream := &SnapshotStream{manager: m}
+	m.snapshotStreamsMu.Lock()
+	if m.snapshotStreams == nil {
+		m.snapshotStreams = map[*SnapshotStream]struct{}{}
+	}
+	m.snapshotStreams[stream] = struct{}{}
+	m.snapshotStreamsMu.Unlock()
+	return stream
+}
+
+func (s *SnapshotStream) Snapshot() *Snapshot {
+	snapshot := s.manager.Snapshot()
+
+	s.mu.Lock()
+	if len(s.pending) == 0 {
+		s.mu.Unlock()
+		return snapshot
+	}
+	closedConnections := s.pending
+	s.pending = nil
+	s.mu.Unlock()
+
+	activeConnections := make(map[uuid.UUID]struct{}, len(snapshot.Connections))
+	for _, connection := range snapshot.Connections {
+		activeConnections[connection.UUID] = struct{}{}
+	}
+	for _, connection := range closedConnections {
+		if _, exists := activeConnections[connection.UUID]; !exists {
+			snapshot.Connections = append(snapshot.Connections, connection)
+		}
+	}
+	return snapshot
+}
+
+func (s *SnapshotStream) Close() {
+	s.manager.snapshotStreamsMu.Lock()
+	delete(s.manager.snapshotStreams, s)
+	s.manager.snapshotStreamsMu.Unlock()
+}
+
+func (s *SnapshotStream) pushClosed(connection *TrackerInfo) {
+	s.mu.Lock()
+	s.pending = append(s.pending, connection)
+	s.mu.Unlock()
 }
 
 func (m *Manager) updateMemory() {

@@ -32,6 +32,8 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	snapshotStream := statistic.DefaultManager.NewSnapshotStream()
+	defer snapshotStream.Close()
 
 	intervalStr := r.URL.Query().Get("interval")
 	interval := 1000
@@ -49,7 +51,7 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 	buf := &bytes.Buffer{}
 	sendSnapshot := func() error {
 		buf.Reset()
-		snapshot := statistic.DefaultManager.Snapshot()
+		snapshot := snapshotStream.Snapshot()
 		if err := json.NewEncoder(buf).Encode(snapshot); err != nil {
 			return err
 		}
