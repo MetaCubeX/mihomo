@@ -53,6 +53,7 @@ type WireGuard struct {
 	device    wireguardGoDevice
 	tunDevice wireguardDevice
 	resolver  resolver.Resolver
+	owner     ProxyAdapter
 
 	initOk        atomic.Bool
 	initMutex     sync.Mutex
@@ -779,6 +780,13 @@ func (w *WireGuard) Close() error {
 	return nil
 }
 
+func (w *WireGuard) connectionOwner() ProxyAdapter {
+	if w.owner != nil {
+		return w.owner
+	}
+	return w
+}
+
 func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	var conn net.Conn
 	if err = w.init(ctx); err != nil {
@@ -802,7 +810,7 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.
 	if conn == nil {
 		return nil, E.New("conn is nil")
 	}
-	return NewConn(conn, w), nil
+	return NewConn(conn, w.connectionOwner()), nil
 }
 
 func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
@@ -821,7 +829,7 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return NewPacketConn(pc, w), nil
+	return NewPacketConn(pc, w.connectionOwner()), nil
 }
 
 func (w *WireGuard) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

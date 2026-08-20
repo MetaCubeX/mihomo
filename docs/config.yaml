@@ -1457,15 +1457,32 @@ proxies: # socks5
     # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
     # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
 
-  # masque
+  # 标准 MASQUE CONNECT-IP（RFC 9484）
   - name: "masque"
     type: masque
-    server: 162.159.198.1
+    server: proxy.example.com
     port: 443
-    private-key: MHcCAQEEILI1eOtnbEIh89Fj4yNDuFR6UjayCKI3NdLl3DhetimWoAoGCCqGSM49AwEHoUQDQgAEgyXrE8v+hHsHy3ewSb3WcRjYgCrM9T9hiE0Uv6k2DZ1+4kefrDT9v1Q/8wdRigTf6t6gGNUV8W+IUMdrfUt+9g==
-    public-key: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==
-    ip: 172.16.0.2
-    ipv6: 2606:4700:110:84c0:163a:4914:a0ad:3342
+    # CONNECT-IP URI Template；默认值为
+    # https://server:port/.well-known/masque/ip/*/*/
+    uri: "https://proxy.example.com/.well-known/masque/ip/{target}/{ipproto}/"
+    ip: 192.0.2.2 # 至少配置一个静态隧道地址
+    ipv6: 2001:db8::2
+    # routes: [ 192.0.2.0/24, 2001:db8::/64 ] # 向服务端通告的 RFC 9484 路由；默认仅通告本机隧道地址
+    # headers:
+    #   Authorization: "Bearer TOKEN" # 额外普通 HTTP 请求头；不允许覆盖伪头
+    # certificate: | # 可选 mTLS 客户端证书，支持 PEM 内容或安全路径
+    #   -----BEGIN CERTIFICATE-----
+    #   ...
+    #   -----END CERTIFICATE-----
+    # private-key: | # 与 certificate 配套的 PEM 私钥
+    #   -----BEGIN PRIVATE KEY-----
+    #   ...
+    #   -----END PRIVATE KEY-----
+    network: h3 # h3 使用 QUIC Datagram；h2 使用 Extended CONNECT + DATAGRAM capsule
+    # sni: proxy.example.com
+    # skip-cert-verify: false
+    # name-cert-verify: proxy.example.com
+    # fingerprint: 00:11:22:...
     mtu: 1280
     udp: true
     # ip-stack:
@@ -1475,45 +1492,35 @@ proxies: # socks5
     # dialer-proxy: "ss1"
     # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
     # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
-    # congestion-controller: bbr # 默认不开启
+    # congestion-controller: bbr # 仅 h3，默认不开启
     # handshake-timeout: 30 # 单位为秒；配置后握手时不受外层连接超时影响；默认值为 0，表示仅使用外层连接超时
 
-  # masque-h3-l4proxy
-  - name: "masque-h3-l4proxy"
-    type: masque
-    server: 162.159.198.1
-    port: 443
-    private-key: MHcCAQEEILI1eOtnbEIh89Fj4yNDuFR6UjayCKI3NdLl3DhetimWoAoGCCqGSM49AwEHoUQDQgAEgyXrE8v+hHsHy3ewSb3WcRjYgCrM9T9hiE0Uv6k2DZ1+4kefrDT9v1Q/8wdRigTf6t6gGNUV8W+IUMdrfUt+9g==
-    public-key: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==
-    udp: false # 目前 l4proxy 模式不支持 udp
-    network: h3-l4proxy
-    # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
-    # dialer-proxy: "ss1"
-    # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
-    # dns: [ tls://1.1.1.1, tls://1.0.0.1 ] # 仅在 remote-dns-resolve 为 true 时生效
-    # congestion-controller: bbr # 默认不开启
-    # handshake-timeout: 30 # 单位为秒；配置后握手时不受外层连接超时影响；默认值为 0，表示仅使用外层连接超时
-
-  # masque-h2
-  - name: "masque-h2"
-    type: masque
-    server: 162.159.198.2
-    port: 443
-    private-key: MHcCAQEEILI1eOtnbEIh89Fj4yNDuFR6UjayCKI3NdLl3DhetimWoAoGCCqGSM49AwEHoUQDQgAEgyXrE8v+hHsHy3ewSb3WcRjYgCrM9T9hiE0Uv6k2DZ1+4kefrDT9v1Q/8wdRigTf6t6gGNUV8W+IUMdrfUt+9g==
-    public-key: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==
-    ip: 172.16.0.2
-    ipv6: 2606:4700:110:84c0:163a:4914:a0ad:3342
+  # Cloudflare WARP
+  # 旧版 type=masque + private-key/public-key 配置需迁移为 type=warp；标准 MASQUE 不使用 Cloudflare 私有密钥格式。
+  - name: "warp"
+    type: warp
+    mode: masque # options: masque, wireguard
+    accept-tos: true # 首次自动注册必须显式接受 Cloudflare Application Terms；已有完整状态时不再使用
+    # 首次连接会参考 wgcf/usque 自动生成密钥、注册 WARP 设备并 enroll 所选协议；mode=masque 会先用一次性 WireGuard 公钥完成注册。
+    # 私钥、device-id、access-token、隧道地址、端点和端点公钥会完整写入 state-dir 下的 0600 JSON 文件；
+    # 文件按 provider/name/mode 隔离，后续启动直接读取，不会再次注册或 enroll。删除该文件才会创建新设备。
+    # state-dir: ./warp # 默认值；可选，仅用于调整自动状态文件目录
+    network: h3 # 仅 mode=masque：options: h3, h2, h3-l4proxy；后两者均为 WARP 私有模式
+    # sni: consumer-masque.cloudflareclient.com # 可选覆盖；默认按 network 自动选择
+    # server: 192.0.2.1 # 可选，覆盖 API 返回的端点；h2 默认 162.159.198.2
+    # port: 443
+    # skip-cert-verify: false # true 会禁用 WARP MASQUE 端点公钥 pin，不建议开启
+    # persistent-keepalive: 30 # 仅 mode=wireguard
     mtu: 1280
-    udp: true
-    network: h2
+    udp: true # network=h3-l4proxy 时会强制关闭 UDP
     # ip-stack:
-    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
-    #   congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; ignored by gVisor
-    # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
-    # dialer-proxy: "ss1"
-    # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
-    # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
-    # handshake-timeout: 30 # 单位为秒；配置后握手时不受外层连接超时影响；默认值为 0，表示仅使用外层连接超时
+    #   mode: auto # options: auto, gvisor, mips
+    #   congestion-controller: cubic # options: cubic, reno, bbr, bbr3; ignored by gvisor
+    # dialer-proxy: "ss1" # 首次 API 注册/enroll 与隧道连接都会使用该代理
+    # remote-dns-resolve: true
+    # dns: [ 1.1.1.1, 8.8.8.8 ]
+    # congestion-controller: bbr # 仅 mode=masque + network=h3
+    # handshake-timeout: 30 # 仅 mode=masque，单位为秒
 
   # tuic
   - name: tuic

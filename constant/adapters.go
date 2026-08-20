@@ -54,6 +54,7 @@ const (
 	Tailscale
 	ZeroTier
 	GostRelay
+	Warp
 )
 
 const (
@@ -227,6 +228,8 @@ func (at AdapterType) String() string {
 		return "Sudoku"
 	case Masque:
 		return "Masque"
+	case Warp:
+		return "Warp"
 	case TrustTunnel:
 		return "TrustTunnel"
 	case ShadowQuic:

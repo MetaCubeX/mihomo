@@ -1,30 +1,32 @@
-// Package masque
-// copy and modify from https://github.com/Diniboy1123/usque/blob/d0eb96e7e5c56cce6cf34a7f8d75abbedba58fef/api/masque.go
+// Package masque implements the client side of CONNECT-IP as specified by
+// RFC 9484. Product-specific extensions belong in their respective packages.
 package masque
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/rand"
-	"crypto/x509"
 	"errors"
 	"fmt"
-	"math/big"
-	"net/netip"
 	"net/url"
-	"time"
+	"reflect"
+	"strings"
 
 	connectip "github.com/metacubex/connect-ip-go"
 	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/http3"
-	"github.com/metacubex/tls"
 	"github.com/yosida95/uritemplate/v3"
+
+	"github.com/dunglas/httpsfv"
 )
 
 const (
-	ConnectSNI = "consumer-masque.cloudflareclient.com"
-	ConnectURI = "https://cloudflareaccess.com"
+	// RequestProtocol is the Extended CONNECT protocol registered by RFC 9484.
+	RequestProtocol = "connect-ip"
+	// DefaultPath is the well-known full-tunnel path from RFC 9484.
+	DefaultPath = "/.well-known/masque/ip/*/*/"
+	// CapsuleProtocolHeaderValue is the Structured Fields boolean true value
+	// required by RFC 9297.
+	CapsuleProtocolHeaderValue = "?1"
 )
 
 type IpConn interface {
@@ -33,151 +35,127 @@ type IpConn interface {
 	Close() error
 }
 
-// PrepareTlsConfig creates a TLS configuration using the provided certificate and SNI (Server Name Indication).
-// It also verifies the peer's public key against the provided public key.
-func PrepareTlsConfig(privKey *ecdsa.PrivateKey, peerPubKey *ecdsa.PublicKey, sni string, insecure bool) (*tls.Config, error) {
-	verfiyCert := func(cert *x509.Certificate) error {
-		if _, ok := cert.PublicKey.(*ecdsa.PublicKey); !ok {
-			// we only support ECDSA
-			// TODO: don't hardcode cert type in the future
-			// as backend can start using different cert types
-			return x509.ErrUnsupportedAlgorithm
-		}
-
-		if !cert.PublicKey.(*ecdsa.PublicKey).Equal(peerPubKey) {
-			// reason is incorrect, but the best I could figure
-			// detail explains the actual reason
-
-			//10 is NoValidChains, but we support go1.22 where it's not defined
-			return x509.CertificateInvalidError{Cert: cert, Reason: 10, Detail: "remote endpoint has a different public key than what we trust"}
-		}
-
-		return nil
-	}
-
-	cert, err := GenerateCert(privKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate cert: %v", err)
-	}
-
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{
-			{
-				Certificate: cert,
-				PrivateKey:  privKey,
-			},
-		},
-		ServerName: sni,
-		NextProtos: []string{http3.NextProtoH3},
-		// WARN: SNI is usually not for the endpoint, so we must skip verification
-		InsecureSkipVerify: true,
-		// we pin to the endpoint public key
-		VerifyConnection: func(cs tls.ConnectionState) error {
-			var err error
-			for _, cert := range cs.PeerCertificates {
-				if er := verfiyCert(cert); er != nil {
-					err = errors.Join(err, er)
-					continue
-				}
-			}
-			return err
-		},
-	}
-	if insecure {
-		tlsConfig.VerifyConnection = nil
-	}
-
-	return tlsConfig, nil
-}
-
-func GenerateCert(privKey *ecdsa.PrivateKey) ([][]byte, error) {
-	cert, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(0),
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(1 * 24 * time.Hour),
-	}, &x509.Certificate{}, &privKey.PublicKey, privKey)
-	if err != nil {
+// ParseTunnelURL parses and expands a CONNECT-IP URI template for a full
+// tunnel. RFC 9484 defines target and ipproto semantics; this client fills
+// both with the wildcard value and requires any deployment-specific variables
+// to be expanded by the configuration author.
+func ParseTunnelURL(raw string) (*url.URL, error) {
+	if err := validateTemplateSyntax(raw); err != nil {
 		return nil, err
 	}
-
-	return [][]byte{cert}, nil
+	template, err := uritemplate.New(raw)
+	if err != nil {
+		return nil, fmt.Errorf("connect-ip: parse URI template: %w", err)
+	}
+	values := uritemplate.Values{}
+	for _, name := range template.Varnames() {
+		switch name {
+		case "target", "ipproto":
+			values.Set(name, uritemplate.String("*"))
+		default:
+			return nil, fmt.Errorf("connect-ip: unsupported URI template variable %q", name)
+		}
+	}
+	expanded, err := template.Expand(values)
+	if err != nil {
+		return nil, fmt.Errorf("connect-ip: expand URI template: %w", err)
+	}
+	u, err := url.Parse(expanded)
+	if err != nil {
+		return nil, fmt.Errorf("connect-ip: parse expanded URI: %w", err)
+	}
+	if u.Scheme != "https" {
+		return nil, fmt.Errorf("connect-ip: URI scheme must be https, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return nil, errors.New("connect-ip: URI is missing an authority")
+	}
+	if u.Path == "" || u.Path[0] != '/' {
+		return nil, errors.New("connect-ip: URI path must be non-empty and start with a slash")
+	}
+	if u.User != nil {
+		return nil, errors.New("connect-ip: URI authority must not contain userinfo")
+	}
+	if u.Fragment != "" {
+		return nil, errors.New("connect-ip: URI must not contain a fragment")
+	}
+	return u, nil
 }
 
-// ConnectTunnel establishes a QUIC connection and sets up a Connect-IP tunnel with the provided endpoint.
-// Endpoint address is used to check whether the authentication/connection is successful or not.
-// Requires modified connect-ip-go for now to support Cloudflare's non RFC compliant implementation.
-func ConnectTunnel(ctx context.Context, quicConn *quic.Conn, connectUri string) (*http3.Transport, *connectip.Conn, error) {
+func validateTemplateSyntax(raw string) error {
+	for index := 0; index < len(raw); index++ {
+		if raw[index] < 0x21 || raw[index] > 0x7e {
+			return fmt.Errorf("connect-ip: URI template contains a non-ASCII or whitespace byte at offset %d", index)
+		}
+	}
+	schemeEnd := strings.Index(raw, "://")
+	if schemeEnd <= 0 {
+		return errors.New("connect-ip: URI template must be absolute")
+	}
+	authorityStart := schemeEnd + 3
+	pathOffset := strings.IndexByte(raw[authorityStart:], '/')
+	if pathOffset < 0 {
+		return errors.New("connect-ip: URI template must contain a non-empty path")
+	}
+	pathStart := authorityStart + pathOffset
+	fragmentStart := strings.IndexByte(raw, '#')
+	if fragmentStart >= 0 {
+		return errors.New("connect-ip: URI template must not contain a fragment")
+	}
+	for offset := 0; ; {
+		startOffset := strings.IndexByte(raw[offset:], '{')
+		if startOffset < 0 {
+			break
+		}
+		start := offset + startOffset
+		endOffset := strings.IndexByte(raw[start+1:], '}')
+		if endOffset < 0 {
+			break // uritemplate.New reports the more precise syntax error.
+		}
+		end := start + 1 + endOffset
+		if start < pathStart {
+			return errors.New("connect-ip: URI template variables must be in the path or query")
+		}
+		expression := raw[start+1 : end]
+		if expression != "" && strings.ContainsRune("+#./;", rune(expression[0])) {
+			return fmt.Errorf("connect-ip: URI template operator %q is not allowed by RFC 9484", expression[:1])
+		}
+		if strings.Contains(expression, ":") || strings.HasSuffix(expression, "*") || strings.Contains(expression, "*,") {
+			return errors.New("connect-ip: URI template must be level 3 or lower")
+		}
+		offset = end + 1
+	}
+	return nil
+}
+
+// ConnectTunnel establishes a standards-compliant CONNECT-IP tunnel over
+// HTTP/3. It requires both Extended CONNECT and HTTP Datagrams to have been
+// enabled by the peer.
+func ConnectTunnel(ctx context.Context, quicConn *quic.Conn, connectURI string, additionalHeaders http.Header) (*http3.Transport, *connectip.Conn, error) {
+	u, err := ParseTunnelURL(connectURI)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	tr := &http3.Transport{
-		EnableDatagrams: true,
-		AdditionalSettings: map[uint64]uint64{
-			// official client still sends this out as well, even though
-			// it's deprecated, see https://datatracker.ietf.org/doc/draft-ietf-masque-h3-datagram/00/
-			// SETTINGS_H3_DATAGRAM_00 = 0x0000000000000276
-			// https://github.com/cloudflare/quiche/blob/7c66757dbc55b8d0c3653d4b345c6785a181f0b7/quiche/src/h3/frame.rs#L46
-			0x276: 1,
-		},
+		EnableDatagrams:    true,
 		DisableCompression: true,
 	}
-
 	hconn := tr.NewClientConn(quicConn)
-
-	additionalHeaders := http.Header{
-		"User-Agent": []string{""},
-	}
-
-	template := uritemplate.MustNew(connectUri)
-	ipConn, rsp, err := dialEx(ctx, hconn, template, "cf-connect-ip", additionalHeaders, true)
+	ipConn, rsp, err := dialHTTP3(ctx, hconn, u, additionalHeaders)
 	if err != nil {
 		_ = tr.Close()
-		if err.Error() == "CRYPTO_ERROR 0x131 (remote): tls: access denied" {
-			return nil, nil, errors.New("login failed! Please double-check if your tls key and cert is enrolled in the Cloudflare Access service")
-		}
-		return nil, nil, fmt.Errorf("failed to dial connect-ip: %v", err)
+		return nil, nil, err
 	}
-
-	err = ipConn.AdvertiseRoute(ctx, []connectip.IPRoute{
-		{
-			IPProtocol: 0,
-			StartIP:    netip.AddrFrom4([4]byte{}),
-			EndIP:      netip.AddrFrom4([4]byte{255, 255, 255, 255}),
-		},
-		{
-			IPProtocol: 0,
-			StartIP:    netip.AddrFrom16([16]byte{}),
-			EndIP: netip.AddrFrom16([16]byte{
-				255, 255, 255, 255,
-				255, 255, 255, 255,
-				255, 255, 255, 255,
-				255, 255, 255, 255,
-			}),
-		},
-	})
-	if err != nil {
+	if err := validateCapsuleProtocol(rsp.Header); err != nil {
 		_ = ipConn.Close()
 		_ = tr.Close()
 		return nil, nil, err
 	}
-
-	if rsp.StatusCode != http.StatusOK {
-		_ = ipConn.Close()
-		_ = tr.Close()
-		return nil, nil, fmt.Errorf("failed to dial connect-ip: %v", rsp.Status)
-	}
-
 	return tr, ipConn, nil
 }
 
-// dialEx dials a proxied connection to a target server.
-func dialEx(ctx context.Context, conn *http3.ClientConn, template *uritemplate.Template, requestProtocol string, additionalHeaders http.Header, ignoreExtendedConnect bool) (*connectip.Conn, *http.Response, error) {
-	if len(template.Varnames()) > 0 {
-		return nil, nil, errors.New("connect-ip: IP flow forwarding not supported")
-	}
-
-	u, err := url.Parse(template.Raw())
-	if err != nil {
-		return nil, nil, fmt.Errorf("connect-ip: failed to parse URI: %w", err)
-	}
-
+func dialHTTP3(ctx context.Context, conn *http3.ClientConn, u *url.URL, additionalHeaders http.Header) (*connectip.Conn, *http.Response, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil, context.Cause(ctx)
@@ -186,39 +164,72 @@ func dialEx(ctx context.Context, conn *http3.ClientConn, template *uritemplate.T
 	case <-conn.ReceivedSettings():
 	}
 	settings := conn.Settings()
-	if !ignoreExtendedConnect && !settings.EnableExtendedConnect {
+	if !settings.EnableExtendedConnect {
 		return nil, nil, errors.New("connect-ip: server didn't enable Extended CONNECT")
 	}
 	if !settings.EnableDatagrams {
-		return nil, nil, errors.New("connect-ip: server didn't enable datagrams")
+		return nil, nil, errors.New("connect-ip: server didn't enable HTTP Datagrams")
 	}
 
-	const capsuleProtocolHeaderValue = "?1"
-	headers := http.Header{http3.CapsuleProtocolHeader: []string{capsuleProtocolHeaderValue}}
-	for k, v := range additionalHeaders {
-		headers[k] = v
+	headers, err := requestHeaders(additionalHeaders)
+	if err != nil {
+		return nil, nil, err
 	}
-
 	rstr, err := conn.OpenRequestStream(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect-ip: failed to open request stream: %w", err)
+		return nil, nil, fmt.Errorf("connect-ip: open HTTP/3 request stream: %w", err)
 	}
 	if err := rstr.SendRequestHeader(&http.Request{
 		Method: http.MethodConnect,
-		Proto:  requestProtocol,
+		Proto:  RequestProtocol,
 		Host:   u.Host,
 		Header: headers,
 		URL:    u,
 	}); err != nil {
-		return nil, nil, fmt.Errorf("connect-ip: failed to send request: %w", err)
+		_ = rstr.Close()
+		return nil, nil, fmt.Errorf("connect-ip: send HTTP/3 request: %w", err)
 	}
-	// TODO: optimistically return the connection
 	rsp, err := rstr.ReadResponse()
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect-ip: failed to read response: %w", err)
+		_ = rstr.Close()
+		return nil, nil, fmt.Errorf("connect-ip: read HTTP/3 response: %w", err)
 	}
 	if rsp.StatusCode < 200 || rsp.StatusCode > 299 {
-		return nil, rsp, fmt.Errorf("connect-ip: server responded with %d", rsp.StatusCode)
+		_ = rstr.Close()
+		return nil, rsp, fmt.Errorf("connect-ip: server responded with %s", rsp.Status)
 	}
 	return connectip.NewProxiedConn(rstr), rsp, nil
+}
+
+func requestHeaders(additional http.Header) (http.Header, error) {
+	headers := additional.Clone()
+	if headers == nil {
+		headers = make(http.Header)
+	}
+	for name := range headers {
+		if len(name) > 0 && name[0] == ':' {
+			return nil, fmt.Errorf("connect-ip: pseudo-header %q cannot be configured", name)
+		}
+	}
+	headers.Set(http3.CapsuleProtocolHeader, CapsuleProtocolHeaderValue)
+	return headers, nil
+}
+
+func validateCapsuleProtocol(headers http.Header) error {
+	values := headers.Values(http3.CapsuleProtocolHeader)
+	if len(values) == 0 {
+		return errors.New("connect-ip: successful response is missing Capsule-Protocol")
+	}
+	item, err := httpsfv.UnmarshalItem(values)
+	if err != nil {
+		return fmt.Errorf("connect-ip: invalid Capsule-Protocol response: %w", err)
+	}
+	value, ok := item.Value.(bool)
+	if !ok {
+		return fmt.Errorf("connect-ip: Capsule-Protocol response has type %s, want boolean", reflect.TypeOf(item.Value))
+	}
+	if !value {
+		return errors.New("connect-ip: server declined the Capsule Protocol")
+	}
+	return nil
 }
