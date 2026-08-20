@@ -43,7 +43,6 @@ type Manager struct {
 	snapshotMu        sync.Mutex
 	snapshotStreams   map[*SnapshotStream]struct{}
 	closedConnections deque.Deque[*TrackerInfo]
-	closedSequence    uint64
 }
 
 func (m *Manager) Join(c Tracker) {
@@ -116,7 +115,7 @@ func (m *Manager) Snapshot() *Snapshot {
 // SnapshotStream includes connections closed between snapshots in the next snapshot.
 type SnapshotStream struct {
 	manager *Manager
-	cursor  uint64
+	cursor  int
 }
 
 func (m *Manager) NewSnapshotStream() *SnapshotStream {
@@ -125,7 +124,7 @@ func (m *Manager) NewSnapshotStream() *SnapshotStream {
 
 	stream := &SnapshotStream{
 		manager: m,
-		cursor:  m.closedSequence + uint64(m.closedConnections.Len()),
+		cursor:  m.closedConnections.Len(),
 	}
 	if m.snapshotStreams == nil {
 		m.snapshotStreams = map[*SnapshotStream]struct{}{}
@@ -140,18 +139,16 @@ func (s *SnapshotStream) Snapshot() *Snapshot {
 	m.snapshotMu.Lock()
 
 	closedCount := m.closedConnections.Len()
-	nextSequence := m.closedSequence + uint64(closedCount)
-	if s.cursor == nextSequence {
+	if s.cursor == closedCount {
 		m.snapshotMu.Unlock()
 		return snapshot
 	}
 
-	closedStart := int(s.cursor - m.closedSequence)
-	closedConnections := make([]*TrackerInfo, 0, closedCount-closedStart)
-	for i := closedStart; i < closedCount; i++ {
+	closedConnections := make([]*TrackerInfo, 0, closedCount-s.cursor)
+	for i := s.cursor; i < closedCount; i++ {
 		closedConnections = append(closedConnections, m.closedConnections.At(i))
 	}
-	s.cursor = nextSequence
+	s.cursor = closedCount
 	m.pruneClosedConnectionsLocked()
 	m.snapshotMu.Unlock()
 
@@ -178,21 +175,25 @@ func (s *SnapshotStream) Close() {
 }
 
 func (m *Manager) pruneClosedConnectionsLocked() {
-	nextSequence := m.closedSequence + uint64(m.closedConnections.Len())
-	sequence := nextSequence
+	closedCount := m.closedConnections.Len()
+	pruneCount := closedCount
 	for stream := range m.snapshotStreams {
-		if stream.cursor < sequence {
-			sequence = stream.cursor
+		if stream.cursor < pruneCount {
+			pruneCount = stream.cursor
 		}
 	}
-	if sequence == nextSequence {
-		m.closedConnections = deque.Deque[*TrackerInfo]{}
-		m.closedSequence = nextSequence
+	if pruneCount == 0 {
 		return
 	}
-	for m.closedSequence < sequence {
-		m.closedConnections.PopFront()
-		m.closedSequence++
+	if pruneCount == closedCount {
+		m.closedConnections = deque.Deque[*TrackerInfo]{}
+	} else {
+		for i := 0; i < pruneCount; i++ {
+			m.closedConnections.PopFront()
+		}
+	}
+	for stream := range m.snapshotStreams {
+		stream.cursor -= pruneCount
 	}
 }
 
