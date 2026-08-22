@@ -163,7 +163,7 @@ func (o IPStackOption) validate() error {
 	default:
 		return fmt.Errorf("invalid IP stack mode %q; expected auto, gvisor, or mips", o.Mode)
 	}
-	switch mipstack.CongestionControl(o.CongestionController) {
+	switch o.CongestionController {
 	case "", mipstack.CongestionControlCUBIC, mipstack.CongestionControlReno, mipstack.CongestionControlBBR, mipstack.CongestionControlBBR3:
 		return nil
 	default:
@@ -204,7 +204,7 @@ func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32)
 			LocalAddresses: localAddresses,
 			MTU:            mtu,
 			TCP: mipstack.TCPSocketDefaults{
-				CongestionControl: mipstack.CongestionControl(option.CongestionController),
+				CongestionControl: option.CongestionController,
 				// Align with sing-wireguard: enable keepalive with 15-second
 				// idle/interval timing and gVisor's default probe count.
 				KeepAlive: true,
