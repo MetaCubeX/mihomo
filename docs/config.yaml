@@ -1603,7 +1603,7 @@ proxies: # socks5
     port: 22
     username: root
     password: password
-    privateKey: path
+    private-key: path
 
   # mieru
   - name: mieru
