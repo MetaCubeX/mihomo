@@ -12,6 +12,7 @@ import (
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 
+	M "github.com/metacubex/sing/common/metadata"
 	D "github.com/miekg/dns"
 )
 
@@ -152,6 +153,9 @@ func withFakeIP(skipper *fakeip.Skipper, fakePool *fakeip.Pool, fakePool6 *fakei
 			q := r.Question[0]
 
 			host := strings.TrimRight(q.Name, ".")
+			if !M.IsDomainName(host) {
+				return next(ctx, r)
+			}
 			if skipper.ShouldSkipped(host) {
 				return next(ctx, r)
 			}
