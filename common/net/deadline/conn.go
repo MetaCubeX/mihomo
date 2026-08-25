@@ -19,11 +19,13 @@ type connReadResult struct {
 
 type Conn struct {
 	network.ExtendedConn
-	deadline     atomic.TypedValue[time.Time]
-	pipeDeadline PipeDeadline
-	disablePipe  atomic.Bool
-	inRead       atomic.Bool
-	resultCh     chan *connReadResult
+	deadline      atomic.TypedValue[time.Time]
+	pipeDeadline  PipeDeadline
+	disablePipe   atomic.Bool
+	inRead        atomic.Bool
+	resultCh      chan *connReadResult
+	emulated      bool
+	writeDeadline atomic.TypedValue[time.Time]
 }
 
 func IsConn(conn any) bool {
@@ -38,6 +40,12 @@ func NewConn(conn net.Conn) *Conn {
 		resultCh:     make(chan *connReadResult, 1),
 	}
 	c.resultCh <- nil
+	return c
+}
+
+func NewEmulatedConn(conn net.Conn) *Conn {
+	c := NewConn(conn)
+	c.emulated = true
 	return c
 }
 
@@ -123,15 +131,57 @@ func (c *Conn) ReadBuffer(buffer *buf.Buffer) (err error) {
 }
 
 func (c *Conn) SetReadDeadline(t time.Time) error {
-	if c.disablePipe.Load() {
-		return c.ExtendedConn.SetReadDeadline(t)
-	} else if c.inRead.Load() {
-		c.disablePipe.Store(true)
-		return c.ExtendedConn.SetReadDeadline(t)
+	if !c.emulated {
+		if c.disablePipe.Load() {
+			return c.ExtendedConn.SetReadDeadline(t)
+		} else if c.inRead.Load() {
+			c.disablePipe.Store(true)
+			return c.ExtendedConn.SetReadDeadline(t)
+		}
 	}
 	c.deadline.Store(t)
 	c.pipeDeadline.Set(t)
 	return nil
+}
+
+func (c *Conn) SetDeadline(t time.Time) error {
+	if !c.emulated {
+		return c.ExtendedConn.SetDeadline(t)
+	}
+	if err := c.SetReadDeadline(t); err != nil {
+		return err
+	}
+	return c.SetWriteDeadline(t)
+}
+
+func (c *Conn) SetWriteDeadline(t time.Time) error {
+	if !c.emulated {
+		return c.ExtendedConn.SetWriteDeadline(t)
+	}
+	c.writeDeadline.Store(t)
+	return nil
+}
+
+func (c *Conn) writeDeadlineExceeded() bool {
+	if !c.emulated {
+		return false
+	}
+	deadline := c.writeDeadline.Load()
+	return !deadline.IsZero() && !time.Now().Before(deadline)
+}
+
+func (c *Conn) Write(p []byte) (n int, err error) {
+	if c.writeDeadlineExceeded() {
+		return 0, os.ErrDeadlineExceeded
+	}
+	return c.ExtendedConn.Write(p)
+}
+
+func (c *Conn) WriteBuffer(buffer *buf.Buffer) error {
+	if c.writeDeadlineExceeded() {
+		return os.ErrDeadlineExceeded
+	}
+	return c.ExtendedConn.WriteBuffer(buffer)
 }
 
 func (c *Conn) ReaderReplaceable() bool {
@@ -150,7 +200,7 @@ func (c *Conn) ReaderReplaceable() bool {
 }
 
 func (c *Conn) WriterReplaceable() bool {
-	return true
+	return !c.emulated
 }
 
 func (c *Conn) Upstream() any {

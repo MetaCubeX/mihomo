@@ -46,6 +46,10 @@ func NewDeadlineConn(conn net.Conn) ExtendedConn {
 	return deadline.NewConn(conn)
 }
 
+func NewEmulatedDeadlineConn(conn net.Conn) ExtendedConn {
+	return deadline.NewEmulatedConn(conn)
+}
+
 func NeedHandshake(conn any) bool {
 	if earlyConn, isEarlyConn := common.Cast[network.EarlyConn](conn); isEarlyConn && earlyConn.NeedHandshake() {
 		return true

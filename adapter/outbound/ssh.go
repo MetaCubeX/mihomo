@@ -51,7 +51,7 @@ func (s *Ssh) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, 
 		return nil, err
 	}
 
-	return NewConn(c, s), nil
+	return NewConn(N.NewEmulatedDeadlineConn(c), s), nil
 }
 
 func (s *Ssh) connect(ctx context.Context, addr string) (client *ssh.Client, err error) {
