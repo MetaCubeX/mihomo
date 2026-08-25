@@ -265,10 +265,8 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 }
 
 func (l *Listener) HandleHTTPConn(r *http.Request, conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	if l.config.TrustedProxyHeader != "" {
-		if ap := httputils.ClientAddrPortFromHeader(r, l.config.TrustedProxyHeader); ap.IsValid() {
-			additions = append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))
-		}
+	if ap := httputils.ClientAddrPortFromHeader(r, l.config.TrustedProxyHeader); ap.IsValid() {
+		additions = append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))
 	}
 	l.HandleConn(conn, tunnel, additions...)
 }
