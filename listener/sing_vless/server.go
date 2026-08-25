@@ -173,8 +173,7 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
-			sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
+			sl.HandleHTTPConn(r, conn, tunnel, additions...)
 		})
 		httpServer.Handler = httpMux
 		httpServer.Protocols.SetHTTP1(true)
@@ -184,8 +183,7 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 		httpServer.Handler = gun.NewServerHandler(gun.ServerOption{
 			ServiceName: config.GrpcServiceName,
 			ConnHandler: func(conn net.Conn, r *http.Request) {
-				ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
-				sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
+				sl.HandleHTTPConn(r, conn, tunnel, additions...)
 			},
 			HttpHandler: httpServer.Handler,
 		})
@@ -233,8 +231,7 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 				ScMaxEachPostBytes:   config.XHTTPConfig.ScMaxEachPostBytes,
 			},
 			ConnHandler: func(conn net.Conn, r *http.Request) {
-				ap := httputils.ClientAddrPortFromHeader(r, config.TrustedProxyHeader)
-				sl.HandleConn(conn, tunnel, append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))...)
+				sl.HandleHTTPConn(r, conn, tunnel, additions...)
 			},
 			HttpHandler: httpServer.Handler,
 		})
@@ -327,6 +324,15 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 		addrList = append(addrList, lis.Addr())
 	}
 	return
+}
+
+func (l *Listener) HandleHTTPConn(r *http.Request, conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
+	if l.config.TrustedProxyHeader != "" {
+		if ap := httputils.ClientAddrPortFromHeader(r, l.config.TrustedProxyHeader); ap.IsValid() {
+			additions = append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))
+		}
+	}
+	l.HandleConn(conn, tunnel, additions...)
 }
 
 func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
