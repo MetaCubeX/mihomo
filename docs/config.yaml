@@ -327,6 +327,10 @@ dns:
   # 专用于节点域名解析的 DNS 服务器，非必要配置项，如果不填则遵循nameserver-policy、nameserver和fallback的配置
   # proxy-server-nameserver:
   #   - https://doh.pub/dns-query
+  # proxy-server-nameserver-fallback: # 主组未能及时返回有效 IP 时使用；主组异常后暂时只使用 fallback
+  #   - system://
+  # proxy-server-nameserver-fallback-delay: 1000 # 启动 fallback 前等待的时间，单位：ms；默认 1000ms
+  # 主组进入 fallback 状态后，内核每隔 5 分钟在下一次查询时使用根区 NS 查询探测主组，成功后恢复
   #   - tls://223.5.5.5:853
   # proxy-server-nameserver-policy: # 格式同nameserver-policy，仅用于节点域名解析，当且仅当proxy-server-nameserver不为空时生效
   #   'www.yournode.com': '114.114.114.114'
@@ -334,9 +338,10 @@ dns:
   # 专用于direct出口域名解析的 DNS 服务器，非必要配置项，如果不填则遵循nameserver-policy、nameserver和fallback的配置
   # direct-nameserver:
   #   - system://
-  # direct-nameserver-fallback: # direct-nameserver 未能及时返回有效结果时使用
+  # direct-nameserver-fallback: # 主组未能及时返回有效 IP 时使用；主组异常后暂时只使用 fallback
   #   - system://
   # direct-nameserver-fallback-delay: 1000 # 启动 fallback 查询前等待的时间，单位：ms；默认 1000ms
+  # 主组进入 fallback 状态后，内核每隔 5 分钟在下一次查询时使用根区 NS 查询探测主组，成功后恢复
   # direct-nameserver-follow-policy: false # 是否遵循nameserver-policy，默认为不遵守，仅当direct-nameserver不为空时生效
 
   # 配置 fallback 使用条件
