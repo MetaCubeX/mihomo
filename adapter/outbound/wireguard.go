@@ -177,7 +177,10 @@ type ipStack interface {
 	Start() error
 	DialTCP(ctx context.Context, network string, source, destination netip.AddrPort) (net.Conn, error)
 	DialUDP(ctx context.Context, network string, source, destination netip.AddrPort) (net.Conn, error)
+	DialIP(ctx context.Context, network string, source, destination netip.Addr) (net.Conn, error)
+	ListenTCP(ctx context.Context, network string, local netip.AddrPort) (net.Listener, error)
 	ListenUDP(ctx context.Context, network string, local netip.AddrPort) (net.PacketConn, error)
+	ListenIP(ctx context.Context, network string, local netip.Addr) (net.PacketConn, error)
 	Read(buffers [][]byte, sizes []int, offset int) (int, error)
 	Write(buffers [][]byte, offset int) (int, error)
 	MTU() (int, error)
@@ -211,6 +214,11 @@ func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32)
 				KeepAliveConfig: mipstack.KeepAliveConfig{
 					Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 9,
 				},
+			},
+			IP: mipstack.IPSocketDefaults{
+				// Align with sing-wireguard: fellow its IP socket semantics
+				IPHeaderIncludedOnRead:  true,
+				IPHeaderIncludedOnWrite: true,
 			},
 		})
 	default:
