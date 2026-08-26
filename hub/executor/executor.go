@@ -260,6 +260,8 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		ProxyServer:          c.ProxyServerNameserver,
 		ProxyServerPolicy:    c.ProxyServerPolicy,
 		DirectServer:         c.DirectNameServer,
+		DirectFallback:       c.DirectNameServerFallback,
+		DirectFallbackDelay:  c.DirectNameServerFallbackDelay,
 		DirectFollowPolicy:   c.DirectFollowPolicy,
 		CacheAlgorithm:       c.CacheAlgorithm,
 		CacheMaxSize:         c.CacheMaxSize,

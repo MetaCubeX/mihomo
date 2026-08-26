@@ -44,6 +44,8 @@ type Resolver struct {
 	fallbackDomainFilters []C.DomainMatcher
 	fallbackIPFilters     []C.IpMatcher
 	fallbackLazyQuery     bool
+	fallbackDelay         time.Duration
+	delayedFallback       bool
 	group                 singleflight.Group[*D.Msg]
 	cache                 dnsCache
 	policy                []dnsPolicy
@@ -301,6 +303,9 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 		res := <-r.asyncExchange(ctx, matched, m)
 		return res.Msg, res.Error
 	}
+	if r.delayedFallback {
+		return r.ipExchangeWithDelayedFallback(ctx, m)
+	}
 
 	onlyFallback := r.shouldOnlyQueryFallback(m)
 
@@ -340,6 +345,61 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	res = <-fallbackMsg
 	msg, err = res.Msg, res.Error
 	return
+}
+
+func validIPResult(res *result) bool {
+	return res != nil && res.Error == nil && res.Msg != nil && len(msgToIP(res.Msg)) != 0
+}
+
+// ipExchangeWithDelayedFallback starts the fallback query after the configured
+// delay, or immediately when all primary servers fail first. Once both tiers
+// are running, the first response containing an IP address wins.
+func (r *Resolver) ipExchangeWithDelayedFallback(ctx context.Context, m *D.Msg) (*D.Msg, error) {
+	mainCh := r.asyncExchange(ctx, r.main, m)
+	var fallbackCh <-chan *result
+	fallbackStarted := false
+	startFallback := func() {
+		if !fallbackStarted {
+			fallbackStarted = true
+			fallbackCh = r.asyncExchange(ctx, r.fallback, m)
+		}
+	}
+
+	timer := time.NewTimer(r.fallbackDelay)
+	defer timer.Stop()
+	timerCh := timer.C
+
+	var mainResult, fallbackResult *result
+	for mainCh != nil || fallbackCh != nil {
+		select {
+		case res := <-mainCh:
+			mainCh = nil
+			mainResult = res
+			if validIPResult(res) {
+				return res.Msg, nil
+			}
+			startFallback()
+		case <-timerCh:
+			startFallback()
+			timerCh = nil
+		case res := <-fallbackCh:
+			fallbackCh = nil
+			fallbackResult = res
+			if validIPResult(res) {
+				return res.Msg, nil
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	if fallbackResult != nil {
+		return fallbackResult.Msg, fallbackResult.Error
+	}
+	if mainResult != nil {
+		return mainResult.Msg, mainResult.Error
+	}
+	return nil, errors.New("all DNS requests failed")
 }
 
 func (r *Resolver) lookupIP(ctx context.Context, host string, dnsType uint16) (ips []netip.Addr, err error) {
@@ -473,6 +533,8 @@ type Config struct {
 	Default              []NameServer
 	ProxyServer          []NameServer
 	DirectServer         []NameServer
+	DirectFallback       []NameServer
+	DirectFallbackDelay  uint
 	DirectFollowPolicy   bool
 	IPv6                 bool
 	IPv6Timeout          uint
@@ -616,10 +678,13 @@ func NewResolver(config Config) (rs Resolvers) {
 
 	if len(config.DirectServer) != 0 {
 		rs.DirectResolver = &Resolver{
-			ipv6:        config.IPv6,
-			main:        cacheTransform(config.DirectServer),
-			cache:       config.newCache(),
-			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+			ipv6:            config.IPv6,
+			main:            cacheTransform(config.DirectServer),
+			fallback:        cacheTransform(config.DirectFallback),
+			fallbackDelay:   time.Duration(config.DirectFallbackDelay) * time.Millisecond,
+			delayedFallback: len(config.DirectFallback) != 0,
+			cache:           config.newCache(),
+			ipv6Timeout:     time.Duration(config.IPv6Timeout) * time.Millisecond,
 		}
 		if config.DirectFollowPolicy {
 			rs.DirectResolver.policy = r.policy

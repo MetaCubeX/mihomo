@@ -334,6 +334,9 @@ dns:
   # 专用于direct出口域名解析的 DNS 服务器，非必要配置项，如果不填则遵循nameserver-policy、nameserver和fallback的配置
   # direct-nameserver:
   #   - system://
+  # direct-nameserver-fallback: # direct-nameserver 未能及时返回有效结果时使用
+  #   - system://
+  # direct-nameserver-fallback-delay: 1000 # 启动 fallback 查询前等待的时间，单位：ms；默认 1000ms
   # direct-nameserver-follow-policy: false # 是否遵循nameserver-policy，默认为不遵守，仅当direct-nameserver不为空时生效
 
   # 配置 fallback 使用条件
