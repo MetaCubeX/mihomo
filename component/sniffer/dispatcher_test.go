@@ -366,7 +366,7 @@ func TestDispatcherMultipleSniffers(t *testing.T) {
 		assert.False(t, cached)
 	})
 
-	t.Run("keeps the connection open and caches an initial read failure once", func(t *testing.T) {
+	t.Run("keeps the connection open without caching an empty initial read", func(t *testing.T) {
 		waiting := &stubSniffer{reply: func(data []byte) (string, error) {
 			return "", needAtLeast(len(data) + 1)
 		}}
@@ -389,10 +389,36 @@ func TestDispatcherMultipleSniffers(t *testing.T) {
 		assert.False(t, sniffed)
 		assert.False(t, raw.closed)
 		assert.Empty(t, waiting.seen)
+		_, cached := sd.skipList.Get(metadata.AddrPort())
+		assert.False(t, cached)
+		assert.True(t, raw.deadline.IsZero(), "read deadline was not cleared")
+	})
+
+	t.Run("caches a sniff failure after receiving client data", func(t *testing.T) {
+		waiting := &stubSniffer{reply: func(data []byte) (string, error) {
+			return "", needAtLeast(len(data) + 1)
+		}}
+		sd, err := NewDispatcher(&Config{Enable: true, ParsePureIp: true})
+		assert.NoError(t, err)
+		sd.sniffers = []configuredSniffer{{Sniffer: waiting}}
+		raw := &chunkedConn{
+			t:       t,
+			chunks:  [][]byte{segment},
+			readErr: &net.OpError{Op: "read", Net: "tcp", Err: io.ErrNoProgress},
+		}
+		t.Cleanup(raw.stopTimer)
+		metadata := &C.Metadata{
+			NetWork: C.TCP,
+			DstIP:   netip.MustParseAddr("192.0.2.1"),
+			DstPort: 80,
+		}
+
+		sniffed := sd.TCPSniff(N.NewBufferedConn(raw), metadata)
+
+		assert.False(t, sniffed)
 		failures, cached := sd.skipList.Get(metadata.AddrPort())
 		assert.True(t, cached)
 		assert.Equal(t, uint8(1), failures)
-		assert.True(t, raw.deadline.IsZero(), "read deadline was not cleared")
 	})
 
 	t.Run("does not cache a forced initial read failure", func(t *testing.T) {
