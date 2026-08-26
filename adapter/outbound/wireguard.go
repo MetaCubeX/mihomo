@@ -386,6 +386,10 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	outbound.bind = wireguard.NewClientBind(context.Background(), wgSingErrorHandler{outbound.Name()}, singDialer, isConnect, outbound.connectAddr.AddrPort(), reserved)
 
+	if outbound.bind == nil {
+		return nil, E.New("failed to create wireguard client bind")
+	}
+
 	var err error
 	outbound.localPrefixes, err = option.Prefixes()
 	if err != nil {
