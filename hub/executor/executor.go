@@ -264,6 +264,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		DirectServer:         c.DirectNameServer,
 		DirectFallback:       c.DirectNameServerFallback,
 		DirectFallbackDelay:  c.DirectNameServerFallbackDelay,
+		RecoveryInterval:     c.NameServerFallbackRecoveryInterval,
 		DirectFollowPolicy:   c.DirectFollowPolicy,
 		CacheAlgorithm:       c.CacheAlgorithm,
 		CacheMaxSize:         c.CacheMaxSize,

@@ -156,19 +156,22 @@ type DNS struct {
 	FallbackIPFilter     []C.IpMatcher
 	FallbackDomainFilter []C.DomainMatcher
 	FallbackLazyQuery    bool
-	Listen               string
-	ListenRoutingMark    int
-	EnhancedMode         C.DNSMode
-	DefaultNameserver    []dns.NameServer
-	CacheAlgorithm       string
-	CacheMaxSize         int
-	FakeIPRange          netip.Prefix
-	FakeIPPool           *fakeip.Pool
-	FakeIPRange6         netip.Prefix
-	FakeIPPool6          *fakeip.Pool
-	FakeIPSkipper        *fakeip.Skipper
-	FakeIPTTL            int
-	NameServerPolicy     []dns.Policy
+
+	NameServerFallbackRecoveryInterval uint
+
+	Listen            string
+	ListenRoutingMark int
+	EnhancedMode      C.DNSMode
+	DefaultNameserver []dns.NameServer
+	CacheAlgorithm    string
+	CacheMaxSize      int
+	FakeIPRange       netip.Prefix
+	FakeIPPool        *fakeip.Pool
+	FakeIPRange6      netip.Prefix
+	FakeIPPool6       *fakeip.Pool
+	FakeIPSkipper     *fakeip.Skipper
+	FakeIPTTL         int
+	NameServerPolicy  []dns.Policy
 
 	ProxyServerNameserver              []dns.NameServer
 	ProxyServerPolicy                  []dns.Policy
@@ -225,17 +228,20 @@ type RawCors struct {
 }
 
 type RawDNS struct {
-	Enable            bool                                `yaml:"enable" json:"enable"`
-	PreferH3          bool                                `yaml:"prefer-h3" json:"prefer-h3"`
-	IPv6              bool                                `yaml:"ipv6" json:"ipv6"`
-	IPv6Timeout       uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
-	UseHosts          bool                                `yaml:"use-hosts" json:"use-hosts"`
-	UseSystemHosts    bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
-	RespectRules      bool                                `yaml:"respect-rules" json:"respect-rules"`
-	NameServer        []string                            `yaml:"nameserver" json:"nameserver"`
-	Fallback          []string                            `yaml:"fallback" json:"fallback"`
-	FallbackFilter    RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
-	FallbackLazyQuery bool                                `yaml:"fallback-lazy-query" json:"fallback-lazy-query"`
+	Enable            bool              `yaml:"enable" json:"enable"`
+	PreferH3          bool              `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6              bool              `yaml:"ipv6" json:"ipv6"`
+	IPv6Timeout       uint              `yaml:"ipv6-timeout" json:"ipv6-timeout"`
+	UseHosts          bool              `yaml:"use-hosts" json:"use-hosts"`
+	UseSystemHosts    bool              `yaml:"use-system-hosts" json:"use-system-hosts"`
+	RespectRules      bool              `yaml:"respect-rules" json:"respect-rules"`
+	NameServer        []string          `yaml:"nameserver" json:"nameserver"`
+	Fallback          []string          `yaml:"fallback" json:"fallback"`
+	FallbackFilter    RawFallbackFilter `yaml:"fallback-filter" json:"fallback-filter"`
+	FallbackLazyQuery bool              `yaml:"fallback-lazy-query" json:"fallback-lazy-query"`
+
+	NameServerFallbackRecoveryInterval uint `yaml:"nameserver-fallback-recovery-interval" json:"nameserver-fallback-recovery-interval"`
+
 	Listen            string                              `yaml:"listen" json:"listen"`
 	ListenRoutingMark int                                 `yaml:"listen-routing-mark" json:"listen-routing-mark"`
 	EnhancedMode      C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
@@ -522,6 +528,9 @@ func DefaultRawConfig() *RawConfig {
 
 			DirectNameServerFallbackDelay:      1000,
 			ProxyServerNameserverFallbackDelay: 1000,
+
+			NameServerFallbackRecoveryInterval: 300000,
+
 			FallbackFilter: RawFallbackFilter{
 				GeoIP:     true,
 				GeoIPCode: "CN",
@@ -1480,6 +1489,7 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	}
 	dnsCfg.DirectNameServerFallbackDelay = cfg.DirectNameServerFallbackDelay
 	dnsCfg.DirectFollowPolicy = cfg.DirectNameServerFollowPolicy
+	dnsCfg.NameServerFallbackRecoveryInterval = cfg.NameServerFallbackRecoveryInterval
 
 	if len(cfg.DefaultNameserver) == 0 {
 		return nil, errors.New("default nameserver should have at least one nameserver")
