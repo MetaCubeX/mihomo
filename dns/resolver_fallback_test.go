@@ -503,7 +503,7 @@ func TestNewResolverConfiguresDirectAndProxyFallback(t *testing.T) {
 	assert.Nil(t, disabled.DirectResolver.fallbackCircuit)
 }
 
-func TestFallbackCircuitDoesNotCacheFallbackOnlyResponses(t *testing.T) {
+func TestFallbackCircuitCachesFallbackOnlyResponses(t *testing.T) {
 	var fallbackQueries atomic.Int32
 	resolver := &Resolver{
 		main: []dnsClient{&fallbackTestClient{
@@ -536,7 +536,156 @@ func TestFallbackCircuitDoesNotCacheFallbackOnlyResponses(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
 	}
-	assert.Equal(t, int32(2), fallbackQueries.Load())
+	assert.Equal(t, int32(1), fallbackQueries.Load())
+}
+
+func TestExpiredFallbackCircuitCacheIsIgnored(t *testing.T) {
+	resolver := &Resolver{
+		fallbackCircuit: newFallbackCircuit(time.Minute),
+		fallbackLabel:   "test-nameserver",
+	}
+	query := fallbackTestQuery()
+	key := fallbackQueryKey(query)
+	resolver.fallbackCircuit.fallbackCache.SetWithExpire(key, fallbackTestResponse("192.0.2.2"), time.Now().Add(-time.Second))
+
+	_, hit := resolver.getFallbackCache(query)
+	assert.False(t, hit)
+	_, _, stored := resolver.fallbackCircuit.fallbackCache.GetWithExpire(key)
+	assert.False(t, stored)
+}
+
+func TestRecoveryReturnsFallbackCacheImmediatelyAndClearsItOnPrimarySuccess(t *testing.T) {
+	mainStarted := make(chan struct{})
+	mainRelease := make(chan struct{})
+	var mainQueries atomic.Int32
+	var fallbackQueries atomic.Int32
+	resolver := &Resolver{
+		main: []dnsClient{&fallbackTestClient{
+			address: "primary",
+			started: mainStarted,
+			exchange: func(ctx context.Context, _ *D.Msg) (*D.Msg, error) {
+				mainQueries.Add(1)
+				select {
+				case <-mainRelease:
+					return fallbackTestResponse("192.0.2.1"), nil
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			},
+		}},
+		fallback: []dnsClient{&fallbackTestClient{
+			address: "fallback",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				fallbackQueries.Add(1)
+				return fallbackTestResponse("192.0.2.2"), nil
+			},
+		}},
+		fallbackTimeout: 200 * time.Millisecond,
+		delayedFallback: true,
+		fallbackCircuit: newFallbackCircuit(20 * time.Millisecond),
+		fallbackLabel:   "test-nameserver",
+	}
+	query := fallbackTestQuery()
+	resolver.openDomainFallback(query)
+	resolver.putFallbackCache(query, &result{Msg: fallbackTestResponse("192.0.2.2")})
+	time.Sleep(25 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	msg, _, err := resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
+	assert.Equal(t, int32(0), fallbackQueries.Load(), "a valid fallback cache hit must avoid a fallback DNS query")
+	select {
+	case <-mainStarted:
+	case <-time.After(time.Second):
+		t.Fatal("cached recovery did not start a primary query")
+	}
+
+	close(mainRelease)
+	require.Eventually(t, func() bool {
+		scope, _ := resolver.fallbackState(query, false)
+		return scope == fallbackScopeNone
+	}, 500*time.Millisecond, 5*time.Millisecond)
+	_, hit := resolver.getFallbackCache(query)
+	assert.False(t, hit, "primary recovery must remove the fallback answer")
+	assert.Equal(t, int32(1), mainQueries.Load())
+
+	msg, _, err = resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.1", msgToIP(msg)[0].String())
+	assert.Equal(t, int32(2), mainQueries.Load())
+	assert.Equal(t, int32(0), fallbackQueries.Load())
+}
+
+func TestFailedBackgroundRecoveryPreservesFallbackCacheAndExtendsCircuit(t *testing.T) {
+	mainFinished := make(chan struct{})
+	var fallbackQueries atomic.Int32
+	resolver := &Resolver{
+		main: []dnsClient{&fallbackTestClient{
+			address: "primary",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				close(mainFinished)
+				return nil, errors.New("primary failed")
+			},
+		}},
+		fallback: []dnsClient{&fallbackTestClient{
+			address: "fallback",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				fallbackQueries.Add(1)
+				return nil, nil
+			},
+		}},
+		fallbackTimeout: 100 * time.Millisecond,
+		delayedFallback: true,
+		fallbackCircuit: newFallbackCircuit(time.Minute),
+		fallbackLabel:   "test-nameserver",
+	}
+	query := fallbackTestQuery()
+	key := fallbackQueryKey(query)
+	resolver.openDomainFallback(query)
+	resolver.fallbackCircuit.domains.Set(key, time.Now().Add(-time.Second))
+	resolver.putFallbackCache(query, &result{Msg: fallbackTestResponse("192.0.2.2")})
+
+	msg, _, err := resolver.ipExchangeWithDelayedFallback(context.Background(), query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
+	select {
+	case <-mainFinished:
+	case <-time.After(time.Second):
+		t.Fatal("background primary recovery did not finish")
+	}
+	require.Eventually(t, func() bool {
+		scope, retry := resolver.fallbackState(query, false)
+		return scope == fallbackScopeDomain && !retry
+	}, 500*time.Millisecond, 5*time.Millisecond)
+	_, hit := resolver.getFallbackCache(query)
+	assert.True(t, hit, "failed primary recovery must preserve the fallback answer")
+	assert.Equal(t, int32(0), fallbackQueries.Load())
+}
+
+func TestFallbackRecoveryClearsOnlyItsCacheScope(t *testing.T) {
+	resolver := &Resolver{
+		fallbackCircuit: newFallbackCircuit(time.Minute),
+		fallbackLabel:   "test-nameserver",
+	}
+	first := fallbackTestQueryFor("first.example.")
+	second := fallbackTestQueryFor("second.example.")
+	resolver.putFallbackCache(first, &result{Msg: fallbackTestResponse("192.0.2.1")})
+	resolver.putFallbackCache(second, &result{Msg: fallbackTestResponse("192.0.2.2")})
+
+	resolver.recoverFallback(fallbackScopeDomain, first)
+	_, firstHit := resolver.getFallbackCache(first)
+	_, secondHit := resolver.getFallbackCache(second)
+	assert.False(t, firstHit)
+	assert.True(t, secondHit)
+
+	resolver.recoverFallback(fallbackScopeGroup, second)
+	_, secondHit = resolver.getFallbackCache(second)
+	assert.False(t, secondHit)
 }
 
 func TestFallbackStateTransitionsPreserveUnrelatedCache(t *testing.T) {

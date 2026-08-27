@@ -56,15 +56,24 @@ type fallbackCircuit struct {
 	probeRunning    bool
 	probeGeneration uint64
 	probeCancel     context.CancelFunc
+	fallbackCache   *lru.LruCache[string, *D.Msg]
 }
 
 func newFallbackCircuit(interval time.Duration) *fallbackCircuit {
 	if interval <= 0 {
 		return nil
 	}
+	fallbackCache := lru.New(
+		lru.WithSize[string, *D.Msg](fallbackCircuitMaxDomains),
+		lru.WithStale[string, *D.Msg](true),
+	)
 	return &fallbackCircuit{
-		domains:  lru.New(lru.WithSize[string, time.Time](fallbackCircuitMaxDomains)),
-		interval: interval,
+		domains: lru.New(
+			lru.WithSize[string, time.Time](fallbackCircuitMaxDomains),
+			lru.WithEvict(func(key string, _ time.Time) { fallbackCache.Delete(key) }),
+		),
+		interval:      interval,
+		fallbackCache: fallbackCache,
 	}
 }
 
@@ -414,6 +423,33 @@ func fallbackQueryKey(m *D.Msg) string {
 	return strings.ToLower(m.Question[0].String())
 }
 
+func (r *Resolver) getFallbackCache(m *D.Msg) (*D.Msg, bool) {
+	circuit := r.fallbackCircuit
+	key := fallbackQueryKey(m)
+	if circuit == nil || key == "" {
+		return nil, false
+	}
+	msg, expireTime, hit := getMsgFromCacheKey(circuit.fallbackCache, key)
+	if !hit || msg == nil {
+		return nil, false
+	}
+	if !expireTime.After(time.Now()) {
+		circuit.fallbackCache.Delete(key)
+		return nil, false
+	}
+	updateMsgTTL(msg, uint32(time.Until(expireTime).Seconds()))
+	return msg, true
+}
+
+func (r *Resolver) putFallbackCache(m *D.Msg, res *result) {
+	circuit := r.fallbackCircuit
+	key := fallbackQueryKey(m)
+	if circuit == nil || key == "" || res == nil || res.Error != nil || res.Msg == nil || len(m.Question) == 0 {
+		return
+	}
+	putMsgToCacheKey(circuit.fallbackCache, key, m.Question[0], res.Msg)
+}
+
 func (r *Resolver) fallbackState(m *D.Msg, claimRetry bool) (fallbackScope, bool) {
 	circuit := r.fallbackCircuit
 	if circuit == nil {
@@ -496,9 +532,11 @@ func (r *Resolver) recoverFallback(scope fallbackScope, m *D.Msg) {
 
 	key := fallbackQueryKey(m)
 	circuit.mu.Lock()
+	clearAllFallbackCache := false
 	switch scope {
 	case fallbackScopeGroup:
 		circuit.groupUntil = time.Time{}
+		clearAllFallbackCache = true
 		if key != "" {
 			circuit.domains.Delete(key)
 		}
@@ -512,6 +550,11 @@ func (r *Resolver) recoverFallback(scope fallbackScope, m *D.Msg) {
 	circuit.mu.Unlock()
 	if probeCancel != nil {
 		probeCancel()
+	}
+	if clearAllFallbackCache {
+		circuit.fallbackCache.Clear()
+	} else if key != "" {
+		circuit.fallbackCache.Delete(key)
 	}
 	log.Infoln("[DNS] %s primary query recovered for %s", r.fallbackLabel, key)
 }
@@ -545,11 +588,15 @@ func (r *Resolver) classifyNewFailure(m *D.Msg) {
 }
 
 func (r *Resolver) exchangeFallbackOnly(ctx context.Context, m *D.Msg) (*D.Msg, error) {
+	if msg, hit := r.getFallbackCache(m); hit {
+		return msg, nil
+	}
 	res := <-r.asyncExchange(ctx, r.fallback, m)
+	r.putFallbackCache(m, res)
 	return res.Msg, res.Error
 }
 
-func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fallbackScope) (*D.Msg, error) {
+func (r *Resolver) startPrimaryRecovery(m *D.Msg, scope fallbackScope) <-chan *result {
 	mainCtx, cancelMain := context.WithTimeout(context.Background(), r.fallbackQueryTimeout())
 	mainCh := r.asyncExchange(mainCtx, r.main, m)
 	recoveryCh := make(chan *result, 1)
@@ -561,7 +608,11 @@ func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fal
 		cancelMain()
 		recoveryCh <- res
 	}()
+	return recoveryCh
+}
 
+func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fallbackScope) (*D.Msg, error) {
+	recoveryCh := r.startPrimaryRecovery(m, scope)
 	fallbackCh := r.asyncExchange(ctx, r.fallback, m)
 	var mainResult, fallbackResult *result
 	for recoveryCh != nil || fallbackCh != nil {
@@ -575,6 +626,7 @@ func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fal
 		case res := <-fallbackCh:
 			fallbackCh = nil
 			fallbackResult = res
+			r.putFallbackCache(m, res)
 			if validFallbackResult(m, res) {
 				return res.Msg, nil
 			}
@@ -597,6 +649,10 @@ func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fal
 func (r *Resolver) ipExchangeWithDelayedFallback(ctx context.Context, m *D.Msg) (*D.Msg, bool, error) {
 	if scope, retry := r.fallbackState(m, true); scope != fallbackScopeNone {
 		if retry {
+			if msg, hit := r.getFallbackCache(m); hit {
+				r.startPrimaryRecovery(m, scope)
+				return msg, false, nil
+			}
 			msg, err := r.exchangeRecoveryRace(ctx, m, scope)
 			return msg, false, err
 		}
@@ -647,6 +703,9 @@ func (r *Resolver) ipExchangeWithDelayedFallback(ctx context.Context, m *D.Msg) 
 		case res := <-fallbackCh:
 			fallbackCh = nil
 			fallbackResult = res
+			if !cacheable {
+				r.putFallbackCache(m, res)
+			}
 			if validFallbackResult(m, res) {
 				return res.Msg, cacheable, nil
 			}
