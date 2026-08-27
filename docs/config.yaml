@@ -1934,6 +1934,34 @@ rule-providers:
       - '.blogger.com'
       - '*.*.microsoft.com'
       - 'books.itunes.apple.com'
+  rule5:
+    # json类型ruleset，通过 json.paths 的简单路径表达式从JSON文档中提取规则字符串,
+    # 路径表达式语法: 以点号分隔的键访问，任何一段都可以以 [] 结尾表示遍历数组并自动展开(拍平)，
+    # 例如 prefixes[].ipv4Prefix 、 actions[] 、 [](根数组)、a.b.c；同 JSONPath 中 "$" 为可选前缀,
+    # 提取时自动忽略 null、缺失字段，数组自动拍平，仅收集字符串(及数字)值,
+    # 如果一条规则都没有提取到则会报错
+    type: http
+    url: "https://www.gstatic.com/ipranges/cloud.json" # 例如 Google Cloud 的IP段, AWS: https://ip-ranges.amazonaws.com/ip-ranges.json
+    format: json
+    behavior: ipcidr
+    # path: /path/to/save/file.json # 同 http 的默认行为，可省略
+    interval: 86400
+    json:
+      paths:
+        - prefixes[].ipv4Prefix # 遍历 prefixes 数组取每个元素的 ipv4Prefix
+        - prefixes[].ipv6Prefix # 遍历 prefixes 数组取每个元素的 ipv6Prefix
+  rule6:
+    # json类型ruleset的另一个例子，GitHub Meta 中的多个数组,
+    # 如果不配置 json.paths 或者 format 不是 json 时配置了 json，加载配置时会报错
+    type: http
+    url: "https://api.github.com/meta"
+    format: json
+    behavior: ipcidr
+    json:
+      paths:
+        - actions[]
+        - git[]
+        - hooks[]
 
 rules:
   - RULE-SET,rule1,REJECT
