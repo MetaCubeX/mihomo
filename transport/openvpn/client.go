@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"strconv"
@@ -36,6 +37,8 @@ type Client struct {
 	mux    *PacketMux
 
 	control *ControlChannel
+	// controlConn is the net.Conn adapter wrapping the control channel.
+	controlConn *ControlConn
 	// tlsConn is the active TLS session; swapped on each rekey by the
 	// watchControl goroutine and read by Close. Atomic to avoid racing.
 	tlsConn atomic.Pointer[tls.Conn]
@@ -89,8 +92,6 @@ type Client struct {
 	lastRekeyErr atomic.Pointer[error]
 	// dataByKey keeps active and retiring data channels indexed by key ID.
 	dataByKey map[uint8]*DataChannel
-	// controlConn is the net.Conn adapter wrapping the control channel.
-	controlConn *ControlConn
 
 	// negotiatedCipher is the data channel cipher selected during the most
 	// recent key exchange.
@@ -142,11 +143,13 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	mux := NewPacketMux(io)
-	go mux.Run(runCtx)
+	go mux.Run()
+	control := NewControlChannel(mux, crypt, local)
 	client := &Client{
 		config:                config,
 		mux:                   mux,
-		control:               NewControlChannel(mux, crypt, local),
+		control:               control,
+		controlConn:           NewControlConn(control),
 		runCtx:                runCtx,
 		cancel:                cancel,
 		writeSem:              semaphore.NewWeighted(1),
@@ -156,10 +159,28 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		dataChanged:           make(chan struct{}),
 		rekeyHandshakeTimeout: renegotiateTimeout,
 	}
-	client.control.transientWriteIsLoss = config.Proto == ProtoUDP
 	client.markSend()
 	client.markReceive()
+	go client.flushControlACKs()
 	return client, nil
+}
+
+func (c *Client) flushControlACKs() {
+	for {
+		select {
+		case <-c.control.ackWake:
+			for c.control.PendingACKs() > 0 {
+				if err := c.control.SendAck(c.runCtx); err != nil {
+					if c.runCtx.Err() == nil {
+						c.failControl(fmt.Errorf("send openvpn control ACK: %w", err))
+					}
+					return
+				}
+			}
+		case <-c.runCtx.Done():
+			return
+		}
+	}
 }
 
 func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
@@ -174,8 +195,12 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	}
 	handshakeCtx, cancelHandshake := context.WithCancelCause(ctx)
 	defer cancelHandshake(nil)
-	interrupt := c.interruptTLSOnDone(handshakeCtx)
-	defer interrupt()
+	var interrupt func()
+	defer func() {
+		if interrupt != nil {
+			interrupt()
+		}
+	}()
 	var retransmitStop func()
 	defer func() {
 		if retransmitStop != nil {
@@ -186,7 +211,9 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		retransmitStop = c.retransmitControl(handshakeCtx, cancelHandshake)
 	}
 
-	if err := c.startTLSEpoch(handshakeCtx); err != nil {
+	var err error
+	interrupt, err = c.startTLSEpoch(handshakeCtx)
+	if err != nil {
 		return nil, operationContextError(handshakeCtx, err)
 	}
 
@@ -198,21 +225,20 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		retransmitStop()
 		retransmitStop = nil
 	}
-	if cause := context.Cause(handshakeCtx); cause != nil {
-		return nil, cause
+	interrupt()
+	interrupt = nil
+	if err := c.controlOperationError(handshakeCtx); err != nil {
+		return nil, err
 	}
-	_ = c.tlsConn.Load().SetDeadline(time.Time{})
+	_ = c.controlConn.SetDeadline(time.Time{})
 	go c.watchControl()
 	return push, nil
 }
 
-func (c *Client) startTLSEpoch(ctx context.Context) error {
+func (c *Client) startTLSEpoch(ctx context.Context) (interrupt func(), err error) {
 	tlsConfig, err := c.tlsConfig()
 	if err != nil {
-		return err
-	}
-	if c.controlConn == nil {
-		c.controlConn = NewControlConn(c.control)
+		return nil, err
 	}
 	if c.tlsConn.Load() != nil {
 		// Drop the old epoch without writing close_notify. Close() would send
@@ -226,26 +252,22 @@ func (c *Client) startTLSEpoch(ctx context.Context) error {
 	c.leftoverTLS = nil
 	conn := tls.Client(c.controlConn, tlsConfig)
 	c.tlsConn.Store(conn)
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(deadline)
-	}
+	interrupt = interruptControlConnOnDone(ctx, c.controlConn)
 	if err := conn.HandshakeContext(ctx); err != nil {
-		return fmt.Errorf("openvpn tls handshake: %w", err)
+		interrupt()
+		return nil, fmt.Errorf("openvpn tls handshake: %w", err)
 	}
 	// Drain any control packets that arrived on the new epoch while the
 	// handshake was reading, so they are not acknowledged and dropped by a
 	// raw ControlChannel read. A TLS-encrypted P_CONTROL_V1 token update
 	// must stay reachable through the active tls.Conn.
 	c.consumeQueuedControl()
-	return nil
+	return interrupt, nil
 }
 
 // consumeQueuedControl parses queued control packets and routes them back
 // into the active TLS stream so the key-method / PUSH exchange can see them.
 func (c *Client) consumeQueuedControl() {
-	if c.controlConn == nil {
-		return
-	}
 	for _, pkt := range c.control.ReadAll() {
 		if pkt.Opcode != PControlV1 || len(pkt.Payload) == 0 {
 			continue
@@ -385,7 +407,7 @@ func (c *Client) consumeRekeyPushFrom(conn pushReadConn, readFinal tokenPushRead
 	// The token/deferred-push exchange owns every transport deadline installed
 	// while it runs. Clear them before returning so standalone parked-TLS calls
 	// cannot leak an operation deadline into the established-channel loop.
-	defer c.clearControlOperationDeadline()
+	defer func() { _ = c.controlConn.SetDeadline(time.Time{}) }()
 
 	base := *c.push
 	rekey := &PushReply{PeerID: base.PeerID}
@@ -469,17 +491,8 @@ func (c *Client) consumeParkedRekeyPush() error {
 		return c.consumeRekeyPush()
 	}
 	// Keep the ownership explicit even when no cached push exists.
-	c.clearControlOperationDeadline()
+	_ = c.controlConn.SetDeadline(time.Time{})
 	return nil
-}
-
-func (c *Client) clearControlOperationDeadline() {
-	if conn := c.tlsConn.Load(); conn != nil {
-		_ = conn.SetDeadline(time.Time{})
-	}
-	if c.controlConn != nil {
-		_ = c.controlConn.SetDeadline(time.Time{})
-	}
 }
 
 // applyAuthPendingTimeout records a server-advertised AUTH_PENDING,timeout N
@@ -507,15 +520,13 @@ func (c *Client) applyAuthPendingTimeout(reply *PushReply) {
 	}
 	c.dataLock.Unlock()
 
-	if conn := c.tlsConn.Load(); conn != nil {
-		_ = conn.SetDeadline(deadline)
-	}
-	if c.controlConn != nil {
-		_ = c.controlConn.SetDeadline(deadline)
-	}
+	_ = c.controlConn.SetDeadline(deadline)
 }
 
-func (c *Client) effectiveControlDeadline(fallback time.Time) time.Time {
+// authPendingDeadline returns only the server-advertised protocol deadline for
+// the current key epoch. Caller context cancellation is enforced independently
+// and the rekey baseline is already installed on ControlChannel.
+func (c *Client) authPendingDeadline() time.Time {
 	keyID := c.control.KeyID()
 	c.dataLock.RLock()
 	deferred := c.deferredUntil
@@ -523,16 +534,16 @@ func (c *Client) effectiveControlDeadline(fallback time.Time) time.Time {
 	pending := c.pendingDeferredUntil
 	pendingMatches := c.pendingDeferredSet && c.pendingDeferredKeyID == keyID
 	c.dataLock.RUnlock()
-	// AUTH_PENDING replaces the operation timeout for its exact key epoch;
-	// it may extend or shorten the original context deadline. Pending state
-	// wins before installDataChannel, active state afterwards.
+	// AUTH_PENDING replaces the protocol timeout for its exact key epoch.
+	// Caller context cancellation remains an independent hard limit. Pending
+	// state wins before installDataChannel, active state afterwards.
 	if pendingMatches {
 		return pending
 	}
 	if dataMatches && !deferred.IsZero() {
 		return deferred
 	}
-	return fallback
+	return time.Time{}
 }
 
 // authDeferredExpire is the no-evidence promotion window for the outbound
@@ -772,7 +783,10 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		// in-flight datagram. Release state before transport I/O: network delay
 		// can naturally carry a valid packet across a later rekey, and a blocked
 		// socket must not prevent installDataChannel from committing that rekey.
-		if err := c.mux.WritePacket(ctx, encrypted); err != nil {
+		if err := c.mux.WriteDataPacket(ctx, encrypted); err != nil {
+			if errors.Is(err, errPacketDropped) {
+				return nil
+			}
 			return err
 		}
 		c.markSend()
@@ -924,14 +938,10 @@ func (c *Client) watchControl() {
 }
 
 func (c *Client) failControl(err error) {
-	c.lastRekeyErr.Store(&err)
+	c.lastRekeyErr.CompareAndSwap(nil, &err)
 	c.cancel()
 	_ = c.mux.Close()
 }
-
-// errRenegotiateNoTLS is returned when renegotiate() is called before a TLS
-// connection has been established.
-var errRenegotiateNoTLS = errors.New("cannot renegotiate: tls connection not established")
 
 // renegotiate performs a single TLS epoch restart:
 // 1. Send our own soft reset to acknowledge the server's rekey request
@@ -939,21 +949,16 @@ var errRenegotiateNoTLS = errors.New("cannot renegotiate: tls connection not est
 // 3. Exchange fresh key method 2 records and derive new data channel keys
 // 4. Atomically replace c.data with the new DataChannel
 func (c *Client) renegotiate(serverReset *ControlPacket, retiringExpiry time.Time) error {
-	if c.tlsConn.Load() == nil && c.controlConn == nil {
-		return errRenegotiateNoTLS
-	}
 	renegCtx, cancelReneg := context.WithCancelCause(c.runCtx)
 	defer cancelReneg(nil)
-	interrupt := c.interruptTLSOnDone(renegCtx)
-	defer interrupt()
+	var interrupt func()
 	defer func() {
-		if c.controlConn != nil {
-			_ = c.controlConn.SetDeadline(time.Time{})
+		if interrupt != nil {
+			interrupt()
 		}
 	}()
-	if c.controlConn != nil {
-		_ = c.controlConn.SetDeadline(time.Now().Add(c.rekeyTimeout()))
-	}
+	defer func() { _ = c.controlConn.SetDeadline(time.Time{}) }()
+	_ = c.controlConn.SetDeadline(time.Now().Add(c.rekeyTimeout()))
 
 	// The watcher captures this absolute deadline as soon as it accepts the
 	// peer's soft reset, before probing the previous TLS stream. Stage that
@@ -998,7 +1003,9 @@ func (c *Client) renegotiate(serverReset *ControlPacket, retiringExpiry time.Tim
 		retransmitStop = c.retransmitControl(renegCtx, cancelReneg)
 	}
 
-	if err := c.startTLSEpoch(renegCtx); err != nil {
+	var err error
+	interrupt, err = c.startTLSEpoch(renegCtx)
+	if err != nil {
 		return operationContextError(renegCtx, fmt.Errorf("tls epoch handshake: %w", err))
 	}
 
@@ -1009,8 +1016,17 @@ func (c *Client) renegotiate(serverReset *ControlPacket, retiringExpiry time.Tim
 		retransmitStop()
 		retransmitStop = nil
 	}
-	if cause := context.Cause(renegCtx); cause != nil {
+	interrupt()
+	interrupt = nil
+	return c.controlOperationError(renegCtx)
+}
+
+func (c *Client) controlOperationError(ctx context.Context) error {
+	if cause := context.Cause(ctx); cause != nil {
 		return cause
+	}
+	if err := c.mux.currentError(); err != nil {
+		return fmt.Errorf("openvpn transport terminated: %w", err)
 	}
 	return nil
 }
@@ -1019,22 +1035,24 @@ func (c *Client) renegotiate(serverReset *ControlPacket, retiringExpiry time.Tim
 // ControlRetransmitDelay while ctx is live. It is the UDP reliability path
 // for initial and renegotiated TLS epochs.
 func (c *Client) retransmitControl(ctx context.Context, fail ...context.CancelCauseFunc) (stop func()) {
-	loopCtx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
+	loopCtx, cancel := context.WithCancelCause(ctx)
+	var stopOnce sync.Once
 	go func() {
-		defer close(done)
+		defer cancel(nil)
 		ticker := time.NewTicker(ControlRetransmitDelay)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				if err := c.control.RetransmitPending(loopCtx); err != nil {
-					if loopCtx.Err() != nil &&
-						(errors.Is(err, context.Canceled) || retryableControlWriteError(err)) {
+					if loopCtx.Err() != nil {
+						if errors.Is(context.Cause(loopCtx), errControlRetransmitStopped) {
+							if transportErr := c.mux.currentError(); transportErr != nil &&
+								len(fail) > 0 && fail[0] != nil {
+								fail[0](fmt.Errorf("retransmit openvpn control packet: %w", transportErr))
+							}
+						}
 						return
-					}
-					if retryableControlWriteError(err) {
-						continue
 					}
 					if len(fail) > 0 && fail[0] != nil {
 						fail[0](fmt.Errorf("retransmit openvpn control packet: %w", err))
@@ -1047,8 +1065,9 @@ func (c *Client) retransmitControl(ctx context.Context, fail ...context.CancelCa
 		}
 	}()
 	return func() {
-		cancel()
-		<-done
+		stopOnce.Do(func() {
+			cancel(errControlRetransmitStopped)
+		})
 	}
 }
 
@@ -1070,11 +1089,6 @@ func (c *Client) rekeyWaitDeadline(now time.Time) time.Time {
 	return deadline
 }
 
-func retryableControlWriteError(err error) bool {
-	var netErr net.Error
-	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary())
-}
-
 func operationContextError(ctx context.Context, fallback error) error {
 	if cause := context.Cause(ctx); cause != nil {
 		return cause
@@ -1082,15 +1096,21 @@ func operationContextError(ctx context.Context, fallback error) error {
 	return fallback
 }
 
-// interruptTLSOnDone makes cancellation observable to tls.Conn reads backed
-// by ControlConn, whose packet read otherwise has no context parameter.
-func (c *Client) interruptTLSOnDone(ctx context.Context) func() {
+// interruptControlConnOnDone makes cancellation observable to the TLS reads
+// and writes of one epoch. stop waits for a callback that already started, so
+// it is also the success boundary after which cancellation cannot close a
+// later epoch through the reused ControlConn.
+func interruptControlConnOnDone(ctx context.Context, conn io.Closer) func() {
+	done := make(chan struct{})
 	stop := contextutils.AfterFunc(ctx, func() {
-		if conn := c.tlsConn.Load(); conn != nil {
-			_ = conn.SetDeadline(time.Now())
-		}
+		defer close(done)
+		_ = conn.Close()
 	})
-	return func() { _ = stop() }
+	return func() {
+		if !stop() {
+			<-done
+		}
+	}
 }
 
 func (c *Client) SinceSend() time.Duration {
@@ -1118,10 +1138,6 @@ func (c *Client) Close() error {
 	if c.cancel != nil {
 		c.cancel()
 	}
-	if conn := c.tlsConn.Load(); conn != nil {
-		_ = conn.SetDeadline(time.Now())
-		_ = conn.Close()
-	}
 	if c.mux != nil {
 		return c.mux.Close()
 	}
@@ -1141,10 +1157,6 @@ func (c *Client) waitServerReset(ctx context.Context) error {
 		if err != nil {
 			if c.config.Proto == ProtoUDP && errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 				if err := c.control.RetransmitPending(ctx); err != nil {
-					if retryableControlWriteError(err) {
-						retransmits++
-						continue
-					}
 					return fmt.Errorf("retransmit hard reset: %w", err)
 				}
 				retransmits++
@@ -1154,7 +1166,7 @@ func (c *Client) waitServerReset(ctx context.Context) error {
 		}
 		switch packet.Opcode {
 		case PControlHardResetServerV2:
-			return c.control.SendAck(ctx)
+			return nil
 		case PControlHardResetServerV1:
 			return fmt.Errorf("openvpn server replied with unsupported key method 1 reset")
 		}
@@ -1207,14 +1219,6 @@ func (c *Client) readServerKeyMethodFrom(ctx context.Context, conn pushReadConn)
 		}
 		if readErr != nil {
 			return nil, fmt.Errorf("read key method 2 server record: %w", readErr)
-		}
-		deadline := time.Time{}
-		if d, ok := ctx.Deadline(); ok {
-			deadline = d
-		}
-		deadline = c.effectiveControlDeadline(deadline)
-		if !deadline.IsZero() {
-			_ = conn.SetDeadline(deadline)
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -1272,11 +1276,7 @@ func (c *Client) readPushReplyFrom(ctx context.Context, conn pushReadConn) (*Pus
 		if readErr != nil {
 			return nil, fmt.Errorf("read push reply: %w", readErr)
 		}
-		deadline := time.Time{}
-		if d, ok := ctx.Deadline(); ok {
-			deadline = d
-		}
-		deadline = c.effectiveControlDeadline(deadline)
+		deadline := c.authPendingDeadline()
 		if !continuationDeadline.IsZero() && (deadline.IsZero() || continuationDeadline.Before(deadline)) {
 			deadline = continuationDeadline
 		}

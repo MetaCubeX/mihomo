@@ -25,6 +25,11 @@ import (
 	"github.com/metacubex/tls"
 )
 
+func newBareControlClient() *Client {
+	control := &ControlChannel{}
+	return &Client{control: control, controlConn: NewControlConn(control)}
+}
+
 func newTestTLSServerCertificate(t *testing.T) (tls.Certificate, []byte) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -109,6 +114,180 @@ func readTestClientKeyMethod(conn net.Conn) error {
 	return nil
 }
 
+type blockingCloseRecorder struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (c *blockingCloseRecorder) Close() error {
+	close(c.entered)
+	<-c.release
+	return nil
+}
+
+func TestInterruptControlConnStopWaitsForRunningClose(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	closer := &blockingCloseRecorder{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	stop := interruptControlConnOnDone(ctx, closer)
+	cancel()
+	select {
+	case <-closer.entered:
+	case <-time.After(time.Second):
+		t.Fatal("context cancellation did not start control connection close")
+	}
+
+	stopCalled := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		close(stopCalled)
+		stop()
+		close(stopped)
+	}()
+	<-stopCalled
+	select {
+	case <-stopped:
+		t.Fatal("stop returned while control connection close was still running")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(closer.release)
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("stop did not return after control connection close completed")
+	}
+}
+
+func TestInitialHandshakeContextDeadlineRemainsHardLimit(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	certificate, caPEM := newTestTLSServerCertificate(t)
+	client, err := newTestClient(&ClientConfig{
+		Proto:      ProtoUDP,
+		CA:         caPEM,
+		Cipher:     CipherAES128GCM,
+		Auth:       AuthSHA256,
+		Username:   "test",
+		RemoteHost: "server",
+		RemotePort: 1194,
+	}, clientIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	guardCtx, guardCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer guardCancel()
+	handshakeCtx, handshakeCancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+	defer handshakeCancel()
+	handshakeDeadline, ok := handshakeCtx.Deadline()
+	if !ok {
+		t.Fatal("handshake context has no deadline")
+	}
+	handshakeResult := make(chan error, 1)
+	go func() {
+		_, err := client.Handshake(handshakeCtx)
+		handshakeResult <- err
+	}()
+
+	resetRaw, err := serverIO.ReadPacket(guardCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset, _, _, err := DecodeControlPacket(nil, resetRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	serverControl := NewControlChannel(serverIO, nil, serverID)
+	serverControl.SetRemoteSessionID(reset.LocalSession)
+	serverControl.MarkReceived(reset.MessageID)
+	serverControl.QueueAck(reset.MessageID)
+	if _, err := serverControl.Send(guardCtx, PControlHardResetServerV2, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	serverConn := NewControlConn(serverControl)
+	defer serverConn.Close()
+	serverTLS := tls.Server(serverConn, &tls.Config{Certificates: []tls.Certificate{certificate}})
+	if err := serverTLS.HandshakeContext(guardCtx); err != nil {
+		t.Fatal(err)
+	}
+	if err := readTestClientKeyMethod(serverTLS); err != nil {
+		t.Fatal(err)
+	}
+
+	client.control.mu.Lock()
+	readDeadline := client.control.readDeadline
+	writeDeadline := client.control.writeDeadline
+	client.control.mu.Unlock()
+	if !readDeadline.IsZero() || !writeDeadline.IsZero() {
+		t.Fatalf("caller deadline was copied into control channel: read=%v write=%v", readDeadline, writeDeadline)
+	}
+
+	if _, err := serverTLS.Write(marshalTestServerKeyMethod(t)); err != nil {
+		t.Fatal(err)
+	}
+	pushRequest := make([]byte, 0, len(PushRequest)+1)
+	readBuf := make([]byte, 128)
+	for !bytes.Contains(pushRequest, []byte{0}) {
+		n, err := serverTLS.Read(readBuf)
+		if n > 0 {
+			pushRequest = append(pushRequest, readBuf[:n]...)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := string(pushRequest[:bytes.IndexByte(pushRequest, 0)]); got != PushRequest {
+		t.Fatalf("push request = %q", got)
+	}
+	if _, err := serverTLS.Write([]byte("AUTH_PENDING,timeout 60\x00")); err != nil {
+		t.Fatal(err)
+	}
+
+	var authDeadline time.Time
+	for authDeadline.IsZero() {
+		client.dataLock.RLock()
+		if client.pendingDeferredSet {
+			authDeadline = client.pendingDeferredUntil
+		}
+		client.dataLock.RUnlock()
+		if !authDeadline.IsZero() {
+			break
+		}
+		select {
+		case err := <-handshakeResult:
+			t.Fatalf("handshake ended before AUTH_PENDING was applied: %v", err)
+		case <-guardCtx.Done():
+			t.Fatal(guardCtx.Err())
+		case <-time.After(time.Millisecond):
+		}
+	}
+	if !authDeadline.After(handshakeDeadline) {
+		t.Fatalf("AUTH_PENDING deadline = %v, want later than caller deadline %v", authDeadline, handshakeDeadline)
+	}
+
+	select {
+	case err := <-handshakeResult:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("handshake returned %v", err)
+		}
+	case <-guardCtx.Done():
+		t.Fatal(guardCtx.Err())
+	}
+	client.control.mu.Lock()
+	readDeadline = client.control.readDeadline
+	writeDeadline = client.control.writeDeadline
+	client.control.mu.Unlock()
+	if !readDeadline.Equal(authDeadline) || !writeDeadline.Equal(authDeadline) {
+		t.Fatalf("context cancellation rewrote protocol deadline: read=%v write=%v want=%v",
+			readDeadline, writeDeadline, authDeadline)
+	}
+}
+
 func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 	for _, useTLSAuth := range []bool{false, true} {
 		name := "plain"
@@ -139,7 +318,7 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			client, err := NewClient(config, clientIO)
+			client, err := newTestClient(config, clientIO)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -311,7 +490,7 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 
 func TestClientPropagatesDataPacketIDExhaustion(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,26 +515,6 @@ func TestClientPropagatesDataPacketIDExhaustion(t *testing.T) {
 	defer cancel()
 	if _, err := serverIO.ReadPacket(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("exhausted packet reached transport: %v", err)
-	}
-}
-
-// TestRenegotiateFailsWithoutTLS verifies that renegotiate() returns an error
-// (instead of panicking) when no TLS connection has been established.
-func TestRenegotiateFailsWithoutTLS(t *testing.T) {
-	config := ClientConfig{}
-	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&config, clientIO)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-
-	err = client.renegotiate(nil, time.Time{})
-	if err == nil {
-		t.Fatal("expected error from renegotiate without TLS connection")
-	}
-	if !errors.Is(err, errRenegotiateNoTLS) {
-		t.Fatalf("expected errRenegotiateNoTLS, got %v", err)
 	}
 }
 
@@ -494,7 +653,7 @@ func TestDataLockProtectsDataChannelSwap(t *testing.T) {
 		t.Fatal(err)
 	}
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&config, clientIO)
+	client, err := newTestClient(&config, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,7 +721,7 @@ func TestSoftResetAdvancesOpenVPNKeyID(t *testing.T) {
 // is irrelevant.
 func TestRekeyKeepsOldOutboundEvenIfNeverSent(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,7 +774,7 @@ func TestRekeyKeepsOldOutboundEvenIfNeverSent(t *testing.T) {
 // must not promote the new outbound key.
 func TestFailedDecryptDoesNotPromote(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,7 +838,7 @@ func TestFailedDecryptDoesNotPromote(t *testing.T) {
 // one-way tunnel still rotates outbound to the new key.
 func TestOutboundPromotesAfterAuthDeferredExpire(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -739,7 +898,7 @@ func TestOutboundPromotesAfterAuthDeferredExpire(t *testing.T) {
 // outbound auth_deferred_expire selection window.
 func TestAuthPendingTimeoutDoesNotExtendOutboundSelection(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -806,7 +965,7 @@ func TestAuthPendingTimeoutDoesNotExtendOutboundSelection(t *testing.T) {
 // unchanged through renegotiate and data-channel installation.
 func TestRetiringWindowAnchoredAtAcceptedSoftReset(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{TransitionWindow: 10 * time.Second}, clientIO)
+	client, err := newTestClient(&ClientConfig{TransitionWindow: 10 * time.Second}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -845,7 +1004,7 @@ func TestRetiringWindowAnchoredAtAcceptedSoftReset(t *testing.T) {
 
 func TestExplicitZeroTransitionWindow(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{TransitionWindowSet: true}, clientIO)
+	client, err := newTestClient(&ClientConfig{TransitionWindowSet: true}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -855,7 +1014,7 @@ func TestExplicitZeroTransitionWindow(t *testing.T) {
 	}
 
 	defaultIO, _ := newMemoryPacketPair()
-	defaultClient, err := NewClient(&ClientConfig{}, defaultIO)
+	defaultClient, err := newTestClient(&ClientConfig{}, defaultIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,7 +1029,7 @@ func TestExplicitZeroTransitionWindow(t *testing.T) {
 // is no peer evidence and the AUTH_PENDING deadline is still in the future.
 func TestRetiringExpiryForcesOutboundPromotion(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1046,7 +1205,7 @@ func TestAuthPendingDeadlineAnchoredAtTLSEstablishment(t *testing.T) {
 	}
 
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1068,7 +1227,7 @@ func TestAuthPendingDeadlineAnchoredAtTLSEstablishment(t *testing.T) {
 // and token reader's active operation deadline.
 func TestAuthPendingUpdateCanShortenDeadline(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1100,9 +1259,8 @@ func TestAuthPendingUpdateCanShortenDeadline(t *testing.T) {
 		t.Fatalf("later AUTH_PENDING did not shorten staged deadline: got=%v want=%v",
 			staged, short.authPendingUntil)
 	}
-	fallback := time.Now().Add(30 * time.Second)
-	if effective := client.effectiveControlDeadline(fallback); !effective.Equal(short.authPendingUntil) {
-		t.Fatalf("effective deadline retained longer fallback: got=%v want=%v",
+	if effective := client.authPendingDeadline(); !effective.Equal(short.authPendingUntil) {
+		t.Fatalf("effective AUTH_PENDING deadline: got=%v want=%v",
 			effective, short.authPendingUntil)
 	}
 
@@ -1175,7 +1333,7 @@ func TestAuthPendingUpdateCanShortenDeadline(t *testing.T) {
 
 func TestConsumeParkedRekeyPushFeedsControlConnInOrder(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1206,7 +1364,7 @@ func TestConsumeParkedRekeyPushFeedsControlConnInOrder(t *testing.T) {
 // established connection's next waitForSoftReset cycle.
 func TestConsumeParkedRekeyPushClearsDeadline(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1237,7 +1395,7 @@ func TestConsumeParkedRekeyPushClearsDeadline(t *testing.T) {
 // incomplete when that probe reaches its deadline without a final segment.
 func TestConsumeRekeyPushRejectsContinuationDiscoveredByReader(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1281,7 +1439,7 @@ func TestConsumeRekeyPushRejectsContinuationDiscoveredByReader(t *testing.T) {
 // generate data keys without sending any further push message.
 func TestConsumeRekeyPushAllowsAuthPendingWithoutFinalPush(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1422,7 +1580,7 @@ func TestPushContinuationWireOrderAndCrossCall(t *testing.T) {
 	}
 
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1474,7 +1632,7 @@ func TestTakePushReplyContinuation(t *testing.T) {
 
 func TestOutboundKeyStaysLameDuckUntilPeerEvidence(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1810,7 +1968,7 @@ func TestInitialHandshakeRetransmitsLostClientHello(t *testing.T) {
 		RemoteHost: "server",
 		RemotePort: 1194,
 	}
-	client, err := NewClient(config, clientIO)
+	client, err := newTestClient(config, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1892,7 +2050,7 @@ func TestRekeyRetransmitsLostClientHello(t *testing.T) {
 	var serverID SessionID
 	copy(serverID[:], []byte("server01"))
 
-	client, err := NewClient(&ClientConfig{
+	client, err := newTestClient(&ClientConfig{
 		Proto:       ProtoUDP,
 		TLSCryptKey: testStaticKey(),
 	}, clientIO)
@@ -2145,7 +2303,7 @@ func TestReadPushReplyCanceledBeforeRead(t *testing.T) {
 
 func TestOutboundPromotionWindowAnchoredAtSoftReset(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{TransitionWindow: time.Minute, TransitionWindowSet: true}, clientIO)
+	client, err := newTestClient(&ClientConfig{TransitionWindow: time.Minute, TransitionWindowSet: true}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2184,12 +2342,6 @@ func TestParsePushRejectsMalformedCredentialAndContinuation(t *testing.T) {
 	}
 }
 
-type temporaryControlWriteError struct{}
-
-func (temporaryControlWriteError) Error() string   { return "temporary control write" }
-func (temporaryControlWriteError) Timeout() bool   { return false }
-func (temporaryControlWriteError) Temporary() bool { return true }
-
 type retransmitTestPacketIO struct {
 	mu      sync.Mutex
 	writes  int
@@ -2218,6 +2370,10 @@ func (p *retransmitTestPacketIO) WritePacket(context.Context, []byte) error {
 		p.once.Do(func() { close(p.retried) })
 	}
 	return nil
+}
+
+func (p *retransmitTestPacketIO) WritePacketAllowActiveStop(ctx context.Context, packet []byte) error {
+	return p.WritePacket(ctx, packet)
 }
 
 func (*retransmitTestPacketIO) Close() error         { return nil }
@@ -2251,17 +2407,21 @@ func (p *blockingPermanentPacketIO) WritePacket(context.Context, []byte) error {
 	return nil
 }
 
+func (p *blockingPermanentPacketIO) WritePacketAllowActiveStop(ctx context.Context, packet []byte) error {
+	return p.WritePacket(ctx, packet)
+}
+
 func (*blockingPermanentPacketIO) Close() error         { return nil }
 func (*blockingPermanentPacketIO) LocalAddr() net.Addr  { return nil }
 func (*blockingPermanentPacketIO) RemoteAddr() net.Addr { return nil }
 
-func TestRetransmitControlReportsErrorRacingStop(t *testing.T) {
+func TestRetransmitControlReportsPhysicalErrorRacingStop(t *testing.T) {
 	packetIO := &blockingPermanentPacketIO{
 		entered:  make(chan struct{}),
 		release:  make(chan struct{}),
 		writeErr: errors.New("permanent write at stop"),
 	}
-	client, err := NewClient(&ClientConfig{}, packetIO)
+	client, err := newTestClient(&ClientConfig{}, packetIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2276,29 +2436,33 @@ func TestRetransmitControlReportsErrorRacingStop(t *testing.T) {
 	case <-time.After(2 * ControlRetransmitDelay):
 		t.Fatal("retransmission did not enter blocked write")
 	}
-	stopped := make(chan struct{})
-	go func() {
-		stop()
-		close(stopped)
-	}()
+	stop()
 	close(packetIO.release)
 	select {
-	case <-stopped:
+	case <-ctx.Done():
+		if cause := context.Cause(ctx); cause == nil || !strings.Contains(cause.Error(), "permanent write at stop") {
+			t.Fatalf("physical error racing stop produced cause %v", cause)
+		}
 	case <-time.After(time.Second):
-		t.Fatal("retransmitter did not stop")
+		t.Fatal("physical error racing stop did not fail the parent operation")
 	}
-	if cause := context.Cause(ctx); cause == nil || !strings.Contains(cause.Error(), "permanent write at stop") {
-		t.Fatalf("stop-boundary error was lost: %v", cause)
+	select {
+	case <-client.mux.done:
+		if err := client.mux.terminalError(); !strings.Contains(err.Error(), "permanent write at stop") {
+			t.Fatalf("physical transport error was lost: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("permanent physical write did not terminate transport")
 	}
 }
 
-func TestRetransmitControlSuppressesTemporaryErrorRacingStop(t *testing.T) {
+func TestRetransmitControlSuppressesDroppedPacketRacingStop(t *testing.T) {
 	packetIO := &blockingPermanentPacketIO{
 		entered:  make(chan struct{}),
 		release:  make(chan struct{}),
-		writeErr: temporaryControlWriteError{},
+		writeErr: &packetDroppedError{cause: errors.New("dropped retransmit")},
 	}
-	client, err := NewClient(&ClientConfig{}, packetIO)
+	client, err := newTestClient(&ClientConfig{}, packetIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2313,34 +2477,25 @@ func TestRetransmitControlSuppressesTemporaryErrorRacingStop(t *testing.T) {
 	case <-time.After(2 * ControlRetransmitDelay):
 		t.Fatal("retransmission did not enter blocked write")
 	}
-	stopped := make(chan struct{})
-	go func() {
-		stop()
-		close(stopped)
-	}()
+	stop()
 	close(packetIO.release)
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("retransmitter did not stop")
-	}
 	if cause := context.Cause(ctx); cause != nil {
-		t.Fatalf("temporary stop-boundary error became operation failure: %v", cause)
+		t.Fatalf("dropped stop-boundary packet became operation failure: %v", cause)
 	}
 }
 
-func TestTemporaryInitialReliableWriteRemainsQueued(t *testing.T) {
-	packetIO := &retransmitTestPacketIO{first: temporaryControlWriteError{}}
-	client, err := NewClient(&ClientConfig{Proto: ProtoUDP}, packetIO)
+func TestDroppedInitialReliableWriteRemainsQueued(t *testing.T) {
+	packetIO := &retransmitTestPacketIO{first: &packetDroppedError{cause: errors.New("dropped initial packet")}}
+	client, err := newTestClient(&ClientConfig{Proto: ProtoUDP}, packetIO)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
 	if err := client.control.SendReset(context.Background()); err != nil {
-		t.Fatalf("temporary initial send failed: %v", err)
+		t.Fatalf("dropped initial send failed: %v", err)
 	}
 	if client.control.PendingMessages() != 1 {
-		t.Fatalf("temporary initial send pending = %d, want 1", client.control.PendingMessages())
+		t.Fatalf("dropped initial send pending = %d, want 1", client.control.PendingMessages())
 	}
 	if err := client.control.RetransmitPending(context.Background()); err != nil {
 		t.Fatal(err)
@@ -2353,9 +2508,9 @@ func TestTemporaryInitialReliableWriteRemainsQueued(t *testing.T) {
 	}
 }
 
-func TestRetransmitControlRetriesTemporaryError(t *testing.T) {
-	packetIO := &retransmitTestPacketIO{second: temporaryControlWriteError{}, retried: make(chan struct{})}
-	client, err := NewClient(&ClientConfig{}, packetIO)
+func TestRetransmitControlRetriesDroppedPacket(t *testing.T) {
+	packetIO := &retransmitTestPacketIO{second: &packetDroppedError{cause: errors.New("dropped retransmit")}, retried: make(chan struct{})}
+	client, err := newTestClient(&ClientConfig{}, packetIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2369,16 +2524,16 @@ func TestRetransmitControlRetriesTemporaryError(t *testing.T) {
 	select {
 	case <-packetIO.retried:
 	case <-time.After(3 * ControlRetransmitDelay):
-		t.Fatal("temporary retransmission error stopped retry loop")
+		t.Fatal("dropped retransmission stopped retry loop")
 	}
 	if context.Cause(ctx) != nil {
-		t.Fatalf("temporary retransmission canceled operation: %v", context.Cause(ctx))
+		t.Fatalf("dropped retransmission canceled operation: %v", context.Cause(ctx))
 	}
 }
 
 func TestRetransmitControlPropagatesPermanentError(t *testing.T) {
 	packetIO := &retransmitTestPacketIO{second: errors.New("permanent control write")}
-	client, err := NewClient(&ClientConfig{}, packetIO)
+	client, err := newTestClient(&ClientConfig{}, packetIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2402,7 +2557,8 @@ func TestRetransmitControlPropagatesPermanentError(t *testing.T) {
 // TestConsumeRekeyPushAUTHFailed verifies that AUTH_FAILED during a rekey is a
 // hard error, not "no token".
 func TestConsumeRekeyPushAUTHFailed(t *testing.T) {
-	client := &Client{push: &PushReply{PeerID: 5, AuthTokenPass: "SESS_ID_old"}}
+	client := newBareControlClient()
+	client.push = &PushReply{PeerID: 5, AuthTokenPass: "SESS_ID_old"}
 	client.leftoverTLS = []byte("AUTH_FAILED,SESSION: auth-token expired\x00")
 	err := client.consumeRekeyPush()
 	if err == nil {
@@ -2696,7 +2852,7 @@ func TestAuthPendingTimeoutZeroAndCap(t *testing.T) {
 		t.Fatalf("zero timeout deadline = %v, want %v", zero.authPendingUntil, establishedAt)
 	}
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2729,7 +2885,7 @@ func TestTLSControlBufferLimit(t *testing.T) {
 }
 func TestExpiredPendingRetiringWindowPausesUntilInstall(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2791,7 +2947,7 @@ func TestExpiredPendingRetiringWindowPausesUntilInstall(t *testing.T) {
 
 func TestRetiringExpiryStagedBetweenSelectionAndEncryption(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2873,7 +3029,7 @@ func TestRetiringExpiryStagedBetweenSelectionAndEncryption(t *testing.T) {
 
 func TestRetiringExpiryChangesBetweenSelectionAndEncryption(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2952,7 +3108,7 @@ func TestRetiringExpiryChangesBetweenSelectionAndEncryption(t *testing.T) {
 // renegotiation.
 func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
+	client, err := newTestClient(&ClientConfig{Username: "u", Password: "p"}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3003,7 +3159,7 @@ func TestWatchControlSurfacesParkedAUTHFailed(t *testing.T) {
 
 func TestWatchControlCloseDoesNotRecordRekeyFailure(t *testing.T) {
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&ClientConfig{}, clientIO)
+	client, err := newTestClient(&ClientConfig{}, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3574,7 +3730,7 @@ func TestCaptureAuthTokenUsedOnNextKeyMethod(t *testing.T) {
 }
 
 func TestRekeyConsumesTokenPushReplyAndKeepsPeerID(t *testing.T) {
-	client := &Client{}
+	client := newBareControlClient()
 	client.push = &PushReply{
 		PeerID: 42,
 	}
@@ -3639,7 +3795,8 @@ func TestWaitForSoftResetParksLateControlPayload(t *testing.T) {
 }
 
 func TestConsumeRekeyPushReadsParkedTokenViaLeftover(t *testing.T) {
-	c := &Client{push: &PushReply{PeerID: 9, AuthTokenPass: "SESS_ID_old"}}
+	c := newBareControlClient()
+	c.push = &PushReply{PeerID: 9, AuthTokenPass: "SESS_ID_old"}
 	c.leftoverTLS = []byte("PUSH_REPLY,auth-token SESS_ID_parked,auth-token-user dGVzdA==\x00")
 	c.consumeRekeyPush()
 	if c.authPass != "SESS_ID_parked" {
@@ -3676,7 +3833,7 @@ func TestLooksLikeFollowingTLSControlNotOnWholeKM2Buffer(t *testing.T) {
 }
 
 func TestRekeyKeepsPeerIDWithoutTokenPush(t *testing.T) {
-	client := &Client{}
+	client := newBareControlClient()
 	client.push = &PushReply{
 		PeerID: 7,
 	}

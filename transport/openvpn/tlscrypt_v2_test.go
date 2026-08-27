@@ -110,7 +110,7 @@ func TestClientWithTLSCryptV2(t *testing.T) {
 		t.Fatal("v2 material not prepared")
 	}
 	clientIO, _ := newMemoryPacketPair()
-	client, err := NewClient(&config, clientIO)
+	client, err := newTestClient(&config, clientIO)
 	if err != nil {
 		t.Fatal(err)
 	}

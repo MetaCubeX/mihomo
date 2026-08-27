@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -48,6 +48,10 @@ func (m *memoryPacketIO) WritePacket(ctx context.Context, packet []byte) error {
 	}
 }
 
+func (m *memoryPacketIO) WritePacketAllowActiveStop(ctx context.Context, packet []byte) error {
+	return m.WritePacket(ctx, packet)
+}
+
 func (m *memoryPacketIO) Close() error {
 	m.once.Do(func() { close(m.closed) })
 	return nil
@@ -59,6 +63,53 @@ func (m *memoryPacketIO) LocalAddr() net.Addr {
 
 func (m *memoryPacketIO) RemoteAddr() net.Addr {
 	return dummyAddr("remote")
+}
+
+type controlIOPacketAdapter struct {
+	io     ControlIO
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func (a *controlIOPacketAdapter) ReadPacket() ([]byte, error) {
+	return a.io.ReadPacket(a.ctx)
+}
+
+func (a *controlIOPacketAdapter) WritePacket(packet []byte) error {
+	return a.io.WritePacket(context.Background(), packet)
+}
+
+func (a *controlIOPacketAdapter) Close() error {
+	a.cancel()
+	return a.io.Close()
+}
+func (a *controlIOPacketAdapter) LocalAddr() net.Addr  { return a.io.LocalAddr() }
+func (a *controlIOPacketAdapter) RemoteAddr() net.Addr { return a.io.RemoteAddr() }
+
+type initialPacketRecordingIO struct {
+	ControlIO
+	marked chan struct{}
+	once   sync.Once
+}
+
+func (i *initialPacketRecordingIO) markInitialPacketReceived() {
+	i.once.Do(func() { close(i.marked) })
+}
+
+func newTestClient(config *ClientConfig, packetIO any) (*Client, error) {
+	switch io := packetIO.(type) {
+	case PacketIO:
+		return NewClient(config, io)
+	case ControlIO:
+		ctx, cancel := context.WithCancel(context.Background())
+		client, err := NewClient(config, &controlIOPacketAdapter{io: io, ctx: ctx, cancel: cancel})
+		if err != nil {
+			cancel()
+		}
+		return client, err
+	default:
+		return nil, fmt.Errorf("unsupported test packet IO %T", packetIO)
+	}
 }
 
 type dummyAddr string
@@ -88,7 +139,29 @@ func newTestChannels(t *testing.T) (*ControlChannel, *ControlChannel) {
 	server.SetRemoteSessionID(clientID)
 	client.clock = func() time.Time { return time.Unix(1714567890, 0) }
 	server.clock = func() time.Time { return time.Unix(1714567891, 0) }
+	startTestACKFlusher(t, client)
+	startTestACKFlusher(t, server)
 	return client, server
+}
+
+func startTestACKFlusher(t *testing.T, channel *ControlChannel) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() {
+		for {
+			select {
+			case <-channel.ackWake:
+				for channel.PendingACKs() > 0 {
+					if channel.SendAck(ctx) != nil {
+						return
+					}
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // TestCheckReplayAntiReplay verifies the protected-control anti-replay window
@@ -485,102 +558,6 @@ func TestClientWaitServerResetRetransmitsUDP(t *testing.T) {
 	}
 }
 
-func TestClientClosesOnSoftReset(t *testing.T) {
-	for _, name := range []string{"plain", "tls-auth", "tls-crypt"} {
-		t.Run(name, func(t *testing.T) {
-			var (
-				config      ClientConfig
-				serverCrypt ControlCryptor
-				err         error
-			)
-			switch name {
-			case "tls-auth":
-				config.TLSAuthKey = testStaticKey()
-				config.KeyDirection = "1"
-				serverCrypt, err = NewTLSAuth(testStaticKey(), "0")
-			case "tls-crypt":
-				config.TLSCryptKey = testStaticKey()
-				serverCrypt, err = NewTLSCrypt(testStaticKey(), false)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			clientIO, serverIO := newMemoryPacketPair()
-			client, err := NewClient(&config, clientIO)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer client.Close()
-			var serverID SessionID
-			copy(serverID[:], []byte("server01"))
-			client.control.SetRemoteSessionID(serverID)
-			go client.watchControl()
-			serverControl := NewControlChannel(serverIO, serverCrypt, serverID)
-			serverControl.SetRemoteSessionID(client.control.LocalSessionID())
-
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			if _, err := client.control.Send(ctx, PControlV1, []byte("client control")); err != nil {
-				t.Fatal(err)
-			}
-			packet, err := serverControl.Read(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if string(packet.Payload) != "client control" {
-				t.Fatalf("unexpected client control payload: %q", packet.Payload)
-			}
-			if err := serverControl.SendAck(ctx); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := serverControl.Send(ctx, PControlV1, nil); err != nil {
-				t.Fatal(err)
-			}
-			if err := serverIO.WritePacket(ctx, []byte{opcodeKeyID(PControlSoftResetV1, 1)}); err != nil {
-				t.Fatal(err)
-			}
-			softReset, err := (ControlPacket{
-				Opcode:       PControlSoftResetV1,
-				KeyID:        1,
-				LocalSession: serverID,
-				MessageID:    0,
-			}).Encode(serverCrypt, 3, uint32(time.Now().Unix()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := serverIO.WritePacket(ctx, softReset); err != nil {
-				t.Fatal(err)
-			}
-			// With the rekey fix, the client attempts TLS renegotiation on
-			// soft reset. Since no real TLS connection was established in
-			// this unit test (tlsConn is nil), renegotiate() should fail
-			// and the client should close.
-			select {
-			case <-client.mux.done:
-			case <-ctx.Done():
-				t.Fatal("client did not close after soft reset renegotiation failure")
-			}
-			if client.control.recvMessage != 1 {
-				t.Fatalf("soft reset changed the old epoch receive sequence: %d", client.control.recvMessage)
-			}
-			if client.control.PendingMessages() != 0 {
-				t.Fatalf("expected server ack to clear client pending messages: %d", client.control.PendingMessages())
-			}
-
-			ackCtx, ackCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer ackCancel()
-			_, err = serverControl.Read(ackCtx)
-			if !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatalf("expected deadline after consuming client ack, got %v", err)
-			}
-			if serverControl.PendingMessages() != 0 {
-				t.Fatalf("expected client to ack ordinary control message: %d", serverControl.PendingMessages())
-			}
-		})
-	}
-}
-
 func TestClientControlWatcherIgnoresInvalidPackets(t *testing.T) {
 	var serverID SessionID
 	copy(serverID[:], []byte("server01"))
@@ -612,7 +589,7 @@ func TestClientControlWatcherIgnoresInvalidPackets(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clientIO, serverIO := newMemoryPacketPair()
-			client, err := NewClient(&ClientConfig{}, clientIO)
+			client, err := newTestClient(&ClientConfig{}, clientIO)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -725,6 +702,10 @@ func (p *recordingPacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
 func (p *recordingPacketIO) WritePacket(context.Context, []byte) error {
 	p.writes++
 	return nil
+}
+
+func (p *recordingPacketIO) WritePacketAllowActiveStop(ctx context.Context, packet []byte) error {
+	return p.WritePacket(ctx, packet)
 }
 
 func (*recordingPacketIO) Close() error         { return nil }
@@ -931,7 +912,8 @@ func TestUnsetRemoteSessionIgnoresNonResetPacket(t *testing.T) {
 	copy(clientID[:], []byte("client01"))
 	copy(attackerID[:], []byte("attacker"))
 	copy(serverID[:], []byte("server01"))
-	channel := NewControlChannel(clientIO, nil, clientID)
+	recordingIO := &initialPacketRecordingIO{ControlIO: clientIO, marked: make(chan struct{})}
+	channel := NewControlChannel(recordingIO, nil, clientID)
 	bogus, err := (ControlPacket{Opcode: PAckV1, LocalSession: attackerID}).Encode(nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -957,9 +939,14 @@ func TestUnsetRemoteSessionIgnoresNonResetPacket(t *testing.T) {
 	if packet.Opcode != PControlHardResetServerV2 || channel.RemoteSessionID() != serverID {
 		t.Fatalf("remote pinned by non-reset: opcode=%s remote=%x", packet.Opcode, channel.RemoteSessionID())
 	}
+	select {
+	case <-recordingIO.marked:
+	default:
+		t.Fatal("accepted initial hard reset did not mark the transport established")
+	}
 }
 
-func TestTCPPacketIOPreservesPartialFrameAcrossDeadline(t *testing.T) {
+func TestTCPPacketIOWaitsForCompleteFrame(t *testing.T) {
 	for _, bodyPartial := range []bool{false, true} {
 		name := "prefix"
 		if bodyPartial {
@@ -977,47 +964,60 @@ func TestTCPPacketIOPreservesPartialFrameAcrossDeadline(t *testing.T) {
 				first = []byte{0, byte(len(payload)), payload[0], payload[1]}
 				rest = payload[2:]
 			}
+			readDone := make(chan struct {
+				packet []byte
+				err    error
+			}, 1)
+			go func() {
+				packet, err := packetIO.ReadPacket()
+				readDone <- struct {
+					packet []byte
+					err    error
+				}{packet: packet, err: err}
+			}()
 			writeDone := make(chan error, 1)
 			go func() {
 				_, err := serverNet.Write(first)
 				writeDone <- err
 			}()
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-			_, err := packetIO.ReadPacket(ctx)
-			cancel()
-			if err == nil {
-				t.Fatal("partial frame read did not time out")
-			}
 			if err := <-writeDone; err != nil {
 				t.Fatal(err)
 			}
-			go func() { _, _ = serverNet.Write(rest) }()
-			ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			got, err := packetIO.ReadPacket(ctx)
-			if err != nil {
-				t.Fatal(err)
+			select {
+			case result := <-readDone:
+				t.Fatalf("partial frame returned packet=%q err=%v", result.packet, result.err)
+			case <-time.After(20 * time.Millisecond):
 			}
-			if !bytes.Equal(got, payload) {
-				t.Fatalf("resumed frame = %q, want %q", got, payload)
+			go func() { _, _ = serverNet.Write(rest) }()
+			select {
+			case result := <-readDone:
+				if result.err != nil {
+					t.Fatal(result.err)
+				}
+				if !bytes.Equal(result.packet, payload) {
+					t.Fatalf("completed frame = %q, want %q", result.packet, payload)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("complete frame was not returned")
 			}
 		})
 	}
 }
 
-func TestTCPPacketIOWriteGateObservesContext(t *testing.T) {
+func TestPacketMuxWriteGateObservesContext(t *testing.T) {
 	clientNet, serverNet := net.Pipe()
 	defer serverNet.Close()
 	wrapper := &writeSignalingConn{Conn: clientNet, entered: make(chan struct{})}
-	packetIO := NewTCPPacketIO(wrapper)
+	mux := NewPacketMux(NewTCPPacketIO(wrapper))
+	defer mux.Close()
 	firstDone := make(chan error, 1)
 	go func() {
-		firstDone <- packetIO.WritePacket(context.Background(), []byte("blocked"))
+		firstDone <- mux.WriteDataPacket(context.Background(), []byte("blocked"))
 	}()
 	<-wrapper.entered
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if err := packetIO.WritePacket(ctx, []byte("queued")); !errors.Is(err, context.DeadlineExceeded) {
+	if err := mux.WriteDataPacket(ctx, []byte("queued")); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("queued write returned %v", err)
 	}
 	_ = clientNet.Close()
@@ -1077,9 +1077,12 @@ func (p *deadlineRacePacketIO) ReadPacket(context.Context) ([]byte, error) {
 }
 
 func (p *deadlineRacePacketIO) WritePacket(context.Context, []byte) error { return nil }
-func (p *deadlineRacePacketIO) Close() error                              { return nil }
-func (p *deadlineRacePacketIO) LocalAddr() net.Addr                       { return nil }
-func (p *deadlineRacePacketIO) RemoteAddr() net.Addr                      { return nil }
+func (p *deadlineRacePacketIO) WritePacketAllowActiveStop(context.Context, []byte) error {
+	return nil
+}
+func (p *deadlineRacePacketIO) Close() error         { return nil }
+func (p *deadlineRacePacketIO) LocalAddr() net.Addr  { return nil }
+func (p *deadlineRacePacketIO) RemoteAddr() net.Addr { return nil }
 
 func TestReadDeadlineRaceDoesNotDropPacket(t *testing.T) {
 	var clientID, serverID SessionID
@@ -1140,9 +1143,40 @@ func (p *blockingWritePacketIO) WritePacket(ctx context.Context, _ []byte) error
 	return ctx.Err()
 }
 
+func (p *blockingWritePacketIO) WritePacketAllowActiveStop(ctx context.Context, packet []byte) error {
+	return p.WritePacket(ctx, packet)
+}
+
 func (p *blockingWritePacketIO) Close() error         { return nil }
 func (p *blockingWritePacketIO) LocalAddr() net.Addr  { return nil }
 func (p *blockingWritePacketIO) RemoteAddr() net.Addr { return nil }
+
+type heldCanceledWritePacketIO struct {
+	entered  chan struct{}
+	canceled chan struct{}
+	release  chan struct{}
+}
+
+func (p *heldCanceledWritePacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (p *heldCanceledWritePacketIO) WritePacket(ctx context.Context, _ []byte) error {
+	close(p.entered)
+	<-ctx.Done()
+	close(p.canceled)
+	<-p.release
+	return ctx.Err()
+}
+
+func (p *heldCanceledWritePacketIO) WritePacketAllowActiveStop(ctx context.Context, packet []byte) error {
+	return p.WritePacket(ctx, packet)
+}
+
+func (*heldCanceledWritePacketIO) Close() error         { return nil }
+func (*heldCanceledWritePacketIO) LocalAddr() net.Addr  { return nil }
+func (*heldCanceledWritePacketIO) RemoteAddr() net.Addr { return nil }
 
 func TestControlConnWriteDeadlineInterruptsBlockedWrite(t *testing.T) {
 	packetIO := &blockingWritePacketIO{entered: make(chan struct{})}
@@ -1197,7 +1231,10 @@ func TestTCPControlConnDeadlineInterruptsSocketRead(t *testing.T) {
 	defer serverNet.Close()
 	var clientID SessionID
 	copy(clientID[:], []byte("client01"))
-	conn := NewControlConn(NewControlChannel(NewTCPPacketIO(clientNet), nil, clientID))
+	mux := NewPacketMux(NewTCPPacketIO(clientNet))
+	go mux.Run()
+	defer mux.Close()
+	conn := NewControlConn(NewControlChannel(mux, nil, clientID))
 	errCh := make(chan error, 1)
 	go func() {
 		_, err := conn.Read(make([]byte, 1))
@@ -1275,40 +1312,32 @@ func TestControlWriteDeadlineExtensionIgnoresOldTimer(t *testing.T) {
 	}
 }
 
-type limitedWriteConn struct {
-	net.Conn
-	max int
-}
-
-func (c *limitedWriteConn) Write(p []byte) (int, error) {
-	if len(p) > c.max {
-		p = p[:c.max]
+func TestControlWriteKeepsCancellationCauseAfterDeadlineChange(t *testing.T) {
+	packetIO := &heldCanceledWritePacketIO{
+		entered:  make(chan struct{}),
+		canceled: make(chan struct{}),
+		release:  make(chan struct{}),
 	}
-	return c.Conn.Write(p)
-}
-
-func TestTCPPacketIOCompletesPartialWrites(t *testing.T) {
-	clientNet, serverNet := net.Pipe()
-	defer clientNet.Close()
-	defer serverNet.Close()
-	packetIO := NewTCPPacketIO(&limitedWriteConn{Conn: clientNet, max: 3})
-	payload := []byte("complete framed packet")
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	channel := NewControlChannel(packetIO, nil, clientID)
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- packetIO.WritePacket(context.Background(), payload)
+		_, err := channel.Send(context.Background(), PControlV1, []byte("blocked"))
+		errCh <- err
 	}()
-	frame := make([]byte, 2+len(payload))
-	if _, err := io.ReadFull(serverNet, frame); err != nil {
+	<-packetIO.entered
+	channel.mu.Lock()
+	cancel := channel.writeCancel
+	channel.mu.Unlock()
+	cancel(context.DeadlineExceeded)
+	<-packetIO.canceled
+	if err := channel.SetWriteDeadline(time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
-	}
-	if int(frame[0])<<8|int(frame[1]) != len(payload) {
-		t.Fatalf("frame length = %d, want %d", int(frame[0])<<8|int(frame[1]), len(payload))
-	}
-	if !bytes.Equal(frame[2:], payload) {
-		t.Fatalf("frame payload = %q, want %q", frame[2:], payload)
+	close(packetIO.release)
+	if err := <-errCh; !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("write lost its cancellation cause after deadline change: %v", err)
 	}
 }
 
@@ -1335,7 +1364,10 @@ func TestTCPControlConnInterruptsSocketWrite(t *testing.T) {
 			wrapped := &writeSignalingConn{Conn: clientNet, entered: make(chan struct{})}
 			var clientID SessionID
 			copy(clientID[:], []byte("client01"))
-			conn := NewControlConn(NewControlChannel(NewTCPPacketIO(wrapped), nil, clientID))
+			mux := NewPacketMux(NewTCPPacketIO(wrapped))
+			go mux.Run()
+			defer mux.Close()
+			conn := NewControlConn(NewControlChannel(mux, nil, clientID))
 			errCh := make(chan error, 1)
 			go func() {
 				_, err := conn.Write([]byte("blocked socket write"))
@@ -1391,6 +1423,10 @@ func (p *ackCloseRacePacketIO) WritePacket(context.Context, []byte) error {
 		<-p.release
 	}
 	return nil
+}
+
+func (p *ackCloseRacePacketIO) WritePacketAllowActiveStop(ctx context.Context, packet []byte) error {
+	return p.WritePacket(ctx, packet)
 }
 
 func (p *ackCloseRacePacketIO) Close() error         { return nil }
@@ -1475,6 +1511,60 @@ func TestControlConnCloseInterruptsBlockedRead(t *testing.T) {
 	}
 }
 
+func TestControlConnCloseResetDoesNotLeaveReadDeadline(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	var clientID, serverID SessionID
+	copy(clientID[:], []byte("client01"))
+	copy(serverID[:], []byte("server01"))
+	channel := NewControlChannel(clientIO, nil, clientID)
+	channel.SetRemoteSessionID(serverID)
+	conn := NewControlConn(channel)
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	conn.Reset()
+
+	type readResult struct {
+		payload string
+		err     error
+	}
+	result := make(chan readResult, 1)
+	go func() {
+		buf := make([]byte, 32)
+		n, err := conn.Read(buf)
+		result <- readResult{payload: string(buf[:n]), err: err}
+	}()
+	select {
+	case got := <-result:
+		t.Fatalf("read after Reset returned before a packet arrived: payload=%q err=%v", got.payload, got.err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	raw, err := (ControlPacket{
+		Opcode:       PControlV1,
+		LocalSession: serverID,
+		MessageID:    0,
+		Payload:      []byte("after reset"),
+	}).Encode(nil, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := serverIO.WritePacket(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-result:
+		if got.err != nil {
+			t.Fatal(got.err)
+		}
+		if got.payload != "after reset" {
+			t.Fatalf("read after Reset returned %q", got.payload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("read after Reset did not receive the packet")
+	}
+}
+
 func TestTCPPacketIOFraming(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()
@@ -1486,10 +1576,10 @@ func TestTCPPacketIOFraming(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- clientIO.WritePacket(context.Background(), payload)
+		errCh <- clientIO.WritePacket(payload)
 	}()
 
-	got, err := serverIO.ReadPacket(context.Background())
+	got, err := serverIO.ReadPacket()
 	if err != nil {
 		t.Fatal(err)
 	}

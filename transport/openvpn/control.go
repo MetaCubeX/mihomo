@@ -4,33 +4,33 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 	"time"
-
-	"github.com/metacubex/mihomo/common/contextutils"
-	"github.com/metacubex/mihomo/common/pool"
 )
 
-type PacketIO interface {
+type ControlIO interface {
 	ReadPacket(ctx context.Context) ([]byte, error)
 	WritePacket(ctx context.Context, packet []byte) error
+	WritePacketAllowActiveStop(ctx context.Context, packet []byte) error
 	Close() error
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 }
 
+type initialPacketReceiver interface {
+	markInitialPacketReceived()
+}
+
 type ControlChannel struct {
-	io                   PacketIO
-	crypt                ControlCryptor
-	clock                func() time.Time
-	replayClock          func() time.Time
-	sendGate             chan struct{}
-	transientWriteIsLoss bool
-	keyID                uint8
-	local                SessionID
-	remote               SessionID
+	io          ControlIO
+	crypt       ControlCryptor
+	clock       func() time.Time
+	replayClock func() time.Time
+	sendGate    chan struct{}
+	keyID       uint8
+	local       SessionID
+	remote      SessionID
 
 	mu             sync.Mutex
 	sendPacketID   uint32
@@ -54,11 +54,12 @@ type ControlChannel struct {
 	parkedTLS               [][]byte
 	readDeadline            time.Time
 	writeDeadline           time.Time
-	writeCancel             context.CancelFunc
+	writeCancel             context.CancelCauseFunc
 	writeTimer              *time.Timer
 	writeDeadlineGeneration uint64
 	writeGeneration         uint64
 	readWake                chan struct{}
+	ackWake                 chan struct{}
 	// recReplay is the session-wide anti-replay window for tls-auth / tls-crypt
 	// protected control packets, mirroring OpenVPN's packet_id_rec. Soft key
 	// resets do not replace the outer TLS wrapper or reset its packet IDs.
@@ -156,7 +157,7 @@ func (r *replayState) reap(now time.Time) {
 	}
 }
 
-func NewControlChannel(io PacketIO, crypt ControlCryptor, local SessionID) *ControlChannel {
+func NewControlChannel(io ControlIO, crypt ControlCryptor, local SessionID) *ControlChannel {
 	return &ControlChannel{
 		io:          io,
 		crypt:       crypt,
@@ -167,6 +168,7 @@ func NewControlChannel(io PacketIO, crypt ControlCryptor, local SessionID) *Cont
 		pending:     make(map[uint32]*ControlPacket),
 		recvPending: make(map[uint32]*ControlPacket),
 		readWake:    make(chan struct{}),
+		ackWake:     make(chan struct{}, 1),
 	}
 }
 
@@ -243,7 +245,27 @@ func (c *ControlChannel) AdoptKeyID(keyID uint8) {
 func (c *ControlChannel) QueueAck(messageID uint32) {
 	c.mu.Lock()
 	c.ackPending = appendAck(c.ackPending, messageID)
+	c.signalAckLocked()
 	c.mu.Unlock()
+}
+
+func (c *ControlChannel) signalAckLocked() {
+	select {
+	case c.ackWake <- struct{}{}:
+	default:
+	}
+}
+
+func (c *ControlChannel) signalAck() {
+	c.mu.Lock()
+	c.signalAckLocked()
+	c.mu.Unlock()
+}
+
+func (c *ControlChannel) PendingACKs() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.ackPending)
 }
 
 // MarkReceived advances the reliable receive sequence past messageID.
@@ -373,6 +395,22 @@ func (c *ControlChannel) dedicatedAckMax() int {
 }
 
 func (c *ControlChannel) SendAck(ctx context.Context) error {
+	// Select the ACK IDs and key epoch only after this write owns the logical
+	// send gate. This keeps an asynchronous ACK from being constructed for an
+	// old epoch and emitted after a new epoch's first reliable packet.
+	c.mu.Lock()
+	hasPending := len(c.ackPending) != 0
+	c.mu.Unlock()
+	if !hasPending {
+		return nil
+	}
+	if err := acquireWriteGate(ctx, c.sendGate); err != nil {
+		return err
+	}
+	defer releaseWriteGate(c.sendGate)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	if len(c.ackPending) == 0 {
 		c.mu.Unlock()
@@ -387,7 +425,7 @@ func (c *ControlChannel) SendAck(ctx context.Context) error {
 		AckRemoteSession: c.remote,
 	}
 	c.mu.Unlock()
-	return c.writeControlPacket(ctx, packet)
+	return c.writeControlPacketGranted(ctx, packet, true)
 }
 
 func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
@@ -436,9 +474,7 @@ read:
 			c.mu.Unlock()
 			return nil, errParkedTLS
 		}
-		if err := c.SendAck(ctx); err != nil {
-			return nil, err
-		}
+		c.signalAck()
 	}
 }
 
@@ -538,6 +574,9 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			if initialReset {
 				c.remote = packet.LocalSession
 				remote = packet.LocalSession
+				if receiver, ok := c.io.(initialPacketReceiver); ok {
+					receiver.markInitialPacketReceived()
+				}
 			}
 		}
 		c.mu.Unlock()
@@ -623,7 +662,6 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 		}
 
 		var deliver *ControlPacket
-		sendAck := false
 
 		c.mu.Lock()
 		for _, ackID := range packet.AckIDs {
@@ -644,13 +682,13 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			// In-window replay of an already-delivered packet: acknowledge so
 			// the sender stops retransmitting, but do not redeliver.
 			c.ackPending = appendAck(c.ackPending, packet.MessageID)
-			sendAck = true
+			c.signalAckLocked()
 		case packet.MessageID == c.recvMessage:
 			// The expected next message: deliver and advance.
 			c.ackPending = appendAck(c.ackPending, packet.MessageID)
+			c.signalAckLocked()
 			deliver = packet
 			c.recvMessage++
-			sendAck = true
 		default:
 			// Out-of-order packet ahead of recvMessage. A duplicate already
 			// buffered inside the receive window must be re-ACKed (its first
@@ -659,20 +697,14 @@ func (c *ControlChannel) read(ctx context.Context, watchSoftReset bool) (*Contro
 			// out-of-window packet is neither buffered nor ACKed.
 			if _, exists := c.recvPending[packet.MessageID]; exists {
 				c.ackPending = appendAck(c.ackPending, packet.MessageID)
-				sendAck = true
+				c.signalAckLocked()
 			} else if recvWindowOK(c.recvMessage, packet.MessageID, len(c.recvPending)) {
 				c.recvPending[packet.MessageID] = packet
 				c.ackPending = appendAck(c.ackPending, packet.MessageID)
-				sendAck = true
+				c.signalAckLocked()
 			}
 		}
 		c.mu.Unlock()
-
-		if sendAck {
-			if err := c.SendAck(ctx); err != nil {
-				return nil, err
-			}
-		}
 
 		if deliver != nil {
 			return deliver, nil
@@ -728,7 +760,7 @@ func (c *ControlChannel) RetransmitPending(ctx context.Context) error {
 	c.mu.Unlock()
 
 	for _, packet := range packets {
-		if err := c.writeControlPacket(ctx, packet); err != nil {
+		if err := c.writeControlPacketWithAbort(ctx, packet, false); err != nil {
 			return err
 		}
 	}
@@ -736,6 +768,10 @@ func (c *ControlChannel) RetransmitPending(ctx context.Context) error {
 }
 
 func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *ControlPacket) error {
+	return c.writeControlPacketWithAbort(ctx, packet, true)
+}
+
+func (c *ControlChannel) writeControlPacketWithAbort(ctx context.Context, packet *ControlPacket, abortActive bool) error {
 	if err := acquireWriteGate(ctx, c.sendGate); err != nil {
 		return err
 	}
@@ -743,6 +779,11 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	return c.writeControlPacketGranted(ctx, packet, abortActive)
+}
+
+// writeControlPacketGranted writes while the caller owns sendGate.
+func (c *ControlChannel) writeControlPacketGranted(ctx context.Context, packet *ControlPacket, abortActive bool) error {
 	c.mu.Lock()
 	if c.crypt != nil && c.sendPacketID == ^uint32(0) {
 		c.mu.Unlock()
@@ -754,7 +795,7 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 	c.sendPacketID++
 	packetID := c.sendPacketID
 	unixTime := c.sendPacketTime
-	opCtx, cancel := context.WithCancel(ctx)
+	opCtx, cancel := context.WithCancelCause(ctx)
 	c.writeGeneration++
 	generation := c.writeGeneration
 	c.writeCancel = cancel
@@ -767,14 +808,8 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 		return err
 	}
 	if err := opCtx.Err(); err != nil {
-		c.mu.Lock()
-		deadline := c.writeDeadline
-		c.mu.Unlock()
-		if !deadline.IsZero() && !time.Now().Before(deadline) {
-			return context.DeadlineExceeded
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
+		if cause := context.Cause(opCtx); cause != nil {
+			return cause
 		}
 		return err
 	}
@@ -782,19 +817,18 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 		packet.Opcode == PControlHardResetClientV3 && packet.MessageID == 0 {
 		encoded = append(encoded, tlsCryptV2.WrappedClientKey()...)
 	}
-	err = c.io.WritePacket(opCtx, encoded)
-	if err != nil && opCtx.Err() != nil && contextCausedIOError(err) {
-		c.mu.Lock()
-		deadline := c.writeDeadline
-		c.mu.Unlock()
-		if !deadline.IsZero() && !time.Now().Before(deadline) {
-			return context.DeadlineExceeded
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
+	if abortActive {
+		err = c.io.WritePacket(opCtx, encoded)
+	} else {
+		err = c.io.WritePacketAllowActiveStop(opCtx, encoded)
 	}
-	if err != nil && c.transientWriteIsLoss && retryablePacketWriteError(err) {
+	if err != nil && opCtx.Err() != nil {
+		if cause := context.Cause(opCtx); cause != nil {
+			return cause
+		}
+		return err
+	}
+	if errors.Is(err, errPacketDropped) {
 		return nil
 	}
 	return err
@@ -889,7 +923,7 @@ func (c *ControlChannel) scheduleWriteDeadlineLocked() {
 	cancel := c.writeCancel
 	delay := time.Until(c.writeDeadline)
 	if delay <= 0 {
-		cancel()
+		cancel(context.DeadlineExceeded)
 		return
 	}
 	c.writeTimer = time.AfterFunc(delay, func() {
@@ -897,17 +931,17 @@ func (c *ControlChannel) scheduleWriteDeadlineLocked() {
 	})
 }
 
-func (c *ControlChannel) cancelWriteGeneration(writeGeneration, deadlineGeneration uint64, cancel context.CancelFunc) {
+func (c *ControlChannel) cancelWriteGeneration(writeGeneration, deadlineGeneration uint64, cancel context.CancelCauseFunc) {
 	c.mu.Lock()
 	if c.writeGeneration == writeGeneration &&
 		c.writeDeadlineGeneration == deadlineGeneration && c.writeCancel != nil {
-		cancel()
+		cancel(context.DeadlineExceeded)
 	}
 	c.mu.Unlock()
 }
 
-func (c *ControlChannel) finishWrite(generation uint64, cancel context.CancelFunc) {
-	cancel()
+func (c *ControlChannel) finishWrite(generation uint64, cancel context.CancelCauseFunc) {
+	cancel(context.Canceled)
 	c.mu.Lock()
 	if c.writeGeneration == generation {
 		if c.writeTimer != nil {
@@ -922,7 +956,7 @@ func (c *ControlChannel) finishWrite(generation uint64, cancel context.CancelFun
 func (c *ControlChannel) interruptWrite() {
 	c.mu.Lock()
 	if c.writeCancel != nil {
-		c.writeCancel()
+		c.writeCancel(context.Canceled)
 	}
 	c.mu.Unlock()
 }
@@ -1005,13 +1039,7 @@ func (c *ControlConn) Read(b []byte) (int, error) {
 			return 0, err
 		}
 		if packet.Opcode != PControlV1 {
-			if err := c.channel.SendAck(opCtx); err != nil {
-				return 0, err
-			}
 			continue
-		}
-		if err := c.channel.SendAck(opCtx); err != nil {
-			return 0, err
 		}
 		if len(packet.Payload) == 0 {
 			continue
@@ -1083,7 +1111,6 @@ func (c *ControlConn) Close() error {
 	if c.opCancel != nil {
 		c.opCancel()
 	}
-	_ = c.channel.SetReadDeadline(time.Now())
 	c.readBuf = nil
 	c.channel.interruptWrite()
 	c.mu.Unlock()
@@ -1112,149 +1139,6 @@ func (c *ControlConn) SetWriteDeadline(t time.Time) error {
 	return c.channel.SetWriteDeadline(t)
 }
 
-type streamPacketIO struct {
-	conn          net.Conn
-	writeGate     chan struct{}
-	readMu        sync.Mutex
-	readLen       [2]byte
-	readLenN      int
-	readPacket    []byte
-	readPacketN   int
-	deadlineMu    sync.Mutex
-	readDeadline  time.Time
-	writeDeadline time.Time
-}
-
-type datagramPacketIO struct {
-	conn          net.Conn
-	writeGate     chan struct{}
-	deadlineMu    sync.Mutex
-	readDeadline  time.Time
-	writeDeadline time.Time
-}
-
-func NewDatagramPacketIO(conn net.Conn) PacketIO {
-	return &datagramPacketIO{conn: conn, writeGate: make(chan struct{}, 1)}
-}
-
-func (d *datagramPacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
-	if err := setReadDeadlineFromContext(d.conn, ctx, &d.deadlineMu, &d.readDeadline); err != nil {
-		return nil, err
-	}
-	stop := interruptConnReadOnDone(ctx, d.conn, &d.deadlineMu, &d.readDeadline)
-	defer stop()
-	buf := make([]byte, 64*1024)
-	n, err := d.conn.Read(buf)
-	if err != nil {
-		return nil, contextIOError(ctx, err)
-	}
-	return buf[:n], nil
-}
-
-func (d *datagramPacketIO) WritePacket(ctx context.Context, packet []byte) error {
-	if err := acquireWriteGate(ctx, d.writeGate); err != nil {
-		return err
-	}
-	defer releaseWriteGate(d.writeGate)
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := setWriteDeadlineFromContext(d.conn, ctx, &d.deadlineMu, &d.writeDeadline); err != nil {
-		return err
-	}
-	stop := interruptConnWriteOnDone(ctx, d.conn, &d.deadlineMu, &d.writeDeadline)
-	defer stop()
-	n, err := d.conn.Write(packet)
-	if err == nil && n != len(packet) {
-		err = io.ErrShortWrite
-	}
-	return contextIOError(ctx, err)
-}
-
-func (d *datagramPacketIO) Close() error {
-	return d.conn.Close()
-}
-
-func (d *datagramPacketIO) LocalAddr() net.Addr {
-	return d.conn.LocalAddr()
-}
-
-func (d *datagramPacketIO) RemoteAddr() net.Addr {
-	return d.conn.RemoteAddr()
-}
-
-func NewTCPPacketIO(conn net.Conn) PacketIO {
-	return &streamPacketIO{conn: conn, writeGate: make(chan struct{}, 1)}
-}
-
-func (s *streamPacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
-	s.readMu.Lock()
-	defer s.readMu.Unlock()
-	if err := setReadDeadlineFromContext(s.conn, ctx, &s.deadlineMu, &s.readDeadline); err != nil {
-		return nil, err
-	}
-	stop := interruptConnReadOnDone(ctx, s.conn, &s.deadlineMu, &s.readDeadline)
-	defer stop()
-	for s.readLenN < len(s.readLen) {
-		n, err := s.conn.Read(s.readLen[s.readLenN:])
-		s.readLenN += n
-		if err != nil && s.readLenN < len(s.readLen) {
-			return nil, contextIOError(ctx, err)
-		}
-		if n == 0 && err == nil {
-			return nil, io.ErrNoProgress
-		}
-	}
-	if s.readPacket == nil {
-		size := int(s.readLen[0])<<8 | int(s.readLen[1])
-		if size == 0 {
-			s.readLenN = 0
-			return nil, errors.New("empty openvpn tcp packet")
-		}
-		s.readPacket = make([]byte, size)
-	}
-	for s.readPacketN < len(s.readPacket) {
-		n, err := s.conn.Read(s.readPacket[s.readPacketN:])
-		s.readPacketN += n
-		if err != nil && s.readPacketN < len(s.readPacket) {
-			return nil, contextIOError(ctx, err)
-		}
-		if n == 0 && err == nil {
-			return nil, io.ErrNoProgress
-		}
-	}
-	packet := s.readPacket
-	s.readLenN = 0
-	s.readPacket = nil
-	s.readPacketN = 0
-	return packet, nil
-}
-
-func (s *streamPacketIO) WritePacket(ctx context.Context, packet []byte) error {
-	if err := acquireWriteGate(ctx, s.writeGate); err != nil {
-		return err
-	}
-	defer releaseWriteGate(s.writeGate)
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if len(packet) > 0xffff {
-		return fmt.Errorf("openvpn tcp packet too large: %d", len(packet))
-	}
-	if err := setWriteDeadlineFromContext(s.conn, ctx, &s.deadlineMu, &s.writeDeadline); err != nil {
-		return err
-	}
-	stop := interruptConnWriteOnDone(ctx, s.conn, &s.deadlineMu, &s.writeDeadline)
-	defer stop()
-	frame := pool.Get(2 + len(packet))
-	defer pool.Put(frame)
-	frame[0] = byte(len(packet) >> 8)
-	frame[1] = byte(len(packet))
-	copy(frame[2:], packet)
-	err := writeAll(s.conn, frame)
-	return contextIOError(ctx, err)
-}
-
 func acquireWriteGate(ctx context.Context, gate chan struct{}) error {
 	select {
 	case gate <- struct{}{}:
@@ -1266,132 +1150,4 @@ func acquireWriteGate(ctx context.Context, gate chan struct{}) error {
 
 func releaseWriteGate(gate chan struct{}) {
 	<-gate
-}
-
-func contextCausedIOError(err error) bool {
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-	var netErr net.Error
-	return errors.As(err, &netErr) && netErr.Timeout()
-}
-
-func retryablePacketWriteError(err error) bool {
-	var netErr net.Error
-	return errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary())
-}
-
-func writeAll(conn net.Conn, packet []byte) error {
-	for len(packet) > 0 {
-		n, err := conn.Write(packet)
-		if n > 0 {
-			packet = packet[n:]
-		}
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return io.ErrShortWrite
-		}
-	}
-	return nil
-}
-
-func (s *streamPacketIO) Close() error {
-	return s.conn.Close()
-}
-
-func (s *streamPacketIO) LocalAddr() net.Addr {
-	return s.conn.LocalAddr()
-}
-
-func (s *streamPacketIO) RemoteAddr() net.Addr {
-	return s.conn.RemoteAddr()
-}
-
-func setReadDeadlineFromContext(conn net.Conn, ctx context.Context, mu *sync.Mutex, current *time.Time) error {
-	deadline, hasDeadline := ctx.Deadline()
-	mu.Lock()
-	defer mu.Unlock()
-	if current.Equal(deadline) {
-		return nil
-	}
-	if hasDeadline {
-		if err := conn.SetReadDeadline(deadline); err != nil {
-			return err
-		}
-	} else if err := conn.SetReadDeadline(time.Time{}); err != nil {
-		return err
-	}
-	*current = deadline
-	return nil
-}
-
-func setWriteDeadlineFromContext(conn net.Conn, ctx context.Context, mu *sync.Mutex, current *time.Time) error {
-	deadline, hasDeadline := ctx.Deadline()
-	mu.Lock()
-	defer mu.Unlock()
-	if current.Equal(deadline) {
-		return nil
-	}
-	if hasDeadline {
-		if err := conn.SetWriteDeadline(deadline); err != nil {
-			return err
-		}
-	} else if err := conn.SetWriteDeadline(time.Time{}); err != nil {
-		return err
-	}
-	*current = deadline
-	return nil
-}
-
-func interruptConnReadOnDone(ctx context.Context, conn net.Conn, mu *sync.Mutex, current *time.Time) func() {
-	if ctx.Done() == nil {
-		return func() {}
-	}
-	done := make(chan struct{})
-	stop := contextutils.AfterFunc(ctx, func() {
-		mu.Lock()
-		now := time.Now()
-		_ = conn.SetReadDeadline(now)
-		*current = now
-		mu.Unlock()
-		close(done)
-	})
-	return func() {
-		if !stop() {
-			<-done
-		}
-	}
-}
-
-func interruptConnWriteOnDone(ctx context.Context, conn net.Conn, mu *sync.Mutex, current *time.Time) func() {
-	if ctx.Done() == nil {
-		return func() {}
-	}
-	done := make(chan struct{})
-	stop := contextutils.AfterFunc(ctx, func() {
-		mu.Lock()
-		now := time.Now()
-		_ = conn.SetWriteDeadline(now)
-		*current = now
-		mu.Unlock()
-		close(done)
-	})
-	return func() {
-		if !stop() {
-			<-done
-		}
-	}
-}
-
-func contextIOError(ctx context.Context, err error) error {
-	if err == nil {
-		return nil
-	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() && ctx.Err() != nil {
-		return ctx.Err()
-	}
-	return err
 }
