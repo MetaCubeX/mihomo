@@ -21,7 +21,6 @@ dns:
 	require.NoError(t, err)
 	require.Len(t, dnsCfg.DirectNameServerFallback, 1)
 	assert.Equal(t, "system", dnsCfg.DirectNameServerFallback[0].Net)
-	assert.Equal(t, uint(1000), dnsCfg.DirectNameServerFallbackDelay)
 	assert.Equal(t, uint(300000), dnsCfg.NameServerFallbackRecoveryInterval)
 }
 
@@ -51,7 +50,6 @@ dns:
 	require.NoError(t, err)
 	require.Len(t, dnsCfg.ProxyServerNameserverFallback, 1)
 	assert.Equal(t, "system", dnsCfg.ProxyServerNameserverFallback[0].Net)
-	assert.Equal(t, uint(1000), dnsCfg.ProxyServerNameserverFallbackDelay)
 	assert.Equal(t, uint(300000), dnsCfg.NameServerFallbackRecoveryInterval)
 }
 

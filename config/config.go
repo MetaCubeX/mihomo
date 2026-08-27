@@ -173,15 +173,13 @@ type DNS struct {
 	FakeIPTTL         int
 	NameServerPolicy  []dns.Policy
 
-	ProxyServerNameserver              []dns.NameServer
-	ProxyServerPolicy                  []dns.Policy
-	ProxyServerNameserverFallback      []dns.NameServer
-	ProxyServerNameserverFallbackDelay uint
+	ProxyServerNameserver         []dns.NameServer
+	ProxyServerPolicy             []dns.Policy
+	ProxyServerNameserverFallback []dns.NameServer
 
-	DirectNameServer              []dns.NameServer
-	DirectNameServerFallback      []dns.NameServer
-	DirectNameServerFallbackDelay uint
-	DirectFollowPolicy            bool
+	DirectNameServer         []dns.NameServer
+	DirectNameServerFallback []dns.NameServer
+	DirectFollowPolicy       bool
 }
 
 // Profile config
@@ -255,15 +253,13 @@ type RawDNS struct {
 	CacheMaxSize      int                                 `yaml:"cache-max-size" json:"cache-max-size"`
 	NameServerPolicy  *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
 
-	ProxyServerNameserver              []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
-	ProxyServerNameserverPolicy        *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
-	ProxyServerNameserverFallback      []string                            `yaml:"proxy-server-nameserver-fallback" json:"proxy-server-nameserver-fallback"`
-	ProxyServerNameserverFallbackDelay uint                                `yaml:"proxy-server-nameserver-fallback-delay" json:"proxy-server-nameserver-fallback-delay"`
+	ProxyServerNameserver         []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+	ProxyServerNameserverPolicy   *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
+	ProxyServerNameserverFallback []string                            `yaml:"proxy-server-nameserver-fallback" json:"proxy-server-nameserver-fallback"`
 
-	DirectNameServer              []string `yaml:"direct-nameserver" json:"direct-nameserver"`
-	DirectNameServerFallback      []string `yaml:"direct-nameserver-fallback" json:"direct-nameserver-fallback"`
-	DirectNameServerFallbackDelay uint     `yaml:"direct-nameserver-fallback-delay" json:"direct-nameserver-fallback-delay"`
-	DirectNameServerFollowPolicy  bool     `yaml:"direct-nameserver-follow-policy" json:"direct-nameserver-follow-policy"`
+	DirectNameServer             []string `yaml:"direct-nameserver" json:"direct-nameserver"`
+	DirectNameServerFallback     []string `yaml:"direct-nameserver-fallback" json:"direct-nameserver-fallback"`
+	DirectNameServerFollowPolicy bool     `yaml:"direct-nameserver-follow-policy" json:"direct-nameserver-follow-policy"`
 }
 
 type RawFallbackFilter struct {
@@ -525,9 +521,6 @@ func DefaultRawConfig() *RawConfig {
 			EnhancedMode:   C.DNSMapping,
 			FakeIPRange:    "198.18.0.1/16",
 			FakeIPTTL:      1,
-
-			DirectNameServerFallbackDelay:      1000,
-			ProxyServerNameserverFallbackDelay: 1000,
 
 			NameServerFallbackRecoveryInterval: 300000,
 
@@ -1476,7 +1469,6 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	if len(dnsCfg.ProxyServerNameserverFallback) != 0 && len(dnsCfg.ProxyServerNameserver) == 0 {
 		return nil, errors.New("disallow empty `proxy-server-nameserver` when `proxy-server-nameserver-fallback` is set")
 	}
-	dnsCfg.ProxyServerNameserverFallbackDelay = cfg.ProxyServerNameserverFallbackDelay
 
 	if dnsCfg.DirectNameServer, err = parseNameServer(cfg.DirectNameServer, false, cfg.PreferH3); err != nil {
 		return nil, err
@@ -1487,7 +1479,6 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	if len(dnsCfg.DirectNameServerFallback) != 0 && len(dnsCfg.DirectNameServer) == 0 {
 		return nil, errors.New("disallow empty `direct-nameserver` when `direct-nameserver-fallback` is set")
 	}
-	dnsCfg.DirectNameServerFallbackDelay = cfg.DirectNameServerFallbackDelay
 	dnsCfg.DirectFollowPolicy = cfg.DirectNameServerFollowPolicy
 	dnsCfg.NameServerFallbackRecoveryInterval = cfg.NameServerFallbackRecoveryInterval
 

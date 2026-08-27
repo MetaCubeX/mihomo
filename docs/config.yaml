@@ -329,7 +329,6 @@ dns:
   #   - https://doh.pub/dns-query
   # proxy-server-nameserver-fallback: # 主组未能及时返回有效 IP 时使用
   #   - system://
-  # proxy-server-nameserver-fallback-delay: 1000 # 启动 fallback 前等待的时间，单位：ms；默认 1000ms
   #   - tls://223.5.5.5:853
   # proxy-server-nameserver-policy: # 格式同nameserver-policy，仅用于节点域名解析，当且仅当proxy-server-nameserver不为空时生效
   #   'www.yournode.com': '114.114.114.114'
@@ -339,11 +338,10 @@ dns:
   #   - system://
   # direct-nameserver-fallback: # 主组未能及时返回有效 IP 时使用
   #   - system://
-  # direct-nameserver-fallback-delay: 1000 # 启动 fallback 查询前等待的时间，单位：ms；默认 1000ms
   # direct-nameserver-follow-policy: false # 是否遵循nameserver-policy，默认为不遵守，仅当direct-nameserver不为空时生效
 
   # nameserver-fallback-recovery-interval: 300000 # direct/proxy fallback 恢复间隔，单位：ms；默认 5 分钟，0 表示禁用持续熔断
-  # 新查询首次超时后使用根区 NS 探针区分单查询故障与整组故障；恢复时使用原查询与 fallback 竞速
+  # 主组使用内核默认 DNS 超时；新查询首次超时后使用根区 NS 探针区分单查询故障与整组故障；恢复时使用原查询与 fallback 竞速
 
   # 配置 fallback 使用条件
   # fallback-filter:
