@@ -48,6 +48,10 @@ type Resolver struct {
 	cache                 dnsCache
 	policy                []dnsPolicy
 	defaultResolver       *Resolver
+
+	serveExpired              bool
+	serveExpiredTTL           time.Duration
+	serveExpiredClientTimeout time.Duration
 }
 
 func (r *Resolver) LookupIPPrimaryIPv4(ctx context.Context, host string) (ips []netip.Addr, err error) {
@@ -153,9 +157,8 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	if len(m.Question) == 0 {
 		return nil, errors.New("should have one question at least")
 	}
-	continueFetch := false
 	defer func() {
-		if continueFetch || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
 				defer cancel()
@@ -171,8 +174,10 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 		log.Debugln("[DNS] cache hit %s --> %s, expire at %s", domain, msgToLogString(msg), expireTime.Format("2006-01-02 15:04:05"))
 		now := time.Now()
 		if expireTime.Before(now) {
-			setMsgTTL(msg, uint32(1)) // Continue fetch
-			continueFetch = true
+			if !r.serveExpired || (r.serveExpiredTTL > 0 && now.Sub(expireTime) > r.serveExpiredTTL) {
+				return r.exchangeWithoutCache(ctx, m)
+			}
+			return r.exchangeWithExpired(ctx, m, msg)
 		} else {
 			// updating TTL by subtracting common delta time from each DNS record
 			updateMsgTTL(msg, uint32(time.Until(expireTime).Seconds()))
@@ -180,6 +185,32 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 		return
 	}
 	return r.exchangeWithoutCache(ctx, m)
+}
+
+func (r *Resolver) exchangeWithExpired(ctx context.Context, query, expired *D.Msg) (*D.Msg, error) {
+	refreshCh := make(chan result, 1)
+	go func() {
+		refreshCtx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+		defer cancel()
+		msg, err := r.exchangeWithoutCache(refreshCtx, query)
+		refreshCh <- result{Msg: msg, Error: err}
+	}()
+
+	if r.serveExpiredClientTimeout > 0 {
+		timer := time.NewTimer(r.serveExpiredClientTimeout)
+		defer timer.Stop()
+		select {
+		case refresh := <-refreshCh:
+			if refresh.Error == nil {
+				return refresh.Msg, nil
+			}
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+	}
+
+	setMsgTTL(expired, uint32(1))
+	return expired, nil
 }
 
 // ExchangeWithoutCache a batch of dns request, and it do NOT GET from cache
@@ -483,6 +514,10 @@ type Config struct {
 	ProxyServerPolicy    []Policy
 	CacheAlgorithm       string
 	CacheMaxSize         int
+
+	ServeExpired              bool
+	ServeExpiredTTL           time.Duration
+	ServeExpiredClientTimeout time.Duration
 }
 
 func (config Config) newCache() dnsCache {
@@ -528,6 +563,10 @@ func NewResolver(config Config) (rs Resolvers) {
 		main:        transform(config.Default, nil),
 		cache:       config.newCache(),
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+
+		serveExpired:              config.ServeExpired,
+		serveExpiredTTL:           config.ServeExpiredTTL,
+		serveExpiredClientTimeout: config.ServeExpiredClientTimeout,
 	}
 
 	var nameServerCache []struct {
@@ -600,6 +639,10 @@ func NewResolver(config Config) (rs Resolvers) {
 		cache:       config.newCache(),
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 		policy:      makePolicy(config.Policy),
+
+		serveExpired:              config.ServeExpired,
+		serveExpiredTTL:           config.ServeExpiredTTL,
+		serveExpiredClientTimeout: config.ServeExpiredClientTimeout,
 	}
 	r.defaultResolver = defaultResolver
 	rs.Resolver = r
@@ -611,6 +654,10 @@ func NewResolver(config Config) (rs Resolvers) {
 			cache:       config.newCache(),
 			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 			policy:      makePolicy(config.ProxyServerPolicy),
+
+			serveExpired:              config.ServeExpired,
+			serveExpiredTTL:           config.ServeExpiredTTL,
+			serveExpiredClientTimeout: config.ServeExpiredClientTimeout,
 		}
 	}
 
@@ -620,6 +667,10 @@ func NewResolver(config Config) (rs Resolvers) {
 			main:        cacheTransform(config.DirectServer),
 			cache:       config.newCache(),
 			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+
+			serveExpired:              config.ServeExpired,
+			serveExpiredTTL:           config.ServeExpiredTTL,
+			serveExpiredClientTimeout: config.ServeExpiredClientTimeout,
 		}
 		if config.DirectFollowPolicy {
 			rs.DirectResolver.policy = r.policy

@@ -145,23 +145,28 @@ type NTP struct {
 
 // DNS config
 type DNS struct {
-	Enable                bool
-	PreferH3              bool
-	IPv6                  bool
-	IPv6Timeout           uint
-	UseHosts              bool
-	UseSystemHosts        bool
-	NameServer            []dns.NameServer
-	Fallback              []dns.NameServer
-	FallbackIPFilter      []C.IpMatcher
-	FallbackDomainFilter  []C.DomainMatcher
-	FallbackLazyQuery     bool
-	Listen                string
-	ListenRoutingMark     int
-	EnhancedMode          C.DNSMode
-	DefaultNameserver     []dns.NameServer
-	CacheAlgorithm        string
-	CacheMaxSize          int
+	Enable               bool
+	PreferH3             bool
+	IPv6                 bool
+	IPv6Timeout          uint
+	UseHosts             bool
+	UseSystemHosts       bool
+	NameServer           []dns.NameServer
+	Fallback             []dns.NameServer
+	FallbackIPFilter     []C.IpMatcher
+	FallbackDomainFilter []C.DomainMatcher
+	FallbackLazyQuery    bool
+	Listen               string
+	ListenRoutingMark    int
+	EnhancedMode         C.DNSMode
+	DefaultNameserver    []dns.NameServer
+	CacheAlgorithm       string
+	CacheMaxSize         int
+
+	ServeExpired              bool
+	ServeExpiredTTL           time.Duration
+	ServeExpiredClientTimeout time.Duration
+
 	FakeIPRange           netip.Prefix
 	FakeIPPool            *fakeip.Pool
 	FakeIPRange6          netip.Prefix
@@ -241,6 +246,9 @@ type RawDNS struct {
 	DefaultNameserver            []string                            `yaml:"default-nameserver" json:"default-nameserver"`
 	CacheAlgorithm               string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
 	CacheMaxSize                 int                                 `yaml:"cache-max-size" json:"cache-max-size"`
+	ServeExpired                 bool                                `yaml:"serve-expired" json:"serve-expired"`
+	ServeExpiredTTL              uint                                `yaml:"serve-expired-ttl" json:"serve-expired-ttl"`
+	ServeExpiredClientTimeout    uint                                `yaml:"serve-expired-client-timeout" json:"serve-expired-client-timeout"`
 	NameServerPolicy             *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
 	ProxyServerNameserver        []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
 	ProxyServerNameserverPolicy  *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
@@ -507,6 +515,11 @@ func DefaultRawConfig() *RawConfig {
 			EnhancedMode:   C.DNSMapping,
 			FakeIPRange:    "198.18.0.1/16",
 			FakeIPTTL:      1,
+
+			ServeExpired:              true,
+			ServeExpiredTTL:           86400,
+			ServeExpiredClientTimeout: 1800,
+
 			FallbackFilter: RawFallbackFilter{
 				GeoIP:     true,
 				GeoIPCode: "CN",
@@ -1422,6 +1435,10 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 		EnhancedMode:      cfg.EnhancedMode,
 		CacheAlgorithm:    cfg.CacheAlgorithm,
 		CacheMaxSize:      cfg.CacheMaxSize,
+
+		ServeExpired:              cfg.ServeExpired,
+		ServeExpiredTTL:           time.Duration(cfg.ServeExpiredTTL) * time.Second,
+		ServeExpiredClientTimeout: time.Duration(cfg.ServeExpiredClientTimeout) * time.Millisecond,
 	}
 	var err error
 	if dnsCfg.NameServer, err = parseNameServer(cfg.NameServer, cfg.RespectRules, cfg.PreferH3); err != nil {
