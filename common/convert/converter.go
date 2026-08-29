@@ -16,13 +16,13 @@ import (
 func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 	data := DecodeBase64(buf)
 
-	arr := strings.Split(string(data), "\n")
+	rawLines := bytes.Split(data, []byte("\n"))
 
-	proxies := make([]map[string]any, 0, len(arr))
+	proxies := make([]map[string]any, 0, len(rawLines))
 	names := make(map[string]int, 200)
 
-	for _, line := range arr {
-		line = strings.TrimRight(line, " \r")
+	for _, raw := range rawLines {
+		line := strings.TrimRight(string(raw), " \r")
 		if line == "" {
 			continue
 		}
