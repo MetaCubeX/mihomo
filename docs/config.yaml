@@ -1762,10 +1762,12 @@ proxy-groups:
     type: select
     filter: "HK|TW" # 正则表达式，过滤 provider1 中节点名包含 HK 或 TW
     use:
-      - provider1
+      - ^provider1 # 以 ^ 开头的代理集合会排在 proxies 前面；多个 ^ 按书写顺序依次前置
+      # - provider2 # 不加 ^ 则追加在 proxies 后面（默认行为）
     proxies:
       - Proxy
       - DIRECT
+    # 最终顺序: [provider1 过滤后的节点] -> Proxy -> DIRECT -> [未加 ^ 的 use]
     # empty-fallback: COMPATIBLE # 设置当组为空时的回退proxy（这里不支持填写代理组，只支持填写proxy名称）
 
 # Mihomo 格式的节点或支持 *ray 的分享格式

@@ -82,8 +82,6 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		return nil, fmt.Errorf("%s: empty fallback proxy '%s' not found", groupName, groupOption.EmptyFallback)
 	}
 
-	providers := []P.ProxyProvider{}
-
 	if groupOption.IncludeAll {
 		groupOption.IncludeAllProviders = true
 		groupOption.IncludeAllProxies = true
@@ -129,8 +127,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 	groupOption.ExpectedStatus = status
 
+	var useFront, useBack []P.ProxyProvider
 	if len(groupOption.Use) != 0 {
-		PDs, err := getProviders(providersMap, groupOption.Use)
+		PDs, prependFlags, err := getProviders(providersMap, groupOption.Use)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
@@ -149,8 +148,18 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		} else {
 			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
 		}
-		providers = append(providers, PDs...)
+
+		for i, pd := range PDs {
+			if prependFlags[i] {
+				useFront = append(useFront, pd)
+			} else {
+				useBack = append(useBack, pd)
+			}
+		}
 	}
+
+	providers := make([]P.ProxyProvider, 0, len(useFront)+len(useBack)+1)
+	providers = append(providers, useFront...)
 
 	if len(groupOption.Proxies) != 0 {
 		ps, err := getProxies(proxyMap, groupOption.Proxies)
@@ -180,9 +189,11 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
-		providers = append([]P.ProxyProvider{pd}, providers...)
+		providers = append(providers, pd)
 		providersMap[groupName] = pd
 	}
+
+	providers = append(providers, useBack...)
 
 	switch groupOption.Type {
 	case "url-test":
@@ -232,20 +243,49 @@ func getProxies(mapping map[string]C.Proxy, list []string) ([]C.Proxy, error) {
 	return ps, nil
 }
 
-func getProviders(mapping map[string]P.ProxyProvider, list []string) ([]P.ProxyProvider, error) {
-	var ps []P.ProxyProvider
-	for _, name := range list {
-		p, ok := mapping[name]
-		if !ok {
-			return nil, fmt.Errorf("'%s' not found", name)
-		}
+const usePrependPrefix = "^"
 
-		if p.VehicleType() == P.Compatible {
-			return nil, fmt.Errorf("proxy group %s can't contains in `use`", name)
+func getProviders(mapping map[string]P.ProxyProvider, list []string) ([]P.ProxyProvider, []bool, error) {
+	ps := make([]P.ProxyProvider, 0, len(list))
+	prepend := make([]bool, 0, len(list))
+	for _, name := range list {
+		p, front, err := parseUseItem(mapping, name)
+		if err != nil {
+			return nil, nil, err
 		}
 		ps = append(ps, p)
+		prepend = append(prepend, front)
 	}
-	return ps, nil
+	return ps, prepend, nil
+}
+
+// parseUseItem resolves a `use` entry.
+// A leading '^' places that provider before `proxies`; unprefixed names still
+// append after `proxies`. Exact name match always wins, so a provider literally
+// named "^foo" can still be referenced as "^foo".
+func parseUseItem(mapping map[string]P.ProxyProvider, name string) (P.ProxyProvider, bool, error) {
+	p, ok := mapping[name]
+	if !ok && strings.HasPrefix(name, usePrependPrefix) {
+		realName := name[len(usePrependPrefix):]
+		if realName == "" {
+			return nil, false, fmt.Errorf("invalid `use` item '%s'", name)
+		}
+		p, ok = mapping[realName]
+		if !ok {
+			return nil, false, fmt.Errorf("'%s' not found", name)
+		}
+		if p.VehicleType() == P.Compatible {
+			return nil, false, fmt.Errorf("proxy group %s can't contains in `use`", realName)
+		}
+		return p, true, nil
+	}
+	if !ok {
+		return nil, false, fmt.Errorf("'%s' not found", name)
+	}
+	if p.VehicleType() == P.Compatible {
+		return nil, false, fmt.Errorf("proxy group %s can't contains in `use`", name)
+	}
+	return p, false, nil
 }
 
 func addTestUrlToProviders(providers []P.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
