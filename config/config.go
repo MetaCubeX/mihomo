@@ -145,34 +145,36 @@ type NTP struct {
 
 // DNS config
 type DNS struct {
-	Enable                bool
-	PreferH3              bool
-	IPv6                  bool
-	IPv6Timeout           uint
-	UseHosts              bool
-	UseSystemHosts        bool
-	NameServer            []dns.NameServer
-	Fallback              []dns.NameServer
-	FallbackIPFilter      []C.IpMatcher
-	FallbackDomainFilter  []C.DomainMatcher
-	FallbackLazyQuery     bool
-	Listen                string
-	ListenRoutingMark     int
-	EnhancedMode          C.DNSMode
-	DefaultNameserver     []dns.NameServer
-	CacheAlgorithm        string
-	CacheMaxSize          int
-	FakeIPRange           netip.Prefix
-	FakeIPPool            *fakeip.Pool
-	FakeIPRange6          netip.Prefix
-	FakeIPPool6           *fakeip.Pool
-	FakeIPSkipper         *fakeip.Skipper
-	FakeIPTTL             int
-	NameServerPolicy      []dns.Policy
-	ProxyServerNameserver []dns.NameServer
-	ProxyServerPolicy     []dns.Policy
-	DirectNameServer      []dns.NameServer
-	DirectFollowPolicy    bool
+	Enable                        bool
+	PreferH3                      bool
+	IPv6                          bool
+	IPv6Timeout                   uint
+	UseHosts                      bool
+	UseSystemHosts                bool
+	NameServer                    []dns.NameServer
+	Fallback                      []dns.NameServer
+	FallbackIPFilter              []C.IpMatcher
+	FallbackDomainFilter          []C.DomainMatcher
+	FallbackLazyQuery             bool
+	Listen                        string
+	ListenRoutingMark             int
+	EnhancedMode                  C.DNSMode
+	DefaultNameserver             []dns.NameServer
+	CacheAlgorithm                string
+	CacheMaxSize                  int
+	FakeIPRange                   netip.Prefix
+	FakeIPPool                    *fakeip.Pool
+	FakeIPRange6                  netip.Prefix
+	FakeIPPool6                   *fakeip.Pool
+	FakeIPSkipper                 *fakeip.Skipper
+	FakeIPTTL                     int
+	NameServerPolicy              []dns.Policy
+	ProxyServerNameserver         []dns.NameServer
+	ProxyServerNameserverFallback []dns.NameServer
+	ProxyServerPolicy             []dns.Policy
+	ProxyServerPolicyFallback     []dns.Policy
+	DirectNameServer              []dns.NameServer
+	DirectFollowPolicy            bool
 }
 
 // Profile config
@@ -219,33 +221,35 @@ type RawCors struct {
 }
 
 type RawDNS struct {
-	Enable                       bool                                `yaml:"enable" json:"enable"`
-	PreferH3                     bool                                `yaml:"prefer-h3" json:"prefer-h3"`
-	IPv6                         bool                                `yaml:"ipv6" json:"ipv6"`
-	IPv6Timeout                  uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
-	UseHosts                     bool                                `yaml:"use-hosts" json:"use-hosts"`
-	UseSystemHosts               bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
-	RespectRules                 bool                                `yaml:"respect-rules" json:"respect-rules"`
-	NameServer                   []string                            `yaml:"nameserver" json:"nameserver"`
-	Fallback                     []string                            `yaml:"fallback" json:"fallback"`
-	FallbackFilter               RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
-	FallbackLazyQuery            bool                                `yaml:"fallback-lazy-query" json:"fallback-lazy-query"`
-	Listen                       string                              `yaml:"listen" json:"listen"`
-	ListenRoutingMark            int                                 `yaml:"listen-routing-mark" json:"listen-routing-mark"`
-	EnhancedMode                 C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
-	FakeIPRange                  string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
-	FakeIPRange6                 string                              `yaml:"fake-ip-range6" json:"fake-ip-range6"`
-	FakeIPFilter                 []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
-	FakeIPFilterMode             C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
-	FakeIPTTL                    int                                 `yaml:"fake-ip-ttl" json:"fake-ip-ttl"`
-	DefaultNameserver            []string                            `yaml:"default-nameserver" json:"default-nameserver"`
-	CacheAlgorithm               string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
-	CacheMaxSize                 int                                 `yaml:"cache-max-size" json:"cache-max-size"`
-	NameServerPolicy             *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
-	ProxyServerNameserver        []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
-	ProxyServerNameserverPolicy  *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
-	DirectNameServer             []string                            `yaml:"direct-nameserver" json:"direct-nameserver"`
-	DirectNameServerFollowPolicy bool                                `yaml:"direct-nameserver-follow-policy" json:"direct-nameserver-follow-policy"`
+	Enable                              bool                                `yaml:"enable" json:"enable"`
+	PreferH3                            bool                                `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6                                bool                                `yaml:"ipv6" json:"ipv6"`
+	IPv6Timeout                         uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
+	UseHosts                            bool                                `yaml:"use-hosts" json:"use-hosts"`
+	UseSystemHosts                      bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
+	RespectRules                        bool                                `yaml:"respect-rules" json:"respect-rules"`
+	NameServer                          []string                            `yaml:"nameserver" json:"nameserver"`
+	Fallback                            []string                            `yaml:"fallback" json:"fallback"`
+	FallbackFilter                      RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
+	FallbackLazyQuery                   bool                                `yaml:"fallback-lazy-query" json:"fallback-lazy-query"`
+	Listen                              string                              `yaml:"listen" json:"listen"`
+	ListenRoutingMark                   int                                 `yaml:"listen-routing-mark" json:"listen-routing-mark"`
+	EnhancedMode                        C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
+	FakeIPRange                         string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
+	FakeIPRange6                        string                              `yaml:"fake-ip-range6" json:"fake-ip-range6"`
+	FakeIPFilter                        []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	FakeIPFilterMode                    C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
+	FakeIPTTL                           int                                 `yaml:"fake-ip-ttl" json:"fake-ip-ttl"`
+	DefaultNameserver                   []string                            `yaml:"default-nameserver" json:"default-nameserver"`
+	CacheAlgorithm                      string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
+	CacheMaxSize                        int                                 `yaml:"cache-max-size" json:"cache-max-size"`
+	NameServerPolicy                    *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
+	ProxyServerNameserver               []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+	ProxyServerNameserverFallback       []string                            `yaml:"proxy-server-nameserver-fallback" json:"proxy-server-nameserver-fallback"`
+	ProxyServerNameserverPolicy         *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
+	ProxyServerNameserverPolicyFallback *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy-fallback" json:"proxy-server-nameserver-policy-fallback"`
+	DirectNameServer                    []string                            `yaml:"direct-nameserver" json:"direct-nameserver"`
+	DirectNameServerFollowPolicy        bool                                `yaml:"direct-nameserver-follow-policy" json:"direct-nameserver-follow-policy"`
 }
 
 type RawFallbackFilter struct {
@@ -1431,6 +1435,7 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	if dnsCfg.Fallback, err = parseNameServer(cfg.Fallback, cfg.RespectRules, cfg.PreferH3); err != nil {
 		return nil, err
 	}
+	dnsCfg.FallbackLazyQuery = cfg.FallbackLazyQuery
 
 	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, "dns.nameserver-policy", ruleProviders, cfg.RespectRules, cfg.PreferH3); err != nil {
 		return nil, err
@@ -1439,12 +1444,24 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver, false, cfg.PreferH3); err != nil {
 		return nil, err
 	}
+	if dnsCfg.ProxyServerNameserverFallback, err = parseNameServer(cfg.ProxyServerNameserverFallback, false, cfg.PreferH3); err != nil {
+		return nil, err
+	}
+	if len(dnsCfg.ProxyServerNameserverFallback) != 0 && len(dnsCfg.ProxyServerNameserver) == 0 {
+		return nil, errors.New("disallow empty `proxy-server-nameserver` when `proxy-server-nameserver-fallback` is set")
+	}
 
 	if dnsCfg.ProxyServerPolicy, err = parseNameServerPolicy(cfg.ProxyServerNameserverPolicy, "dns.proxy-server-nameserver-policy", ruleProviders, false, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 	if len(dnsCfg.ProxyServerPolicy) != 0 && len(dnsCfg.ProxyServerNameserver) == 0 {
 		return nil, errors.New("disallow empty `proxy-server-nameserver` when `proxy-server-nameserver-policy` is set")
+	}
+	if dnsCfg.ProxyServerPolicyFallback, err = parseNameServerPolicy(cfg.ProxyServerNameserverPolicyFallback, "dns.proxy-server-nameserver-policy-fallback", ruleProviders, false, cfg.PreferH3); err != nil {
+		return nil, err
+	}
+	if len(dnsCfg.ProxyServerPolicyFallback) != 0 && len(dnsCfg.ProxyServerPolicy) == 0 {
+		return nil, errors.New("disallow empty `proxy-server-nameserver-policy` when `proxy-server-nameserver-policy-fallback` is set")
 	}
 
 	if dnsCfg.DirectNameServer, err = parseNameServer(cfg.DirectNameServer, false, cfg.PreferH3); err != nil {
@@ -1600,7 +1617,6 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 				dnsCfg.FallbackDomainFilter = append(dnsCfg.FallbackDomainFilter, matcher)
 			}
 		}
-		dnsCfg.FallbackLazyQuery = cfg.FallbackLazyQuery
 	}
 
 	return dnsCfg, nil
