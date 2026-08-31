@@ -47,26 +47,27 @@ import (
 // General config
 type General struct {
 	Inbound
-	Mode              T.TunnelMode            `json:"mode"`
-	UnifiedDelay      bool                    `json:"unified-delay"`
-	LogLevel          log.LogLevel            `json:"log-level"`
-	IPv6              bool                    `json:"ipv6"`
-	Interface         string                  `json:"interface-name"`
-	RoutingMark       int                     `json:"routing-mark"`
-	GeoXUrl           GeoXUrl                 `json:"geox-url"`
-	GeoAutoUpdate     bool                    `json:"geo-auto-update"`
-	GeoUpdateInterval int                     `json:"geo-update-interval"`
-	GeodataMode       bool                    `json:"geodata-mode"`
-	GeodataLoader     string                  `json:"geodata-loader"`
-	GeositeMatcher    string                  `json:"geosite-matcher"`
-	TCPConcurrent     bool                    `json:"tcp-concurrent"`
-	FindProcessMode   process.FindProcessMode `json:"find-process-mode"`
-	Sniffing          bool                    `json:"sniffing"`
-	GlobalUA          string                  `json:"global-ua"`
-	ETagSupport       bool                    `json:"etag-support"`
-	KeepAliveIdle     int                     `json:"keep-alive-idle"`
-	KeepAliveInterval int                     `json:"keep-alive-interval"`
-	DisableKeepAlive  bool                    `json:"disable-keep-alive"`
+	Mode                    T.TunnelMode            `json:"mode"`
+	UnifiedDelay            bool                    `json:"unified-delay"`
+	LogLevel                log.LogLevel            `json:"log-level"`
+	IPv6                    bool                    `json:"ipv6"`
+	Interface               string                  `json:"interface-name"`
+	RoutingMark             int                     `json:"routing-mark"`
+	GeoXUrl                 GeoXUrl                 `json:"geox-url"`
+	GeoAutoUpdate           bool                    `json:"geo-auto-update"`
+	GeoUpdateInterval       int                     `json:"geo-update-interval"`
+	GeodataMode             bool                    `json:"geodata-mode"`
+	GeodataLoader           string                  `json:"geodata-loader"`
+	GeositeMatcher          string                  `json:"geosite-matcher"`
+	TCPConcurrent           bool                    `json:"tcp-concurrent"`
+	ProviderLoadConcurrency int                     `json:"provider-load-concurrency"`
+	FindProcessMode         process.FindProcessMode `json:"find-process-mode"`
+	Sniffing                bool                    `json:"sniffing"`
+	GlobalUA                string                  `json:"global-ua"`
+	ETagSupport             bool                    `json:"etag-support"`
+	KeepAliveIdle           int                     `json:"keep-alive-idle"`
+	KeepAliveInterval       int                     `json:"keep-alive-interval"`
+	DisableKeepAlive        bool                    `json:"disable-keep-alive"`
 }
 
 // Inbound config
@@ -436,6 +437,7 @@ type RawConfig struct {
 	GeodataLoader                 string                  `yaml:"geodata-loader" json:"geodata-loader"`
 	GeositeMatcher                string                  `yaml:"geosite-matcher" json:"geosite-matcher"`
 	TCPConcurrent                 bool                    `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	ProviderLoadConcurrency       int                     `yaml:"provider-load-concurrency" json:"provider-load-concurrency"`
 	FindProcessMode               process.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint       string                  `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
 	GlobalUA                      string                  `yaml:"global-ua" json:"global-ua"`
@@ -785,18 +787,19 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ASN:     cfg.GeoXUrl.ASN,
 			GeoSite: cfg.GeoXUrl.GeoSite,
 		},
-		GeoAutoUpdate:     cfg.GeoAutoUpdate,
-		GeoUpdateInterval: cfg.GeoUpdateInterval,
-		GeodataMode:       cfg.GeodataMode,
-		GeodataLoader:     cfg.GeodataLoader,
-		GeositeMatcher:    cfg.GeositeMatcher,
-		TCPConcurrent:     cfg.TCPConcurrent,
-		FindProcessMode:   cfg.FindProcessMode,
-		GlobalUA:          cfg.GlobalUA,
-		ETagSupport:       cfg.ETagSupport,
-		KeepAliveIdle:     cfg.KeepAliveIdle,
-		KeepAliveInterval: cfg.KeepAliveInterval,
-		DisableKeepAlive:  cfg.DisableKeepAlive,
+		GeoAutoUpdate:           cfg.GeoAutoUpdate,
+		GeoUpdateInterval:       cfg.GeoUpdateInterval,
+		GeodataMode:             cfg.GeodataMode,
+		GeodataLoader:           cfg.GeodataLoader,
+		GeositeMatcher:          cfg.GeositeMatcher,
+		TCPConcurrent:           cfg.TCPConcurrent,
+		ProviderLoadConcurrency: cfg.ProviderLoadConcurrency,
+		FindProcessMode:         cfg.FindProcessMode,
+		GlobalUA:                cfg.GlobalUA,
+		ETagSupport:             cfg.ETagSupport,
+		KeepAliveIdle:           cfg.KeepAliveIdle,
+		KeepAliveInterval:       cfg.KeepAliveInterval,
+		DisableKeepAlive:        cfg.DisableKeepAlive,
 	}, nil
 }
 
