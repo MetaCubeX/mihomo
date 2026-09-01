@@ -8,20 +8,22 @@ struct ip6_key { __u8 addr[16]; };
 
 #define MAP(NAME, TYPE, MAX, KEY, VALUE) \
 struct { __uint(type, TYPE); __uint(max_entries, MAX); __type(key, KEY); __type(value, VALUE); } NAME SEC(".maps")
+#define LPM_MAP(NAME, MAX, KEY) \
+struct { __uint(type, BPF_MAP_TYPE_LPM_TRIE); __uint(max_entries, MAX); __uint(map_flags, BPF_F_NO_PREALLOC); __type(key, KEY); __type(value, __u8); } NAME SEC(".maps")
 
 MAP(DAE_PARAM, BPF_MAP_TYPE_ARRAY, 1, __u32, struct dae_param);
 MAP(BYPASS_SRC_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
 MAP(BYPASS_DST_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
-MAP(BYPASS_SRC_IPS, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v4_key, __u8);
-MAP(BYPASS_SRC_IP6S, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v6_key, __u8);
-MAP(BYPASS_DST_IPS, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v4_key, __u8);
-MAP(BYPASS_DST_IP6S, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v6_key, __u8);
+LPM_MAP(BYPASS_SRC_IPS, 1024, struct lpm_v4_key);
+LPM_MAP(BYPASS_SRC_IP6S, 1024, struct lpm_v6_key);
+LPM_MAP(BYPASS_DST_IPS, 1024, struct lpm_v4_key);
+LPM_MAP(BYPASS_DST_IP6S, 1024, struct lpm_v6_key);
 MAP(PROXY_SRC_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
 MAP(PROXY_DST_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
-MAP(PROXY_SRC_IPS, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v4_key, __u8);
-MAP(PROXY_SRC_IP6S, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v6_key, __u8);
-MAP(PROXY_DST_IPS, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v4_key, __u8);
-MAP(PROXY_DST_IP6S, BPF_MAP_TYPE_LPM_TRIE, 1024, struct lpm_v6_key, __u8);
+LPM_MAP(PROXY_SRC_IPS, 1024, struct lpm_v4_key);
+LPM_MAP(PROXY_SRC_IP6S, 1024, struct lpm_v6_key);
+LPM_MAP(PROXY_DST_IPS, 1024, struct lpm_v4_key);
+LPM_MAP(PROXY_DST_IP6S, 1024, struct lpm_v6_key);
 MAP(DYNAMIC_BYPASS_DST_IPS, BPF_MAP_TYPE_LRU_HASH, 16384, __u32, __u8);
 MAP(DYNAMIC_BYPASS_DST_IP6S, BPF_MAP_TYPE_LRU_HASH, 4096, struct ip6_key, __u8);
 MAP(REDIRECT_TRACK, BPF_MAP_TYPE_LRU_HASH, 32768, struct redirect_tuple, struct redirect_entry);
