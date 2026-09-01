@@ -128,14 +128,6 @@ func configureHostVeth(link netlink.Link) error {
 	if err := netlink.LinkSetUp(link); err != nil {
 		return fmt.Errorf("bring %s up: %w", HostVethName, err)
 	}
-	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
-		if err := netlink.RuleAdd(routingRule(family)); err != nil {
-			return fmt.Errorf("install TPROXY mark rule for family %d: %w", family, err)
-		}
-		if err := addLocalRoute(family); err != nil {
-			return fmt.Errorf("install local route in table %d for family %d: %w", RoutingTable, family, err)
-		}
-	}
 	return nil
 }
 
@@ -152,6 +144,18 @@ func routingRule(family int) *netlink.Rule {
 	}
 	rule.Mark = TPROXYMark
 	rule.Mask = &mask
+	return rule
+}
+
+func peerIngressRule(family int) *netlink.Rule {
+	rule := netlink.NewRule()
+	rule.Family = family
+	rule.Table = RoutingTable
+	rule.Priority = rulePriority + 20
+	if family == unix.AF_INET6 {
+		rule.Priority++
+	}
+	rule.IifName = PeerVethName
 	return rule
 }
 
@@ -184,6 +188,13 @@ func (topology *NetNSTopology) configurePeerLocked() error {
 	if err := netns.Set(topology.peerNS); err != nil {
 		return fmt.Errorf("enter isolated network namespace: %w", err)
 	}
+	loopback, err := netlink.LinkByName("lo")
+	if err != nil {
+		return fmt.Errorf("find isolated loopback: %w", err)
+	}
+	if err := netlink.LinkSetUp(loopback); err != nil {
+		return fmt.Errorf("bring isolated loopback up: %w", err)
+	}
 	peer, err := netlink.LinkByName(PeerVethName)
 	if err != nil {
 		return fmt.Errorf("find peer veth in isolated network namespace: %w", err)
@@ -196,7 +207,43 @@ func (topology *NetNSTopology) configurePeerLocked() error {
 	if err := netlink.LinkSetUp(peer); err != nil {
 		return fmt.Errorf("bring %s up: %w", PeerVethName, err)
 	}
-	return topology.setPeerSysctlsLocked()
+	if err := topology.setPeerSysctlsLocked(); err != nil {
+		return err
+	}
+	if err := addPeerDefaultRoutes(peer.Attrs().Index); err != nil {
+		return err
+	}
+	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
+		if err := netlink.RuleAdd(routingRule(family)); err != nil {
+			return fmt.Errorf("install isolated TPROXY mark rule for family %d: %w", family, err)
+		}
+		if err := netlink.RuleAdd(peerIngressRule(family)); err != nil {
+			return fmt.Errorf("install isolated dae0peer rule for family %d: %w", family, err)
+		}
+		if err := addLocalRoute(family); err != nil {
+			return fmt.Errorf("install isolated local route in table %d for family %d: %w", RoutingTable, family, err)
+		}
+	}
+	return nil
+}
+
+func addPeerDefaultRoutes(linkIndex int) error {
+	if err := netlink.RouteAdd(&netlink.Route{
+		LinkIndex: linkIndex,
+		Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)},
+		Gw:        net.ParseIP("169.254.0.1").To4(),
+		Flags:     unix.RTNH_F_ONLINK,
+	}); err != nil {
+		return fmt.Errorf("add isolated IPv4 default route: %w", err)
+	}
+	if err := netlink.RouteAdd(&netlink.Route{
+		LinkIndex: linkIndex,
+		Dst:       &net.IPNet{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)},
+		Gw:        net.ParseIP("fd00::1"),
+	}); err != nil {
+		return fmt.Errorf("add isolated IPv6 default route: %w", err)
+	}
+	return nil
 }
 
 func (topology *NetNSTopology) setPeerSysctlsLocked() error {
@@ -206,6 +253,9 @@ func (topology *NetNSTopology) setPeerSysctlsLocked() error {
 	}{
 		{"/proc/sys/net/ipv4/ip_forward", "1"},
 		{"/proc/sys/net/ipv4/conf/all/rp_filter", "0"},
+		{"/proc/sys/net/ipv4/conf/dae0peer/rp_filter", "0"},
+		{"/proc/sys/net/ipv4/conf/all/route_localnet", "1"},
+		{"/proc/sys/net/ipv4/ip_nonlocal_bind", "1"},
 		{"/proc/sys/net/ipv6/conf/all/forwarding", "1"},
 	}
 	for _, setting := range settings {
@@ -246,12 +296,13 @@ func (topology *NetNSTopology) closeLocked() error {
 	defer netns.Set(originalNS) // best effort: callers must never be left in the peer namespace
 
 	var cleanupErr error
-	if err := netns.Set(topology.hostNS); err != nil {
-		cleanupErr = errors.Join(cleanupErr, fmt.Errorf("enter host network namespace for cleanup: %w", err))
-	} else {
+	if topology.peerNS != netns.None() && netns.Set(topology.peerNS) == nil {
 		for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
 			if err := ignoreNotFound(netlink.RuleDel(routingRule(family))); err != nil {
 				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove table-%d TPROXY rule: %w", RoutingTable, err))
+			}
+			if err := ignoreNotFound(netlink.RuleDel(peerIngressRule(family))); err != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove table-%d dae0peer rule: %w", RoutingTable, err))
 			}
 			loopback, err := netlink.LinkByName("lo")
 			if err == nil {
@@ -260,9 +311,6 @@ func (topology *NetNSTopology) closeLocked() error {
 				}
 			}
 		}
-	}
-
-	if topology.peerNS != netns.None() && netns.Set(topology.peerNS) == nil {
 		for index := len(topology.peerSysctls) - 1; index >= 0; index-- {
 			restore := topology.peerSysctls[index]
 			if err := os.WriteFile(restore.path, []byte(restore.value), 0); err != nil {
@@ -289,6 +337,45 @@ func (topology *NetNSTopology) closeLocked() error {
 	cleanupErr = errors.Join(cleanupErr, topology.hostNS.Close())
 	topology.hostNS = netns.None()
 	return cleanupErr
+}
+
+// WithPeerNetNS runs fn on an OS thread joined to the isolated namespace and
+// restores the caller's namespace even when fn returns an error.
+func (topology *NetNSTopology) WithPeerNetNS(fn func() error) error {
+	if topology == nil || topology.peerNS == netns.None() {
+		return errors.New("eBPF peer network namespace is closed")
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	originalNS, err := netns.Get()
+	if err != nil {
+		return fmt.Errorf("get current network namespace: %w", err)
+	}
+	defer originalNS.Close()
+	if err := netns.Set(topology.peerNS); err != nil {
+		return fmt.Errorf("enter isolated network namespace: %w", err)
+	}
+	defer netns.Set(originalNS)
+	return fn()
+}
+
+// WithHostNetNS runs fn in the namespace that owned dae0 at creation time.
+func (topology *NetNSTopology) WithHostNetNS(fn func() error) error {
+	if topology == nil || topology.hostNS == netns.None() {
+		return errors.New("eBPF host network namespace is closed")
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	originalNS, err := netns.Get()
+	if err != nil {
+		return fmt.Errorf("get current network namespace: %w", err)
+	}
+	defer originalNS.Close()
+	if err := netns.Set(topology.hostNS); err != nil {
+		return fmt.Errorf("enter host network namespace: %w", err)
+	}
+	defer netns.Set(originalNS)
+	return fn()
 }
 
 func ignoreNotFound(err error) error {

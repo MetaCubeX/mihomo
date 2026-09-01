@@ -38,9 +38,9 @@ func LoadDatapath() (*Datapath, error) {
 		Programs: cebpf.ProgramOptions{LogLevel: cebpf.LogLevelBranch, LogSize: 2 * 1024 * 1024},
 	})
 	if err != nil {
-		// The generated collection currently has one program. cilium/ebpf
-		// includes the kernel verifier log in this error when it is available.
-		return nil, fmt.Errorf("load eBPF program tc_ingress (including verifier log): %w", err)
+		// cilium/ebpf identifies the rejected program and includes the kernel
+		// verifier log in this error when it is available.
+		return nil, fmt.Errorf("load eBPF collection (including verifier log): %w", err)
 	}
 
 	return &Datapath{collection: collection}, nil

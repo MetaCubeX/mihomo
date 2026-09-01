@@ -111,7 +111,9 @@ type datapathSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type datapathProgramSpecs struct {
-	TcIngress *ebpf.ProgramSpec `ebpf:"tc_ingress"`
+	TcDae0peerIngress *ebpf.ProgramSpec `ebpf:"tc_dae0peer_ingress"`
+	TcLanIngress      *ebpf.ProgramSpec `ebpf:"tc_lan_ingress"`
+	TproxySkLookup    *ebpf.ProgramSpec `ebpf:"tproxy_sk_lookup"`
 }
 
 // datapathMapSpecs contains maps before they are loaded into the kernel.
@@ -207,12 +209,16 @@ func (m *datapathMaps) Close() error {
 //
 // It can be passed to loadDatapathObjects or ebpf.CollectionSpec.LoadAndAssign.
 type datapathPrograms struct {
-	TcIngress *ebpf.Program `ebpf:"tc_ingress"`
+	TcDae0peerIngress *ebpf.Program `ebpf:"tc_dae0peer_ingress"`
+	TcLanIngress      *ebpf.Program `ebpf:"tc_lan_ingress"`
+	TproxySkLookup    *ebpf.Program `ebpf:"tproxy_sk_lookup"`
 }
 
 func (p *datapathPrograms) Close() error {
 	return _DatapathClose(
-		p.TcIngress,
+		p.TcDae0peerIngress,
+		p.TcLanIngress,
+		p.TproxySkLookup,
 	)
 }
 

@@ -25,7 +25,9 @@ func TestLoadDatapathIntegration(t *testing.T) {
 
 	datapath, err := LoadDatapath()
 	require.NoError(t, err)
-	require.NotNil(t, datapath.Program("tc_ingress"))
+	for _, program := range []string{"tc_lan_ingress", "tc_dae0peer_ingress", "tproxy_sk_lookup"} {
+		require.NotNilf(t, datapath.Program(program), "program %s", program)
+	}
 	for _, mapSpec := range ABIMaps {
 		require.NotNilf(t, datapath.Map(mapSpec.Name), "map %s", mapSpec.Name)
 	}
