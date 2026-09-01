@@ -18,6 +18,8 @@ struct ports { __u16 src; __u16 dst; };
 #define SK_TCP6 1
 #define SK_UDP4 2
 #define SK_UDP6 3
+#define UDP_CONN_TIMEOUT_NS 120000000000ULL
+#define TRACK_UPDATE_INTERVAL_NS 1000000000ULL
 
 static __u16 ntohs(__u16 value) { return __builtin_bswap16(value); }
 
@@ -50,25 +52,34 @@ static int is_supported_transport(__u8 protocol) {
 	return protocol == IPPROTO_TCP || protocol == IPPROTO_UDP;
 }
 
-static int is_dynamic_bypass(struct __sk_buff *skb) {
-	struct ethhdr eth = {};
-	if (bpf_skb_load_bytes(skb, 0, &eth, sizeof(eth)) != 0)
+static int direct_track_hit(struct redirect_tuple *tuple, __u8 proto, int pure_syn, int fin_rst) {
+	struct direct_track_entry *entry;
+	__u64 now, elapsed;
+	if (pure_syn)
 		return 0;
-	if (ntohs(eth.proto) == ETH_P_IP) {
-		struct ipv4hdr ip = {};
-		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip, sizeof(ip)) != 0)
-			return 0;
-		return bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IPS, &ip.daddr) != 0;
+	entry = bpf_map_lookup_elem(&DIRECT_TRACK, tuple);
+	if (!entry)
+		return 0;
+	now = bpf_ktime_get_ns();
+	elapsed = now - entry->last_seen_ns;
+	if (proto == IPPROTO_UDP && elapsed > UDP_CONN_TIMEOUT_NS) {
+		bpf_map_delete_elem(&DIRECT_TRACK, tuple);
+		return 0;
 	}
-	if (ntohs(eth.proto) == ETH_P_IPV6) {
-		struct ipv6hdr ip6 = {};
-		struct ip6_key key = {};
-		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip6, sizeof(ip6)) != 0)
-			return 0;
-		__builtin_memcpy(key.addr, ip6.daddr, sizeof(key.addr));
-		return bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IP6S, &key) != 0;
+	if (proto == IPPROTO_TCP && fin_rst) {
+		bpf_map_delete_elem(&DIRECT_TRACK, tuple);
+		return 1;
 	}
-	return 0;
+	if (elapsed > TRACK_UPDATE_INTERVAL_NS) {
+		struct direct_track_entry updated = { .last_seen_ns = now, .state = 0 };
+		bpf_map_update_elem(&DIRECT_TRACK, tuple, &updated, BPF_ANY);
+	}
+	return 1;
+}
+
+static void direct_track_register(struct redirect_tuple *tuple) {
+	struct direct_track_entry entry = { .last_seen_ns = bpf_ktime_get_ns(), .state = 0 };
+	bpf_map_update_elem(&DIRECT_TRACK, tuple, &entry, BPF_ANY);
 }
 
 static int capture_redirect_reply(struct __sk_buff *skb) {
@@ -76,6 +87,9 @@ static int capture_redirect_reply(struct __sk_buff *skb) {
 	struct redirect_tuple tuple = {};
 	struct redirect_entry entry = {};
 	struct ports ports = {};
+	__u32 l4offset;
+	__u8 flags = 0;
+	int dynamic_bypass = 0;
 	if (bpf_skb_load_bytes(skb, 0, &eth, sizeof(eth)) != 0)
 		return 0;
 	if (ntohs(eth.proto) == ETH_P_IP) {
@@ -83,9 +97,11 @@ static int capture_redirect_reply(struct __sk_buff *skb) {
 		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip, sizeof(ip)) != 0)
 			return 0;
 		__u32 ihl = (ip.version_ihl & 0x0f) * 4;
+		l4offset = sizeof(eth) + ihl;
 		if (ihl < sizeof(ip) || !is_supported_transport(ip.protocol) ||
-		    bpf_skb_load_bytes(skb, sizeof(eth) + ihl, &ports, sizeof(ports)) != 0)
+		    bpf_skb_load_bytes(skb, l4offset, &ports, sizeof(ports)) != 0)
 			return 0;
+		dynamic_bypass = bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IPS, &ip.daddr) != 0;
 		__builtin_memcpy(tuple.src_ip, &ip.daddr, sizeof(ip.daddr));
 		__builtin_memcpy(tuple.dst_ip, &ip.saddr, sizeof(ip.saddr));
 		tuple.src_port = ports.dst;
@@ -97,9 +113,15 @@ static int capture_redirect_reply(struct __sk_buff *skb) {
 		struct ipv6hdr ip6 = {};
 		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip6, sizeof(ip6)) != 0)
 			return 0;
+		l4offset = sizeof(eth) + sizeof(ip6);
 		if (!is_supported_transport(ip6.next_header) ||
-		    bpf_skb_load_bytes(skb, sizeof(eth) + sizeof(ip6), &ports, sizeof(ports)) != 0)
+		    bpf_skb_load_bytes(skb, l4offset, &ports, sizeof(ports)) != 0)
 			return 0;
+		{
+			struct ip6_key key = {};
+			__builtin_memcpy(key.addr, ip6.daddr, sizeof(key.addr));
+			dynamic_bypass = bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IP6S, &key) != 0;
+		}
 		__builtin_memcpy(tuple.src_ip, ip6.daddr, sizeof(ip6.daddr));
 		__builtin_memcpy(tuple.dst_ip, ip6.saddr, sizeof(ip6.saddr));
 		tuple.src_port = ports.dst;
@@ -108,6 +130,20 @@ static int capture_redirect_reply(struct __sk_buff *skb) {
 		tuple.ip_version = 6;
 	} else {
 		return 0;
+	}
+	if (tuple.proto == IPPROTO_TCP)
+		bpf_skb_load_bytes(skb, l4offset + 13, &flags, sizeof(flags));
+	if (bpf_map_lookup_elem(&BYPASS_SRC_PORTS, &ports.src))
+		return 2;
+	// DNS stays intercepted unless explicitly bypassed as a source service;
+	// this matches the reference's forced DNS interception policy.
+	if (ntohs(ports.dst) != 53 && bpf_map_lookup_elem(&BYPASS_DST_PORTS, &ports.dst))
+		return 2;
+	if (direct_track_hit(&tuple, tuple.proto, tuple.proto == IPPROTO_TCP && (flags & 0x12) == 0x02, tuple.proto == IPPROTO_TCP && (flags & 0x05) != 0))
+		return 2;
+	if (dynamic_bypass) {
+		direct_track_register(&tuple);
+		return 2;
 	}
 	entry.ifindex = skb->ifindex;
 	__builtin_memcpy(entry.smac, eth.dst, sizeof(entry.smac));
@@ -167,7 +203,10 @@ SEC("classifier/lan_ingress")
 int tc_lan_ingress(struct __sk_buff *skb) {
 	__u32 key = 0;
 	struct dae_param *param = bpf_map_lookup_elem(&DAE_PARAM, &key);
-	if (!param || !param->dae0_ifindex || is_dynamic_bypass(skb) || !capture_redirect_reply(skb))
+	if (!param || !param->dae0_ifindex || skb->mark == DAE_BYPASS_MARK ||
+	    (param->dae_socket_mark && skb->mark == param->dae_socket_mark))
+		return TC_ACT_OK;
+	if (capture_redirect_reply(skb) != 1)
 		return TC_ACT_OK;
 	// A veth peer only admits frames addressed to its own MAC. Keep the
 	// original L3/L4 tuple untouched for transparent socket lookup.

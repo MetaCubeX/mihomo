@@ -68,6 +68,10 @@ var (
 	sniffingEnable    = false
 
 	ruleUpdateCallback = utils.NewCallback[P.RuleProvider]()
+
+	routingObserverMu sync.RWMutex
+	routingObserver   func(*C.Metadata, C.Proxy)
+	routingObserverID uint64
 )
 
 type tunnel struct{}
@@ -130,6 +134,41 @@ func (t tunnel) RuleProviders() map[string]P.RuleProvider {
 
 func (t tunnel) RuleUpdateCallback() *utils.Callback[P.RuleProvider] {
 	return ruleUpdateCallback
+}
+
+// SetRoutingDecisionObserver installs the eBPF direct-offload observation
+// point. It runs only after rule matching has selected the final outbound;
+// callers receive a metadata clone and may never mutate tunnel state.
+func SetRoutingDecisionObserver(observer func(*C.Metadata, C.Proxy)) (restore func()) {
+	routingObserverMu.Lock()
+	previous := routingObserver
+	previousID := routingObserverID
+	routingObserverID++
+	id := routingObserverID
+	routingObserver = observer
+	routingObserverMu.Unlock()
+	return func() {
+		routingObserverMu.Lock()
+		if routingObserverID == id {
+			routingObserver = previous
+			routingObserverID = previousID
+		}
+		routingObserverMu.Unlock()
+	}
+}
+
+func observeRoutingDecision(metadata *C.Metadata, proxy C.Proxy) {
+	routingObserverMu.RLock()
+	observer := routingObserver
+	routingObserverMu.RUnlock()
+	if observer == nil || metadata.Type != C.EBPF {
+		return
+	}
+	final := proxy
+	for next := final.Unwrap(metadata, true); next != nil; next = final.Unwrap(metadata, true) {
+		final = next
+	}
+	observer(metadata.Clone(), final)
 }
 
 func OnSuspend() {
@@ -462,6 +501,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 				log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 				return nil, nil, err
 			}
+			observeRoutingDecision(metadata, proxy)
 
 			dialMetadata := metadata.Pure()
 			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
@@ -556,6 +596,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
 	}
+	observeRoutingDecision(metadata, proxy)
 
 	dialMetadata := metadata
 	if len(metadata.Host) > 0 {
