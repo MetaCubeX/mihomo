@@ -81,7 +81,11 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 }
 
 // ApplyConfig dispatch configure to all parts without ExternalController
-func ApplyConfig(cfg *config.Config, force bool) {
+func ApplyConfig(cfg *config.Config, force bool) error {
+	if err := validateConfigForPlatform(cfg, runtime.GOOS); err != nil {
+		return err
+	}
+
 	mux.Lock()
 	defer mux.Unlock()
 	log.SetLevel(cfg.General.LogLevel)
@@ -120,6 +124,14 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateUpdater(cfg)
 
 	resolver.ResetConnection()
+	return nil
+}
+
+func validateConfigForPlatform(cfg *config.Config, goos string) error {
+	if cfg.General.Ebpf.Enable && goos != "linux" {
+		return fmt.Errorf("eBPF inbound requires Linux")
+	}
+	return nil
 }
 
 func initInnerTcp() {

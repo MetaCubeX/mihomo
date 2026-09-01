@@ -108,3 +108,51 @@ func TestEbpfValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestEbpfConflicts(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		errContains string
+	}{
+		{
+			name: "tun",
+			yaml: `ebpf:
+  enable: true
+tun:
+  enable: true`,
+			errContains: "ebpf.enable and tun.enable cannot both be enabled",
+		},
+		{
+			name: "iptables",
+			yaml: `ebpf:
+  enable: true
+iptables:
+  enable: true`,
+			errContains: "ebpf.enable and iptables.enable cannot both be enabled",
+		},
+		{
+			name: "disabled",
+			yaml: `ebpf:
+  enable: false
+tun:
+  enable: true
+iptables:
+  enable: true`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw, err := UnmarshalRawConfig([]byte(tt.yaml))
+			require.NoError(t, err)
+			_, err = parseGeneral(raw)
+			if tt.errContains == "" {
+				require.NoError(t, validateInboundConflicts(raw))
+				return
+			}
+			require.NoError(t, err)
+			require.ErrorContains(t, validateInboundConflicts(raw), tt.errContains)
+		})
+	}
+}

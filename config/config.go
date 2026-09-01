@@ -690,6 +690,9 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
+	if err := validateInboundConflicts(rawCfg); err != nil {
+		return nil, err
+	}
 
 	// We need to temporarily apply some configuration in general and roll back after parsing the complete configuration.
 	// The loading and downloading of geodata in the parseRules and parseRuleProviders rely on these.
@@ -941,6 +944,19 @@ func parseEbpf(raw RawEbpf) (LC.Ebpf, error) {
 	}
 	ebpf.Sort()
 	return ebpf, nil
+}
+
+func validateInboundConflicts(rawCfg *RawConfig) error {
+	if !rawCfg.Ebpf.Enable {
+		return nil
+	}
+	if rawCfg.Tun.Enable {
+		return errors.New("ebpf.enable and tun.enable cannot both be enabled")
+	}
+	if rawCfg.IPTables.Enable {
+		return errors.New("ebpf.enable and iptables.enable cannot both be enabled")
+	}
+	return nil
 }
 
 func parseEbpfPorts(field string, raw []int) ([]uint16, error) {
