@@ -6,14 +6,18 @@ struct lpm_v4_key { __u32 prefixlen; __u32 addr; };
 struct lpm_v6_key { __u32 prefixlen; __u8 addr[16]; };
 struct ip6_key { __u8 addr[16]; };
 struct ethhdr { __u8 dst[6]; __u8 src[6]; __u16 proto; };
-struct ipv4hdr { __u8 version_ihl; __u8 tos; __u16 len; __u16 id; __u16 frag; __u8 ttl; __u8 protocol; };
-struct ipv6hdr { __u32 version_tc_flow; __u16 payload_len; __u8 next_header; __u8 hop_limit; };
+struct ipv4hdr { __u8 version_ihl; __u8 tos; __u16 len; __u16 id; __u16 frag; __u8 ttl; __u8 protocol; __u16 check; __u32 saddr; __u32 daddr; };
+struct ipv6hdr { __u32 version_tc_flow; __u16 payload_len; __u8 next_header; __u8 hop_limit; __u8 saddr[16]; __u8 daddr[16]; };
+struct ports { __u16 src; __u16 dst; };
 
 #define ETH_P_IP 0x0800
 #define ETH_P_IPV6 0x86dd
 #define IPPROTO_TCP 6
+#define IPPROTO_UDP 17
 #define SK_TCP4 0
 #define SK_TCP6 1
+#define SK_UDP4 2
+#define SK_UDP6 3
 
 static __u16 ntohs(__u16 value) { return __builtin_bswap16(value); }
 
@@ -42,32 +46,107 @@ MAP(DIRECT_TRACK, BPF_MAP_TYPE_LRU_HASH, 65536, struct redirect_tuple, struct di
 MAP(LISTEN_SOCKET_MAP, BPF_MAP_TYPE_SOCKMAP, 4, __u32, __u32);
 struct { __uint(type, BPF_MAP_TYPE_RINGBUF); __uint(max_entries, 262144); } EVENT_RINGBUF SEC(".maps");
 
-static int is_tcp(struct __sk_buff *skb) {
+static int is_supported_transport(__u8 protocol) {
+	return protocol == IPPROTO_TCP || protocol == IPPROTO_UDP;
+}
+
+static int capture_redirect_reply(struct __sk_buff *skb) {
 	struct ethhdr eth = {};
+	struct redirect_tuple tuple = {};
+	struct redirect_entry entry = {};
+	struct ports ports = {};
 	if (bpf_skb_load_bytes(skb, 0, &eth, sizeof(eth)) != 0)
 		return 0;
 	if (ntohs(eth.proto) == ETH_P_IP) {
 		struct ipv4hdr ip = {};
 		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip, sizeof(ip)) != 0)
 			return 0;
-		return ip.protocol == IPPROTO_TCP;
+		__u32 ihl = (ip.version_ihl & 0x0f) * 4;
+		if (ihl < sizeof(ip) || !is_supported_transport(ip.protocol) ||
+		    bpf_skb_load_bytes(skb, sizeof(eth) + ihl, &ports, sizeof(ports)) != 0)
+			return 0;
+		__builtin_memcpy(tuple.src_ip, &ip.daddr, sizeof(ip.daddr));
+		__builtin_memcpy(tuple.dst_ip, &ip.saddr, sizeof(ip.saddr));
+		tuple.src_port = ports.dst;
+		tuple.dst_port = ports.src;
+		tuple.proto = ip.protocol;
+		tuple.ip_version = 4;
 	}
-	if (ntohs(eth.proto) == ETH_P_IPV6) {
+	else if (ntohs(eth.proto) == ETH_P_IPV6) {
 		struct ipv6hdr ip6 = {};
 		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip6, sizeof(ip6)) != 0)
 			return 0;
-		return ip6.next_header == IPPROTO_TCP;
+		if (!is_supported_transport(ip6.next_header) ||
+		    bpf_skb_load_bytes(skb, sizeof(eth) + sizeof(ip6), &ports, sizeof(ports)) != 0)
+			return 0;
+		__builtin_memcpy(tuple.src_ip, ip6.daddr, sizeof(ip6.daddr));
+		__builtin_memcpy(tuple.dst_ip, ip6.saddr, sizeof(ip6.saddr));
+		tuple.src_port = ports.dst;
+		tuple.dst_port = ports.src;
+		tuple.proto = ip6.next_header;
+		tuple.ip_version = 6;
+	} else {
+		return 0;
 	}
-	return 0;
+	entry.ifindex = skb->ifindex;
+	__builtin_memcpy(entry.smac, eth.dst, sizeof(entry.smac));
+	__builtin_memcpy(entry.dmac, eth.src, sizeof(entry.dmac));
+	return bpf_map_update_elem(&REDIRECT_TRACK, &tuple, &entry, BPF_ANY) == 0;
 }
 
-// LAN ingress only classifies TCP and transfers it to dae0. Routing policy
-// remains in Mihomo after sk_lookup assigns the transparent listener.
+static int restore_redirect_reply(struct __sk_buff *skb) {
+	struct ethhdr eth = {};
+	struct redirect_tuple tuple = {};
+	struct ports ports = {};
+	struct redirect_entry *entry;
+	if (bpf_skb_load_bytes(skb, 0, &eth, sizeof(eth)) != 0)
+		return TC_ACT_OK;
+	if (ntohs(eth.proto) == ETH_P_IP) {
+		struct ipv4hdr ip = {};
+		__u32 ihl;
+		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip, sizeof(ip)) != 0)
+			return TC_ACT_OK;
+		ihl = (ip.version_ihl & 0x0f) * 4;
+		if (ihl < sizeof(ip) || !is_supported_transport(ip.protocol) ||
+		    bpf_skb_load_bytes(skb, sizeof(eth) + ihl, &ports, sizeof(ports)) != 0)
+			return TC_ACT_OK;
+		__builtin_memcpy(tuple.src_ip, &ip.saddr, sizeof(ip.saddr));
+		__builtin_memcpy(tuple.dst_ip, &ip.daddr, sizeof(ip.daddr));
+		tuple.src_port = ports.src;
+		tuple.dst_port = ports.dst;
+		tuple.proto = ip.protocol;
+		tuple.ip_version = 4;
+	} else if (ntohs(eth.proto) == ETH_P_IPV6) {
+		struct ipv6hdr ip6 = {};
+		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip6, sizeof(ip6)) != 0 ||
+		    !is_supported_transport(ip6.next_header) ||
+		    bpf_skb_load_bytes(skb, sizeof(eth) + sizeof(ip6), &ports, sizeof(ports)) != 0)
+			return TC_ACT_OK;
+		__builtin_memcpy(tuple.src_ip, ip6.saddr, sizeof(ip6.saddr));
+		__builtin_memcpy(tuple.dst_ip, ip6.daddr, sizeof(ip6.daddr));
+		tuple.src_port = ports.src;
+		tuple.dst_port = ports.dst;
+		tuple.proto = ip6.next_header;
+		tuple.ip_version = 6;
+	} else {
+		return TC_ACT_OK;
+	}
+	entry = bpf_map_lookup_elem(&REDIRECT_TRACK, &tuple);
+	if (!entry)
+		return TC_ACT_OK;
+	if (bpf_skb_store_bytes(skb, 0, entry->dmac, sizeof(entry->dmac), 0) != 0 ||
+	    bpf_skb_store_bytes(skb, 6, entry->smac, sizeof(entry->smac), 0) != 0)
+		return TC_ACT_OK;
+	return bpf_redirect(entry->ifindex, 0);
+}
+
+// LAN ingress records the L2 return path and transfers TCP/UDP to dae0.
+// Routing policy remains in Mihomo after sk_lookup assigns the listener.
 SEC("classifier/lan_ingress")
 int tc_lan_ingress(struct __sk_buff *skb) {
 	__u32 key = 0;
 	struct dae_param *param = bpf_map_lookup_elem(&DAE_PARAM, &key);
-	if (!param || !param->dae0_ifindex || !is_tcp(skb))
+	if (!param || !param->dae0_ifindex || !capture_redirect_reply(skb))
 		return TC_ACT_OK;
 	// A veth peer only admits frames addressed to its own MAC. Keep the
 	// original L3/L4 tuple untouched for transparent socket lookup.
@@ -75,8 +154,16 @@ int tc_lan_ingress(struct __sk_buff *skb) {
 		return TC_ACT_OK;
 	skb->mark = 0x1dae;
 	skb->cb[0] = 0x1dae;
-	skb->cb[1] = IPPROTO_TCP;
+	skb->cb[1] = 0;
 	return param->use_redirect_peer ? bpf_redirect_peer(param->dae0_ifindex, 0) : bpf_redirect(param->dae0_ifindex, 0);
+}
+
+// Replies from the isolated namespace retain the intercepted original
+// destination as source. Restore the observed LAN MACs and send them straight
+// back to the ingress interface, without a host routing or NAT rule.
+SEC("classifier/dae0_ingress")
+int tc_dae0_ingress(struct __sk_buff *skb) {
+	return restore_redirect_reply(skb);
 }
 
 // dae0peer receives the redirected packet in the isolated namespace. Mark
@@ -94,12 +181,12 @@ SEC("sk_lookup/")
 int tproxy_sk_lookup(struct bpf_sk_lookup *ctx) {
 	__u32 key;
 	void *socket;
-	if (ctx->protocol != IPPROTO_TCP)
+	if (ctx->protocol != IPPROTO_TCP && ctx->protocol != IPPROTO_UDP)
 		return SK_PASS;
 	if (ctx->family == 2)
-		key = SK_TCP4;
+		key = ctx->protocol == IPPROTO_TCP ? SK_TCP4 : SK_UDP4;
 	else if (ctx->family == 10)
-		key = SK_TCP6;
+		key = ctx->protocol == IPPROTO_TCP ? SK_TCP6 : SK_UDP6;
 	else
 		return SK_PASS;
 	socket = bpf_map_lookup_elem(&LISTEN_SOCKET_MAP, &key);

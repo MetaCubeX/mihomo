@@ -59,8 +59,10 @@ enum {
 #define SK_DROP 0
 #define PACKET_HOST 0
 #define BPF_F_NO_PREALLOC 1
+#define BPF_ANY 0
 
 static void *(*bpf_map_lookup_elem)(void *map, const void *key) = (void *)1;
+static long (*bpf_map_update_elem)(void *map, const void *key, const void *value, __u64 flags) = (void *)2;
 static long (*bpf_skb_store_bytes)(struct __sk_buff *skb, __u32 offset, const void *from, __u32 len, __u64 flags) = (void *)9;
 static long (*bpf_skb_load_bytes)(struct __sk_buff *skb, __u32 offset, void *to, __u32 len) = (void *)26;
 static long (*bpf_redirect)(__u32 ifindex, __u64 flags) = (void *)23;

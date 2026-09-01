@@ -41,6 +41,7 @@ type sysctlRestore struct {
 type NetNSTopology struct {
 	hostNS      netns.NsHandle
 	peerNS      netns.NsHandle
+	hostMAC     net.HardwareAddr
 	peerSysctls []sysctlRestore
 	closeOnce   sync.Once
 	closeErr    error
@@ -100,6 +101,7 @@ func CreateNetNSTopology() (topology *NetNSTopology, err error) {
 	if err := configureHostVeth(hostLink); err != nil {
 		return nil, err
 	}
+	topology.hostMAC = append(net.HardwareAddr(nil), hostLink.Attrs().HardwareAddr...)
 	if err := topology.configurePeerLocked(); err != nil {
 		return nil, err
 	}
@@ -121,7 +123,11 @@ func ensureLinkAbsent(name string) error {
 
 func configureHostVeth(link netlink.Link) error {
 	for _, address := range []*net.IPNet{hostIPv4, hostIPv6} {
-		if err := netlink.AddrAdd(link, &netlink.Addr{IPNet: address}); err != nil {
+		addr := &netlink.Addr{IPNet: address}
+		if address.IP.To4() == nil {
+			addr.Flags = unix.IFA_F_NODAD
+		}
+		if err := netlink.AddrAdd(link, addr); err != nil {
 			return fmt.Errorf("add host address %s: %w", address, err)
 		}
 	}
@@ -200,7 +206,11 @@ func (topology *NetNSTopology) configurePeerLocked() error {
 		return fmt.Errorf("find peer veth in isolated network namespace: %w", err)
 	}
 	for _, address := range []*net.IPNet{peerIPv4, peerIPv6} {
-		if err := netlink.AddrAdd(peer, &netlink.Addr{IPNet: address}); err != nil {
+		addr := &netlink.Addr{IPNet: address}
+		if address.IP.To4() == nil {
+			addr.Flags = unix.IFA_F_NODAD
+		}
+		if err := netlink.AddrAdd(peer, addr); err != nil {
 			return fmt.Errorf("add peer address %s: %w", address, err)
 		}
 	}
@@ -212,6 +222,18 @@ func (topology *NetNSTopology) configurePeerLocked() error {
 	}
 	if err := addPeerDefaultRoutes(peer.Attrs().Index); err != nil {
 		return err
+	}
+	if len(topology.hostMAC) != 6 {
+		return errors.New("host dae0 has invalid MAC address")
+	}
+	if err := netlink.NeighAdd(&netlink.Neigh{
+		LinkIndex:    peer.Attrs().Index,
+		Family:       unix.AF_INET6,
+		State:        netlink.NUD_PERMANENT,
+		IP:           net.ParseIP("fd00::1"),
+		HardwareAddr: topology.hostMAC,
+	}); err != nil {
+		return fmt.Errorf("pin isolated IPv6 gateway neighbor: %w", err)
 	}
 	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
 		if err := netlink.RuleAdd(routingRule(family)); err != nil {

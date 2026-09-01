@@ -4,7 +4,10 @@ package ebpf
 
 import (
 	"errors"
+	"fmt"
+	"math/bits"
 	"net"
+	"net/netip"
 	"os"
 	"runtime"
 	"testing"
@@ -141,6 +144,164 @@ func TestSKLookupSocketAssignmentIntegration(t *testing.T) {
 	}
 }
 
+func TestUDPInboundAttachmentIntegration(t *testing.T) {
+	if os.Getenv("MIHOMO_EBPF_UDP_INTEGRATION") != "1" {
+		t.Skip("set MIHOMO_EBPF_UDP_INTEGRATION=1 to attach UDP hooks in an isolated topology")
+	}
+	topology, err := CreateNetNSTopology()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, topology.Close()) })
+	datapath, err := LoadDatapath()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, datapath.Close()) })
+	lan, err := createTestLAN()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, lan.Close()) })
+	inboundUDP, err := StartUDPInbound(datapath, topology, lan.hostName, 12345, &udpInboundTestTunnel{})
+	require.NoError(t, err)
+	require.NotNil(t, inboundUDP.skLookupLink)
+	require.NotNil(t, inboundUDP.lanAttachment)
+	require.NotNil(t, inboundUDP.peerAttachment)
+	require.NotNil(t, inboundUDP.replyAttachment)
+	require.NoError(t, inboundUDP.Close())
+	require.NoError(t, inboundUDP.Close())
+}
+
+func TestUDPInboundFlowAndReplyIntegration(t *testing.T) {
+	if os.Getenv("MIHOMO_EBPF_UDP_FLOW_INTEGRATION") != "1" {
+		t.Skip("set MIHOMO_EBPF_UDP_FLOW_INTEGRATION=1 to exercise UDP interception and L2 reply")
+	}
+	topology, err := CreateNetNSTopology()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, topology.Close()) })
+	datapath, err := LoadDatapath()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, datapath.Close()) })
+	lan, err := createTestLAN()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, lan.Close()) })
+	tunnel := &udpInboundTestTunnel{received: make(chan *C.Metadata, 1), replyResult: make(chan error, 1), reply: []byte("pong")}
+	inboundUDP, err := StartUDPInbound(datapath, topology, lan.hostName, 12345, tunnel)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, inboundUDP.Close()) })
+
+	err = lan.withPeer(func() error {
+		conn, err := net.DialUDP("udp4", nil, net.UDPAddrFromAddrPort(netipMustParseAddrPort("198.51.100.1:53")))
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		if _, err = conn.Write([]byte("ping")); err != nil {
+			return err
+		}
+		select {
+		case err = <-tunnel.replyResult:
+			if err != nil {
+				return err
+			}
+		case <-time.After(time.Second):
+			return errors.New("transparent UDP handler did not write a reply")
+		}
+		if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			return err
+		}
+		buf := make([]byte, 16)
+		n, err := conn.Read(buf)
+		if err != nil {
+			return err
+		}
+		if string(buf[:n]) != "pong" {
+			return errors.New("unexpected UDP reply")
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	select {
+	case metadata := <-tunnel.received:
+		require.Equal(t, C.EBPF, metadata.Type)
+		require.Equal(t, C.UDP, metadata.NetWork)
+		require.Equal(t, "198.51.100.1", metadata.DstIP.String())
+		require.EqualValues(t, 53, metadata.DstPort)
+	case <-time.After(time.Second):
+		t.Fatal("transparent UDP listener did not receive the intercepted datagram")
+	}
+}
+
+func TestUDPInboundIPv6FlowAndReplyIntegration(t *testing.T) {
+	if os.Getenv("MIHOMO_EBPF_UDP_FLOW_INTEGRATION") != "1" {
+		t.Skip("set MIHOMO_EBPF_UDP_FLOW_INTEGRATION=1 to exercise IPv6 UDP interception and L2 reply")
+	}
+	topology, err := CreateNetNSTopology()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, topology.Close()) })
+	datapath, err := LoadDatapath()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, datapath.Close()) })
+	lan, err := createTestLAN()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, lan.Close()) })
+	tunnel := &udpInboundTestTunnel{received: make(chan *C.Metadata, 1), replyResult: make(chan error, 1), reply: []byte("pong6")}
+	inboundUDP, err := StartUDPInbound(datapath, topology, lan.hostName, 12345, tunnel)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, inboundUDP.Close()) })
+
+	err = lan.withPeer(func() error {
+		conn, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.ParseIP("2001:db8:1::2")})
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		remote := netip.MustParseAddrPort("[2001:db8:ffff::53]:53")
+		if _, err = conn.WriteToUDPAddrPort([]byte("ping6"), remote); err != nil {
+			return err
+		}
+		select {
+		case err = <-tunnel.replyResult:
+			if err != nil {
+				return err
+			}
+		case <-time.After(time.Second):
+			select {
+			case metadata := <-tunnel.received:
+				return fmt.Errorf("transparent IPv6 UDP handler received %s but did not write a reply", metadata.RemoteAddress())
+			default:
+				return errors.New("transparent IPv6 UDP listener did not receive the datagram")
+			}
+		}
+		client := conn.LocalAddr().(*net.UDPAddr).AddrPort()
+		key := redirectTupleForReply(remote, client, unix.IPPROTO_UDP)
+		var entry RedirectEntry
+		if err := datapath.Map("REDIRECT_TRACK").Lookup(&key, &entry); err != nil {
+			return fmt.Errorf("look up IPv6 UDP return path: %w", err)
+		}
+		if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			return err
+		}
+		buf := make([]byte, 16)
+		n, replySource, err := conn.ReadFromUDPAddrPort(buf)
+		if err != nil {
+			return err
+		}
+		if string(buf[:n]) != "pong6" {
+			return errors.New("unexpected IPv6 UDP reply")
+		}
+		if replySource != remote {
+			return fmt.Errorf("unexpected IPv6 UDP reply source %s", replySource)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	select {
+	case metadata := <-tunnel.received:
+		require.Equal(t, C.EBPF, metadata.Type)
+		require.Equal(t, C.UDP, metadata.NetWork)
+		require.Equal(t, "2001:db8:ffff::53", metadata.DstIP.String())
+		require.EqualValues(t, 53, metadata.DstPort)
+	case <-time.After(time.Second):
+		t.Fatal("transparent IPv6 UDP listener did not receive the intercepted datagram")
+	}
+}
+
 type tcpInboundTestTunnel struct{ accepted chan *C.Metadata }
 
 func (t *tcpInboundTestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
@@ -151,6 +312,50 @@ func (t *tcpInboundTestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata
 func (*tcpInboundTestTunnel) HandleUDPPacket(C.UDPPacket, *C.Metadata) {}
 
 func (*tcpInboundTestTunnel) NatTable() C.NatTable { return nil }
+
+type udpInboundTestTunnel struct {
+	received    chan *C.Metadata
+	replyResult chan error
+	reply       []byte
+}
+
+func (*udpInboundTestTunnel) HandleTCPConn(net.Conn, *C.Metadata) {}
+
+func (t *udpInboundTestTunnel) HandleUDPPacket(packet C.UDPPacket, metadata *C.Metadata) {
+	if t.received != nil {
+		t.received <- metadata
+	}
+	if len(t.reply) != 0 {
+		_, err := packet.WriteBack(t.reply, metadata.UDPAddr())
+		if t.replyResult != nil {
+			t.replyResult <- err
+		}
+	}
+	packet.Drop()
+}
+
+func (*udpInboundTestTunnel) NatTable() C.NatTable { return nil }
+
+func netipMustParseAddrPort(raw string) netip.AddrPort {
+	return netip.MustParseAddrPort(raw)
+}
+
+func redirectTupleForReply(source, destination netip.AddrPort, protocol uint8) RedirectTuple {
+	var key RedirectTuple
+	if source.Addr().Is4() {
+		copy(key.SrcIP[:], source.Addr().AsSlice())
+		copy(key.DstIP[:], destination.Addr().AsSlice())
+		key.IPVersion = 4
+	} else {
+		copy(key.SrcIP[:], source.Addr().AsSlice())
+		copy(key.DstIP[:], destination.Addr().AsSlice())
+		key.IPVersion = 6
+	}
+	key.SrcPort = bits.ReverseBytes16(source.Port())
+	key.DstPort = bits.ReverseBytes16(destination.Port())
+	key.Proto = protocol
+	return key
+}
 
 type testLAN struct {
 	hostNS   netns.NsHandle
@@ -195,6 +400,9 @@ func createTestLAN() (lan *testLAN, err error) {
 	if err := netlink.AddrAdd(host, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("192.0.2.1").To4(), Mask: net.CIDRMask(24, 32)}}); err != nil {
 		return nil, err
 	}
+	if err := netlink.AddrAdd(host, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("2001:db8:1::1"), Mask: net.CIDRMask(64, 128)}, Flags: unix.IFA_F_NODAD}); err != nil {
+		return nil, err
+	}
 	if err := netlink.LinkSetUp(host); err != nil {
 		return nil, err
 	}
@@ -220,10 +428,16 @@ func createTestLAN() (lan *testLAN, err error) {
 		if err := netlink.AddrAdd(peer, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("192.0.2.2").To4(), Mask: net.CIDRMask(24, 32)}}); err != nil {
 			return err
 		}
+		if err := netlink.AddrAdd(peer, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("2001:db8:1::2"), Mask: net.CIDRMask(64, 128)}, Flags: unix.IFA_F_NODAD}); err != nil {
+			return err
+		}
 		if err := netlink.LinkSetUp(peer); err != nil {
 			return err
 		}
-		return netlink.RouteAdd(&netlink.Route{Dst: &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)}, Gw: net.ParseIP("192.0.2.1").To4(), LinkIndex: peer.Attrs().Index})
+		if err := netlink.RouteAdd(&netlink.Route{Dst: &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)}, Gw: net.ParseIP("192.0.2.1").To4(), LinkIndex: peer.Attrs().Index}); err != nil {
+			return err
+		}
+		return netlink.RouteAdd(&netlink.Route{Dst: &net.IPNet{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)}, Gw: net.ParseIP("2001:db8:1::1"), LinkIndex: peer.Attrs().Index})
 	}); err != nil {
 		return nil, err
 	}
