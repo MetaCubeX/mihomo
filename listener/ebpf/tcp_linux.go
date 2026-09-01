@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"net"
 	"sync"
 	"syscall"
@@ -267,8 +268,12 @@ func attachTCIngress(interfaceName string, program *cebpf.Program, name string) 
 	} else if !errors.Is(err, unix.EEXIST) {
 		return nil, fmt.Errorf("add clsact qdisc on %s: %w", interfaceName, err)
 	}
+	handle := uint16(crc32.ChecksumIEEE([]byte(name)))
+	if handle == 0 {
+		handle = 1
+	}
 	attachment.filter = &netlink.BpfFilter{
-		FilterAttrs:  netlink.FilterAttrs{LinkIndex: device.Attrs().Index, Parent: netlink.HANDLE_MIN_INGRESS, Handle: netlink.MakeHandle(0, 1), Priority: 1, Protocol: unix.ETH_P_ALL},
+		FilterAttrs:  netlink.FilterAttrs{LinkIndex: device.Attrs().Index, Parent: netlink.HANDLE_MIN_INGRESS, Handle: netlink.MakeHandle(0, handle), Priority: 1, Protocol: unix.ETH_P_ALL},
 		Fd:           program.FD(),
 		Name:         name,
 		DirectAction: true,

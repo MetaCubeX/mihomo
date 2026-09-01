@@ -362,6 +362,20 @@ func TestDynamicBypassIntegration(t *testing.T) {
 	}
 }
 
+func TestManagerIntegration(t *testing.T) {
+	if os.Getenv("MIHOMO_EBPF_MANAGER_INTEGRATION") != "1" {
+		t.Skip("set MIHOMO_EBPF_MANAGER_INTEGRATION=1 to start the complete eBPF lifecycle")
+	}
+	lan, err := createTestLAN()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, lan.Close()) })
+	manager, err := StartManager(InboundConfig{Enable: true, LANInterfaces: []string{lan.hostName}, TProxyPort: 12345, AutoDirectOffload: true}, &udpInboundTestTunnel{})
+	require.NoError(t, err)
+	require.NoError(t, manager.Close())
+	require.NoError(t, manager.Close())
+	require.NoError(t, assertLinkMissing(HostVethName))
+}
+
 type tcpInboundTestTunnel struct{ accepted chan *C.Metadata }
 
 func (t *tcpInboundTestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {

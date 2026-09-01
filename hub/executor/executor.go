@@ -35,6 +35,7 @@ import (
 	"github.com/metacubex/mihomo/listener"
 	authStore "github.com/metacubex/mihomo/listener/auth"
 	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/ebpf"
 	"github.com/metacubex/mihomo/listener/inner"
 	"github.com/metacubex/mihomo/listener/tproxy"
 	"github.com/metacubex/mihomo/log"
@@ -43,6 +44,8 @@ import (
 )
 
 var mux sync.Mutex
+var ebpfInbound *ebpf.Manager
+var ebpfConfig LC.Ebpf
 
 func readConfig(path string) ([]byte, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -109,6 +112,9 @@ func ApplyConfig(cfg *config.Config, force bool) error {
 	updateDNS(cfg.DNS, cfg.General.IPv6)
 	updateNTP(cfg.NTP) // initialize NTP after DNS because an NTP server may be a hostname.
 	updateListeners(cfg.General, cfg.Listeners, force)
+	if err := updateEBPF(cfg.General.Ebpf); err != nil {
+		return err
+	}
 	updateTun(cfg.General) // tun should not care "force"
 	updateIPTables(cfg)
 	updateTunnels(cfg.Tunnels)
@@ -124,6 +130,43 @@ func ApplyConfig(cfg *config.Config, force bool) error {
 	updateUpdater(cfg)
 
 	resolver.ResetConnection()
+	return nil
+}
+
+func updateEBPF(config LC.Ebpf) error {
+	if !config.Enable {
+		if ebpfInbound != nil {
+			err := ebpfInbound.Close()
+			ebpfInbound = nil
+			return err
+		}
+		return nil
+	}
+	if ebpfInbound != nil && ebpfConfig.Equal(config) {
+		return nil
+	}
+	// The fixed ABI topology owns dae0, so a changed instance cannot coexist
+	// with the old one. Validation has already run before this point; runtime
+	// construction errors are surfaced rather than being hidden.
+	if ebpfInbound != nil {
+		if err := ebpfInbound.Close(); err != nil {
+			return err
+		}
+		ebpfInbound = nil
+	}
+	manager, err := ebpf.StartManager(ebpf.InboundConfig{
+		Enable:            config.Enable,
+		LANInterfaces:     config.LanInterface,
+		TProxyPort:        config.TProxyPort,
+		AutoDirectOffload: config.AutoDirectOffload,
+		BypassSrcPorts:    config.Lan.BypassSrcPorts,
+		BypassDstPorts:    config.Target.BypassDstPorts,
+	}, tunnel.Tunnel)
+	if err != nil {
+		return err
+	}
+	ebpfInbound = manager
+	ebpfConfig = config
 	return nil
 }
 
@@ -542,6 +585,14 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func Shutdown() {
+	mux.Lock()
+	if ebpfInbound != nil {
+		if err := ebpfInbound.Close(); err != nil {
+			log.Warnln("eBPF inbound cleanup failed: %s", err.Error())
+		}
+		ebpfInbound = nil
+	}
+	mux.Unlock()
 	listener.Cleanup()
 	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
