@@ -86,6 +86,7 @@ require (
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/bodgit/plumbing v1.3.0 // indirect
 	github.com/bodgit/windows v1.0.1 // indirect
+	github.com/cilium/ebpf v0.12.3
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/dunglas/httpsfv v1.0.2 // indirect
 	github.com/ericlagergren/aegis v0.0.0-20250325060835-cd0defd64358 // indirect
