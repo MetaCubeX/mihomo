@@ -50,6 +50,27 @@ static int is_supported_transport(__u8 protocol) {
 	return protocol == IPPROTO_TCP || protocol == IPPROTO_UDP;
 }
 
+static int is_dynamic_bypass(struct __sk_buff *skb) {
+	struct ethhdr eth = {};
+	if (bpf_skb_load_bytes(skb, 0, &eth, sizeof(eth)) != 0)
+		return 0;
+	if (ntohs(eth.proto) == ETH_P_IP) {
+		struct ipv4hdr ip = {};
+		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip, sizeof(ip)) != 0)
+			return 0;
+		return bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IPS, &ip.daddr) != 0;
+	}
+	if (ntohs(eth.proto) == ETH_P_IPV6) {
+		struct ipv6hdr ip6 = {};
+		struct ip6_key key = {};
+		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip6, sizeof(ip6)) != 0)
+			return 0;
+		__builtin_memcpy(key.addr, ip6.daddr, sizeof(key.addr));
+		return bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IP6S, &key) != 0;
+	}
+	return 0;
+}
+
 static int capture_redirect_reply(struct __sk_buff *skb) {
 	struct ethhdr eth = {};
 	struct redirect_tuple tuple = {};
@@ -146,7 +167,7 @@ SEC("classifier/lan_ingress")
 int tc_lan_ingress(struct __sk_buff *skb) {
 	__u32 key = 0;
 	struct dae_param *param = bpf_map_lookup_elem(&DAE_PARAM, &key);
-	if (!param || !param->dae0_ifindex || !capture_redirect_reply(skb))
+	if (!param || !param->dae0_ifindex || is_dynamic_bypass(skb) || !capture_redirect_reply(skb))
 		return TC_ACT_OK;
 	// A veth peer only admits frames addressed to its own MAC. Keep the
 	// original L3/L4 tuple untouched for transparent socket lookup.

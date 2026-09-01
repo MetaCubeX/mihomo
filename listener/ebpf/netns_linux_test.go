@@ -302,6 +302,44 @@ func TestUDPInboundIPv6FlowAndReplyIntegration(t *testing.T) {
 	}
 }
 
+func TestDynamicBypassIntegration(t *testing.T) {
+	if os.Getenv("MIHOMO_EBPF_UDP_INTEGRATION") != "1" {
+		t.Skip("set MIHOMO_EBPF_UDP_INTEGRATION=1 to exercise the dynamic direct bypass map")
+	}
+	topology, err := CreateNetNSTopology()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, topology.Close()) })
+	datapath, err := LoadDatapath()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, datapath.Close()) })
+	lan, err := createTestLAN()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, lan.Close()) })
+	tunnel := &udpInboundTestTunnel{received: make(chan *C.Metadata, 1)}
+	inboundUDP, err := StartUDPInbound(datapath, topology, lan.hostName, 12345, tunnel)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, inboundUDP.Close()) })
+	writer, err := NewDatapathDestinationMap(datapath)
+	require.NoError(t, err)
+	remote := netip.MustParseAddr("198.51.100.99")
+	require.NoError(t, writer.Apply([]netip.Addr{remote}, nil))
+	t.Cleanup(func() { require.NoError(t, writer.Apply(nil, []netip.Addr{remote})) })
+	require.NoError(t, lan.withPeer(func() error {
+		conn, err := net.DialUDP("udp4", nil, net.UDPAddrFromAddrPort(netip.AddrPortFrom(remote, 53)))
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		_, err = conn.Write([]byte("bypass"))
+		return err
+	}))
+	select {
+	case metadata := <-tunnel.received:
+		t.Fatalf("dynamic bypass unexpectedly entered transparent listener: %s", metadata.RemoteAddress())
+	case <-time.After(250 * time.Millisecond):
+	}
+}
+
 type tcpInboundTestTunnel struct{ accepted chan *C.Metadata }
 
 func (t *tcpInboundTestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
