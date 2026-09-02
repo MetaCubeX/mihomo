@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -193,7 +194,9 @@ type ipStack interface {
 func newIPStack(option IPStackOption, localAddresses []netip.Prefix, mtu uint32) (ipStack, error) {
 	mode := option.Mode
 	if mode == ipStackAuto {
-		if features.WithGVisor {
+		if runtime.GOOS == "windows" {
+			mode = ipStackMips
+		} else if features.WithGVisor {
 			mode = ipStackGVisor
 		} else {
 			mode = ipStackMips
