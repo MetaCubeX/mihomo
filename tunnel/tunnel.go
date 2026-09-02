@@ -15,6 +15,7 @@ import (
 	"github.com/metacubex/mihomo/common/atomic"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/loopback"
 	"github.com/metacubex/mihomo/component/nat"
 	"github.com/metacubex/mihomo/component/process"
@@ -286,6 +287,16 @@ func needLookupIP(metadata *C.Metadata) bool {
 	return resolver.MappingEnabled() && metadata.Host == "" && metadata.DstIP.IsValid()
 }
 
+func shouldFindProcess(srcIP netip.Addr) bool {
+	srcIP = srcIP.Unmap().WithZone("")
+	if !srcIP.IsValid() || srcIP.IsLoopback() {
+		return true
+	}
+
+	local, err := iface.IsLocalIp(srcIP)
+	return err != nil || local
+}
+
 func preHandleMetadata(metadata *C.Metadata) error {
 	// preprocess enhanced-mode metadata
 	if needLookupIP(metadata) {
@@ -351,6 +362,9 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		FindProcess: func() {
 			if attemptProcessLookup {
 				attemptProcessLookup = false
+				if !shouldFindProcess(metadata.SrcIP) {
+					return
+				}
 				if !features.CMFA {
 					// normal check for process
 					uid, path, err := process.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
