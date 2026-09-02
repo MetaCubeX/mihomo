@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /*
- * Shared Mihomo/Clash Premium eBPF ABI, version 1.
+ * Shared Mihomo/Clash Premium eBPF ABI, version 2.
  * Reference: CHKayanami/clash-rs@f1a9107e010b01da541af24f471409a2bb1bd2a6
  * (clash-ebpf-common/src/{lib.rs,conn.rs,event.rs}).
  */
@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#define MIHOMO_EBPF_ABI_VERSION 1u
+#define MIHOMO_EBPF_ABI_VERSION 2u
 #define DAE_TPROXY_MARK 0x1daeu
 #define DAE_BYPASS_MARK 0x2daeu
 
@@ -54,9 +54,18 @@ struct redirect_entry {
 	uint8_t dmac[6];
 };
 
-struct direct_track_entry {
+/*
+ * Flow ownership is deliberately separate from destination policy.  A
+ * destination can become DIRECT after Mihomo has accepted a connection, but
+ * that must only influence later connections: an accepted socket cannot be
+ * transferred back to the kernel datapath.
+ */
+#define FLOW_OWNER_DIRECT 1u
+#define FLOW_OWNER_MIHOMO 2u
+
+struct flow_owner_entry {
 	uint64_t last_seen_ns;
-	uint8_t state;
+	uint8_t owner;
 	uint8_t pad[7];
 };
 

@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+/* New flows are classified once; FLOW_OWNER always wins over destination policy. */
 #include "abi.h"
 #include "include/bpf_helpers.h"
 
@@ -20,244 +21,121 @@ struct ports { __u16 src; __u16 dst; };
 #define SK_UDP6 3
 #define UDP_CONN_TIMEOUT_NS 120000000000ULL
 #define TRACK_UPDATE_INTERVAL_NS 1000000000ULL
-
-static __u16 ntohs(__u16 value) { return __builtin_bswap16(value); }
-
-#define MAP(NAME, TYPE, MAX, KEY, VALUE) \
-struct { __uint(type, TYPE); __uint(max_entries, MAX); __type(key, KEY); __type(value, VALUE); } NAME SEC(".maps")
-#define LPM_MAP(NAME, MAX, KEY) \
-struct { __uint(type, BPF_MAP_TYPE_LPM_TRIE); __uint(max_entries, MAX); __uint(map_flags, BPF_F_NO_PREALLOC); __type(key, KEY); __type(value, __u8); } NAME SEC(".maps")
+#define TC_ACT_SHOT 2
+#define BPF_NOEXIST 1
+static __u16 ntohs(__u16 v) { return __builtin_bswap16(v); }
+#define MAP(N,T,M,K,V) struct { __uint(type,T); __uint(max_entries,M); __type(key,K); __type(value,V); } N SEC(".maps")
+#define LPM(N,M,K) struct { __uint(type,BPF_MAP_TYPE_LPM_TRIE); __uint(max_entries,M); __uint(map_flags,BPF_F_NO_PREALLOC); __type(key,K); __type(value,__u8); } N SEC(".maps")
 
 MAP(DAE_PARAM, BPF_MAP_TYPE_ARRAY, 1, __u32, struct dae_param);
 MAP(BYPASS_SRC_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
 MAP(BYPASS_DST_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
-LPM_MAP(BYPASS_SRC_IPS, 1024, struct lpm_v4_key);
-LPM_MAP(BYPASS_SRC_IP6S, 1024, struct lpm_v6_key);
-LPM_MAP(BYPASS_DST_IPS, 1024, struct lpm_v4_key);
-LPM_MAP(BYPASS_DST_IP6S, 1024, struct lpm_v6_key);
+LPM(BYPASS_SRC_IPS, 65536, struct lpm_v4_key); LPM(BYPASS_SRC_IP6S, 65536, struct lpm_v6_key);
+LPM(BYPASS_DST_IPS, 65536, struct lpm_v4_key); LPM(BYPASS_DST_IP6S, 65536, struct lpm_v6_key);
 MAP(PROXY_SRC_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
 MAP(PROXY_DST_PORTS, BPF_MAP_TYPE_HASH, 256, __u16, __u8);
-LPM_MAP(PROXY_SRC_IPS, 1024, struct lpm_v4_key);
-LPM_MAP(PROXY_SRC_IP6S, 1024, struct lpm_v6_key);
-LPM_MAP(PROXY_DST_IPS, 1024, struct lpm_v4_key);
-LPM_MAP(PROXY_DST_IP6S, 1024, struct lpm_v6_key);
-MAP(DYNAMIC_BYPASS_DST_IPS, BPF_MAP_TYPE_LRU_HASH, 16384, __u32, __u8);
-MAP(DYNAMIC_BYPASS_DST_IP6S, BPF_MAP_TYPE_LRU_HASH, 4096, struct ip6_key, __u8);
+LPM(PROXY_SRC_IPS, 65536, struct lpm_v4_key); LPM(PROXY_SRC_IP6S, 65536, struct lpm_v6_key);
+LPM(PROXY_DST_IPS, 65536, struct lpm_v4_key); LPM(PROXY_DST_IP6S, 65536, struct lpm_v6_key);
+MAP(DYN_DIRECT4, BPF_MAP_TYPE_LRU_HASH, 16384, __u32, __u8); MAP(DYN_DIRECT6, BPF_MAP_TYPE_LRU_HASH, 4096, struct ip6_key, __u8);
+MAP(DYN_PROXY4, BPF_MAP_TYPE_LRU_HASH, 16384, __u32, __u8); MAP(DYN_PROXY6, BPF_MAP_TYPE_LRU_HASH, 4096, struct ip6_key, __u8);
 MAP(REDIRECT_TRACK, BPF_MAP_TYPE_LRU_HASH, 32768, struct redirect_tuple, struct redirect_entry);
-MAP(DIRECT_TRACK, BPF_MAP_TYPE_LRU_HASH, 65536, struct redirect_tuple, struct direct_track_entry);
+MAP(FLOW_OWNER, BPF_MAP_TYPE_LRU_HASH, 65536, struct redirect_tuple, struct flow_owner_entry);
 MAP(LISTEN_SOCKET_MAP, BPF_MAP_TYPE_SOCKMAP, 4, __u32, __u32);
-struct { __uint(type, BPF_MAP_TYPE_RINGBUF); __uint(max_entries, 262144); } EVENT_RINGBUF SEC(".maps");
+struct { __uint(type,BPF_MAP_TYPE_RINGBUF); __uint(max_entries,262144); } EVENT_RINGBUF SEC(".maps");
 
-static int is_supported_transport(__u8 protocol) {
-	return protocol == IPPROTO_TCP || protocol == IPPROTO_UDP;
+static int supported(__u8 p) { return p == IPPROTO_TCP || p == IPPROTO_UDP; }
+static void reverse(struct redirect_tuple *r, const struct redirect_tuple *t) {
+	__builtin_memcpy(r->src_ip,t->dst_ip,16); __builtin_memcpy(r->dst_ip,t->src_ip,16);
+	r->src_port=t->dst_port; r->dst_port=t->src_port; r->proto=t->proto; r->ip_version=t->ip_version;
 }
-
-static int direct_track_hit(struct redirect_tuple *tuple, __u8 proto, int pure_syn, int fin_rst) {
-	struct direct_track_entry *entry;
-	__u64 now, elapsed;
-	if (pure_syn)
-		return 0;
-	entry = bpf_map_lookup_elem(&DIRECT_TRACK, tuple);
-	if (!entry)
-		return 0;
-	now = bpf_ktime_get_ns();
-	elapsed = now - entry->last_seen_ns;
-	if (proto == IPPROTO_UDP && elapsed > UDP_CONN_TIMEOUT_NS) {
-		bpf_map_delete_elem(&DIRECT_TRACK, tuple);
-		return 0;
-	}
-	if (proto == IPPROTO_TCP && fin_rst) {
-		bpf_map_delete_elem(&DIRECT_TRACK, tuple);
-		return 1;
-	}
-	if (elapsed > TRACK_UPDATE_INTERVAL_NS) {
-		struct direct_track_entry updated = { .last_seen_ns = now, .state = 0 };
-		bpf_map_update_elem(&DIRECT_TRACK, tuple, &updated, BPF_ANY);
-	}
-	return 1;
+static int owner_hit(struct redirect_tuple *t, int close) {
+	struct flow_owner_entry *e; struct flow_owner_entry u={}; struct redirect_tuple r={}; __u64 now, age; __u8 owner;
+	e=bpf_map_lookup_elem(&FLOW_OWNER,t); if (!e) return 0;
+	owner=e->owner;
+	now=bpf_ktime_get_ns(); age=now-e->last_seen_ns;
+	if (t->proto==IPPROTO_UDP && age>UDP_CONN_TIMEOUT_NS) { bpf_map_delete_elem(&FLOW_OWNER,t); reverse(&r,t); bpf_map_delete_elem(&FLOW_OWNER,&r); return 0; }
+	u.last_seen_ns=now; u.owner=owner; if(age>TRACK_UPDATE_INTERVAL_NS) bpf_map_update_elem(&FLOW_OWNER,t,&u,BPF_ANY);
+	if(close) { bpf_map_delete_elem(&FLOW_OWNER,t); reverse(&r,t); bpf_map_delete_elem(&FLOW_OWNER,&r); }
+	return owner;
 }
-
-static void direct_track_register(struct redirect_tuple *tuple) {
-	struct direct_track_entry entry = { .last_seen_ns = bpf_ktime_get_ns(), .state = 0 };
-	bpf_map_update_elem(&DIRECT_TRACK, tuple, &entry, BPF_ANY);
+/* Roll back the first insert if the reverse key cannot be installed. */
+static int owner_create(struct redirect_tuple *t, __u8 owner) {
+	struct redirect_tuple r={}; struct flow_owner_entry e={.last_seen_ns=bpf_ktime_get_ns(),.owner=owner}; reverse(&r,t);
+	if(bpf_map_update_elem(&FLOW_OWNER,t,&e,BPF_NOEXIST)) return -1;
+	if(bpf_map_update_elem(&FLOW_OWNER,&r,&e,BPF_NOEXIST)) { bpf_map_delete_elem(&FLOW_OWNER,t); return -1; }
+	return 0;
 }
-
-static int capture_redirect_reply(struct __sk_buff *skb) {
-	struct ethhdr eth = {};
-	struct redirect_tuple tuple = {};
-	struct redirect_entry entry = {};
-	struct ports ports = {};
-	__u32 l4offset;
-	__u8 flags = 0;
-	int dynamic_bypass = 0;
-	if (bpf_skb_load_bytes(skb, 0, &eth, sizeof(eth)) != 0)
-		return 0;
-	if (ntohs(eth.proto) == ETH_P_IP) {
-		struct ipv4hdr ip = {};
-		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip, sizeof(ip)) != 0)
-			return 0;
-		__u32 ihl = (ip.version_ihl & 0x0f) * 4;
-		l4offset = sizeof(eth) + ihl;
-		if (ihl < sizeof(ip) || !is_supported_transport(ip.protocol) ||
-		    bpf_skb_load_bytes(skb, l4offset, &ports, sizeof(ports)) != 0)
-			return 0;
-		dynamic_bypass = bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IPS, &ip.daddr) != 0;
-		__builtin_memcpy(tuple.src_ip, &ip.daddr, sizeof(ip.daddr));
-		__builtin_memcpy(tuple.dst_ip, &ip.saddr, sizeof(ip.saddr));
-		tuple.src_port = ports.dst;
-		tuple.dst_port = ports.src;
-		tuple.proto = ip.protocol;
-		tuple.ip_version = 4;
-	}
-	else if (ntohs(eth.proto) == ETH_P_IPV6) {
-		struct ipv6hdr ip6 = {};
-		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip6, sizeof(ip6)) != 0)
-			return 0;
-		l4offset = sizeof(eth) + sizeof(ip6);
-		if (!is_supported_transport(ip6.next_header) ||
-		    bpf_skb_load_bytes(skb, l4offset, &ports, sizeof(ports)) != 0)
-			return 0;
-		{
-			struct ip6_key key = {};
-			__builtin_memcpy(key.addr, ip6.daddr, sizeof(key.addr));
-			dynamic_bypass = bpf_map_lookup_elem(&DYNAMIC_BYPASS_DST_IP6S, &key) != 0;
-		}
-		__builtin_memcpy(tuple.src_ip, ip6.daddr, sizeof(ip6.daddr));
-		__builtin_memcpy(tuple.dst_ip, ip6.saddr, sizeof(ip6.saddr));
-		tuple.src_port = ports.dst;
-		tuple.dst_port = ports.src;
-		tuple.proto = ip6.next_header;
-		tuple.ip_version = 6;
-	} else {
-		return 0;
-	}
-	if (tuple.proto == IPPROTO_TCP)
-		bpf_skb_load_bytes(skb, l4offset + 13, &flags, sizeof(flags));
-	if (bpf_map_lookup_elem(&BYPASS_SRC_PORTS, &ports.src))
-		return 2;
-	// DNS stays intercepted unless explicitly bypassed as a source service;
-	// this matches the reference's forced DNS interception policy.
-	if (ntohs(ports.dst) != 53 && bpf_map_lookup_elem(&BYPASS_DST_PORTS, &ports.dst))
-		return 2;
-	if (direct_track_hit(&tuple, tuple.proto, tuple.proto == IPPROTO_TCP && (flags & 0x12) == 0x02, tuple.proto == IPPROTO_TCP && (flags & 0x05) != 0))
-		return 2;
-	if (dynamic_bypass) {
-		direct_track_register(&tuple);
-		return 2;
-	}
-	entry.ifindex = skb->ifindex;
-	__builtin_memcpy(entry.smac, eth.dst, sizeof(entry.smac));
-	__builtin_memcpy(entry.dmac, eth.src, sizeof(entry.dmac));
-	return bpf_map_update_elem(&REDIRECT_TRACK, &tuple, &entry, BPF_ANY) == 0;
+static int lpm4(void *m, __u32 a) { struct lpm_v4_key k={.prefixlen=32,.addr=a}; return bpf_map_lookup_elem(m,&k)!=0; }
+static int lpm6(void *m, const __u8 *a) { struct lpm_v6_key k={.prefixlen=128}; __builtin_memcpy(k.addr,a,16); return bpf_map_lookup_elem(m,&k)!=0; }
+static int proxy_dst(struct redirect_tuple *t, __u32 a4, __u16 port) {
+	struct ip6_key k={}; if(bpf_map_lookup_elem(&PROXY_DST_PORTS,&port)) return 1;
+	if(t->ip_version==4) return bpf_map_lookup_elem(&DYN_PROXY4,&a4)||lpm4(&PROXY_DST_IPS,a4);
+	__builtin_memcpy(k.addr,t->dst_ip,16); return bpf_map_lookup_elem(&DYN_PROXY6,&k)||lpm6(&PROXY_DST_IP6S,t->dst_ip);
 }
-
+static int direct_dst(struct redirect_tuple *t, __u32 a4) {
+	struct ip6_key k={}; if(t->ip_version==4) return bpf_map_lookup_elem(&DYN_DIRECT4,&a4)||lpm4(&BYPASS_DST_IPS,a4);
+	__builtin_memcpy(k.addr,t->dst_ip,16); return bpf_map_lookup_elem(&DYN_DIRECT6,&k)||lpm6(&BYPASS_DST_IP6S,t->dst_ip);
+}
+static int proxy_src(struct redirect_tuple *t, __u16 port) {
+	__u32 a4=0; if(bpf_map_lookup_elem(&PROXY_SRC_PORTS,&port)) return 1;
+	if(t->ip_version==4) { __builtin_memcpy(&a4,t->src_ip,4); return lpm4(&PROXY_SRC_IPS,a4); }
+	return lpm6(&PROXY_SRC_IP6S,t->src_ip);
+}
+static int direct_src(struct redirect_tuple *t) {
+	__u32 a4=0; if(t->ip_version==4) { __builtin_memcpy(&a4,t->src_ip,4); return lpm4(&BYPASS_SRC_IPS,a4); }
+	return lpm6(&BYPASS_SRC_IP6S,t->src_ip);
+}
+static int track_redirect(struct __sk_buff *skb, const struct ethhdr *eth, struct redirect_tuple *t) {
+	struct redirect_tuple r={}; struct redirect_entry e={.ifindex=skb->ifindex}; reverse(&r,t);
+	__builtin_memcpy(e.smac,eth->dst,6); __builtin_memcpy(e.dmac,eth->src,6);
+	return bpf_map_update_elem(&REDIRECT_TRACK,&r,&e,BPF_ANY)==0;
+}
 static int restore_redirect_reply(struct __sk_buff *skb) {
-	struct ethhdr eth = {};
-	struct redirect_tuple tuple = {};
-	struct ports ports = {};
-	struct redirect_entry *entry;
-	if (bpf_skb_load_bytes(skb, 0, &eth, sizeof(eth)) != 0)
-		return TC_ACT_OK;
-	if (ntohs(eth.proto) == ETH_P_IP) {
-		struct ipv4hdr ip = {};
-		__u32 ihl;
-		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip, sizeof(ip)) != 0)
-			return TC_ACT_OK;
-		ihl = (ip.version_ihl & 0x0f) * 4;
-		if (ihl < sizeof(ip) || !is_supported_transport(ip.protocol) ||
-		    bpf_skb_load_bytes(skb, sizeof(eth) + ihl, &ports, sizeof(ports)) != 0)
-			return TC_ACT_OK;
-		__builtin_memcpy(tuple.src_ip, &ip.saddr, sizeof(ip.saddr));
-		__builtin_memcpy(tuple.dst_ip, &ip.daddr, sizeof(ip.daddr));
-		tuple.src_port = ports.src;
-		tuple.dst_port = ports.dst;
-		tuple.proto = ip.protocol;
-		tuple.ip_version = 4;
-	} else if (ntohs(eth.proto) == ETH_P_IPV6) {
-		struct ipv6hdr ip6 = {};
-		if (bpf_skb_load_bytes(skb, sizeof(eth), &ip6, sizeof(ip6)) != 0 ||
-		    !is_supported_transport(ip6.next_header) ||
-		    bpf_skb_load_bytes(skb, sizeof(eth) + sizeof(ip6), &ports, sizeof(ports)) != 0)
-			return TC_ACT_OK;
-		__builtin_memcpy(tuple.src_ip, ip6.saddr, sizeof(ip6.saddr));
-		__builtin_memcpy(tuple.dst_ip, ip6.daddr, sizeof(ip6.daddr));
-		tuple.src_port = ports.src;
-		tuple.dst_port = ports.dst;
-		tuple.proto = ip6.next_header;
-		tuple.ip_version = 6;
-	} else {
-		return TC_ACT_OK;
+	struct ethhdr eth={}; struct redirect_tuple t={}; struct ports p={}; struct redirect_entry *e;
+	if(bpf_skb_load_bytes(skb,0,&eth,sizeof(eth))) return TC_ACT_OK;
+	if(ntohs(eth.proto)==ETH_P_IP) { struct ipv4hdr ip={}; __u32 ihl;
+		if(bpf_skb_load_bytes(skb,sizeof(eth),&ip,sizeof(ip))) return TC_ACT_OK; ihl=(ip.version_ihl&15)*4;
+		if(ihl<sizeof(ip)||!supported(ip.protocol)||bpf_skb_load_bytes(skb,sizeof(eth)+ihl,&p,sizeof(p))) return TC_ACT_OK;
+		__builtin_memcpy(t.src_ip,&ip.saddr,4); __builtin_memcpy(t.dst_ip,&ip.daddr,4); t.proto=ip.protocol; t.ip_version=4;
+	} else if(ntohs(eth.proto)==ETH_P_IPV6) { struct ipv6hdr ip={};
+		if(bpf_skb_load_bytes(skb,sizeof(eth),&ip,sizeof(ip))||!supported(ip.next_header)||bpf_skb_load_bytes(skb,sizeof(eth)+sizeof(ip),&p,sizeof(p))) return TC_ACT_OK;
+		__builtin_memcpy(t.src_ip,ip.saddr,16); __builtin_memcpy(t.dst_ip,ip.daddr,16); t.proto=ip.next_header; t.ip_version=6;
+	} else return TC_ACT_OK;
+	t.src_port=p.src; t.dst_port=p.dst; e=bpf_map_lookup_elem(&REDIRECT_TRACK,&t); if(!e) return TC_ACT_OK;
+	if(bpf_skb_store_bytes(skb,0,e->dmac,6,0)||bpf_skb_store_bytes(skb,6,e->smac,6,0)) return TC_ACT_OK;
+	return bpf_redirect(e->ifindex,0);
+}
+SEC("classifier/lan_ingress") int tc_lan_ingress(struct __sk_buff *skb) {
+	__u32 key=0,a4=0,off; struct dae_param *param=bpf_map_lookup_elem(&DAE_PARAM,&key); struct ethhdr eth={}; struct redirect_tuple t={}; struct ports p={};
+	__u8 flags=0, owner; int syn,close;
+	if(!param||!param->dae0_ifindex||skb->mark==DAE_BYPASS_MARK||(param->dae_socket_mark&&skb->mark==param->dae_socket_mark)) return TC_ACT_OK;
+	if(bpf_skb_load_bytes(skb,0,&eth,sizeof(eth))) return TC_ACT_OK;
+	if(ntohs(eth.proto)==ETH_P_IP) { struct ipv4hdr ip={}; __u32 ihl;
+		if(bpf_skb_load_bytes(skb,sizeof(eth),&ip,sizeof(ip))) return TC_ACT_OK; ihl=(ip.version_ihl&15)*4; off=sizeof(eth)+ihl;
+		if(ihl<sizeof(ip)||!supported(ip.protocol)||bpf_skb_load_bytes(skb,off,&p,sizeof(p))) return TC_ACT_OK; if(param->local_ip&&ip.daddr==param->local_ip) return TC_ACT_OK;
+		__builtin_memcpy(t.src_ip,&ip.saddr,4); __builtin_memcpy(t.dst_ip,&ip.daddr,4); t.proto=ip.protocol;t.ip_version=4;a4=ip.daddr;
+	} else if(ntohs(eth.proto)==ETH_P_IPV6) { struct ipv6hdr ip={}; off=sizeof(eth)+sizeof(ip);
+		if(bpf_skb_load_bytes(skb,sizeof(eth),&ip,sizeof(ip))||!supported(ip.next_header)||bpf_skb_load_bytes(skb,off,&p,sizeof(p))) return TC_ACT_OK;
+		__builtin_memcpy(t.src_ip,ip.saddr,16); __builtin_memcpy(t.dst_ip,ip.daddr,16);t.proto=ip.next_header;t.ip_version=6;
+	} else return TC_ACT_OK;
+	t.src_port=p.src;t.dst_port=p.dst; if(t.proto==IPPROTO_TCP) bpf_skb_load_bytes(skb,off+13,&flags,1);
+	/* DNS/host management bypass is intentionally before policy ownership. */
+	if(bpf_map_lookup_elem(&BYPASS_SRC_PORTS,&p.src)||bpf_map_lookup_elem(&BYPASS_DST_PORTS,&p.dst)) return TC_ACT_OK;
+	syn=t.proto==IPPROTO_TCP&&(flags&0x12)==0x02; close=t.proto==IPPROTO_TCP&&(flags&0x05)!=0; owner=owner_hit(&t,close);
+	if(!owner) {
+		/* A non-SYN packet without state must not be reclassified by a fresh IP entry. */
+		if(t.proto==IPPROTO_TCP&&!syn) return TC_ACT_SHOT;
+		owner=FLOW_OWNER_MIHOMO;
+		if(param->direct_offload_enabled&&!proxy_src(&t,p.src)&&!proxy_dst(&t,a4,p.dst)&&(direct_src(&t)||direct_dst(&t,a4))) owner=FLOW_OWNER_DIRECT;
+		if(owner_create(&t,owner)) return TC_ACT_SHOT;
 	}
-	entry = bpf_map_lookup_elem(&REDIRECT_TRACK, &tuple);
-	if (!entry)
-		return TC_ACT_OK;
-	if (bpf_skb_store_bytes(skb, 0, entry->dmac, sizeof(entry->dmac), 0) != 0 ||
-	    bpf_skb_store_bytes(skb, 6, entry->smac, sizeof(entry->smac), 0) != 0)
-		return TC_ACT_OK;
-	return bpf_redirect(entry->ifindex, 0);
+	if(owner==FLOW_OWNER_DIRECT) return TC_ACT_OK;
+	if(!track_redirect(skb,&eth,&t)||bpf_skb_store_bytes(skb,0,param->dae0peer_mac,6,0)) return TC_ACT_SHOT;
+	skb->mark=0x1dae;skb->cb[0]=0x1dae;skb->cb[1]=0; return param->use_redirect_peer?bpf_redirect_peer(param->dae0_ifindex,0):bpf_redirect(param->dae0_ifindex,0);
 }
-
-// LAN ingress records the L2 return path and transfers TCP/UDP to dae0.
-// Routing policy remains in Mihomo after sk_lookup assigns the listener.
-SEC("classifier/lan_ingress")
-int tc_lan_ingress(struct __sk_buff *skb) {
-	__u32 key = 0;
-	struct dae_param *param = bpf_map_lookup_elem(&DAE_PARAM, &key);
-	if (!param || !param->dae0_ifindex || skb->mark == DAE_BYPASS_MARK ||
-	    (param->dae_socket_mark && skb->mark == param->dae_socket_mark))
-		return TC_ACT_OK;
-	if (capture_redirect_reply(skb) != 1)
-		return TC_ACT_OK;
-	// A veth peer only admits frames addressed to its own MAC. Keep the
-	// original L3/L4 tuple untouched for transparent socket lookup.
-	if (bpf_skb_store_bytes(skb, 0, param->dae0peer_mac, 6, 0) != 0)
-		return TC_ACT_OK;
-	skb->mark = 0x1dae;
-	skb->cb[0] = 0x1dae;
-	skb->cb[1] = 0;
-	return param->use_redirect_peer ? bpf_redirect_peer(param->dae0_ifindex, 0) : bpf_redirect(param->dae0_ifindex, 0);
-}
-
-// Replies from the isolated namespace retain the intercepted original
-// destination as source. Restore the observed LAN MACs and send them straight
-// back to the ingress interface, without a host routing or NAT rule.
-SEC("classifier/dae0_ingress")
-int tc_dae0_ingress(struct __sk_buff *skb) {
-	return restore_redirect_reply(skb);
-}
-
-// dae0peer receives the redirected packet in the isolated namespace. Mark
-// it local and force PACKET_HOST so policy routing reaches sk_lookup.
-SEC("classifier/dae0peer_ingress")
-int tc_dae0peer_ingress(struct __sk_buff *skb) {
-	// dae0peer is private to this datapath. Mark every packet delivered over
-	// it so a redirect helper that clears skb->cb still reaches table 100.
-	bpf_skb_change_type(skb, PACKET_HOST);
-	skb->mark = 0x1dae;
-	return TC_ACT_OK;
-}
-
-SEC("sk_lookup/")
-int tproxy_sk_lookup(struct bpf_sk_lookup *ctx) {
-	__u32 key;
-	void *socket;
-	if (ctx->protocol != IPPROTO_TCP && ctx->protocol != IPPROTO_UDP)
-		return SK_PASS;
-	if (ctx->family == 2)
-		key = ctx->protocol == IPPROTO_TCP ? SK_TCP4 : SK_UDP4;
-	else if (ctx->family == 10)
-		key = ctx->protocol == IPPROTO_TCP ? SK_TCP6 : SK_UDP6;
-	else
-		return SK_PASS;
-	socket = bpf_map_lookup_elem(&LISTEN_SOCKET_MAP, &key);
-	if (!socket)
-		return SK_PASS;
-	if (bpf_sk_assign(ctx, socket, 0) != 0) {
-		bpf_sk_release(socket);
-		return SK_DROP;
-	}
-	bpf_sk_release(socket);
-	return SK_PASS;
-}
-
-char LICENSE[] SEC("license") = "GPL";
+SEC("classifier/dae0_ingress") int tc_dae0_ingress(struct __sk_buff *skb) { return restore_redirect_reply(skb); }
+SEC("classifier/dae0peer_ingress") int tc_dae0peer_ingress(struct __sk_buff *skb) { bpf_skb_change_type(skb,PACKET_HOST);skb->mark=0x1dae;return TC_ACT_OK; }
+SEC("sk_lookup/") int tproxy_sk_lookup(struct bpf_sk_lookup *ctx) { __u32 key;void *s;
+	if(ctx->protocol!=IPPROTO_TCP&&ctx->protocol!=IPPROTO_UDP) return SK_PASS; if(ctx->family==2) key=ctx->protocol==IPPROTO_TCP?SK_TCP4:SK_UDP4; else if(ctx->family==10) key=ctx->protocol==IPPROTO_TCP?SK_TCP6:SK_UDP6;else return SK_PASS;
+	s=bpf_map_lookup_elem(&LISTEN_SOCKET_MAP,&key);if(!s)return SK_PASS;if(bpf_sk_assign(ctx,s,0)){bpf_sk_release(s);return SK_DROP;}bpf_sk_release(s);return SK_PASS; }
+char LICENSE[] SEC("license")="GPL";

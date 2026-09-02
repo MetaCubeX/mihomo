@@ -351,10 +351,11 @@ type RawEbpfLan struct {
 }
 
 type RawEbpfTarget struct {
-	BypassDstIPs   []string `yaml:"bypass-dst-ips" json:"bypass-dst-ips"`
-	BypassDstPorts []int    `yaml:"bypass-dst-ports" json:"bypass-dst-ports"`
-	ProxyDstIPs    []string `yaml:"proxy-dst-ips" json:"proxy-dst-ips"`
-	ProxyDstPorts  []int    `yaml:"proxy-dst-ports" json:"proxy-dst-ports"`
+	BypassDstIPs          []string `yaml:"bypass-dst-ips" json:"bypass-dst-ips"`
+	BypassDstPorts        []int    `yaml:"bypass-dst-ports" json:"bypass-dst-ports"`
+	ProxyDstIPs           []string `yaml:"proxy-dst-ips" json:"proxy-dst-ips"`
+	ProxyDstPorts         []int    `yaml:"proxy-dst-ports" json:"proxy-dst-ports"`
+	DirectIPRuleProviders []string `yaml:"direct-ip-rule-providers" json:"direct-ip-rule-providers"`
 }
 
 type RawEbpfHost struct {
@@ -827,6 +828,9 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateEbpfDirectProviders(ebpf.Target.DirectIPRuleProviders, cfg.Rule, cfg.RuleProvider); err != nil {
+		return nil, err
+	}
 
 	return &General{
 		Inbound: Inbound{
@@ -871,6 +875,41 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		KeepAliveInterval: cfg.KeepAliveInterval,
 		DisableKeepAlive:  cfg.DisableKeepAlive,
 	}, nil
+}
+
+// eBPF can preload an ipcidr provider only when its top-level policy is
+// unambiguously DIRECT. A provider used by a non-DIRECT rule may share IPs
+// with proxy traffic, so accepting it would bypass Mihomo rule precedence.
+func validateEbpfDirectProviders(names, rules []string, providers map[string]map[string]any) error {
+	for _, name := range names {
+		provider, ok := providers[name]
+		if !ok {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] does not exist", name)
+		}
+		behavior, _ := provider["behavior"].(string)
+		if !strings.EqualFold(behavior, "ipcidr") {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] must use ipcidr behavior", name)
+		}
+		direct, other := false, false
+		for _, raw := range rules {
+			parts := strings.Split(raw, ",")
+			if len(parts) < 3 || !strings.EqualFold(strings.TrimSpace(parts[0]), "RULE-SET") || strings.TrimSpace(parts[1]) != name {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(parts[2]), "DIRECT") {
+				direct = true
+			} else {
+				other = true
+			}
+		}
+		if !direct {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] requires a top-level RULE-SET,%s,DIRECT rule", name, name)
+		}
+		if other {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] is also used by a non-DIRECT top-level rule", name)
+		}
+	}
+	return nil
 }
 
 func parseEbpf(raw RawEbpf) (LC.Ebpf, error) {
@@ -929,10 +968,11 @@ func parseEbpf(raw RawEbpf) (LC.Ebpf, error) {
 			ProxySrcIPs:    lanProxySrcIPs,
 		},
 		Target: LC.EbpfTarget{
-			BypassDstIPs:   targetBypassDstIPs,
-			BypassDstPorts: targetBypassDstPorts,
-			ProxyDstIPs:    targetProxyDstIPs,
-			ProxyDstPorts:  targetProxyDstPorts,
+			BypassDstIPs:          targetBypassDstIPs,
+			BypassDstPorts:        targetBypassDstPorts,
+			ProxyDstIPs:           targetProxyDstIPs,
+			ProxyDstPorts:         targetProxyDstPorts,
+			DirectIPRuleProviders: append([]string(nil), raw.Target.DirectIPRuleProviders...),
 		},
 		Host: LC.EbpfHost{
 			ProxyLocal:      raw.Host.ProxyLocal,

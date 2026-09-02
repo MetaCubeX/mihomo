@@ -21,6 +21,9 @@ func TestEbpfDefaults(t *testing.T) {
 
 func TestEbpfFullYAML(t *testing.T) {
 	raw, err := UnmarshalRawConfig([]byte(`
+rule-providers:
+  cncidr: {type: inline, behavior: ipcidr, payload: [203.0.113.0/24]}
+rules: ["RULE-SET,cncidr,DIRECT"]
 ebpf:
   enable: true
   lan-interface: [eth1, br-lan]
@@ -38,6 +41,7 @@ ebpf:
     bypass-dst-ports: [53]
     proxy-dst-ips: [2001:db8::/32]
     proxy-dst-ports: [443, 80]
+    direct-ip-rule-providers: [cncidr]
   host:
     proxy-local: true
     proxy-processes: [mihomo, dnsmasq]
@@ -59,10 +63,25 @@ ebpf:
 	require.EqualValues(t, []uint16{22, 5353}, ebpf.Lan.BypassSrcPorts)
 	require.Equal(t, "192.168.1.0/24", ebpf.Lan.BypassSrcIPs[0].String())
 	require.Equal(t, "10.0.0.0/8", ebpf.Target.BypassDstIPs[0].String())
+	require.Equal(t, []string{"cncidr"}, ebpf.Target.DirectIPRuleProviders)
 	require.True(t, ebpf.Host.ProxyLocal)
 	require.Equal(t, []string{"dnsmasq", "mihomo"}, ebpf.Host.ProxyProcesses)
 	require.EqualValues(t, []uint8{0, 46}, ebpf.BypassDSCPs)
 	require.EqualValues(t, []uint32{1, 2}, ebpf.BypassFWMarks)
+}
+
+func TestEbpfDirectProviderMustBeUnambiguousDirectIPCIDR(t *testing.T) {
+	for _, tc := range []struct{ name, behavior, rule, want string }{
+		{"non-ipcidr", "domain", "RULE-SET,cncidr,DIRECT", "must use ipcidr"},
+		{"non-direct", "ipcidr", "RULE-SET,cncidr,Proxy", "requires a top-level"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := UnmarshalRawConfig([]byte("rule-providers:\n  cncidr: {type: inline, behavior: " + tc.behavior + ", payload: [203.0.113.0/24]}\nrules: [\"" + tc.rule + "\"]\nebpf:\n  target:\n    direct-ip-rule-providers: [cncidr]\n"))
+			require.NoError(t, err)
+			_, err = parseGeneral(raw)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
 }
 
 func TestEbpfValidation(t *testing.T) {

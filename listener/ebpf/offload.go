@@ -19,11 +19,22 @@ const (
 	Proxy
 )
 
-// DestinationMap applies a coherent desired set to the BPF dynamic-bypass
-// maps. Implementations must return an error without claiming that a partial
-// operation was applied; the Offloader will retain dirty state and retry.
+// DestinationSets is the complete dynamic policy delta. Proxy is a veto: an
+// address must never be present in both desired sets after a successful call.
+// A destination change is only used by the BPF program while creating a new
+// flow; it is never a request to alter FLOW_OWNER.
+type DestinationSets struct {
+	DirectAdd    []netip.Addr
+	DirectRemove []netip.Addr
+	ProxyAdd     []netip.Addr
+	ProxyRemove  []netip.Addr
+}
+
+// DestinationMap applies a coherent dynamic policy update. Implementations
+// must return an error without claiming it is fully applied; the Offloader
+// retains the complete diff and retries it.
 type DestinationMap interface {
-	Apply(add, remove []netip.Addr) error
+	Apply(DestinationSets) error
 }
 
 type observedDomain struct {
@@ -56,26 +67,30 @@ func (h *expiryHeap) Pop() any {
 // IP as a property of a single domain. This makes shared CDN addresses safe:
 // any live PROXY owner wins over every DIRECT owner.
 type Offloader struct {
-	mu       sync.Mutex
-	now      func() time.Time
-	writer   DestinationMap
-	domains  map[string]observedDomain
-	owners   map[netip.Addr]map[string]RoutingAction
-	desired  map[netip.Addr]struct{}
-	applied  map[netip.Addr]struct{}
-	dirty    bool
-	sequence uint64
-	expires  expiryHeap
+	mu            sync.Mutex
+	now           func() time.Time
+	writer        DestinationMap
+	domains       map[string]observedDomain
+	owners        map[netip.Addr]map[string]RoutingAction
+	desiredDirect map[netip.Addr]struct{}
+	desiredProxy  map[netip.Addr]struct{}
+	appliedDirect map[netip.Addr]struct{}
+	appliedProxy  map[netip.Addr]struct{}
+	dirty         bool
+	sequence      uint64
+	expires       expiryHeap
 }
 
 func NewOffloader(writer DestinationMap) *Offloader {
 	return &Offloader{
-		now:     time.Now,
-		writer:  writer,
-		domains: make(map[string]observedDomain),
-		owners:  make(map[netip.Addr]map[string]RoutingAction),
-		desired: make(map[netip.Addr]struct{}),
-		applied: make(map[netip.Addr]struct{}),
+		now:           time.Now,
+		writer:        writer,
+		domains:       make(map[string]observedDomain),
+		owners:        make(map[netip.Addr]map[string]RoutingAction),
+		desiredDirect: make(map[netip.Addr]struct{}),
+		desiredProxy:  make(map[netip.Addr]struct{}),
+		appliedDirect: make(map[netip.Addr]struct{}),
+		appliedProxy:  make(map[netip.Addr]struct{}),
 	}
 }
 
@@ -156,7 +171,8 @@ func (o *Offloader) removeDomainLocked(domain string) {
 }
 
 func (o *Offloader) reconcileLocked() {
-	next := make(map[netip.Addr]struct{}, len(o.owners))
+	directNext := make(map[netip.Addr]struct{}, len(o.owners))
+	proxyNext := make(map[netip.Addr]struct{}, len(o.owners))
 	for ip, owners := range o.owners {
 		direct := false
 		proxy := false
@@ -164,12 +180,15 @@ func (o *Offloader) reconcileLocked() {
 			direct = direct || action == Direct
 			proxy = proxy || action == Proxy
 		}
-		if direct && !proxy {
-			next[ip] = struct{}{}
+		if proxy {
+			proxyNext[ip] = struct{}{}
+		} else if direct {
+			directNext[ip] = struct{}{}
 		}
 	}
-	if !sameAddressSet(o.desired, next) {
-		o.desired = next
+	if !sameAddressSet(o.desiredDirect, directNext) || !sameAddressSet(o.desiredProxy, proxyNext) {
+		o.desiredDirect = directNext
+		o.desiredProxy = proxyNext
 		o.dirty = true
 	}
 }
@@ -178,12 +197,15 @@ func (o *Offloader) flushLocked() error {
 	if !o.dirty || o.writer == nil {
 		return nil
 	}
-	add := difference(o.desired, o.applied)
-	remove := difference(o.applied, o.desired)
-	if err := o.writer.Apply(add, remove); err != nil {
+	diff := DestinationSets{
+		DirectAdd: difference(o.desiredDirect, o.appliedDirect), DirectRemove: difference(o.appliedDirect, o.desiredDirect),
+		ProxyAdd: difference(o.desiredProxy, o.appliedProxy), ProxyRemove: difference(o.appliedProxy, o.desiredProxy),
+	}
+	if err := o.writer.Apply(diff); err != nil {
 		return err // applied remains untouched: the complete diff is retryable
 	}
-	o.applied = cloneAddressSet(o.desired)
+	o.appliedDirect = cloneAddressSet(o.desiredDirect)
+	o.appliedProxy = cloneAddressSet(o.desiredProxy)
 	o.dirty = false
 	return nil
 }

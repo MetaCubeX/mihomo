@@ -155,12 +155,19 @@ func updateEBPF(config LC.Ebpf) error {
 		ebpfInbound = nil
 	}
 	manager, err := ebpf.StartManager(ebpf.InboundConfig{
-		Enable:            config.Enable,
-		LANInterfaces:     config.LanInterface,
-		TProxyPort:        config.TProxyPort,
-		AutoDirectOffload: config.AutoDirectOffload,
-		BypassSrcPorts:    config.Lan.BypassSrcPorts,
-		BypassDstPorts:    config.Target.BypassDstPorts,
+		Enable:                config.Enable,
+		LANInterfaces:         config.LanInterface,
+		TProxyPort:            config.TProxyPort,
+		AutoDirectOffload:     config.AutoDirectOffload,
+		BypassSrcPorts:        config.Lan.BypassSrcPorts,
+		BypassDstPorts:        config.Target.BypassDstPorts,
+		ProxySrcPorts:         config.Lan.ProxySrcPorts,
+		ProxyDstPorts:         config.Target.ProxyDstPorts,
+		BypassSrcIPs:          config.Lan.BypassSrcIPs,
+		BypassDstIPs:          config.Target.BypassDstIPs,
+		ProxySrcIPs:           config.Lan.ProxySrcIPs,
+		ProxyDstIPs:           config.Target.ProxyDstIPs,
+		DirectIPRuleProviders: config.Target.DirectIPRuleProviders,
 	}, tunnel.Tunnel)
 	if err != nil {
 		return err

@@ -315,36 +315,44 @@ func TestDynamicBypassIntegration(t *testing.T) {
 	lan, err := createTestLAN()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, lan.Close()) })
-	tunnel := &udpInboundTestTunnel{received: make(chan *C.Metadata, 1)}
+	tunnel := &udpInboundTestTunnel{received: make(chan *C.Metadata, 4)}
 	inboundUDP, err := StartUDPInbound(datapath, topology, lan.hostName, 12345, tunnel)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, inboundUDP.Close()) })
 	writer, err := NewDatapathDestinationMap(datapath)
 	require.NoError(t, err)
 	remote := netip.MustParseAddr("198.51.100.99")
-	require.NoError(t, writer.Apply([]netip.Addr{remote}, nil))
 	require.NoError(t, lan.withPeer(func() error {
 		conn, err := net.DialUDP("udp4", nil, net.UDPAddrFromAddrPort(netip.AddrPortFrom(remote, 53)))
 		if err != nil {
 			return err
 		}
 		defer conn.Close()
-		if _, err = conn.Write([]byte("bypass")); err != nil {
+		// First flow is unknown and is therefore owned by Mihomo. Learning a
+		// DIRECT destination while it is alive must not splice this socket out
+		// of the transparent listener.
+		if _, err = conn.Write([]byte("initial")); err != nil {
 			return err
 		}
-		// DNS TTL removal may stop new flows, but must not cut this active UDP
-		// flow; reference clash-rs keeps it in DIRECT_TRACK for 120 seconds.
-		if err = writer.Apply(nil, []netip.Addr{remote}); err != nil {
+		select {
+		case <-tunnel.received:
+		case <-time.After(time.Second):
+			return errors.New("initial unknown UDP flow did not reach transparent listener")
+		}
+		if err = writer.Apply(DestinationSets{DirectAdd: []netip.Addr{remote}}); err != nil {
 			return err
 		}
 		_, err = conn.Write([]byte("tracked"))
-		return err
+		if err != nil {
+			return err
+		}
+		select {
+		case <-tunnel.received:
+			return nil
+		case <-time.After(time.Second):
+			return errors.New("DIRECT observation migrated active UDP flow")
+		}
 	}))
-	select {
-	case metadata := <-tunnel.received:
-		t.Fatalf("dynamic bypass unexpectedly entered transparent listener: %s", metadata.RemoteAddress())
-	case <-time.After(250 * time.Millisecond):
-	}
 	require.NoError(t, lan.withPeer(func() error {
 		conn, err := net.DialUDP("udp4", nil, net.UDPAddrFromAddrPort(netip.AddrPortFrom(remote, 53)))
 		if err != nil {
@@ -356,9 +364,8 @@ func TestDynamicBypassIntegration(t *testing.T) {
 	}))
 	select {
 	case metadata := <-tunnel.received:
-		require.Equal(t, netip.AddrPortFrom(remote, 53), metadata.AddrPort())
-	case <-time.After(time.Second):
-		t.Fatal("new flow was not returned to the transparent listener after DNS removal")
+		t.Fatalf("future DIRECT flow unexpectedly entered transparent listener: %s", metadata.RemoteAddress())
+	case <-time.After(250 * time.Millisecond):
 	}
 }
 

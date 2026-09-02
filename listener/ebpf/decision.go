@@ -12,9 +12,10 @@ import (
 // must never manufacture a long-lived bypass entry from a connection alone.
 const ConservativeFallbackTTL = time.Minute
 
-// DecisionObserver converts Mihomo's completed outbound selection into the
-// shared DIRECT/PROXY observation contract. It is safe to use as tunnel's
-// routing-decision callback.
+// DecisionObserver converts Mihomo's completed outbound selection into a
+// future-flow policy observation. It never writes FLOW_OWNER: this callback
+// commonly runs after the current TCP flow has already reached Mihomo and an
+// accepted socket cannot safely be migrated to the kernel direct datapath.
 func DecisionObserver(offloader *Offloader, fallbackTTL time.Duration) func(*C.Metadata, C.Proxy) {
 	if fallbackTTL <= 0 {
 		fallbackTTL = ConservativeFallbackTTL

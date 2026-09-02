@@ -36,6 +36,9 @@ type EbpfTarget struct {
 	BypassDstPorts []uint16       `yaml:"bypass-dst-ports" json:"bypass-dst-ports"`
 	ProxyDstIPs    []netip.Prefix `yaml:"proxy-dst-ips" json:"proxy-dst-ips"`
 	ProxyDstPorts  []uint16       `yaml:"proxy-dst-ports" json:"proxy-dst-ports"`
+	// DirectIPRuleProviders names explicitly selected ipcidr providers whose
+	// prefixes are preloaded into the eBPF DIRECT LPM trie.
+	DirectIPRuleProviders []string `yaml:"direct-ip-rule-providers" json:"direct-ip-rule-providers"`
 }
 
 type EbpfHost struct {
@@ -57,6 +60,7 @@ func (e *Ebpf) Sort() {
 	slices.Sort(e.Target.BypassDstPorts)
 	slices.SortFunc(e.Target.ProxyDstIPs, netipx.ComparePrefix)
 	slices.Sort(e.Target.ProxyDstPorts)
+	slices.Sort(e.Target.DirectIPRuleProviders)
 	slices.Sort(e.Host.ProxyProcesses)
 	slices.Sort(e.Host.BypassProcesses)
 	slices.Sort(e.BypassDSCPs)
@@ -80,6 +84,7 @@ func (e *Ebpf) Equal(other Ebpf) bool {
 		slices.Equal(e.Target.BypassDstPorts, other.Target.BypassDstPorts) &&
 		slices.Equal(e.Target.ProxyDstIPs, other.Target.ProxyDstIPs) &&
 		slices.Equal(e.Target.ProxyDstPorts, other.Target.ProxyDstPorts) &&
+		slices.Equal(e.Target.DirectIPRuleProviders, other.Target.DirectIPRuleProviders) &&
 		e.Host.ProxyLocal == other.Host.ProxyLocal &&
 		slices.Equal(e.Host.ProxyProcesses, other.Host.ProxyProcesses) &&
 		slices.Equal(e.Host.BypassProcesses, other.Host.BypassProcesses) &&

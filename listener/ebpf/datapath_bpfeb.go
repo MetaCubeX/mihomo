@@ -34,9 +34,9 @@ type datapathDaeParam struct {
 	Pad1                 [3]uint8
 }
 
-type datapathDirectTrackEntry struct {
+type datapathFlowOwnerEntry struct {
 	LastSeenNs uint64
-	State      uint8
+	Owner      uint8
 	Pad        [7]uint8
 }
 
@@ -121,25 +121,27 @@ type datapathProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type datapathMapSpecs struct {
-	BYPASS_DST_IP6S         *ebpf.MapSpec `ebpf:"BYPASS_DST_IP6S"`
-	BYPASS_DST_IPS          *ebpf.MapSpec `ebpf:"BYPASS_DST_IPS"`
-	BYPASS_DST_PORTS        *ebpf.MapSpec `ebpf:"BYPASS_DST_PORTS"`
-	BYPASS_SRC_IP6S         *ebpf.MapSpec `ebpf:"BYPASS_SRC_IP6S"`
-	BYPASS_SRC_IPS          *ebpf.MapSpec `ebpf:"BYPASS_SRC_IPS"`
-	BYPASS_SRC_PORTS        *ebpf.MapSpec `ebpf:"BYPASS_SRC_PORTS"`
-	DAE_PARAM               *ebpf.MapSpec `ebpf:"DAE_PARAM"`
-	DIRECT_TRACK            *ebpf.MapSpec `ebpf:"DIRECT_TRACK"`
-	DYNAMIC_BYPASS_DST_IP6S *ebpf.MapSpec `ebpf:"DYNAMIC_BYPASS_DST_IP6S"`
-	DYNAMIC_BYPASS_DST_IPS  *ebpf.MapSpec `ebpf:"DYNAMIC_BYPASS_DST_IPS"`
-	EVENT_RINGBUF           *ebpf.MapSpec `ebpf:"EVENT_RINGBUF"`
-	LISTEN_SOCKET_MAP       *ebpf.MapSpec `ebpf:"LISTEN_SOCKET_MAP"`
-	PROXY_DST_IP6S          *ebpf.MapSpec `ebpf:"PROXY_DST_IP6S"`
-	PROXY_DST_IPS           *ebpf.MapSpec `ebpf:"PROXY_DST_IPS"`
-	PROXY_DST_PORTS         *ebpf.MapSpec `ebpf:"PROXY_DST_PORTS"`
-	PROXY_SRC_IP6S          *ebpf.MapSpec `ebpf:"PROXY_SRC_IP6S"`
-	PROXY_SRC_IPS           *ebpf.MapSpec `ebpf:"PROXY_SRC_IPS"`
-	PROXY_SRC_PORTS         *ebpf.MapSpec `ebpf:"PROXY_SRC_PORTS"`
-	REDIRECT_TRACK          *ebpf.MapSpec `ebpf:"REDIRECT_TRACK"`
+	BYPASS_DST_IP6S   *ebpf.MapSpec `ebpf:"BYPASS_DST_IP6S"`
+	BYPASS_DST_IPS    *ebpf.MapSpec `ebpf:"BYPASS_DST_IPS"`
+	BYPASS_DST_PORTS  *ebpf.MapSpec `ebpf:"BYPASS_DST_PORTS"`
+	BYPASS_SRC_IP6S   *ebpf.MapSpec `ebpf:"BYPASS_SRC_IP6S"`
+	BYPASS_SRC_IPS    *ebpf.MapSpec `ebpf:"BYPASS_SRC_IPS"`
+	BYPASS_SRC_PORTS  *ebpf.MapSpec `ebpf:"BYPASS_SRC_PORTS"`
+	DAE_PARAM         *ebpf.MapSpec `ebpf:"DAE_PARAM"`
+	DYN_DIRECT4       *ebpf.MapSpec `ebpf:"DYN_DIRECT4"`
+	DYN_DIRECT6       *ebpf.MapSpec `ebpf:"DYN_DIRECT6"`
+	DYN_PROXY4        *ebpf.MapSpec `ebpf:"DYN_PROXY4"`
+	DYN_PROXY6        *ebpf.MapSpec `ebpf:"DYN_PROXY6"`
+	EVENT_RINGBUF     *ebpf.MapSpec `ebpf:"EVENT_RINGBUF"`
+	FLOW_OWNER        *ebpf.MapSpec `ebpf:"FLOW_OWNER"`
+	LISTEN_SOCKET_MAP *ebpf.MapSpec `ebpf:"LISTEN_SOCKET_MAP"`
+	PROXY_DST_IP6S    *ebpf.MapSpec `ebpf:"PROXY_DST_IP6S"`
+	PROXY_DST_IPS     *ebpf.MapSpec `ebpf:"PROXY_DST_IPS"`
+	PROXY_DST_PORTS   *ebpf.MapSpec `ebpf:"PROXY_DST_PORTS"`
+	PROXY_SRC_IP6S    *ebpf.MapSpec `ebpf:"PROXY_SRC_IP6S"`
+	PROXY_SRC_IPS     *ebpf.MapSpec `ebpf:"PROXY_SRC_IPS"`
+	PROXY_SRC_PORTS   *ebpf.MapSpec `ebpf:"PROXY_SRC_PORTS"`
+	REDIRECT_TRACK    *ebpf.MapSpec `ebpf:"REDIRECT_TRACK"`
 }
 
 // datapathObjects contains all objects after they have been loaded into the kernel.
@@ -161,25 +163,27 @@ func (o *datapathObjects) Close() error {
 //
 // It can be passed to loadDatapathObjects or ebpf.CollectionSpec.LoadAndAssign.
 type datapathMaps struct {
-	BYPASS_DST_IP6S         *ebpf.Map `ebpf:"BYPASS_DST_IP6S"`
-	BYPASS_DST_IPS          *ebpf.Map `ebpf:"BYPASS_DST_IPS"`
-	BYPASS_DST_PORTS        *ebpf.Map `ebpf:"BYPASS_DST_PORTS"`
-	BYPASS_SRC_IP6S         *ebpf.Map `ebpf:"BYPASS_SRC_IP6S"`
-	BYPASS_SRC_IPS          *ebpf.Map `ebpf:"BYPASS_SRC_IPS"`
-	BYPASS_SRC_PORTS        *ebpf.Map `ebpf:"BYPASS_SRC_PORTS"`
-	DAE_PARAM               *ebpf.Map `ebpf:"DAE_PARAM"`
-	DIRECT_TRACK            *ebpf.Map `ebpf:"DIRECT_TRACK"`
-	DYNAMIC_BYPASS_DST_IP6S *ebpf.Map `ebpf:"DYNAMIC_BYPASS_DST_IP6S"`
-	DYNAMIC_BYPASS_DST_IPS  *ebpf.Map `ebpf:"DYNAMIC_BYPASS_DST_IPS"`
-	EVENT_RINGBUF           *ebpf.Map `ebpf:"EVENT_RINGBUF"`
-	LISTEN_SOCKET_MAP       *ebpf.Map `ebpf:"LISTEN_SOCKET_MAP"`
-	PROXY_DST_IP6S          *ebpf.Map `ebpf:"PROXY_DST_IP6S"`
-	PROXY_DST_IPS           *ebpf.Map `ebpf:"PROXY_DST_IPS"`
-	PROXY_DST_PORTS         *ebpf.Map `ebpf:"PROXY_DST_PORTS"`
-	PROXY_SRC_IP6S          *ebpf.Map `ebpf:"PROXY_SRC_IP6S"`
-	PROXY_SRC_IPS           *ebpf.Map `ebpf:"PROXY_SRC_IPS"`
-	PROXY_SRC_PORTS         *ebpf.Map `ebpf:"PROXY_SRC_PORTS"`
-	REDIRECT_TRACK          *ebpf.Map `ebpf:"REDIRECT_TRACK"`
+	BYPASS_DST_IP6S   *ebpf.Map `ebpf:"BYPASS_DST_IP6S"`
+	BYPASS_DST_IPS    *ebpf.Map `ebpf:"BYPASS_DST_IPS"`
+	BYPASS_DST_PORTS  *ebpf.Map `ebpf:"BYPASS_DST_PORTS"`
+	BYPASS_SRC_IP6S   *ebpf.Map `ebpf:"BYPASS_SRC_IP6S"`
+	BYPASS_SRC_IPS    *ebpf.Map `ebpf:"BYPASS_SRC_IPS"`
+	BYPASS_SRC_PORTS  *ebpf.Map `ebpf:"BYPASS_SRC_PORTS"`
+	DAE_PARAM         *ebpf.Map `ebpf:"DAE_PARAM"`
+	DYN_DIRECT4       *ebpf.Map `ebpf:"DYN_DIRECT4"`
+	DYN_DIRECT6       *ebpf.Map `ebpf:"DYN_DIRECT6"`
+	DYN_PROXY4        *ebpf.Map `ebpf:"DYN_PROXY4"`
+	DYN_PROXY6        *ebpf.Map `ebpf:"DYN_PROXY6"`
+	EVENT_RINGBUF     *ebpf.Map `ebpf:"EVENT_RINGBUF"`
+	FLOW_OWNER        *ebpf.Map `ebpf:"FLOW_OWNER"`
+	LISTEN_SOCKET_MAP *ebpf.Map `ebpf:"LISTEN_SOCKET_MAP"`
+	PROXY_DST_IP6S    *ebpf.Map `ebpf:"PROXY_DST_IP6S"`
+	PROXY_DST_IPS     *ebpf.Map `ebpf:"PROXY_DST_IPS"`
+	PROXY_DST_PORTS   *ebpf.Map `ebpf:"PROXY_DST_PORTS"`
+	PROXY_SRC_IP6S    *ebpf.Map `ebpf:"PROXY_SRC_IP6S"`
+	PROXY_SRC_IPS     *ebpf.Map `ebpf:"PROXY_SRC_IPS"`
+	PROXY_SRC_PORTS   *ebpf.Map `ebpf:"PROXY_SRC_PORTS"`
+	REDIRECT_TRACK    *ebpf.Map `ebpf:"REDIRECT_TRACK"`
 }
 
 func (m *datapathMaps) Close() error {
@@ -191,10 +195,12 @@ func (m *datapathMaps) Close() error {
 		m.BYPASS_SRC_IPS,
 		m.BYPASS_SRC_PORTS,
 		m.DAE_PARAM,
-		m.DIRECT_TRACK,
-		m.DYNAMIC_BYPASS_DST_IP6S,
-		m.DYNAMIC_BYPASS_DST_IPS,
+		m.DYN_DIRECT4,
+		m.DYN_DIRECT6,
+		m.DYN_PROXY4,
+		m.DYN_PROXY6,
 		m.EVENT_RINGBUF,
+		m.FLOW_OWNER,
 		m.LISTEN_SOCKET_MAP,
 		m.PROXY_DST_IP6S,
 		m.PROXY_DST_IPS,

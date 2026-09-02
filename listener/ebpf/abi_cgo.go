@@ -20,7 +20,7 @@ func abiCLayout() cLayout {
 		param:           C.sizeof_struct_dae_param,
 		tuple:           C.sizeof_struct_redirect_tuple,
 		redirect:        C.sizeof_struct_redirect_entry,
-		direct:          C.sizeof_struct_direct_track_entry,
+		direct:          C.sizeof_struct_flow_owner_entry,
 		event:           C.sizeof_struct_dae_event,
 		paramSocketMark: uintptr(C.dae_param_socket_mark_offset()),
 		eventDestIP:     uintptr(C.dae_event_dest_ip_offset()),

@@ -3,11 +3,11 @@ package ebpf
 import "unsafe"
 
 const (
-	ABIVersion       uint32 = 1
-	TPROXYMark       uint32 = 0x1dae
-	BypassMark       uint32 = 0x2dae
-	DirectTrackLive  uint8  = 0
-	DirectTrackClose uint8  = 1
+	ABIVersion      uint32 = 2
+	TPROXYMark      uint32 = 0x1dae
+	BypassMark      uint32 = 0x2dae
+	FlowOwnerDirect uint8  = 1
+	FlowOwnerMihomo uint8  = 2
 )
 
 // DaeParam is map DAE_PARAM's sole value. Multi-byte scalar fields use host
@@ -34,7 +34,7 @@ type DaeParam struct {
 	Pad1                 [3]uint8
 }
 
-// RedirectTuple is the flow key for REDIRECT_TRACK and DIRECT_TRACK. IP
+// RedirectTuple is the flow key for REDIRECT_TRACK and FLOW_OWNER. IP
 // bytes and ports are network byte order; Proto is the IP protocol number.
 type RedirectTuple struct {
 	SrcIP     [16]uint8
@@ -54,9 +54,11 @@ type RedirectEntry struct {
 	DestMAC   [6]uint8
 }
 
-type DirectTrackEntry struct {
+// FlowOwnerEntry pins an accepted flow to one data plane. Destination policy
+// is intentionally not part of this value: it may only affect future flows.
+type FlowOwnerEntry struct {
 	LastSeenNS uint64
-	State      uint8
+	Owner      uint8
 	Pad        [7]uint8
 }
 
@@ -86,20 +88,22 @@ var ABIMaps = []MapSpec{
 	{"DAE_PARAM", "array", 1, 4, unsafe.Sizeof(DaeParam{})},
 	{"BYPASS_SRC_PORTS", "hash", 256, 2, 1},
 	{"BYPASS_DST_PORTS", "hash", 256, 2, 1},
-	{"BYPASS_SRC_IPS", "lpm_trie", 1024, 8, 1},
-	{"BYPASS_SRC_IP6S", "lpm_trie", 1024, 20, 1},
-	{"BYPASS_DST_IPS", "lpm_trie", 1024, 8, 1},
-	{"BYPASS_DST_IP6S", "lpm_trie", 1024, 20, 1},
+	{"BYPASS_SRC_IPS", "lpm_trie", 65536, 8, 1},
+	{"BYPASS_SRC_IP6S", "lpm_trie", 65536, 20, 1},
+	{"BYPASS_DST_IPS", "lpm_trie", 65536, 8, 1},
+	{"BYPASS_DST_IP6S", "lpm_trie", 65536, 20, 1},
 	{"PROXY_SRC_PORTS", "hash", 256, 2, 1},
 	{"PROXY_DST_PORTS", "hash", 256, 2, 1},
-	{"PROXY_SRC_IPS", "lpm_trie", 1024, 8, 1},
-	{"PROXY_SRC_IP6S", "lpm_trie", 1024, 20, 1},
-	{"PROXY_DST_IPS", "lpm_trie", 1024, 8, 1},
-	{"PROXY_DST_IP6S", "lpm_trie", 1024, 20, 1},
-	{"DYNAMIC_BYPASS_DST_IPS", "lru_hash", 16384, 4, 1},
-	{"DYNAMIC_BYPASS_DST_IP6S", "lru_hash", 4096, 16, 1},
+	{"PROXY_SRC_IPS", "lpm_trie", 65536, 8, 1},
+	{"PROXY_SRC_IP6S", "lpm_trie", 65536, 20, 1},
+	{"PROXY_DST_IPS", "lpm_trie", 65536, 8, 1},
+	{"PROXY_DST_IP6S", "lpm_trie", 65536, 20, 1},
+	{"DYN_DIRECT4", "lru_hash", 16384, 4, 1},
+	{"DYN_DIRECT6", "lru_hash", 4096, 16, 1},
+	{"DYN_PROXY4", "lru_hash", 16384, 4, 1},
+	{"DYN_PROXY6", "lru_hash", 4096, 16, 1},
 	{"REDIRECT_TRACK", "lru_hash", 32768, unsafe.Sizeof(RedirectTuple{}), unsafe.Sizeof(RedirectEntry{})},
-	{"DIRECT_TRACK", "lru_hash", 65536, unsafe.Sizeof(RedirectTuple{}), unsafe.Sizeof(DirectTrackEntry{})},
+	{"FLOW_OWNER", "lru_hash", 65536, unsafe.Sizeof(RedirectTuple{}), unsafe.Sizeof(FlowOwnerEntry{})},
 	{"LISTEN_SOCKET_MAP", "sockmap", 4, 4, 4},
 	{"EVENT_RINGBUF", "ringbuf", 262144, 0, 0},
 }

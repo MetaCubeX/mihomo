@@ -11,21 +11,32 @@ import (
 
 type memoryDestinationMap struct {
 	entries map[netip.Addr]struct{}
+	proxies map[netip.Addr]struct{}
 	fail    bool
 }
 
-func (m *memoryDestinationMap) Apply(add, remove []netip.Addr) error {
+func (m *memoryDestinationMap) Apply(diff DestinationSets) error {
 	if m.fail {
 		return errors.New("injected map batch failure")
 	}
 	if m.entries == nil {
 		m.entries = make(map[netip.Addr]struct{})
 	}
-	for _, ip := range remove {
+	if m.proxies == nil {
+		m.proxies = make(map[netip.Addr]struct{})
+	}
+	for _, ip := range diff.DirectRemove {
 		delete(m.entries, ip)
 	}
-	for _, ip := range add {
+	for _, ip := range diff.DirectAdd {
 		m.entries[ip] = struct{}{}
+	}
+	for _, ip := range diff.ProxyRemove {
+		delete(m.proxies, ip)
+	}
+	for _, ip := range diff.ProxyAdd {
+		m.proxies[ip] = struct{}{}
+		delete(m.entries, ip)
 	}
 	return nil
 }
@@ -38,8 +49,10 @@ func TestOffloaderSharedCDNConflict(t *testing.T) {
 	require.Contains(t, writer.entries, ip)
 	require.NoError(t, offloader.Observe("proxy.example", []netip.Addr{ip}, time.Hour, Proxy))
 	require.NotContains(t, writer.entries, ip)
+	require.Contains(t, writer.proxies, ip)
 	require.NoError(t, offloader.Observe("proxy.example", nil, time.Hour, Proxy))
 	require.Contains(t, writer.entries, ip)
+	require.NotContains(t, writer.proxies, ip)
 }
 
 func TestOffloaderTTLAndOutOfOrderDeadline(t *testing.T) {
