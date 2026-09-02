@@ -133,8 +133,8 @@ github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604 h1:hJwCVlE3ojViC3
 github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604/go.mod h1:lpmN3m269b3V5jFCWtffqBLS4U3QQoIid9ugtO+OhVc=
 github.com/metacubex/mhurl v0.1.0 h1:ZdW4Zxe3j3uJ89gNytOazHu6kbHn5owutN/VfXOI8GE=
 github.com/metacubex/mhurl v0.1.0/go.mod h1:2qpQImCbXoUs6GwJrjuEXKelPyoimsIXr07eNKZdS00=
-github.com/metacubex/mipstack v0.0.0-20260826102845-dc187ebcbdc7 h1:3wIzjgx+tJmlvKUT3zQG1VFkn7825Pyqj41BvgstpdE=
-github.com/metacubex/mipstack v0.0.0-20260826102845-dc187ebcbdc7/go.mod h1:+bbwALZI0pbi2auSG5A3ptdpV2DZ2eLObziXo+P7oj0=
+github.com/metacubex/mipstack v0.0.0-20260902082959-c7e60ae7a02a h1:WMeY2354p4XDjHIo+1CrXfMRhIq7JhxMEBwty+BN+ts=
+github.com/metacubex/mipstack v0.0.0-20260902082959-c7e60ae7a02a/go.mod h1:+bbwALZI0pbi2auSG5A3ptdpV2DZ2eLObziXo+P7oj0=
 github.com/metacubex/mlkem v0.1.0 h1:wFClitonSFcmipzzQvax75beLQU+D7JuC+VK1RzSL8I=
 github.com/metacubex/mlkem v0.1.0/go.mod h1:amhaXZVeYNShuy9BILcR7P0gbeo/QLZsnqCdL8U2PDQ=
 github.com/metacubex/nftables v0.0.0-20260426003805-208c2c1ba2cb h1:wk6mHYPURSUvWcUv72gNP79oiylFsscBSDPJ6ieV6Iw=
