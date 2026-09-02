@@ -358,7 +358,7 @@ jobs:
       shell: bash
 
     - name: Tag Repo
-      uses: richardsimko/update-tag@v1
+      uses: richardsimko/update-tag@v3
       with:
         tag_name: Prerelease-${{ github.ref_name }}
       env:
