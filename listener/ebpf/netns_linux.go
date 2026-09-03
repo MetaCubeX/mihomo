@@ -42,6 +42,7 @@ type NetNSTopology struct {
 	hostNS      netns.NsHandle
 	peerNS      netns.NsHandle
 	hostMAC     net.HardwareAddr
+	ipv6Enabled bool
 	peerSysctls []sysctlRestore
 	closeOnce   sync.Once
 	closeErr    error
@@ -59,7 +60,7 @@ func CreateNetNSTopology() (topology *NetNSTopology, err error) {
 		return nil, fmt.Errorf("get host network namespace: %w", err)
 	}
 
-	created := &NetNSTopology{hostNS: hostNS, peerNS: netns.None()}
+	created := &NetNSTopology{hostNS: hostNS, peerNS: netns.None(), ipv6Enabled: ipv6Enabled()}
 	topology = created
 	defer func() {
 		if restoreErr := netns.Set(hostNS); err == nil && restoreErr != nil {
@@ -98,7 +99,7 @@ func CreateNetNSTopology() (topology *NetNSTopology, err error) {
 	if err := netlink.LinkSetNsFd(peerLink, int(peerNS)); err != nil {
 		return nil, fmt.Errorf("move peer veth into isolated network namespace: %w", err)
 	}
-	if err := configureHostVeth(hostLink); err != nil {
+	if err := configureHostVeth(hostLink, topology.ipv6Enabled); err != nil {
 		return nil, err
 	}
 	topology.hostMAC = append(net.HardwareAddr(nil), hostLink.Attrs().HardwareAddr...)
@@ -121,8 +122,25 @@ func ensureLinkAbsent(name string) error {
 	return fmt.Errorf("check whether %s exists: %w", name, err)
 }
 
-func configureHostVeth(link netlink.Link) error {
-	for _, address := range []*net.IPNet{hostIPv4, hostIPv6} {
+func ipv6Enabled() bool {
+	contents, err := os.ReadFile("/proc/sys/net/ipv6/conf/all/disable_ipv6")
+	return err == nil && strings.TrimSpace(string(contents)) == "0"
+}
+
+func addressFamilies(ipv6 bool) []int {
+	families := []int{unix.AF_INET}
+	if ipv6 {
+		families = append(families, unix.AF_INET6)
+	}
+	return families
+}
+
+func configureHostVeth(link netlink.Link, ipv6 bool) error {
+	addresses := []*net.IPNet{hostIPv4}
+	if ipv6 {
+		addresses = append(addresses, hostIPv6)
+	}
+	for _, address := range addresses {
 		addr := &netlink.Addr{IPNet: address}
 		if address.IP.To4() == nil {
 			addr.Flags = unix.IFA_F_NODAD
@@ -205,7 +223,11 @@ func (topology *NetNSTopology) configurePeerLocked() error {
 	if err != nil {
 		return fmt.Errorf("find peer veth in isolated network namespace: %w", err)
 	}
-	for _, address := range []*net.IPNet{peerIPv4, peerIPv6} {
+	addresses := []*net.IPNet{peerIPv4}
+	if topology.ipv6Enabled {
+		addresses = append(addresses, peerIPv6)
+	}
+	for _, address := range addresses {
 		addr := &netlink.Addr{IPNet: address}
 		if address.IP.To4() == nil {
 			addr.Flags = unix.IFA_F_NODAD
@@ -220,22 +242,24 @@ func (topology *NetNSTopology) configurePeerLocked() error {
 	if err := topology.setPeerSysctlsLocked(); err != nil {
 		return err
 	}
-	if err := addPeerDefaultRoutes(peer.Attrs().Index); err != nil {
+	if err := addPeerDefaultRoutes(peer.Attrs().Index, topology.ipv6Enabled); err != nil {
 		return err
 	}
 	if len(topology.hostMAC) != 6 {
 		return errors.New("host dae0 has invalid MAC address")
 	}
-	if err := netlink.NeighAdd(&netlink.Neigh{
-		LinkIndex:    peer.Attrs().Index,
-		Family:       unix.AF_INET6,
-		State:        netlink.NUD_PERMANENT,
-		IP:           net.ParseIP("fd00::1"),
-		HardwareAddr: topology.hostMAC,
-	}); err != nil {
-		return fmt.Errorf("pin isolated IPv6 gateway neighbor: %w", err)
+	if topology.ipv6Enabled {
+		if err := netlink.NeighAdd(&netlink.Neigh{
+			LinkIndex:    peer.Attrs().Index,
+			Family:       unix.AF_INET6,
+			State:        netlink.NUD_PERMANENT,
+			IP:           net.ParseIP("fd00::1"),
+			HardwareAddr: topology.hostMAC,
+		}); err != nil {
+			return fmt.Errorf("pin isolated IPv6 gateway neighbor: %w", err)
+		}
 	}
-	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
+	for _, family := range addressFamilies(topology.ipv6Enabled) {
 		if err := netlink.RuleAdd(routingRule(family)); err != nil {
 			return fmt.Errorf("install isolated TPROXY mark rule for family %d: %w", family, err)
 		}
@@ -249,21 +273,28 @@ func (topology *NetNSTopology) configurePeerLocked() error {
 	return nil
 }
 
-func addPeerDefaultRoutes(linkIndex int) error {
-	if err := netlink.RouteAdd(&netlink.Route{
+func peerDefaultRoutes(linkIndex int, ipv6 bool) []netlink.Route {
+	routes := []netlink.Route{{
 		LinkIndex: linkIndex,
 		Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)},
 		Gw:        net.ParseIP("169.254.0.1").To4(),
 		Flags:     unix.RTNH_F_ONLINK,
-	}); err != nil {
-		return fmt.Errorf("add isolated IPv4 default route: %w", err)
+	}}
+	if ipv6 {
+		routes = append(routes, netlink.Route{
+			LinkIndex: linkIndex,
+			Dst:       &net.IPNet{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)},
+			Gw:        net.ParseIP("fd00::1"),
+		})
 	}
-	if err := netlink.RouteAdd(&netlink.Route{
-		LinkIndex: linkIndex,
-		Dst:       &net.IPNet{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)},
-		Gw:        net.ParseIP("fd00::1"),
-	}); err != nil {
-		return fmt.Errorf("add isolated IPv6 default route: %w", err)
+	return routes
+}
+
+func addPeerDefaultRoutes(linkIndex int, ipv6 bool) error {
+	for _, route := range peerDefaultRoutes(linkIndex, ipv6) {
+		if err := netlink.RouteAdd(&route); err != nil {
+			return fmt.Errorf("add isolated default route %s: %w", route.Dst, err)
+		}
 	}
 	return nil
 }
@@ -278,7 +309,12 @@ func (topology *NetNSTopology) setPeerSysctlsLocked() error {
 		{"/proc/sys/net/ipv4/conf/dae0peer/rp_filter", "0"},
 		{"/proc/sys/net/ipv4/conf/all/route_localnet", "1"},
 		{"/proc/sys/net/ipv4/ip_nonlocal_bind", "1"},
-		{"/proc/sys/net/ipv6/conf/all/forwarding", "1"},
+	}
+	if topology.ipv6Enabled {
+		settings = append(settings, struct {
+			path  string
+			value string
+		}{"/proc/sys/net/ipv6/conf/all/forwarding", "1"})
 	}
 	for _, setting := range settings {
 		previous, err := os.ReadFile(setting.path)
@@ -319,7 +355,7 @@ func (topology *NetNSTopology) closeLocked() error {
 
 	var cleanupErr error
 	if topology.peerNS != netns.None() && netns.Set(topology.peerNS) == nil {
-		for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
+		for _, family := range addressFamilies(topology.ipv6Enabled) {
 			if err := ignoreNotFound(netlink.RuleDel(routingRule(family))); err != nil {
 				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove table-%d TPROXY rule: %w", RoutingTable, err))
 			}

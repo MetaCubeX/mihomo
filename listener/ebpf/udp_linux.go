@@ -138,13 +138,17 @@ func (inboundUDP *UDPInbound) publishParam(port uint16) error {
 
 func (inboundUDP *UDPInbound) openListeners(port uint16) error {
 	return inboundUDP.topology.WithPeerNetNS(func() error {
-		for _, spec := range []struct {
+		specs := []struct {
 			network, address string
 			key              uint32
-		}{
-			{"udp4", fmt.Sprintf("0.0.0.0:%d", port), udp4SocketKey},
-			{"udp6", fmt.Sprintf("[::]:%d", port), udp6SocketKey},
-		} {
+		}{{"udp4", fmt.Sprintf("0.0.0.0:%d", port), udp4SocketKey}}
+		if inboundUDP.topology.ipv6Enabled {
+			specs = append(specs, struct {
+				network, address string
+				key              uint32
+			}{"udp6", fmt.Sprintf("[::]:%d", port), udp6SocketKey})
+		}
+		for _, spec := range specs {
 			listener, err := transparentListenUDP(spec.network, spec.address)
 			if err != nil {
 				return fmt.Errorf("listen %s in isolated namespace: %w", spec.network, err)

@@ -139,14 +139,19 @@ func (inboundTCP *TCPInbound) publishParam(port uint16) error {
 
 func (inboundTCP *TCPInbound) openListeners(port uint16) error {
 	return inboundTCP.topology.WithPeerNetNS(func() error {
-		for _, spec := range []struct {
+		specs := []struct {
 			network string
 			address string
 			key     uint32
-		}{
-			{"tcp4", fmt.Sprintf("0.0.0.0:%d", port), tcp4SocketKey},
-			{"tcp6", fmt.Sprintf("[::]:%d", port), tcp6SocketKey},
-		} {
+		}{{"tcp4", fmt.Sprintf("0.0.0.0:%d", port), tcp4SocketKey}}
+		if inboundTCP.topology.ipv6Enabled {
+			specs = append(specs, struct {
+				network string
+				address string
+				key     uint32
+			}{"tcp6", fmt.Sprintf("[::]:%d", port), tcp6SocketKey})
+		}
+		for _, spec := range specs {
 			listener, err := transparentListen(spec.network, spec.address)
 			if err != nil {
 				return fmt.Errorf("listen %s in isolated namespace: %w", spec.network, err)

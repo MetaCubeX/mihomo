@@ -20,6 +20,21 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func TestPeerDefaultRoutesIPv4Only(t *testing.T) {
+	routes := peerDefaultRoutes(42, false)
+	require.Len(t, routes, 1)
+	require.Equal(t, 42, routes[0].LinkIndex)
+	require.Equal(t, "0.0.0.0/0", routes[0].Dst.String())
+	require.Equal(t, "169.254.0.1", routes[0].Gw.String())
+}
+
+func TestPeerDefaultRoutesDualStack(t *testing.T) {
+	routes := peerDefaultRoutes(42, true)
+	require.Len(t, routes, 2)
+	require.Equal(t, "0.0.0.0/0", routes[0].Dst.String())
+	require.Equal(t, "::/0", routes[1].Dst.String())
+}
+
 func TestNetNSTopologyIntegration(t *testing.T) {
 	if os.Getenv("MIHOMO_EBPF_NETNS_INTEGRATION") != "1" {
 		t.Skip("set MIHOMO_EBPF_NETNS_INTEGRATION=1 to create the isolated veth topology")
