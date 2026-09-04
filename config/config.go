@@ -1242,6 +1242,11 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 			dnsNetType = "quic" // DNS over QUIC
 		case "system":
 			dnsNetType = "system" // System DNS
+		case "mdns":
+			dnsNetType = "mdns" // Multicast DNS
+			if u.Host != "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+				err = errors.New("mDNS nameserver does not accept an address or parameters")
+			}
 		case "ts", "tailscale":
 			addr = u.Host
 			dnsNetType = "tailscale" // Tailscale DNS via proxy name
@@ -1276,7 +1281,7 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
-		if respectRules && len(proxyName) == 0 {
+		if respectRules && len(proxyName) == 0 && dnsNetType != "mdns" {
 			proxyName = dns.RespectRules
 		}
 
