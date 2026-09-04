@@ -38,6 +38,7 @@ type Listener struct {
 	config    LC.VmessServer
 	listeners []net.Listener
 	service   *vmess.Service[string]
+	handler   *sing.ListenerHandler
 }
 
 var _listener *Listener
@@ -90,7 +91,7 @@ func New(config LC.VmessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 		return nil, err
 	}
 
-	sl = &Listener{false, config, nil, service}
+	sl = &Listener{closed: false, config: config, service: service, handler: h}
 
 	httpServer := http.Server{
 		IdleTimeout: 30 * time.Second,
@@ -315,6 +316,9 @@ func (l *Listener) Close() error {
 	}
 	err := l.service.Close()
 	if err != nil {
+		retErr = err
+	}
+	if err := l.handler.Close(); err != nil {
 		retErr = err
 	}
 	return retErr

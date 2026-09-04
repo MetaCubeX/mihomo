@@ -13,10 +13,26 @@ var singMuxProtocolList = []string{"h2mux", "smux", "yamux"}
 var singMuxProtocolListLong = []string{"yamux"} // don't test "smux", "h2mux" because it has some confused bugs
 
 // notCloseProxyAdapter is a proxy adapter that does not close the underlying outbound.ProxyAdapter.
-// The outbound.SingMux will close the underlying outbound.ProxyAdapter when it is closed, but we don't want to close it.
+// Multiplexing wrappers close their underlying ProxyAdapter, but the test owner keeps it alive.
 // The underlying outbound.ProxyAdapter should only be closed by the caller of testSingMux.
 type notCloseProxyAdapter struct {
 	outbound.ProxyAdapter
+}
+
+func testMuxCool(t *testing.T, tunnel *TestTunnel, out outbound.ProxyAdapter) {
+	t.Run("mux.cool", func(t *testing.T) {
+		muxCool, err := outbound.NewMuxCool(outbound.MuxCoolOption{
+			Enabled:         true,
+			XUDPProxyUDP443: "allow",
+		}, &notCloseProxyAdapter{out})
+		if !assert.NoError(t, err) {
+			return
+		}
+		defer muxCool.Close()
+
+		tunnel.DoSequentialTest(t, muxCool)
+		tunnel.DoConcurrentTest(t, muxCool)
+	})
 }
 
 func (n *notCloseProxyAdapter) Close() error {

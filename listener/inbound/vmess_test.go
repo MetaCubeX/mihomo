@@ -13,6 +13,10 @@ import (
 )
 
 func testInboundVMess(t *testing.T, inboundOptions inbound.VmessOption, outboundOptions outbound.VmessOption) {
+	testInboundVMessWithMuxCool(t, inboundOptions, outboundOptions, false)
+}
+
+func testInboundVMessWithMuxCool(t *testing.T, inboundOptions inbound.VmessOption, outboundOptions outbound.VmessOption, runMuxCool bool) {
 	t.Parallel()
 	inboundOptions.BaseOption = inbound.BaseOption{
 		NameStr: "vmess_inbound",
@@ -71,12 +75,19 @@ func testInboundVMess(t *testing.T, inboundOptions inbound.VmessOption, outbound
 		return
 	}
 	testSingMux(t, tunnel, out)
+	if runMuxCool {
+		testMuxCool(t, tunnel, out)
+	}
 }
 
 func TestInboundVMess_Basic(t *testing.T) {
 	inboundOptions := inbound.VmessOption{}
 	outboundOptions := outbound.VmessOption{}
 	testInboundVMess(t, inboundOptions, outboundOptions)
+}
+
+func TestInboundVMess_MuxCool(t *testing.T) {
+	testInboundVMessWithMuxCool(t, inbound.VmessOption{}, outbound.VmessOption{}, true)
 }
 
 func testInboundVMessTLS(t *testing.T, inboundOptions inbound.VmessOption, outboundOptions outbound.VmessOption) {

@@ -36,6 +36,7 @@ type Listener struct {
 	listeners  []net.Listener
 	service    *Service[string]
 	decryption *encryption.ServerInstance
+	handler    *sing.ListenerHandler
 }
 
 func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (sl *Listener, err error) {
@@ -67,7 +68,7 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			return it.Flow
 		}))
 
-	sl = &Listener{config: config, service: service}
+	sl = &Listener{config: config, service: service, handler: h}
 
 	sl.decryption, err = encryption.NewServer(config.Decryption)
 	if err != nil {
@@ -310,6 +311,9 @@ func (l *Listener) Close() error {
 	}
 	if l.decryption != nil {
 		_ = l.decryption.Close()
+	}
+	if err := l.handler.Close(); err != nil {
+		retErr = err
 	}
 	return retErr
 }

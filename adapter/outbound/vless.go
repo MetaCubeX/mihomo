@@ -432,6 +432,9 @@ func (v *Vless) Close() error {
 }
 
 func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
+	nativeMux := metadata.NetWork == C.TCP &&
+		metadata.Host == muxCoolDestination &&
+		metadata.DstPort == muxCoolPort
 	var addrType byte
 	var addr []byte
 	switch metadata.AddrType() {
@@ -455,7 +458,7 @@ func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
 		AddrType: addrType,
 		Addr:     addr,
 		Port:     metadata.DstPort,
-		Mux:      metadata.NetWork == C.UDP && xudp,
+		Mux:      nativeMux || metadata.NetWork == C.UDP && xudp,
 	}
 }
 

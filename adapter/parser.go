@@ -224,17 +224,34 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 		return nil, err
 	}
 
+	muxOption := &outbound.SingMuxOption{}
 	if muxMapping, muxExist := mapping["smux"].(map[string]any); muxExist {
-		muxOption := &outbound.SingMuxOption{}
 		err = decoder.Decode(muxMapping, muxOption)
 		if err != nil {
 			return nil, err
 		}
-		if muxOption.Enabled {
-			proxy, err = outbound.NewSingMux(*muxOption, proxy)
-			if err != nil {
-				return nil, err
-			}
+	}
+
+	muxCoolOption := &outbound.MuxCoolOption{}
+	if muxMapping, muxExist := mapping["mux.cool"].(map[string]any); muxExist {
+		err = decoder.Decode(muxMapping, muxCoolOption)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if muxOption.Enabled && muxCoolOption.Enabled {
+		return nil, fmt.Errorf("smux and mux.cool cannot be enabled together")
+	}
+	if muxOption.Enabled {
+		proxy, err = outbound.NewSingMux(*muxOption, proxy)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if muxCoolOption.Enabled || muxCoolOption.MaxConcurrency < 0 || muxCoolOption.MaxConnections < 0 || muxCoolOption.MaxCarriers < 0 || muxCoolOption.XUDPConcurrency < 0 {
+		proxy, err = outbound.NewMuxCool(*muxCoolOption, proxy)
+		if err != nil {
+			return nil, err
 		}
 	}
 
