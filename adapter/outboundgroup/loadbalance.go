@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -20,7 +21,9 @@ import (
 )
 
 type LoadBalanceOption struct {
-	Strategy string `group:"strategy,omitempty"`
+	Strategy  string `group:"strategy,omitempty"`
+	Weighting string `group:"weighting,omitempty"`
+	TopN      int    `group:"top-n,omitempty"`
 }
 
 type LoadBalance struct {
@@ -29,6 +32,8 @@ type LoadBalance struct {
 	strategyFn     strategyFn
 	testUrl        string
 	expectedStatus string
+	weighting      string
+	topN           int
 }
 
 type strategyFn = func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy
@@ -212,6 +217,126 @@ func strategyStickySessions(url string) strategyFn {
 	}
 }
 
+type latencyCandidate struct {
+	proxy C.Proxy
+	name  string
+	delay uint16
+}
+
+func insertTopLatencyCandidate(candidates []latencyCandidate, candidate latencyCandidate, topN int) []latencyCandidate {
+	if topN <= 0 {
+		return append(candidates, candidate)
+	}
+
+	insertAt := len(candidates)
+	for i, current := range candidates {
+		if candidate.delay < current.delay || candidate.delay == current.delay && candidate.name < current.name {
+			insertAt = i
+			break
+		}
+	}
+
+	if insertAt >= topN {
+		return candidates
+	}
+
+	candidates = append(candidates, latencyCandidate{})
+	copy(candidates[insertAt+1:], candidates[insertAt:])
+	candidates[insertAt] = candidate
+	if len(candidates) > topN {
+		candidates = candidates[:topN]
+	}
+	return candidates
+}
+
+func weightedCandidateScore(key uint64, candidate latencyCandidate) float64 {
+	hash := key ^ utils.MapHash(candidate.name)
+	// SplitMix64 finalizer avoids correlations between the session and proxy hashes.
+	hash ^= hash >> 30
+	hash *= 0xbf58476d1ce4e5b9
+	hash ^= hash >> 27
+	hash *= 0x94d049bb133111eb
+	hash ^= hash >> 31
+
+	// Weighted rendezvous hashing: inverse latency is the weight, so the
+	// equivalent exponential-race score is -log(U) * latency. Lowest wins.
+	uniform := (float64(hash>>11) + 1) / (1 << 53)
+	return -math.Log(uniform) * float64(candidate.delay)
+}
+
+func selectLatencyWeightedCandidate(candidates []latencyCandidate, key uint64) latencyCandidate {
+	selected := candidates[0]
+	minScore := weightedCandidateScore(key, selected)
+	for _, candidate := range candidates[1:] {
+		score := weightedCandidateScore(key, candidate)
+		if score < minScore {
+			selected = candidate
+			minScore = score
+		}
+	}
+	return selected
+}
+
+func strategyStickySessionsLatencyWeighted(url string, topN int) strategyFn {
+	ttl := time.Minute * 10
+	stickyCache := lru.New[uint64, string](
+		lru.WithAge[uint64, string](int64(ttl.Seconds())),
+		lru.WithSize[uint64, string](1000))
+
+	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
+		key := utils.MapHash(getKeyWithSrcAndDst(metadata))
+		if cachedName, has := stickyCache.Get(key); has {
+			for _, proxy := range proxies {
+				if proxy.Name() == cachedName && proxy.AliveForTestUrl(url) {
+					return proxy
+				}
+			}
+		}
+
+		var candidates []latencyCandidate
+		alive := make([]C.Proxy, 0, len(proxies))
+		if topN > 0 {
+			capacity := topN
+			if capacity > len(proxies) {
+				capacity = len(proxies)
+			}
+			candidates = make([]latencyCandidate, 0, capacity)
+		} else {
+			candidates = make([]latencyCandidate, 0, len(proxies))
+		}
+
+		for _, proxy := range proxies {
+			if !proxy.AliveForTestUrl(url) {
+				continue
+			}
+			alive = append(alive, proxy)
+			delay := proxy.LastDelayForTestUrl(url)
+			if delay == math.MaxUint16 {
+				continue
+			}
+			candidates = insertTopLatencyCandidate(candidates, latencyCandidate{
+				proxy: proxy,
+				name:  proxy.Name(),
+				delay: delay,
+			}, topN)
+		}
+
+		var selected C.Proxy
+		if len(candidates) > 0 {
+			selected = selectLatencyWeightedCandidate(candidates, key).proxy
+		} else if len(alive) > 0 {
+			// Until the first health-check result is available, retain usable
+			// sticky behavior without treating unknown latency as the fastest.
+			selected = alive[int(jumpHash(key, int32(len(alive))))]
+		} else {
+			selected = proxies[0]
+		}
+
+		stickyCache.Set(key, selected.Name())
+		return selected
+	}
+}
+
 // Unwrap implements C.ProxyAdapter
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	proxies := lb.GetProxies(touch)
@@ -229,6 +354,8 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        lb.testUrl,
 		"expectedStatus": lb.expectedStatus,
+		"weighting":      lb.weighting,
+		"topN":           lb.topN,
 		"hidden":         lb.Hidden(),
 		"icon":           lb.Icon(),
 		"emptyFallback":  lb.EmptyFallback().Name(),
@@ -248,6 +375,16 @@ func (lb *LoadBalance) Now() string {
 }
 
 func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (lb *LoadBalance, err error) {
+	if loadBalanceOption.TopN < 0 {
+		return nil, errors.New("top-n must not be negative")
+	}
+	if loadBalanceOption.TopN > 0 && loadBalanceOption.Weighting == "" {
+		return nil, errors.New("top-n requires weighting")
+	}
+	if loadBalanceOption.Weighting != "" && loadBalanceOption.Strategy != "sticky-sessions" {
+		return nil, errors.New("weighting is only supported by sticky-sessions")
+	}
+
 	var strategyFn strategyFn
 	switch loadBalanceOption.Strategy {
 	case "", "consistent-hashing":
@@ -255,7 +392,14 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 	case "round-robin":
 		strategyFn = strategyRoundRobin(option.URL)
 	case "sticky-sessions":
-		strategyFn = strategyStickySessions(option.URL)
+		switch loadBalanceOption.Weighting {
+		case "":
+			strategyFn = strategyStickySessions(option.URL)
+		case "inverse-latency":
+			strategyFn = strategyStickySessionsLatencyWeighted(option.URL, loadBalanceOption.TopN)
+		default:
+			return nil, fmt.Errorf("unsupported weighting: %s", loadBalanceOption.Weighting)
+		}
 	default:
 		return nil, fmt.Errorf("%w: %s", errStrategy, loadBalanceOption.Strategy)
 	}
@@ -277,5 +421,7 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
+		weighting:      loadBalanceOption.Weighting,
+		topN:           loadBalanceOption.TopN,
 	}, nil
 }

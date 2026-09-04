@@ -1746,6 +1746,8 @@ proxy-groups:
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
   # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
+  # weighting: inverse-latency # sticky-sessions 可选，按健康检查延迟的倒数分配新会话
+  # top-n: 3 # weighting 启用时可选，只在延迟最低的 N 个存活节点中分配
 
   # select 用户自行选择节点
   - name: Proxy
