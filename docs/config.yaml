@@ -328,8 +328,13 @@ dns:
   # proxy-server-nameserver:
   #   - https://doh.pub/dns-query
   #   - tls://223.5.5.5:853
+  # proxy-server-nameserver-fallback: # proxy-server-nameserver 查询失败时使用，查询时机由 fallback-lazy-query 控制
+  #   - https://dns.google/dns-query
+  #   - tls://1.1.1.1:853
   # proxy-server-nameserver-policy: # 格式同nameserver-policy，仅用于节点域名解析，当且仅当proxy-server-nameserver不为空时生效
   #   'www.yournode.com': '114.114.114.114'
+  # proxy-server-nameserver-policy-fallback: # policy 查询失败时按域名匹配使用，查询时机由 fallback-lazy-query 控制
+  #   'www.yournode.com': '223.5.5.5'
 
   # 专用于direct出口域名解析的 DNS 服务器，非必要配置项，如果不填则遵循nameserver-policy、nameserver和fallback的配置
   # direct-nameserver:
