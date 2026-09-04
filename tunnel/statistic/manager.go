@@ -2,11 +2,15 @@ package statistic
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/deque"
 	"github.com/metacubex/mihomo/common/xsync"
 	"github.com/metacubex/mihomo/component/memory"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 var DefaultManager *Manager
@@ -35,6 +39,10 @@ type Manager struct {
 	downloadTotal atomic.Int64
 	pid           int32
 	memory        uint64
+
+	snapshotMu        sync.Mutex
+	snapshotStreams   map[*SnapshotStream]struct{}
+	closedConnections deque.Deque[*TrackerInfo]
 }
 
 func (m *Manager) Join(c Tracker) {
@@ -42,7 +50,22 @@ func (m *Manager) Join(c Tracker) {
 }
 
 func (m *Manager) Leave(c Tracker) {
-	m.connections.Delete(c.ID())
+	tracker, loaded := m.connections.LoadAndDelete(c.ID())
+	if !loaded {
+		return
+	}
+
+	m.snapshotMu.Lock()
+	if len(m.snapshotStreams) != 0 {
+		m.closedConnections.PushBack(tracker.Info())
+		for stream := range m.snapshotStreams {
+			select {
+			case stream.updates <- struct{}{}:
+			default:
+			}
+		}
+	}
+	m.snapshotMu.Unlock()
 }
 
 func (m *Manager) Get(id string) (c Tracker) {
@@ -92,6 +115,102 @@ func (m *Manager) Snapshot() *Snapshot {
 		DownloadTotal: m.downloadTotal.Load(),
 		Connections:   connections,
 		Memory:        m.memory,
+	}
+}
+
+// SnapshotStream includes connections closed between snapshots in the next snapshot.
+type SnapshotStream struct {
+	manager *Manager
+	cursor  int
+	updates chan struct{}
+}
+
+func (m *Manager) NewSnapshotStream() *SnapshotStream {
+	m.snapshotMu.Lock()
+	defer m.snapshotMu.Unlock()
+
+	stream := &SnapshotStream{
+		manager: m,
+		cursor:  m.closedConnections.Len(),
+		updates: make(chan struct{}, 1),
+	}
+	if m.snapshotStreams == nil {
+		m.snapshotStreams = map[*SnapshotStream]struct{}{}
+	}
+	m.snapshotStreams[stream] = struct{}{}
+	return stream
+}
+
+func (s *SnapshotStream) Snapshot() *Snapshot {
+	snapshot := s.manager.Snapshot()
+	m := s.manager
+	m.snapshotMu.Lock()
+
+	closedCount := m.closedConnections.Len()
+	select {
+	case <-s.updates:
+	default:
+	}
+	if s.cursor == closedCount {
+		m.snapshotMu.Unlock()
+		return snapshot
+	}
+
+	closedConnections := make([]*TrackerInfo, 0, closedCount-s.cursor)
+	for i := s.cursor; i < closedCount; i++ {
+		closedConnections = append(closedConnections, m.closedConnections.At(i))
+	}
+	s.cursor = closedCount
+	m.pruneClosedConnectionsLocked()
+	m.snapshotMu.Unlock()
+
+	activeConnections := make(map[uuid.UUID]struct{}, len(snapshot.Connections))
+	for _, connection := range snapshot.Connections {
+		activeConnections[connection.UUID] = struct{}{}
+	}
+	for _, connection := range closedConnections {
+		if _, exists := activeConnections[connection.UUID]; !exists {
+			snapshot.Connections = append(snapshot.Connections, connection)
+		}
+	}
+	return snapshot
+}
+
+// Updates reports when closed connections are ready for the next snapshot.
+func (s *SnapshotStream) Updates() <-chan struct{} {
+	return s.updates
+}
+
+func (s *SnapshotStream) Close() {
+	m := s.manager
+	m.snapshotMu.Lock()
+	if _, exists := m.snapshotStreams[s]; exists {
+		delete(m.snapshotStreams, s)
+		m.pruneClosedConnectionsLocked()
+	}
+	m.snapshotMu.Unlock()
+}
+
+func (m *Manager) pruneClosedConnectionsLocked() {
+	closedCount := m.closedConnections.Len()
+	pruneCount := closedCount
+	for stream := range m.snapshotStreams {
+		if stream.cursor < pruneCount {
+			pruneCount = stream.cursor
+		}
+	}
+	if pruneCount == 0 {
+		return
+	}
+	if pruneCount == closedCount {
+		m.closedConnections = deque.Deque[*TrackerInfo]{}
+	} else {
+		for i := 0; i < pruneCount; i++ {
+			m.closedConnections.PopFront()
+		}
+	}
+	for stream := range m.snapshotStreams {
+		stream.cursor -= pruneCount
 	}
 }
 
