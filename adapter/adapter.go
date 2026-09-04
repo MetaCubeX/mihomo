@@ -16,6 +16,7 @@ import (
 	"github.com/metacubex/mihomo/component/ca"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/metacubex/http"
 )
@@ -207,7 +208,11 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	}
 
 	start := time.Now()
-	instance, err := p.DialContext(ctx, &addr)
+	proxy, err := tunnel.ResolveRematch(ctx, p, &addr)
+	if err != nil {
+		return
+	}
+	instance, err := proxy.DialContext(ctx, &addr)
 	if err != nil {
 		return
 	}

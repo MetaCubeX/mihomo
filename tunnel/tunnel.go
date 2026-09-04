@@ -323,6 +323,20 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		}
 		return
 	}
+	helper := ruleMatchHelper(context.Background(), metadata)
+	switch mode {
+	case Direct:
+		proxy = proxies["DIRECT"]
+	case Global:
+		proxy = proxies["GLOBAL"]
+	// Rule
+	default:
+		proxy, rule, err = match(metadata, helper)
+	}
+	return
+}
+
+func ruleMatchHelper(ctx context.Context, metadata *C.Metadata) C.RuleMatchHelper {
 	var (
 		resolved             bool
 		attemptProcessLookup = metadata.Type != C.INNER
@@ -336,7 +350,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 	helper := C.RuleMatchHelper{
 		ResolveIP: func() {
 			if !resolved && metadata.Host != "" && !metadata.Resolved() {
-				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+				ctx, cancel := context.WithTimeout(ctx, resolver.DefaultDNSTimeout)
 				defer cancel()
 				ip, err := resolver.ResolveIP(ctx, metadata.Host)
 				if err != nil {
@@ -398,16 +412,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		helper.FindProcess = nil
 	}
 
-	switch mode {
-	case Direct:
-		proxy = proxies["DIRECT"]
-	case Global:
-		proxy = proxies["GLOBAL"]
-	// Rule
-	default:
-		proxy, rule, err = match(metadata, helper)
-	}
-	return
+	return helper
 }
 
 // processUDP starts a loop to handle udp packet
