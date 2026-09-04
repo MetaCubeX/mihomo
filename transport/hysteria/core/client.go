@@ -230,7 +230,7 @@ func (c *Client) DialUDP(dialer utils.PacketDialer) (UDPConn, error) {
 	}
 	// Send request
 	err = WriteClientRequest(stream, ClientRequest{
-		UDP: false,
+		UDP: true,
 	})
 	if err != nil {
 		_ = stream.Close()
