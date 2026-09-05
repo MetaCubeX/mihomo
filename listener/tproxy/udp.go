@@ -97,7 +97,6 @@ func NewUDP(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPLi
 }
 
 func handlePacketConn(pc net.PacketConn, tunnel C.Tunnel, buf []byte, lAddr, rAddr netip.AddrPort, additions ...inbound.Addition) {
-	target := socks5.AddrFromStdAddrPort(rAddr)
 	pkt := &packet{
 		pc:        pc,
 		lAddr:     lAddr,
@@ -105,5 +104,12 @@ func handlePacketConn(pc net.PacketConn, tunnel C.Tunnel, buf []byte, lAddr, rAd
 		tunnel:    tunnel,
 		additions: additions,
 	}
-	tunnel.HandleUDPPacket(inbound.NewPacket(target, pkt, C.TPROXY, additions...))
+	DispatchUDPPacket(pkt, rAddr, tunnel, C.TPROXY, additions...)
+}
+
+// DispatchUDPPacket is the common transparent-UDP handoff used by TProxy and
+// eBPF inbounds. The caller owns packet's reply transport and buffer lifecycle.
+func DispatchUDPPacket(packet C.UDPPacket, destination netip.AddrPort, tunnel C.Tunnel, source C.Type, additions ...inbound.Addition) {
+	target := socks5.AddrFromStdAddrPort(destination)
+	tunnel.HandleUDPPacket(inbound.NewPacket(target, packet, source, additions...))
 }

@@ -77,6 +77,7 @@ type Inbound struct {
 	TProxyPort        int            `json:"tproxy-port"`
 	MixedPort         int            `json:"mixed-port"`
 	Tun               LC.Tun         `json:"tun"`
+	Ebpf              LC.Ebpf        `json:"ebpf"`
 	TuicServer        LC.TuicServer  `json:"tuic-server"`
 	ShadowSocksConfig string         `json:"ss-config"`
 	VmessConfig       string         `json:"vmess-config"`
@@ -326,6 +327,43 @@ type RawTun struct {
 	SendMsgX bool `yaml:"sendmsgx" json:"sendmsgx,omitempty"`
 }
 
+// RawEbpf retains scalar values as ints and CIDRs as strings so invalid YAML
+// can be reported as a configuration error instead of being silently coerced.
+type RawEbpf struct {
+	Enable            bool          `yaml:"enable" json:"enable"`
+	LanInterface      []string      `yaml:"lan-interface" json:"lan-interface"`
+	WanInterface      string        `yaml:"wan-interface" json:"wan-interface"`
+	TProxyPort        int           `yaml:"tproxy-port" json:"tproxy-port"`
+	AutoDirectOffload bool          `yaml:"auto-direct-offload" json:"auto-direct-offload"`
+	RoutingMark       uint32        `yaml:"routing-mark" json:"routing-mark"`
+	Lan               RawEbpfLan    `yaml:"lan" json:"lan"`
+	Target            RawEbpfTarget `yaml:"target" json:"target"`
+	Host              RawEbpfHost   `yaml:"host" json:"host"`
+	BypassDSCPs       []int         `yaml:"bypass-dscps" json:"bypass-dscps"`
+	BypassFWMarks     []uint32      `yaml:"bypass-fwmarks" json:"bypass-fwmarks"`
+}
+
+type RawEbpfLan struct {
+	BypassSrcPorts []int    `yaml:"bypass-src-ports" json:"bypass-src-ports"`
+	BypassSrcIPs   []string `yaml:"bypass-src-ips" json:"bypass-src-ips"`
+	ProxySrcPorts  []int    `yaml:"proxy-src-ports" json:"proxy-src-ports"`
+	ProxySrcIPs    []string `yaml:"proxy-src-ips" json:"proxy-src-ips"`
+}
+
+type RawEbpfTarget struct {
+	BypassDstIPs          []string `yaml:"bypass-dst-ips" json:"bypass-dst-ips"`
+	BypassDstPorts        []int    `yaml:"bypass-dst-ports" json:"bypass-dst-ports"`
+	ProxyDstIPs           []string `yaml:"proxy-dst-ips" json:"proxy-dst-ips"`
+	ProxyDstPorts         []int    `yaml:"proxy-dst-ports" json:"proxy-dst-ports"`
+	DirectIPRuleProviders []string `yaml:"direct-ip-rule-providers" json:"direct-ip-rule-providers"`
+}
+
+type RawEbpfHost struct {
+	ProxyLocal      bool     `yaml:"proxy-local" json:"proxy-local"`
+	ProxyProcesses  []string `yaml:"proxy-processes" json:"proxy-processes"`
+	BypassProcesses []string `yaml:"bypass-processes" json:"bypass-processes"`
+}
+
 type RawTuicServer struct {
 	Enable                bool              `yaml:"enable" json:"enable"`
 	Listen                string            `yaml:"listen" json:"listen"`
@@ -455,6 +493,7 @@ type RawConfig struct {
 	DNS           RawDNS                    `yaml:"dns" json:"dns"`
 	NTP           RawNTP                    `yaml:"ntp" json:"ntp"`
 	Tun           RawTun                    `yaml:"tun" json:"tun"`
+	Ebpf          RawEbpf                   `yaml:"ebpf" json:"ebpf"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server" json:"tuic-server"`
 	IPTables      RawIPTables               `yaml:"iptables" json:"iptables"`
 	Experimental  RawExperimental           `yaml:"experimental" json:"experimental"`
@@ -548,6 +587,32 @@ func DefaultRawConfig() *RawConfig {
 			RecvMsgX:            true,
 			SendMsgX:            false, // In the current implementation, if enabled, the kernel may freeze during multi-thread downloads, so it is disabled by default.
 		},
+		Ebpf: RawEbpf{
+			Enable:            false,
+			LanInterface:      []string{},
+			WanInterface:      "auto",
+			TProxyPort:        12345,
+			AutoDirectOffload: true,
+			RoutingMark:       0x1dae,
+			Lan: RawEbpfLan{
+				BypassSrcPorts: []int{22, 67, 68, 5353},
+				BypassSrcIPs:   []string{},
+				ProxySrcPorts:  []int{},
+				ProxySrcIPs:    []string{},
+			},
+			Target: RawEbpfTarget{
+				BypassDstIPs:   []string{"127.0.0.0/8", "169.254.0.0/16", "224.0.0.0/4", "::1/128", "fe80::/10", "ff00::/8"},
+				BypassDstPorts: []int{},
+				ProxyDstIPs:    []string{},
+				ProxyDstPorts:  []int{},
+			},
+			Host: RawEbpfHost{
+				ProxyProcesses:  []string{},
+				BypassProcesses: []string{},
+			},
+			BypassDSCPs:   []int{},
+			BypassFWMarks: []uint32{},
+		},
 		TuicServer: RawTuicServer{
 			Enable:                false,
 			Token:                 nil,
@@ -626,6 +691,9 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
+	if err := validateInboundConflicts(rawCfg); err != nil {
+		return nil, err
+	}
 
 	// We need to temporarily apply some configuration in general and roll back after parsing the complete configuration.
 	// The loading and downloading of geodata in the parseRules and parseRuleProviders rely on these.
@@ -756,6 +824,14 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	if cfg.GlobalClientFingerprint != "" {
 		log.Errorln("The `global-client-fingerprint` configuration is removed, please set `client-fingerprint` directly on the proxy instead")
 	}
+	ebpf, err := parseEbpf(cfg.Ebpf)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateEbpfDirectProviders(ebpf.Target.DirectIPRuleProviders, cfg.Rule, cfg.RuleProvider); err != nil {
+		return nil, err
+	}
+
 	return &General{
 		Inbound: Inbound{
 			Port:              cfg.Port,
@@ -772,6 +848,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			BindAddress:       cfg.BindAddress,
 			InboundTfo:        cfg.InboundTfo,
 			InboundMPTCP:      cfg.InboundMPTCP,
+			Ebpf:              ebpf,
 		},
 		UnifiedDelay: cfg.UnifiedDelay,
 		Mode:         cfg.Mode,
@@ -798,6 +875,162 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		KeepAliveInterval: cfg.KeepAliveInterval,
 		DisableKeepAlive:  cfg.DisableKeepAlive,
 	}, nil
+}
+
+// eBPF can preload an ipcidr provider only when its top-level policy is
+// unambiguously DIRECT. A provider used by a non-DIRECT rule may share IPs
+// with proxy traffic, so accepting it would bypass Mihomo rule precedence.
+func validateEbpfDirectProviders(names, rules []string, providers map[string]map[string]any) error {
+	for _, name := range names {
+		provider, ok := providers[name]
+		if !ok {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] does not exist", name)
+		}
+		behavior, _ := provider["behavior"].(string)
+		if !strings.EqualFold(behavior, "ipcidr") {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] must use ipcidr behavior", name)
+		}
+		direct, other := false, false
+		for _, raw := range rules {
+			parts := strings.Split(raw, ",")
+			if len(parts) < 3 || !strings.EqualFold(strings.TrimSpace(parts[0]), "RULE-SET") || strings.TrimSpace(parts[1]) != name {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(parts[2]), "DIRECT") {
+				direct = true
+			} else {
+				other = true
+			}
+		}
+		if !direct {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] requires a top-level RULE-SET,%s,DIRECT rule", name, name)
+		}
+		if other {
+			return fmt.Errorf("ebpf.target.direct-ip-rule-providers[%q] is also used by a non-DIRECT top-level rule", name)
+		}
+	}
+	return nil
+}
+
+func parseEbpf(raw RawEbpf) (LC.Ebpf, error) {
+	if raw.TProxyPort < 1 || raw.TProxyPort > 65535 {
+		return LC.Ebpf{}, fmt.Errorf("ebpf.tproxy-port must be in 1..65535: %d", raw.TProxyPort)
+	}
+
+	lanBypassSrcPorts, err := parseEbpfPorts("ebpf.lan.bypass-src-ports", raw.Lan.BypassSrcPorts)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	lanProxySrcPorts, err := parseEbpfPorts("ebpf.lan.proxy-src-ports", raw.Lan.ProxySrcPorts)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	targetBypassDstPorts, err := parseEbpfPorts("ebpf.target.bypass-dst-ports", raw.Target.BypassDstPorts)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	targetProxyDstPorts, err := parseEbpfPorts("ebpf.target.proxy-dst-ports", raw.Target.ProxyDstPorts)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	lanBypassSrcIPs, err := parseEbpfPrefixes("ebpf.lan.bypass-src-ips", raw.Lan.BypassSrcIPs)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	lanProxySrcIPs, err := parseEbpfPrefixes("ebpf.lan.proxy-src-ips", raw.Lan.ProxySrcIPs)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	targetBypassDstIPs, err := parseEbpfPrefixes("ebpf.target.bypass-dst-ips", raw.Target.BypassDstIPs)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	targetProxyDstIPs, err := parseEbpfPrefixes("ebpf.target.proxy-dst-ips", raw.Target.ProxyDstIPs)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+	bypassDSCPs, err := parseEbpfDSCPs(raw.BypassDSCPs)
+	if err != nil {
+		return LC.Ebpf{}, err
+	}
+
+	ebpf := LC.Ebpf{
+		Enable:            raw.Enable,
+		LanInterface:      append([]string(nil), raw.LanInterface...),
+		WanInterface:      raw.WanInterface,
+		TProxyPort:        uint16(raw.TProxyPort),
+		AutoDirectOffload: raw.AutoDirectOffload,
+		RoutingMark:       raw.RoutingMark,
+		Lan: LC.EbpfLan{
+			BypassSrcPorts: lanBypassSrcPorts,
+			BypassSrcIPs:   lanBypassSrcIPs,
+			ProxySrcPorts:  lanProxySrcPorts,
+			ProxySrcIPs:    lanProxySrcIPs,
+		},
+		Target: LC.EbpfTarget{
+			BypassDstIPs:          targetBypassDstIPs,
+			BypassDstPorts:        targetBypassDstPorts,
+			ProxyDstIPs:           targetProxyDstIPs,
+			ProxyDstPorts:         targetProxyDstPorts,
+			DirectIPRuleProviders: append([]string(nil), raw.Target.DirectIPRuleProviders...),
+		},
+		Host: LC.EbpfHost{
+			ProxyLocal:      raw.Host.ProxyLocal,
+			ProxyProcesses:  append([]string(nil), raw.Host.ProxyProcesses...),
+			BypassProcesses: append([]string(nil), raw.Host.BypassProcesses...),
+		},
+		BypassDSCPs:   bypassDSCPs,
+		BypassFWMarks: append([]uint32(nil), raw.BypassFWMarks...),
+	}
+	ebpf.Sort()
+	return ebpf, nil
+}
+
+func validateInboundConflicts(rawCfg *RawConfig) error {
+	if !rawCfg.Ebpf.Enable {
+		return nil
+	}
+	if rawCfg.Tun.Enable {
+		return errors.New("ebpf.enable and tun.enable cannot both be enabled")
+	}
+	if rawCfg.IPTables.Enable {
+		return errors.New("ebpf.enable and iptables.enable cannot both be enabled")
+	}
+	return nil
+}
+
+func parseEbpfPorts(field string, raw []int) ([]uint16, error) {
+	ports := make([]uint16, len(raw))
+	for i, port := range raw {
+		if port < 1 || port > 65535 {
+			return nil, fmt.Errorf("%s[%d] must be in 1..65535: %d", field, i, port)
+		}
+		ports[i] = uint16(port)
+	}
+	return ports, nil
+}
+
+func parseEbpfPrefixes(field string, raw []string) ([]netip.Prefix, error) {
+	prefixes := make([]netip.Prefix, len(raw))
+	for i, value := range raw {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			return nil, fmt.Errorf("%s[%d] is not a valid CIDR %q: %w", field, i, value, err)
+		}
+		prefixes[i] = prefix
+	}
+	return prefixes, nil
+}
+
+func parseEbpfDSCPs(raw []int) ([]uint8, error) {
+	dscps := make([]uint8, len(raw))
+	for i, dscp := range raw {
+		if dscp < 0 || dscp > 63 {
+			return nil, fmt.Errorf("ebpf.bypass-dscps[%d] must be in 0..63: %d", i, dscp)
+		}
+		dscps[i] = uint8(dscp)
+	}
+	return dscps, nil
 }
 
 func parseController(cfg *RawConfig) (*Controller, error) {

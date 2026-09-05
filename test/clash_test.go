@@ -143,8 +143,7 @@ func parseAndApply(cfgStr string) error {
 		return err
 	}
 
-	executor.ApplyConfig(cfg, true)
-	return nil
+	return executor.ApplyConfig(cfg, true)
 }
 
 func newPingPongPair() (chan []byte, chan []byte, func(t *testing.T) error) {
