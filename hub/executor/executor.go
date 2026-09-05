@@ -263,6 +263,10 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		DirectFollowPolicy:   c.DirectFollowPolicy,
 		CacheAlgorithm:       c.CacheAlgorithm,
 		CacheMaxSize:         c.CacheMaxSize,
+
+		ServeExpired:              c.ServeExpired,
+		ServeExpiredTTL:           c.ServeExpiredTTL,
+		ServeExpiredClientTimeout: c.ServeExpiredClientTimeout,
 	})
 	m := dns.NewEnhancer(dns.EnhancerConfig{
 		IPv6:          ipv6,
