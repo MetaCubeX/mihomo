@@ -1,13 +1,19 @@
 package adapter
 
 import (
+	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
+	"github.com/dlclark/regexp2"
 
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/queue"
@@ -163,7 +169,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], options ...C.HealthCheckOption) (t uint16, err error) {
 	var satisfied bool
 
 	defer func() {
@@ -215,11 +221,29 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		_ = instance.Close()
 	}()
 
-	req, err := http.NewRequest(http.MethodHead, url, nil)
+	option := C.HealthCheckOption{ExpectedStatus: expectedStatus}.WithDefault()
+	if len(options) != 0 {
+		option = options[0].WithDefault()
+	}
+
+	method := http.MethodHead
+	if option.Method == C.HealthCheckMethodGet {
+		method = http.MethodGet
+	}
+
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return
 	}
 	req = req.WithContext(ctx)
+	for key, values := range option.Headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+	if method == http.MethodGet && req.Header.Get("Accept-Encoding") == "" {
+		req.Header.Set("Accept-Encoding", "gzip, br")
+	}
 
 	tlsConfig, err := ca.GetTLSConfig(ca.Option{})
 	if err != nil {
@@ -230,6 +254,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		DialContext: func(context.Context, string, string) (net.Conn, error) {
 			return instance, nil
 		},
+		DisableCompression: true,
 		// from http.DefaultTransport
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
@@ -254,7 +279,11 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		return
 	}
 
+	satisfied, err = healthCheckResponseSatisfied(resp, option)
 	_ = resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	if unifiedDelay {
 		second := time.Now()
@@ -263,7 +292,11 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		secondResp, ignoredErr = client.Do(req)
 		if ignoredErr == nil {
 			resp = secondResp
+			satisfied, err = healthCheckResponseSatisfied(resp, option)
 			_ = resp.Body.Close()
+			if err != nil {
+				return
+			}
 			start = second
 		} else {
 			if strings.HasPrefix(url, "http://") {
@@ -273,9 +306,75 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		}
 	}
 
-	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
+}
+
+func healthCheckResponseSatisfied(resp *http.Response, option C.HealthCheckOption) (bool, error) {
+	if resp == nil {
+		return false, nil
+	}
+	if option.ExpectedStatus != nil && !option.ExpectedStatus.Check(uint16(resp.StatusCode)) {
+		return false, nil
+	}
+	if option.Method != C.HealthCheckMethodGet || option.ExpectedBodyMatch == "" {
+		return true, nil
+	}
+
+	body, err := readHealthCheckBody(resp)
+	if err != nil {
+		return false, err
+	}
+	matcher, err := regexp2.Compile(option.ExpectedBodyMatch, regexp2.None)
+	if err != nil {
+		return false, err
+	}
+	// A user-provided pattern must not be able to block the health-check
+	// worker indefinitely through catastrophic backtracking.
+	matcher.MatchTimeout = 5 * time.Second
+	matched, err := matcher.MatchString(string(body))
+	if err != nil {
+		return false, err
+	}
+	return matched, nil
+}
+
+func readHealthCheckBody(resp *http.Response) (body []byte, err error) {
+	var reader io.Reader = resp.Body
+	encodings := strings.Split(resp.Header.Get("Content-Encoding"), ",")
+	closers := make([]io.Closer, 0, len(encodings))
+	defer func() {
+		for i := len(closers) - 1; i >= 0; i-- {
+			if closeErr := closers[i].Close(); err == nil {
+				err = closeErr
+			}
+		}
+	}()
+	for i := len(encodings) - 1; i >= 0; i-- {
+		switch encoding := strings.ToLower(strings.TrimSpace(encodings[i])); encoding {
+		case "", "identity":
+			continue
+		case "gzip":
+			gzipReader, err := gzip.NewReader(reader)
+			if err != nil {
+				return nil, err
+			}
+			reader = gzipReader
+			closers = append(closers, gzipReader)
+		case "deflate":
+			zlibReader, err := zlib.NewReader(reader)
+			if err != nil {
+				return nil, err
+			}
+			reader = zlibReader
+			closers = append(closers, zlibReader)
+		case "br":
+			reader = brotli.NewReader(reader)
+		default:
+			return nil, fmt.Errorf("unsupported health check content encoding: %s", encoding)
+		}
+	}
+	return io.ReadAll(reader)
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
