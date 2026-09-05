@@ -967,7 +967,15 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	}
 	hc := provider.NewHealthCheck(ps, "", 5000, 0, true, nil)
 	pd, _ := provider.NewCompatibleProvider(provider.ReservedName, ps, hc)
-	providersMap[provider.ReservedName] = pd
+	// Reserved "default" backs the implicit GLOBAL selector. A user proxy-group
+	// of the same name already registered its compatible provider (url/interval)
+	// in the map. Overwriting it drops that health check because loadProvider
+	// only Initial()s map entries, so fallback/url-test interval never starts.
+	if _, exist := providersMap[provider.ReservedName]; exist {
+		log.Warnln("keep proxy group `%s` provider; reserved provider is used by GLOBAL only", provider.ReservedName)
+	} else {
+		providersMap[provider.ReservedName] = pd
+	}
 
 	if !hasGlobal {
 		global, err := outboundgroup.NewSelector(
