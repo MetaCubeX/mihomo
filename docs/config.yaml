@@ -365,6 +365,8 @@ dns:
     ## global，dns 为 rule-providers 中的名为 global 和 dns 规则订阅，
     ## 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
     # "rule-set:global,dns": 8.8.8.8
+    # 配置自定义返回记录, 通过配合fake-ip可透明访问代理网关, 格式(ip4必须): records://{ip4},{ip6}
+    "+.android-gateway.com.cn": records://127.0.0.1,::1
 
 proxies: # socks5
   - name: "socks"

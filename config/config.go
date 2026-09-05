@@ -1268,6 +1268,9 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 			default:
 				err = fmt.Errorf("unsupported RCode type: %s", addr)
 			}
+		case "records":
+			dnsNetType = "records"
+			addr, err = checkRecords(u.Host)
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}
@@ -1294,6 +1297,31 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 		nameservers = append(nameservers, nameserver)
 	}
 	return nameservers, nil
+}
+
+// checkRecords check host is '[ip4],[ip6]', ip4 is required
+func checkRecords(host string) (string, error) {
+	ips := strings.Split(host+",", ",")
+	ip4 := ips[0]
+	ip6 := ips[1]
+
+	log.Debugln("ns-policy records check format => [%s]", host)
+
+	// check ip4 format
+	ip4Addr, err := netip.ParseAddr(ip4)
+	if err != nil || !ip4Addr.Is4() {
+		return "", fmt.Errorf("ns-policy records[0] format error: records://%s", host)
+	}
+
+	// if ip6 not empty, check ip6
+	if len(ip6) > 0 {
+		ip6Addr, err := netip.ParseAddr(ip6)
+		if err != nil || !ip6Addr.Is6() {
+			return "", fmt.Errorf("ns-policy records[1] format error: records://%s", host)
+		}
+	}
+
+	return host, nil
 }
 
 func init() {
