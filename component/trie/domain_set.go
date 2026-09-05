@@ -4,6 +4,7 @@ package trie
 // Modify from https://github.com/openacid/succinct/blob/d4684c35d123f7528b14e03c24327231723db704/sskv.go
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -29,14 +30,83 @@ type qElt struct{ s, e, col int }
 // NewDomainSet creates a new *DomainSet struct, from a DomainTrie.
 func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
 	reserveDomains := make([]string, 0)
-	t.Foreach(func(domain string, data T) bool {
-		reserveDomains = append(reserveDomains, utils.Reverse(domain))
-		return true
-	})
+	path := make([]byte, 0, 64)
+	var visit func(string, *Node[T])
+	visit = func(label string, node *Node[T]) {
+		length := len(path)
+		if length != 0 {
+			path = append(path, '.')
+		}
+		for end := len(label); end > 0; {
+			if label[end-1] < utf8.RuneSelf {
+				path = append(path, label[end-1])
+				end--
+			} else {
+				r, size := utf8.DecodeLastRuneInString(label[:end])
+				path = utf8.AppendRune(path, r)
+				end -= size
+			}
+		}
+		if !node.isEmpty() {
+			if label == dotWildcard {
+				path = append(path, complexWildcardByte)
+				reserveDomains = append(reserveDomains, string(path))
+				path = path[:len(path)-1]
+			} else {
+				reserveDomains = append(reserveDomains, string(path))
+			}
+		}
+		if node.childMap != nil {
+			for key, child := range node.childMap {
+				visit(key, child)
+			}
+		} else if node.childNode != nil {
+			visit(node.childStr, node.childNode)
+		}
+		path = path[:length]
+	}
+	if t.root.childMap != nil {
+		for key, child := range t.root.childMap {
+			visit(key, child)
+		}
+	} else if t.root.childNode != nil {
+		visit(t.root.childStr, t.root.childNode)
+	}
+	return newDomainSetFromKeys(reserveDomains)
+}
+
+type DomainSetBuilder struct{ keys []string }
+
+func NewDomainSetBuilder(capacity int) *DomainSetBuilder {
+	return &DomainSetBuilder{keys: make([]string, 0, capacity*2)}
+}
+
+func (b *DomainSetBuilder) Add(pattern string) error {
+	parts, err := ValidAndSplitDomain(pattern)
+	if err != nil {
+		return err
+	}
+	if parts[0] == complexWildcard {
+		b.keys = append(b.keys, utils.Reverse(strings.Join(parts[1:], domainStep)))
+	}
+	if parts[0] == dotWildcard {
+		parts[0] = complexWildcard
+	}
+	b.keys = append(b.keys, utils.Reverse(strings.Join(parts, domainStep)))
+	return nil
+}
+
+func (b *DomainSetBuilder) Build() *DomainSet {
+	set := newDomainSetFromKeys(b.keys)
+	b.keys = nil
+	return set
+}
+
+func newDomainSetFromKeys(keys []string) *DomainSet {
 	// ensure that the same prefix is continuous
 	// and according to the ascending sequence of length
-	sort.Strings(reserveDomains)
-	keys := reserveDomains
+	sort.Strings(keys)
+	keys = slices.Compact(keys)
 	if len(keys) == 0 {
 		return nil
 	}
@@ -44,27 +114,32 @@ func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
 	lIdx := 0
 
 	queue := []qElt{{0, len(keys), 0}}
-	for i := 0; i < len(queue); i++ {
-		elt := queue[i]
-		if elt.col == len(keys[elt.s]) {
-			elt.s++
-			// a leaf node
-			setBit(&ss.leaves, i, 1)
-		}
-
-		for j := elt.s; j < elt.e; {
-
-			frm := j
-
-			for ; j < elt.e && keys[j][elt.col] == keys[frm][elt.col]; j++ {
+	next := make([]qElt, 0)
+	i := 0
+	for len(queue) != 0 {
+		next = next[:0]
+		for _, elt := range queue {
+			if elt.col == len(keys[elt.s]) {
+				elt.s++
+				setBit(&ss.leaves, i, 1)
 			}
-			queue = append(queue, qElt{frm, j, elt.col + 1})
-			ss.labels = append(ss.labels, keys[frm][elt.col])
-			setBit(&ss.labelBitmap, lIdx, 0)
+
+			for j := elt.s; j < elt.e; {
+
+				frm := j
+
+				for ; j < elt.e && keys[j][elt.col] == keys[frm][elt.col]; j++ {
+				}
+				next = append(next, qElt{frm, j, elt.col + 1})
+				ss.labels = append(ss.labels, keys[frm][elt.col])
+				setBit(&ss.labelBitmap, lIdx, 0)
+				lIdx++
+			}
+			setBit(&ss.labelBitmap, lIdx, 1)
 			lIdx++
+			i++
 		}
-		setBit(&ss.labelBitmap, lIdx, 1)
-		lIdx++
+		queue, next = next, queue
 	}
 
 	ss.init()

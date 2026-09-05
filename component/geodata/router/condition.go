@@ -60,7 +60,7 @@ func (m *succinctDomainMatcher) Count() int {
 }
 
 func NewSuccinctMatcherGroup(domains []*Domain) (DomainMatcher, error) {
-	t := trie.New[struct{}]()
+	builder := trie.NewDomainSetBuilder(len(domains))
 	m := &succinctDomainMatcher{
 		count: len(domains),
 	}
@@ -74,19 +74,17 @@ func NewSuccinctMatcherGroup(domains []*Domain) (DomainMatcher, error) {
 			m.otherMatchers = append(m.otherMatchers, matcher)
 
 		case Domain_Domain:
-			err := t.Insert("+."+d.Value, struct{}{})
-			if err != nil {
+			if err := builder.Add("+." + d.Value); err != nil {
 				return nil, err
 			}
 
 		case Domain_Full:
-			err := t.Insert(d.Value, struct{}{})
-			if err != nil {
+			if err := builder.Add(d.Value); err != nil {
 				return nil, err
 			}
 		}
 	}
-	m.set = t.NewDomainSet()
+	m.set = builder.Build()
 	return m, nil
 }
 
