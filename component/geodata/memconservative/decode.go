@@ -1,6 +1,7 @@
 package memconservative
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -19,75 +20,84 @@ var (
 )
 
 func emitBytes(f io.ReadSeeker, code string) ([]byte, error) {
-	count := 1
-	isInner := false
-	tempContainer := make([]byte, 0, 5)
-
-	var result []byte
-	var advancedN uint64 = 1
-	var geoDataVarintLength, codeVarintLength, varintLenByteLen uint64 = 0, 0, 0
-
-Loop:
+	reader := bufio.NewReaderSize(f, 64*1024)
+	readError := func(err error) error {
+		switch err {
+		case io.EOF:
+			return errCodeNotFound
+		case io.ErrUnexpectedEOF:
+			return errFailedToReadExpectedLenBytes
+		default:
+			return errFailedToReadBytes
+		}
+	}
+	var lengthBytes []byte
+	readLength := func() (uint64, error) {
+		lengthBytes = lengthBytes[:0]
+		for {
+			b, err := reader.ReadByte()
+			if err != nil {
+				return 0, readError(err)
+			}
+			lengthBytes = append(lengthBytes, b)
+			if b < 128 {
+				n, size := protowire.ConsumeVarint(lengthBytes)
+				if size < 0 {
+					return 0, errInvalidGeodataVarintLength
+				}
+				return n, nil
+			}
+		}
+	}
 	for {
-		container := make([]byte, advancedN)
-		bytesRead, err := f.Read(container)
-		if err == io.EOF {
-			return nil, errCodeNotFound
+		b, err := reader.ReadByte()
+		if err != nil {
+			return nil, readError(err)
+		}
+		if b != 10 {
+			return nil, errInvalidGeodataFile
+		}
+		length, err := readLength()
+		if err != nil {
+			return nil, err
+		}
+		b, err = reader.ReadByte()
+		if err != nil {
+			return nil, readError(err)
+		}
+		if b != 10 {
+			return nil, errInvalidGeodataFile
+		}
+		codeLength, err := readLength()
+		if err != nil {
+			return nil, err
+		}
+		name := make([]byte, codeLength)
+		if _, err := io.ReadFull(reader, name); err != nil {
+			return nil, readError(err)
+		}
+		prefixLength := 1 + uint64(len(lengthBytes)) + codeLength
+		if strings.EqualFold(string(name), code) {
+			result := make([]byte, length)
+			n := copy(result, []byte{10})
+			n += copy(result[n:], lengthBytes)
+			n += copy(result[n:], name)
+			if _, err := io.ReadFull(reader, result[n:]); err != nil {
+				return nil, readError(err)
+			}
+			return result, nil
+		}
+		offset := int64(length) - int64(prefixLength)
+		if offset >= 0 && offset <= int64(reader.Buffered()) {
+			_, err = reader.Discard(int(offset))
+		} else {
+			_, err = f.Seek(offset-int64(reader.Buffered()), io.SeekCurrent)
+			reader.Reset(f)
 		}
 		if err != nil {
 			return nil, errFailedToReadBytes
 		}
-		if bytesRead != len(container) {
-			return nil, errFailedToReadExpectedLenBytes
-		}
-
-		switch count {
-		case 1, 3: // data type ((field_number << 3) | wire_type)
-			if container[0] != 10 { // byte `0A` equals to `10` in decimal
-				return nil, errInvalidGeodataFile
-			}
-			advancedN = 1
-			count++
-		case 2, 4: // data length
-			tempContainer = append(tempContainer, container...)
-			if container[0] > 127 { // max one-byte-length byte `7F`(0FFF FFFF) equals to `127` in decimal
-				advancedN = 1
-				goto Loop
-			}
-			lenVarint, n := protowire.ConsumeVarint(tempContainer)
-			if n < 0 {
-				return nil, errInvalidGeodataVarintLength
-			}
-			tempContainer = nil
-			if !isInner {
-				isInner = true
-				geoDataVarintLength = lenVarint
-				advancedN = 1
-			} else {
-				isInner = false
-				codeVarintLength = lenVarint
-				varintLenByteLen = uint64(n)
-				advancedN = codeVarintLength
-			}
-			count++
-		case 5: // data value
-			if strings.EqualFold(string(container), code) {
-				count++
-				offset := -(1 + int64(varintLenByteLen) + int64(codeVarintLength))
-				_, _ = f.Seek(offset, 1)        // back to the start of GeoIP or GeoSite varint
-				advancedN = geoDataVarintLength // the number of bytes to be read in next round
-			} else {
-				count = 1
-				offset := int64(geoDataVarintLength) - int64(codeVarintLength) - int64(varintLenByteLen) - 1
-				_, _ = f.Seek(offset, 1) // skip the unmatched GeoIP or GeoSite varint
-				advancedN = 1            // the next round will be the start of another GeoIPList or GeoSiteList
-			}
-		case 6: // matched GeoIP or GeoSite varint
-			result = container
-			break Loop
-		}
 	}
-	return result, nil
 }
 
 func Decode(filename, code string) ([]byte, error) {
