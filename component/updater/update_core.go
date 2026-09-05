@@ -49,32 +49,51 @@ type CoreUpdater struct {
 
 var DefaultCoreUpdater = CoreUpdater{}
 
-func (u *CoreUpdater) CoreBaseName() string {
-	switch runtime.GOARCH {
+// coreBaseName returns the release asset base name (without version suffix)
+// for the given platform, e.g. "mihomo-android-amd64".
+//
+// Unlike linux/darwin/windows, which publish separate amd64 assets per
+// GOAMD64 (v1/v2/v3), android publishes a single amd64 asset without a
+// GOAMD64 suffix.
+func coreBaseName(goos, goarch, goamd64, goarm, gomips string) string {
+	switch goarch {
 	case "arm":
-		// mihomo-linux-armv5
-		return fmt.Sprintf("mihomo-%s-%sv%s", runtime.GOOS, runtime.GOARCH, features.GOARM)
+		// mihomo-linux-armv5, mihomo-linux-armv6, mihomo-linux-armv7
+		return fmt.Sprintf("mihomo-%s-%sv%s", goos, goarch, goarm)
 	case "arm64":
-		if runtime.GOOS == "android" {
+		if goos == "android" {
 			// mihomo-android-arm64-v8
-			return fmt.Sprintf("mihomo-%s-%s-v8", runtime.GOOS, runtime.GOARCH)
+			return fmt.Sprintf("mihomo-%s-%s-v8", goos, goarch)
 		} else {
 			// mihomo-linux-arm64
-			return fmt.Sprintf("mihomo-%s-%s", runtime.GOOS, runtime.GOARCH)
+			return fmt.Sprintf("mihomo-%s-%s", goos, goarch)
 		}
 	case "mips", "mipsle":
 		// mihomo-linux-mips-hardfloat
-		return fmt.Sprintf("mihomo-%s-%s-%s", runtime.GOOS, runtime.GOARCH, features.GOMIPS)
+		return fmt.Sprintf("mihomo-%s-%s-%s", goos, goarch, gomips)
 	case "amd64":
-		// mihomo-linux-amd64-v1
-		return fmt.Sprintf("mihomo-%s-%s-%s", runtime.GOOS, runtime.GOARCH, features.GOAMD64)
+		if goos == "android" {
+			// mihomo-android-amd64
+			// Unlike linux/darwin/windows, only a single amd64 asset is
+			// published for android, without a GOAMD64 micro-architecture
+			// suffix. Appending one (e.g. mihomo-android-amd64-v1) results in
+			// a 404 when downloading.
+			return fmt.Sprintf("mihomo-%s-%s", goos, goarch)
+		} else {
+			// mihomo-linux-amd64-v1
+			return fmt.Sprintf("mihomo-%s-%s-%s", goos, goarch, goamd64)
+		}
 	default:
 		// mihomo-linux-386
 		// mihomo-linux-mips64
 		// mihomo-linux-riscv64
 		// mihomo-linux-s390x
-		return fmt.Sprintf("mihomo-%s-%s", runtime.GOOS, runtime.GOARCH)
+		return fmt.Sprintf("mihomo-%s-%s", goos, goarch)
 	}
+}
+
+func (u *CoreUpdater) CoreBaseName() string {
+	return coreBaseName(runtime.GOOS, runtime.GOARCH, features.GOAMD64, features.GOARM, features.GOMIPS)
 }
 
 func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) (err error) {
