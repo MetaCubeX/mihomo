@@ -161,7 +161,6 @@ func TestSendSessionControlRetriesTransportEOF(t *testing.T) {
 		"http://example/api/v1/upload?token=session&fin=1",
 		"example",
 		TunnelModeStream,
-		newTunnelAuth("", 0),
 	); err != nil {
 		t.Fatalf("send session control: %v", err)
 	}
@@ -263,7 +262,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 	tests := []struct {
 		name     string
 		pull     func(*TunnelServer, net.Conn, string) (HandleResult, net.Conn, error)
-		push     func(*TunnelServer, net.Conn, string, io.Reader) (HandleResult, net.Conn, error)
+		push     func(*TunnelServer, net.Conn, string, uint64, io.Reader) (HandleResult, net.Conn, error)
 		pushBody string
 	}{
 		{
@@ -286,7 +285,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 
 			appConn, sessionConn := newHalfPipe()
 			server := NewTunnelServer(TunnelServerOptions{PullReadTimeout: 20 * time.Millisecond})
-			server.sessions[token] = &tunnelSession{conn: sessionConn}
+			server.sessions[token] = &tunnelSession{conn: sessionConn, nextUploadSeq: 1}
 			t.Cleanup(func() {
 				_ = appConn.Close()
 				server.sessionClose(token)
@@ -339,7 +338,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 			clientConn, serverConn = net.Pipe()
 			done = make(chan error, 1)
 			go func() {
-				_, _, err := tt.push(server, serverConn, token, strings.NewReader(tt.pushBody))
+				_, _, err := tt.push(server, serverConn, token, 1, strings.NewReader(tt.pushBody))
 				done <- err
 			}()
 			resp, err = http.ReadResponse(bufio.NewReader(clientConn), &http.Request{Method: http.MethodPost})
