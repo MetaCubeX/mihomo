@@ -44,6 +44,7 @@ type streamSplitConn struct {
 	cancel context.CancelFunc
 
 	client     *http.Client
+	owner      *tunnelHTTPTransport
 	pushURL    string
 	pullURL    string
 	finURL     string
@@ -64,6 +65,9 @@ func (c *streamSplitConn) closeWithError(err error) error {
 	}
 
 	bestEffortCloseSession(c.client, c.closeURL, c.headerHost, TunnelModeStream)
+	if c.owner != nil {
+		c.owner.close()
+	}
 	return nil
 }
 
@@ -76,7 +80,7 @@ func dialStreamSplit(ctx context.Context, serverAddress string, opts TunnelDialO
 }
 
 func dialStreamWithClient(ctx context.Context, client *http.Client, dialer *preconnectDialer, target httpClientTarget, opts TunnelDialOptions) (net.Conn, error) {
-	info, err := dialSessionWithClient(ctx, client, dialer, target, TunnelModeStream, opts)
+	info, err := dialSessionWithClient(ctx, client, dialer, target, TunnelModeStream, opts, sessionPreconnectCount())
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +98,7 @@ func newStreamSplitConn(info *sessionDialInfo, opts TunnelDialOptions) (net.Conn
 		cancel:     cancel,
 		readiness:  newTunnelReadiness(),
 		client:     info.client,
+		owner:      info.owner,
 		pushURL:    info.pushURL,
 		pullURL:    info.pullURL,
 		finURL:     info.finURL,
@@ -140,14 +145,12 @@ func (c *streamSplitConn) pullLoop() {
 	const (
 		readChunkSize = 32 * 1024
 		idleBackoff   = 25 * time.Millisecond
-		maxDialRetry  = -1
 		minBackoff    = 10 * time.Millisecond
 		maxBackoff    = 250 * time.Millisecond
 	)
 
 	var (
-		dialRetry int
-		backoff   = minBackoff
+		backoff = minBackoff
 	)
 	buf := make([]byte, readChunkSize)
 	for {
@@ -172,42 +175,29 @@ func (c *streamSplitConn) pullLoop() {
 		resp, err := c.client.Do(req)
 		if err != nil {
 			cancel()
-			if (isDialError(err) || isRetryableHTTPTransportError(err)) && (maxDialRetry < 0 || dialRetry < maxDialRetry) {
-				dialRetry++
+			if isDialError(err) || isRetryableHTTPTransportError(err) {
 				closeIdleConnections(c.client)
-				select {
-				case <-time.After(backoff):
-				case <-c.closed:
+				if err := waitRetry(c.closed, c.closedErr, backoff); err != nil {
 					return
 				}
-				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
+				backoff = nextBackoff(backoff, minBackoff, maxBackoff)
 				continue
 			}
 			_ = c.Close()
 			return
 		}
-		dialRetry = 0
 		backoff = minBackoff
 
 		if resp.StatusCode != http.StatusOK {
-			if isRetryableStatusCode(resp.StatusCode) && (maxDialRetry < 0 || dialRetry < maxDialRetry) {
-				dialRetry++
+			if isRetryableStatusCode(resp.StatusCode) {
 				_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
 				_ = resp.Body.Close()
 				cancel()
 				closeIdleConnections(c.client)
-				select {
-				case <-time.After(backoff):
-				case <-c.closed:
+				if err := waitRetry(c.closed, c.closedErr, backoff); err != nil {
 					return
 				}
-				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
+				backoff = nextBackoff(backoff, minBackoff, maxBackoff)
 				continue
 			}
 			_ = resp.Body.Close()
@@ -218,6 +208,7 @@ func (c *streamSplitConn) pullLoop() {
 		c.readiness.markPullReady()
 
 		readAny := false
+		bodyRetry := false
 		for {
 			n, rerr := resp.Body.Read(buf)
 			if n > 0 {
@@ -245,6 +236,7 @@ func (c *streamSplitConn) pullLoop() {
 				}
 				if isRetryableHTTPTransportError(rerr) {
 					closeIdleConnections(c.client)
+					bodyRetry = true
 					break
 				}
 				_ = c.Close()
@@ -252,6 +244,14 @@ func (c *streamSplitConn) pullLoop() {
 			}
 		}
 		cancel()
+		if bodyRetry {
+			if err := waitRetry(c.closed, c.closedErr, backoff); err != nil {
+				return
+			}
+			backoff = nextBackoff(backoff, minBackoff, maxBackoff)
+			continue
+		}
+		backoff = minBackoff
 		if !readAny {
 			// Avoid tight loop if the server replied quickly with an empty body.
 			select {
@@ -268,7 +268,6 @@ func (c *streamSplitConn) pushLoop() {
 		maxBatchBytes  = 256 * 1024
 		flushInterval  = 5 * time.Millisecond
 		requestTimeout = 20 * time.Second
-		maxDialRetry   = -1
 		minBackoff     = 10 * time.Millisecond
 		maxBackoff     = 250 * time.Millisecond
 	)
@@ -297,7 +296,7 @@ func (c *streamSplitConn) pushLoop() {
 		}
 		payload := append([]byte(nil), buf.Bytes()...)
 
-		if err := retryDial(c.closed, c.closedErr, maxDialRetry, minBackoff, maxBackoff, func() error {
+		if err := retryPersistent(c.closed, c.closedErr, minBackoff, maxBackoff, func() error {
 			reqCtx, cancel := context.WithTimeout(c.ctx, requestTimeout)
 			defer cancel()
 			req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, requestURL, bytes.NewReader(payload))
@@ -331,7 +330,6 @@ func (c *streamSplitConn) pushLoop() {
 		return nil
 	}
 
-	flushWithRetry := flush
 	resetTimer(timer, flushInterval)
 
 	for {
@@ -341,7 +339,7 @@ func (c *streamSplitConn) pushLoop() {
 				continue
 			}
 			if buf.Len()+len(b) > maxBatchBytes {
-				if err := flushWithRetry(); err != nil {
+				if err := flush(); err != nil {
 					fail(fmt.Errorf("stream push flush failed: %w", err))
 					return
 				}
@@ -349,14 +347,14 @@ func (c *streamSplitConn) pushLoop() {
 			}
 			_, _ = buf.Write(b)
 			if buf.Len() >= maxBatchBytes {
-				if err := flushWithRetry(); err != nil {
+				if err := flush(); err != nil {
 					fail(fmt.Errorf("stream push flush failed: %w", err))
 					return
 				}
 				resetTimer(timer, flushInterval)
 			}
 		case <-timer.C:
-			if err := flushWithRetry(); err != nil {
+			if err := flush(); err != nil {
 				fail(fmt.Errorf("stream push flush failed: %w", err))
 				return
 			}
@@ -370,14 +368,14 @@ func (c *streamSplitConn) pushLoop() {
 						continue
 					}
 					if buf.Len()+len(b) > maxBatchBytes {
-						if err := flushWithRetry(); err != nil {
+						if err := flush(); err != nil {
 							fail(fmt.Errorf("stream push flush failed: %w", err))
 							return
 						}
 					}
 					_, _ = buf.Write(b)
 				default:
-					if err := flushWithRetry(); err != nil {
+					if err := flush(); err != nil {
 						fail(fmt.Errorf("stream push flush failed: %w", err))
 						return
 					}

@@ -76,9 +76,8 @@ func canonicalHeaderHost(urlHost, scheme string) string {
 }
 
 func sessionPreconnectCount() int {
-	// Three connections are enough to overlap authorize, pull and the first
-	// upload. Mux used to wait for a fourth "spare" connection before it was
-	// usable, which added a full WAN RTT to every split-tunnel session.
+	// Three connections overlap authorization, the initial pull, and the first
+	// upload without waiting for another WAN round trip before mux is usable.
 	return tunnelPreconnectCount
 }
 
@@ -157,6 +156,7 @@ func parseEarlyDataQuery(u *url.URL) ([]byte, error) {
 
 type sessionDialInfo struct {
 	client     *http.Client
+	owner      *tunnelHTTPTransport
 	pushURL    string
 	pullURL    string
 	finURL     string
@@ -189,6 +189,18 @@ func (t *tunnelHTTPTransport) close() {
 	}
 	if t.dialer != nil {
 		t.dialer.close()
+	}
+}
+
+func (t *tunnelHTTPTransport) clearIdle() {
+	if t == nil {
+		return
+	}
+	if t.transport != nil {
+		t.transport.CloseIdleConnections()
+	}
+	if t.dialer != nil {
+		t.dialer.clearIdle()
 	}
 }
 
@@ -266,10 +278,21 @@ func dialSession(ctx context.Context, serverAddress string, opts TunnelDialOptio
 	if err != nil {
 		return nil, err
 	}
-	return dialSessionWithClient(ctx, httpClient.client, httpClient.transport.dialer, target, mode, opts)
+	// One-shot callers do not retain the transport long enough to benefit from
+	// speculative sockets. Avoid creating a connection burst during concurrent
+	// authorization; reused TunnelClients keep the three-connection fast path.
+	info, err := dialSessionWithClient(ctx, httpClient.client, httpClient.transport.dialer, target, mode, opts, 0)
+	if err != nil {
+		httpClient.transport.close()
+		return nil, err
+	}
+	// The one-shot DialTunnel owns its HTTP transport. Reused TunnelClients
+	// leave ownership nil so closing one session cannot tear down its siblings.
+	info.owner = httpClient.transport
+	return info, nil
 }
 
-func dialSessionWithClient(ctx context.Context, client *http.Client, dialer *preconnectDialer, target httpClientTarget, mode TunnelMode, opts TunnelDialOptions) (*sessionDialInfo, error) {
+func dialSessionWithClient(ctx context.Context, client *http.Client, dialer *preconnectDialer, target httpClientTarget, mode TunnelMode, opts TunnelDialOptions, preconnectCount int) (*sessionDialInfo, error) {
 	if client == nil {
 		return nil, errors.New("httpmask: HTTP client is nil")
 	}
@@ -295,13 +318,36 @@ func dialSessionWithClient(ctx context.Context, client *http.Client, dialer *pre
 	// Keeping this to three avoids adding an extra WAN RTT before mux can open
 	// its first logical stream.
 	if dialer != nil {
-		cancelPreconnect := dialer.preconnect(ctx, scheme == "https", sessionPreconnectCount())
+		cancelPreconnect := dialer.preconnect(ctx, scheme == "https", preconnectCount)
 		defer cancelPreconnect()
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	var resp *http.Response
+	backoff := 50 * time.Millisecond
+	for attempt := 0; attempt < 3; attempt++ {
+		resp, err = client.Do(req)
+		if err == nil {
+			break
+		}
+		if attempt == 2 || !isRetryableHTTPTransportError(err) {
+			return nil, err
+		}
+		closeIdleConnections(client)
+		if retryErr := waitRetry(ctx.Done(), nil, backoff); retryErr != nil {
+			return nil, retryErr
+		}
+		backoff = nextBackoff(backoff, 50*time.Millisecond, 500*time.Millisecond)
+		// A request with a consumed transport connection must be rebuilt before
+		// retrying; GET authorization is idempotent.
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, authorizeURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Host = headerHost
+		applyTunnelHeaders(req.Header, headerHost, mode)
+	}
+	if resp == nil {
+		return nil, errors.New("httpmask: authorization returned no response")
 	}
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
 	_ = resp.Body.Close()
@@ -353,7 +399,10 @@ func sendSessionControl(client *http.Client, controlURL, headerHost string, mode
 	closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var lastErr error
+	var (
+		lastErr error
+		backoff = 50 * time.Millisecond
+	)
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		req, err := http.NewRequestWithContext(closeCtx, http.MethodPost, controlURL, nil)
 		if err != nil {
@@ -365,7 +414,11 @@ func sendSessionControl(client *http.Client, controlURL, headerHost string, mode
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
-			if closeCtx.Err() == nil && (isDialError(err) || isRetryableHTTPTransportError(err)) {
+			if closeCtx.Err() == nil && (isDialError(err) || isRetryableHTTPTransportError(err) || errors.Is(err, context.DeadlineExceeded)) && attempt+1 < maxAttempts {
+				if err := waitRetry(closeCtx.Done(), nil, backoff); err != nil {
+					return err
+				}
+				backoff *= 2
 				continue
 			}
 			return err
@@ -377,14 +430,23 @@ func sendSessionControl(client *http.Client, controlURL, headerHost string, mode
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			if attempt > 0 && (resp.StatusCode == http.StatusForbidden ||
-				resp.StatusCode == http.StatusNotFound ||
-				resp.StatusCode == http.StatusGone) {
+			if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 				return nil
 			}
-			return fmt.Errorf("session control bad status: %s", resp.Status)
+			lastErr = statusError(resp)
+			if isRetryableStatusCode(resp.StatusCode) && attempt+1 < maxAttempts {
+				if err := waitRetry(closeCtx.Done(), nil, backoff); err != nil {
+					return err
+				}
+				backoff *= 2
+				continue
+			}
+			return lastErr
 		}
 		return nil
+	}
+	if lastErr == nil {
+		lastErr = errors.New("session control failed")
 	}
 	return lastErr
 }

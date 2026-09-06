@@ -57,15 +57,6 @@ func normalizeTunnelMode(mode string) TunnelMode {
 	}
 }
 
-func multiplexEnabled(mode string) bool {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "", "auto", "on":
-		return true
-	default:
-		return false
-	}
-}
-
 type HandleResult int
 
 const (
@@ -84,8 +75,6 @@ type TunnelDialOptions struct {
 	AuthKey        string
 	EarlyHandshake *ClientEarlyHandshake
 	Upgrade        func(raw net.Conn) (net.Conn, error)
-	// Multiplex controls reuse of HTTP keep-alive / HTTP/2 connections.
-	Multiplex string
 	// DialContext is required so embedders can preserve their routing and proxy behavior.
 	DialContext func(context.Context, string, string) (net.Conn, error)
 }
@@ -119,6 +108,14 @@ func (c *TunnelClient) CloseIdleConnections() {
 		return
 	}
 	c.client.client.CloseIdleConnections()
+	c.client.transport.clearIdle()
+}
+
+// Close releases the client and its preconnected sockets permanently.
+func (c *TunnelClient) Close() {
+	if c == nil || c.client == nil {
+		return
+	}
 	c.client.transport.close()
 }
 
@@ -138,7 +135,7 @@ func (c *TunnelClient) DialTunnel(ctx context.Context, opts TunnelDialOptions) (
 	case TunnelModePoll:
 		return dialPollWithClient(ctx, client, c.client.transport.dialer, c.target, opts)
 	case TunnelModeAuto:
-		streamCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		streamCtx, cancel := autoProbeContext(ctx)
 		conn, streamErr := dialStreamWithClient(streamCtx, client, c.client.transport.dialer, c.target, opts)
 		cancel()
 		if streamErr == nil {
@@ -171,7 +168,7 @@ func DialTunnel(ctx context.Context, serverAddress string, opts TunnelDialOption
 	case TunnelModeWS:
 		return dialWS(ctx, serverAddress, opts)
 	case TunnelModeAuto:
-		streamCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		streamCtx, cancel := autoProbeContext(ctx)
 		conn, streamErr := dialStreamFn(streamCtx, serverAddress, opts)
 		cancel()
 		if streamErr == nil {
@@ -185,6 +182,15 @@ func DialTunnel(ctx context.Context, serverAddress string, opts TunnelDialOption
 	default:
 		return dialStreamFn(ctx, serverAddress, opts)
 	}
+}
+
+const autoProbeTimeout = 20 * time.Second
+
+func autoProbeContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, autoProbeTimeout)
 }
 
 var (

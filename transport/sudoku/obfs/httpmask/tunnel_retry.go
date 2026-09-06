@@ -117,7 +117,7 @@ func resetTimer(t *time.Timer, d time.Duration) {
 	t.Reset(d)
 }
 
-func retryDial(closed <-chan struct{}, closedErr func() error, maxRetry int, minBackoff, maxBackoff time.Duration, fn func() error) error {
+func retryPersistent(closed <-chan struct{}, closedErr func() error, minBackoff, maxBackoff time.Duration, fn func() error) error {
 	if minBackoff < 0 {
 		minBackoff = 0
 	}
@@ -125,10 +125,10 @@ func retryDial(closed <-chan struct{}, closedErr func() error, maxRetry int, min
 		maxBackoff = minBackoff
 	}
 	backoff := minBackoff
-	for tries := 0; ; tries++ {
+	for {
 		if err := fn(); err == nil {
 			return nil
-		} else if (isDialError(err) || isRetryableHTTPTransportError(err)) && (maxRetry < 0 || tries < maxRetry) {
+		} else if isDialError(err) || isRetryableHTTPTransportError(err) {
 			select {
 			case <-time.After(backoff):
 			case <-closed:
@@ -146,4 +146,31 @@ func retryDial(closed <-chan struct{}, closedErr func() error, maxRetry int, min
 			return err
 		}
 	}
+}
+
+func waitRetry(closed <-chan struct{}, closedErr func() error, backoff time.Duration) error {
+	if backoff < 0 {
+		backoff = 0
+	}
+	timer := time.NewTimer(backoff)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-closed:
+		if closedErr != nil {
+			return closedErr()
+		}
+		return io.ErrClosedPipe
+	}
+}
+
+func nextBackoff(current, min, max time.Duration) time.Duration {
+	if current < min {
+		current = min
+	}
+	if current >= max/2 {
+		return max
+	}
+	return current * 2
 }

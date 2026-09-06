@@ -243,6 +243,25 @@ func (p *preparedConnPool) close() {
 	}
 }
 
+func (p *preparedConnPool) clearIdle() {
+	if p == nil {
+		return
+	}
+
+	p.mu.Lock()
+	ready := p.ready
+	p.ready = nil
+	p.notifyLocked()
+	p.mu.Unlock()
+
+	for _, item := range ready {
+		if item != nil && item.conn != nil {
+			item.releaseSlot()
+			_ = item.conn.Close()
+		}
+	}
+}
+
 type preconnectDialer struct {
 	urlHost    string
 	dialAddr   string
@@ -343,5 +362,11 @@ func (d *preconnectDialer) dialTLSFresh(ctx context.Context, network, addr strin
 func (d *preconnectDialer) close() {
 	if d != nil {
 		d.pool.close()
+	}
+}
+
+func (d *preconnectDialer) clearIdle() {
+	if d != nil {
+		d.pool.clearIdle()
 	}
 }

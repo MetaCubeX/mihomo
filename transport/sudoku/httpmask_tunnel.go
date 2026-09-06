@@ -150,7 +150,6 @@ func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *Protocol
 		AuthKey:        ClientAEADSeed(cfg.Key),
 		EarlyHandshake: earlyHandshake,
 		Upgrade:        upgrade,
-		Multiplex:      cfg.MultiplexMode(),
 		DialContext:    dial,
 	})
 }

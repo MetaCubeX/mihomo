@@ -75,11 +75,15 @@ type TunnelServer struct {
 	sessions map[string]*tunnelSession
 }
 
+const tunnelHeaderReadTimeout = 15 * time.Second
+
 type tunnelSession struct {
 	conn           net.Conn
 	lastActive     time.Time
 	uplinkClosed   bool
 	downlinkClosed bool
+	closed         chan struct{}
+	closeOnce      sync.Once
 
 	uploadMu        sync.Mutex
 	nextUploadSeq   uint64
@@ -173,8 +177,11 @@ func (s *TunnelServer) HandleConn(rawConn net.Conn) (HandleResult, net.Conn, err
 		return HandleDone, nil, nil
 	}
 
-	// Small header read deadline to avoid stalling Accept loops. The actual Sudoku handshake has its own deadlines.
-	_ = rawConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	// Preconnected HTTP sockets may wait for the client to assign their first
+	// request after the TCP/TLS handshake. Keep this bounded, but longer than
+	// the client's preconnect lease so high-RTT links do not turn a prepared
+	// socket into a reset connection before net/http can use it.
+	_ = rawConn.SetReadDeadline(time.Now().Add(tunnelHeaderReadTimeout))
 	var first [4]byte
 	n, err := io.ReadFull(rawConn, first[:])
 	if err != nil {
@@ -756,12 +763,16 @@ func (s *TunnelServer) sessionAuthorize(rawConn net.Conn, headerBytes, buffered,
 	}
 
 	s.mu.Lock()
-	s.sessions[token] = &tunnelSession{conn: c2, lastActive: time.Now(), nextUploadSeq: 1}
+	s.sessions[token] = &tunnelSession{conn: c2, closed: make(chan struct{}), lastActive: time.Now(), nextUploadSeq: 1}
 	s.mu.Unlock()
 
 	go s.reapLater(token)
 
-	_ = writeTokenHTTPResponse(rawConn, token, responsePayload)
+	if err := writeTokenHTTPResponse(rawConn, token, responsePayload); err != nil {
+		s.sessionClose(token)
+		_ = rawConn.Close()
+		return HandleDone, nil, err
+	}
 	_ = rawConn.Close()
 	return HandleStartTunnel, outConn, nil
 }
@@ -784,10 +795,21 @@ func (s *TunnelServer) reapLater(token string) {
 	defer timer.Stop()
 
 	for {
-		<-timer.C
-
 		s.mu.Lock()
 		sess, ok := s.sessions[token]
+		s.mu.Unlock()
+		if !ok {
+			return
+		}
+
+		select {
+		case <-timer.C:
+		case <-sess.closed:
+			return
+		}
+
+		s.mu.Lock()
+		sess, ok = s.sessions[token]
 		if !ok {
 			s.mu.Unlock()
 			return
@@ -867,6 +889,9 @@ func (s *TunnelServer) sessionClose(token string) {
 	}
 	s.mu.Unlock()
 	if ok {
+		if sess.closed != nil {
+			sess.closeOnce.Do(func() { close(sess.closed) })
+		}
 		sess.pullMu.Lock()
 		lease := sess.pull
 		sess.pullMu.Unlock()
@@ -903,6 +928,9 @@ func (s *TunnelServer) sessionHalfClose(token string, direction sessionDirection
 	}
 	if sess.uplinkClosed && sess.downlinkClosed {
 		delete(s.sessions, token)
+		if sess.closed != nil {
+			sess.closeOnce.Do(func() { close(sess.closed) })
+		}
 	}
 	conn = sess.conn
 	s.mu.Unlock()
@@ -1075,36 +1103,27 @@ func (s *TunnelServer) pollPull(rawConn net.Conn, token string) (HandleResult, n
 }
 
 func (s *TunnelServer) beginSessionPull(token string, sess *tunnelSession, rawConn net.Conn) (*sessionPullLease, bool) {
-	if !s.sessionTouch(token, sess) {
-		return nil, false
-	}
+	for {
+		if !s.sessionTouch(token, sess) {
+			return nil, false
+		}
 
-	sess.pullMu.Lock()
-	previous := sess.pull
-	if previous != nil {
+		sess.pullMu.Lock()
+		previous := sess.pull
+		if previous == nil {
+			lease := newSessionPullLease(rawConn)
+			sess.pull = lease
+			sess.pullMu.Unlock()
+			return lease, true
+		}
 		previous.stop()
-	}
-	sess.pullMu.Unlock()
+		sess.pullMu.Unlock()
 
-	if previous != nil {
 		// Only one goroutine may read a session pipe. A new pull takes over a
 		// stale CDN response by waking its pending read before it starts.
 		_ = sess.conn.SetReadDeadline(time.Now())
 		<-previous.done
 	}
-
-	if !s.sessionTouch(token, sess) {
-		return nil, false
-	}
-
-	sess.pullMu.Lock()
-	defer sess.pullMu.Unlock()
-	if !s.sessionTouch(token, sess) {
-		return nil, false
-	}
-	lease := newSessionPullLease(rawConn)
-	sess.pull = lease
-	return lease, true
 }
 
 func (s *TunnelServer) endSessionPull(token string, sess *tunnelSession, lease *sessionPullLease) {
