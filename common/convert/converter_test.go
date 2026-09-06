@@ -1,6 +1,7 @@
 package convert_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/metacubex/mihomo/adapter"
@@ -8,6 +9,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestConvertsV2Ray_duplicateNames(t *testing.T) {
+	uri := strings.Join([]string{
+		"trojan://pwd@example.com:443#name",
+		"trojan://pwd@example.com:443#name-01",
+		"trojan://pwd@example.com:443#name",
+		"trojan://pwd@example.com:443#name",
+	}, "\n")
+
+	proxies, err := ConvertsV2Ray([]byte(uri))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 4)
+	assert.Equal(t, []string{"name", "name-01", "name-02", "name-03"}, []string{
+		proxies[0]["name"].(string),
+		proxies[1]["name"].(string),
+		proxies[2]["name"].(string),
+		proxies[3]["name"].(string),
+	})
+}
 
 // https://v2.hysteria.network/zh/docs/developers/URI-Scheme/
 func TestConvertsV2Ray_normal(t *testing.T) {
