@@ -94,20 +94,3 @@ func WaitTunnelReady(ctx context.Context, conn net.Conn) error {
 	}
 	return nil
 }
-
-func tryCloseRead(target any) error {
-	if closer, ok := target.(interface{ CloseRead() error }); ok {
-		return closer.CloseRead()
-	}
-	return nil
-}
-
-func tryCloseWrite(target any) error {
-	if closer, ok := target.(interface{ CloseWrite() error }); ok {
-		return closer.CloseWrite()
-	}
-	if closer, ok := target.(interface{ Close() error }); ok {
-		return closer.Close()
-	}
-	return nil
-}

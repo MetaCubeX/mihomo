@@ -70,7 +70,6 @@ func TestTunnelHalfClosePreservesResponse(t *testing.T) {
 			conn, err := tt.dial(ctx, addr, TunnelDialOptions{
 				Mode:        tt.name,
 				DialContext: (&net.Dialer{}).DialContext,
-				Multiplex:   "auto",
 			})
 			if err != nil {
 				t.Fatalf("dial: %v", err)
@@ -161,7 +160,6 @@ func TestSendSessionControlRetriesTransportEOF(t *testing.T) {
 		"http://example/api/v1/upload?token=session&fin=1",
 		"example",
 		TunnelModeStream,
-		newTunnelAuth("", 0),
 	); err != nil {
 		t.Fatalf("send session control: %v", err)
 	}
@@ -223,6 +221,54 @@ func TestTunnelServerSessionControlIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestTunnelServerPullTakeoverSerializesReaders(t *testing.T) {
+	const token = "pull-takeover"
+
+	appConn, sessionConn := newHalfPipe()
+	defer appConn.Close()
+	defer sessionConn.Close()
+
+	server := NewTunnelServer(TunnelServerOptions{})
+	sess := &tunnelSession{conn: sessionConn, closed: make(chan struct{})}
+	server.sessions[token] = sess
+
+	firstClient, firstServer := net.Pipe()
+	defer firstClient.Close()
+	defer firstServer.Close()
+	first, ok := server.beginSessionPull(token, sess, firstServer)
+	if !ok || first == nil {
+		t.Fatal("first pull did not acquire a lease")
+	}
+
+	secondClient, secondServer := net.Pipe()
+	defer secondClient.Close()
+	defer secondServer.Close()
+	secondDone := make(chan *sessionPullLease, 1)
+	go func() {
+		lease, _ := server.beginSessionPull(token, sess, secondServer)
+		secondDone <- lease
+	}()
+
+	select {
+	case lease := <-secondDone:
+		if lease != nil {
+			t.Fatal("second pull acquired the lease before takeover completed")
+		}
+	case <-time.After(25 * time.Millisecond):
+	}
+
+	server.endSessionPull(token, sess, first)
+	select {
+	case second := <-secondDone:
+		if second == nil {
+			t.Fatal("second pull did not acquire the lease after takeover")
+		}
+		server.endSessionPull(token, sess, second)
+	case <-time.After(time.Second):
+		t.Fatal("second pull remained blocked after first lease ended")
+	}
+}
+
 func startTestTunnelServer(t testing.TB, server *TunnelServer) (string, func(), <-chan net.Conn) {
 	t.Helper()
 
@@ -263,7 +309,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 	tests := []struct {
 		name     string
 		pull     func(*TunnelServer, net.Conn, string) (HandleResult, net.Conn, error)
-		push     func(*TunnelServer, net.Conn, string, io.Reader) (HandleResult, net.Conn, error)
+		push     func(*TunnelServer, net.Conn, string, uint64, io.Reader) (HandleResult, net.Conn, error)
 		pushBody string
 	}{
 		{
@@ -286,7 +332,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 
 			appConn, sessionConn := newHalfPipe()
 			server := NewTunnelServer(TunnelServerOptions{PullReadTimeout: 20 * time.Millisecond})
-			server.sessions[token] = &tunnelSession{conn: sessionConn}
+			server.sessions[token] = &tunnelSession{conn: sessionConn, nextUploadSeq: 1}
 			t.Cleanup(func() {
 				_ = appConn.Close()
 				server.sessionClose(token)
@@ -339,7 +385,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 			clientConn, serverConn = net.Pipe()
 			done = make(chan error, 1)
 			go func() {
-				_, _, err := tt.push(server, serverConn, token, strings.NewReader(tt.pushBody))
+				_, _, err := tt.push(server, serverConn, token, 1, strings.NewReader(tt.pushBody))
 				done <- err
 			}()
 			resp, err = http.ReadResponse(bufio.NewReader(clientConn), &http.Request{Method: http.MethodPost})
