@@ -132,7 +132,7 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		}
 	} else if len(config.TLSAuthKey) > 0 {
 		var err error
-		crypt, err = NewTLSAuth(config.TLSAuthKey, config.KeyDirection)
+		crypt, err = NewTLSAuth(config.TLSAuthKey, config.KeyDirection, config.Auth)
 		if err != nil {
 			return nil, err
 		}

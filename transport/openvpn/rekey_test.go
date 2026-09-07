@@ -313,7 +313,9 @@ func TestRealTLSRekeySurvivesExtendedAuthPending(t *testing.T) {
 				config.TLSAuthKey = staticKey
 				config.KeyDirection = "1"
 				var err error
-				serverCrypt, err = NewTLSAuth(staticKey, "0")
+				// The simulated server must wrap with the digest the client was
+				// configured with, as a real server does through --auth.
+				serverCrypt, err = NewTLSAuth(staticKey, "0", config.Auth)
 				if err != nil {
 					t.Fatal(err)
 				}
