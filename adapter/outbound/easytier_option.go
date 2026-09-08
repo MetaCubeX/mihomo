@@ -18,8 +18,6 @@ type EasyTierOption struct {
 	ProxyNetworks       []string `proxy:"proxy-networks,omitempty"`
 	InstanceName        string   `proxy:"instance-name,omitempty"`
 	StateDir            string   `proxy:"state-dir,omitempty"`
-	Config              string   `proxy:"config,omitempty"`
-	ConfigFile          string   `proxy:"config-file,omitempty"`
 	UDP                 bool     `proxy:"udp,omitempty"`
 	AcceptDNS           *bool    `proxy:"accept-dns,omitempty"`
 	EnableExitNode      *bool    `proxy:"enable-exit-node,omitempty"`

@@ -50,17 +50,17 @@ func TestRenderTOMLExplicitEmptyListenersWithPeers(t *testing.T) {
 }
 
 func TestApplyRequiredFlagsInjectsNoTun(t *testing.T) {
-	got := ApplyRequiredFlags("[network_identity]\nnetwork_name = \"n\"\n", false)
+	got := ApplyRequiredFlags("[network_identity]\nnetwork_name = \"n\"\n")
 	if !strings.Contains(got, "[flags]") || !strings.Contains(got, "no_tun = true") {
 		t.Fatalf("did not inject no_tun:\n%s", got)
 	}
-	if strings.Contains(got, "bind_device") {
-		t.Fatalf("raw config should not force bind_device:\n%s", got)
+	if !strings.Contains(got, "bind_device = false") {
+		t.Fatalf("missing bind_device:\n%s", got)
 	}
 }
 
 func TestApplyRequiredFlagsReplacesNoTun(t *testing.T) {
-	got := ApplyRequiredFlags("[flags]\nno_tun = false\nmtu = 1200\n", true)
+	got := ApplyRequiredFlags("[flags]\nno_tun = false\nmtu = 1200\n")
 	if !strings.Contains(got, "no_tun = true") {
 		t.Fatalf("did not replace no_tun:\n%s", got)
 	}
@@ -122,7 +122,7 @@ func TestRenderTOMLMultiplePeers(t *testing.T) {
 }
 
 func TestApplyRequiredFlagsSectionComment(t *testing.T) {
-	got := ApplyRequiredFlags("[flags] # tun flags\nno_tun = false\nmtu = 1200\n", false)
+	got := ApplyRequiredFlags("[flags] # tun flags\nno_tun = false\nmtu = 1200\n")
 	if strings.Count(got, "[flags]") != 1 {
 		t.Fatalf("duplicate flags table:\n%s", got)
 	}
@@ -132,7 +132,7 @@ func TestApplyRequiredFlagsSectionComment(t *testing.T) {
 }
 
 func TestApplyRequiredFlagsQuotedKey(t *testing.T) {
-	got := ApplyRequiredFlags("[flags]\n\"no_tun\" = false\n", false)
+	got := ApplyRequiredFlags("[flags]\n\"no_tun\" = false\n")
 	if strings.Count(got, "no_tun") != 1 {
 		t.Fatalf("duplicate no_tun:\n%s", got)
 	}
@@ -173,43 +173,17 @@ func TestRenderTOMLStaticIPv4OmitsDHCP(t *testing.T) {
 	}
 }
 
-func TestTLDDNSZoneFromTOML(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{
-			name: "flags table",
-			in:   "[flags]\n" + `tld_dns_zone = "overlay.example."` + "\n",
-			want: "overlay.example.",
-		},
-		{
-			name: "quoted key",
-			in:   "[flags]\n" + `"tld_dns_zone" = "custom.net"` + "\n",
-			want: "custom.net",
-		},
-		{
-			name: "dotted key",
-			in:   `flags.tld_dns_zone = "mesh.local"` + "\n",
-			want: "mesh.local",
-		},
-		{
-			name: "inline table",
-			in:   `flags = {no_tun = true, tld_dns_zone = "lan.et"}` + "\n",
-			want: "lan.et",
-		},
-		{
-			name: "other section ignored",
-			in:   "[network_identity]\n" + `tld_dns_zone = "wrong.net"` + "\n[flags]\nno_tun = true\n",
-			want: "",
-		},
+func TestRenderTOMLWritesTLDDNSZone(t *testing.T) {
+	toml, err := Config{
+		NetworkName:   "example",
+		NetworkSecret: "secret",
+		Peers:         []string{"tcp://192.0.2.10:11010"},
+		TLDDNSZone:    "overlay.example.",
+	}.RenderTOML()
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := TLDDNSZoneFromTOML(tt.in); got != tt.want {
-				t.Fatalf("got %q want %q", got, tt.want)
-			}
-		})
+	if !strings.Contains(toml, `tld_dns_zone = "overlay.example."`) {
+		t.Fatalf("missing tld_dns_zone:\n%s", toml)
 	}
 }

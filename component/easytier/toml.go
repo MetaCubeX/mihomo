@@ -3,7 +3,6 @@ package easytier
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -134,100 +133,16 @@ func (c Config) RenderTOML() (string, error) {
 	return encoded.String(), nil
 }
 
-// ReadFile returns the contents of an EasyTier TOML file.
-func ReadFile(path string) (string, error) {
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("easytier: read config-file: %w", err)
+func requiredFlags() []requiredFlag {
+	return []requiredFlag{
+		{key: "no_tun", value: "true"},
+		{key: "bind_device", value: "false"},
 	}
-	text := strings.TrimSpace(string(contents))
-	if text == "" {
-		return "", fmt.Errorf("easytier: config-file %q is empty", path)
-	}
-	return text, nil
 }
 
-// TLDDNSZoneFromTOML reads flags.tld_dns_zone from EasyTier TOML.
-func TLDDNSZoneFromTOML(configTOML string) string {
-	section := ""
-	for _, line := range strings.Split(configTOML, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		if isTOMLSection(trimmed) {
-			section = sectionName(trimmed)
-			continue
-		}
-		key, value, ok := tomlAssignment(trimmed)
-		if !ok {
-			continue
-		}
-		if key == "flags.tld_dns_zone" || section == "flags" && key == "tld_dns_zone" {
-			return unquoteTOMLString(value)
-		}
-		if key == "flags" {
-			if zone := tldDNSZoneFromInlineTable(value); zone != "" {
-				return zone
-			}
-		}
-	}
-	return ""
-}
-
-func tomlAssignment(trimmed string) (key, value string, ok bool) {
-	idx := strings.IndexByte(trimmed, '=')
-	if idx < 0 {
-		return "", "", false
-	}
-	key = strings.Trim(strings.TrimSpace(trimmed[:idx]), `"'`)
-	value = strings.TrimSpace(trimmed[idx+1:])
-	if key == "" {
-		return "", "", false
-	}
-	return key, value, true
-}
-
-func tldDNSZoneFromInlineTable(value string) string {
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "{") {
-		return ""
-	}
-	body := strings.TrimSuffix(strings.TrimPrefix(value, "{"), "}")
-	for _, part := range strings.Split(body, ",") {
-		key, field, ok := tomlAssignment(strings.TrimSpace(part))
-		if ok && key == "tld_dns_zone" {
-			return unquoteTOMLString(field)
-		}
-	}
-	return ""
-}
-
-func unquoteTOMLString(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if strings.HasPrefix(value, `"`) {
-		var decoded string
-		if err := json.Unmarshal([]byte(value), &decoded); err == nil {
-			return decoded
-		}
-	}
-	return strings.Trim(value, `"'`)
-}
-
-func requiredFlags(bindDeviceFalse bool) []requiredFlag {
-	flags := []requiredFlag{{key: "no_tun", value: "true"}}
-	if bindDeviceFalse {
-		flags = append(flags, requiredFlag{key: "bind_device", value: "false"})
-	}
-	return flags
-}
-
-// ApplyRequiredFlags forces no_tun, and bind_device=false when requested.
-func ApplyRequiredFlags(configTOML string, bindDeviceFalse bool) string {
-	flags := requiredFlags(bindDeviceFalse)
+// ApplyRequiredFlags forces no_tun and bind_device=false.
+func ApplyRequiredFlags(configTOML string) string {
+	flags := requiredFlags()
 	required := make(map[string]string, len(flags))
 	for _, flag := range flags {
 		required[flag.key] = flag.value

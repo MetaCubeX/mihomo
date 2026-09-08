@@ -314,6 +314,7 @@ dns:
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
     # - ts://tailscale # 使用指定 Tailscale 出站的 DNS 配置查询
+    # - et://easytier # 仅解析 overlay A/PTR；建议放在 nameserver-policy
     # - '8.8.8.8#RULES' # 效果同respect-rules，但仅对该服务器生效
     # - '8.8.8.8#en0' # 兼容指定 DNS 出口网卡
 
@@ -355,9 +356,6 @@ dns:
 
   # 配置查询域名使用的 DNS 服务器
   nameserver-policy:
-    # EasyTier 仅解析 overlay A/PTR；不要放入 nameserver 主列表，以免公网查询被 NXDOMAIN 抢先返回
-    # '+.et.net': et://easytier # 修改 tld-dns-zone 后需同步修改此规则
-    # '+.144.10.in-addr.arpa': et://easytier # 按实际 overlay 网段配置 PTR 区域
     #   'www.baidu.com': '114.114.114.114'
     #   '+.internal.crop.com': '10.0.0.1'
     "geosite:cn,private,apple":
@@ -1397,7 +1395,6 @@ proxies: # socks5
 
   # easytier
   # overlay 仅支持 IPv4；ip-version 只影响底层 peer 连接，不启用 overlay IPv6
-  # WASM 吞吐低于原生 EasyTier，实际性能取决于设备和网络，部署前请实测
   - name: "easytier"
     type: easytier
     network-name: example
@@ -1415,13 +1412,6 @@ proxies: # socks5
     # proxy-networks: ["10.0.0.0/24"]
     # instance-name: mihomo-easytier
     # state-dir: ./easytier # 默认 easytier/<name>，用于持久化 instance_id
-    # config-file: ./easytier.toml # 与 config / 结构化字段三选一
-    # config: |
-    #   [network_identity]
-    #   network_name = "example"
-    #   network_secret = "secret"
-    #   [[peer]]
-    #   uri = "tcp://192.0.2.10:11010"
     udp: true
     # accept-dns: false
     # enable-exit-node: false
@@ -1436,8 +1426,6 @@ proxies: # socks5
     # disable-quic-input: false
     # mtu: 1380
     # tld-dns-zone: et.net.
-    # 始终以 no_tun 运行，不加载自定义 .so。目标不在 overlay 路由内且非 MagicDNS 时，
-    # 通过 ProxyServerHostResolver 解析（需 exit-node 才能访问公网），不会回退直连。
     # dialer-proxy: "ss1"
     # interface-name: "WLAN"
     # routing-mark: 6666

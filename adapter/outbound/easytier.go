@@ -49,11 +49,11 @@ type EasyTier struct {
 }
 
 func NewEasyTier(option EasyTierOption) (*EasyTier, error) {
-	configTOML, structured, err := loadEasyTierTOML(option)
+	configTOML, err := option.structuredConfig().RenderTOML()
 	if err != nil {
 		return nil, err
 	}
-	configTOML = easytier.ApplyRequiredFlags(configTOML, structured)
+	configTOML = easytier.ApplyRequiredFlags(configTOML)
 
 	stateDir := option.StateDir
 	if stateDir == "" {
@@ -83,48 +83,13 @@ func NewEasyTier(option EasyTierOption) (*EasyTier, error) {
 		option:     option,
 		configTOML: configTOML,
 		stateDir:   stateDir,
-		zone:       easytier.NormalizeZone(easyTierDNSZone(option.TLDDNSZone, configTOML)),
+		zone:       easytier.NormalizeZone(option.TLDDNSZone),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	outbound.unregister = dns.RegisterEasyTierDnsClient(option.Name, easyTierDNSTransport{easytier: outbound})
 	return outbound, nil
-}
-
-func loadEasyTierTOML(option EasyTierOption) (string, bool, error) {
-	hasConfig := strings.TrimSpace(option.Config) != ""
-	hasFile := strings.TrimSpace(option.ConfigFile) != ""
-	hasStructured := strings.TrimSpace(option.NetworkName) != ""
-	sources := 0
-	if hasConfig {
-		sources++
-	}
-	if hasFile {
-		sources++
-	}
-	if hasStructured {
-		sources++
-	}
-	if sources > 1 {
-		return "", false, fmt.Errorf("easytier: config, config-file, and structured fields are mutually exclusive")
-	}
-	if sources == 0 {
-		return "", false, fmt.Errorf("easytier: network-name, config, or config-file is required")
-	}
-	if hasConfig {
-		return option.Config, false, nil
-	}
-	if hasFile {
-		path := C.Path.Resolve(option.ConfigFile)
-		if !C.Path.IsSafePath(path) {
-			return "", false, C.Path.ErrNotSafePath(path)
-		}
-		text, err := easytier.ReadFile(path)
-		return text, false, err
-	}
-	text, err := option.structuredConfig().RenderTOML()
-	return text, true, err
 }
 
 func (e *EasyTier) start() error {
@@ -424,13 +389,6 @@ func (t easyTierDNSTransport) ExchangeContext(ctx context.Context, msg *D.Msg) (
 		reply.Rcode = D.RcodeSuccess
 	}
 	return reply, nil
-}
-
-func easyTierDNSZone(optionZone, configTOML string) string {
-	if strings.TrimSpace(optionZone) != "" {
-		return optionZone
-	}
-	return easytier.TLDDNSZoneFromTOML(configTOML)
 }
 
 func loadInstanceID(stateDir string) string {
