@@ -16,6 +16,9 @@ func Tags() (tags []string) {
 	if NoZeroTier {
 		tags = append(tags, "no_zerotier")
 	}
+	if NoEasyTier {
+		tags = append(tags, "no_easytier")
+	}
 	if WithGVisor {
 		tags = append(tags, "with_gvisor")
 	}

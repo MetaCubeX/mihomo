@@ -216,6 +216,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewZeroTier(*zeroTierOption)
+	case "easytier":
+		easyTierOption := &outbound.EasyTierOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, easyTierOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewEasyTier(*easyTierOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}

@@ -1,3 +1,5 @@
+github.com/MiaM1ku/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552 h1:3/VtnEHd4Lrm4squnhvuJtuoAX5J07Fm39yLbs47qds=
+github.com/MiaM1ku/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552/go.mod h1:GhOIqDSHxG9fddZhPTreOowzvXVLsshi6SJU2+AKS0Y=
 github.com/RyuaNerin/go-krypto v1.3.0 h1:smavTzSMAx8iuVlGb4pEwl9MD2qicqMzuXR2QWp2/Pg=
 github.com/RyuaNerin/go-krypto v1.3.0/go.mod h1:9R9TU936laAIqAmjcHo/LsaXYOZlymudOAxjaBf62UM=
 github.com/RyuaNerin/testingutil v0.1.0 h1:IYT6JL57RV3U2ml3dLHZsVtPOP6yNK7WUVdzzlpNrss=
@@ -181,6 +183,8 @@ github.com/metacubex/tls v0.1.8 h1:BHF2payjtxC7wdR3tnq8vl3FAgEQB6/pPjP2tJNTsP4=
 github.com/metacubex/tls v0.1.8/go.mod h1:0XeVdL0cBw+8i5Hqy3lVeP9IyD/LFTq02ExvHM6rzEM=
 github.com/metacubex/utls v1.8.7 h1:Cp+yWkNTFkSihETgGWq34hlVFds5HpYWVOR1xovUVTs=
 github.com/metacubex/utls v1.8.7/go.mod h1:kncGGVhFaoGn5M3pFe3SXhZCzsbCJayNOH4UEqTKTko=
+github.com/metacubex/wazero v0.0.0-20260628025728-9ae6bdcf2a7d h1:UMFI+kdp0jA8s9tC7oul0pWeTW6s8lnm0dD5PT+RY14=
+github.com/metacubex/wazero v0.0.0-20260628025728-9ae6bdcf2a7d/go.mod h1:p48xp436h1oGfoXuEnVONeDhTW+E2UpY94GAVxA62oI=
 github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f h1:FGBPRb1zUabhPhDrlKEjQ9lgIwQ6cHL4x8M9lrERhbk=
 github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f/go.mod h1:oPGcV994OGJedmmxrcK9+ni7jUEMGhR+uVQAdaduIP4=
 github.com/metacubex/yamux v0.0.0-20250918083631-dd5f17c0be49 h1:lhlqpYHopuTLx9xQt22kSA9HtnyTDmk5XjjQVCGHe2E=

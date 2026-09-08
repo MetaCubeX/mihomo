@@ -3,6 +3,7 @@ module github.com/metacubex/mihomo
 go 1.20
 
 require (
+	github.com/EasyTier/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/dlclark/regexp2 v1.12.0
@@ -116,6 +117,7 @@ require (
 	github.com/metacubex/nftables v0.0.0-20260426003805-208c2c1ba2cb // indirect
 	github.com/metacubex/qpack v0.6.0 // indirect
 	github.com/metacubex/tailscale-wireguard-go v0.0.0-20260725073821-e61ab99cede2 // indirect
+	github.com/metacubex/wazero v0.0.0-20260628025728-9ae6bdcf2a7d // indirect
 	github.com/metacubex/yamux v0.0.0-20250918083631-dd5f17c0be49 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
@@ -147,3 +149,5 @@ require (
 
 // for https://github.com/golang/protobuf/issues/1704
 replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20260306035419-7ceee0674686
+
+replace github.com/EasyTier/EasyTier/easytier-go => github.com/MiaM1ku/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552
