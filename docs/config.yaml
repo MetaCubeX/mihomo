@@ -1404,7 +1404,7 @@ proxies: # socks5
     network-secret: secret
     # hostname: mihomo
     # ipv4: 10.144.0.1/24
-    # dhcp: false
+    # dhcp: true # ipv4 为空时默认开启，否则实例没有 overlay IPv4
     peers: # 可配置多个入口；默认不隐式连接 public.easytier.top；无 listeners 时至少填一个
       - tcp://192.0.2.10:11010
       - udp://192.0.2.11:11010

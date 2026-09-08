@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"strings"
 
+	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 
@@ -15,11 +16,11 @@ import (
 )
 
 // Services wraps a mihomo dialer as EasyTier platform capabilities.
-func Services(dialer C.Dialer) platform.Services {
+func Services(d C.Dialer) platform.Services {
 	return platform.Services{
-		Sockets:     SocketFactory{Dialer: dialer},
+		Sockets:     SocketFactory{Dialer: d},
 		DNS:         DNSResolver{},
-		Environment: ConnectorEnvironment{Dialer: dialer},
+		Environment: ConnectorEnvironment{Dialer: d},
 	}
 }
 
@@ -27,7 +28,8 @@ func Services(dialer C.Dialer) platform.Services {
 //
 // EasyTier BindDevice/SocketMark/reuse options are ignored so hole punching
 // can bind local UDP ports. Interface, routing-mark, and dialer-proxy stay on
-// the mihomo dialer. FakeTCP is not supported.
+// the mihomo dialer. Internal TCP reservations bind locally even when
+// dialer-proxy is set. FakeTCP is not supported.
 type SocketFactory struct {
 	Dialer C.Dialer
 }
@@ -49,12 +51,34 @@ func (s SocketFactory) BindUDP(ctx context.Context, options platform.UDPBindOpti
 }
 
 func (s SocketFactory) ListenTCP(ctx context.Context, options platform.TCPListenOptions) (net.Listener, error) {
+	if options.Bind.Context.NetNS != nil {
+		return nil, fmt.Errorf("easytier: network namespaces are not supported")
+	}
 	address := ":0"
 	if options.Bind.LocalAddr != nil {
 		address = options.Bind.LocalAddr.String()
 	}
-	var lc net.ListenConfig
-	return lc.Listen(ctx, tcpNetwork(options.Bind), address)
+	network := tcpNetwork(options.Bind)
+	reuse := options.Bind.ReusePort || options.Bind.ReuseAddr != nil && *options.Bind.ReuseAddr
+	listenOpts := []dialer.Option{dialer.WithAddrReuse(reuse)}
+	if direct, ok := s.Dialer.(dialer.Dialer); ok {
+		return dialer.Listen(ctx, network, address, append(listenOpts, dialer.WithOption(direct.Opt))...)
+	}
+	if externalTCPListen(options.Purpose) {
+		return nil, fmt.Errorf("easytier: TCP listeners are unavailable through a proxy or custom dialer")
+	}
+	// ProxyNAT, port leases, and hole-punch reservations must bind on the host
+	// even when peer traffic uses dialer-proxy.
+	return dialer.Listen(ctx, network, address, listenOpts...)
+}
+
+func externalTCPListen(purpose platform.TCPListenPurpose) bool {
+	switch purpose {
+	case platform.TCPListenDirect, platform.TCPListenManual:
+		return true
+	default:
+		return false
+	}
 }
 
 func tcpNetwork(options platform.TCPBindOptions) string {

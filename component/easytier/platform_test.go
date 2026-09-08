@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"testing"
+	"time"
 
 	"github.com/metacubex/mihomo/component/resolver"
 
@@ -62,5 +64,35 @@ func TestUDPBindPreservesWildcardPort(t *testing.T) {
 	_, port, err := net.SplitHostPort(address)
 	if err != nil || port != "45678" {
 		t.Fatalf("%s: %v", address, err)
+	}
+}
+
+type forbiddenDialer struct{}
+
+func (forbiddenDialer) DialContext(context.Context, string, string) (net.Conn, error) {
+	panic("unexpected proxy session")
+}
+
+func (forbiddenDialer) ListenPacket(context.Context, string, string, netip.AddrPort) (net.PacketConn, error) {
+	panic("unexpected proxy socket")
+}
+
+func TestListenTCPInternalAllowedThroughProxyDialer(t *testing.T) {
+	factory := SocketFactory{Dialer: forbiddenDialer{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	listener, err := factory.ListenTCP(ctx, platform.TCPListenOptions{
+		Bind:    platform.TCPBindOptions{LocalAddr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}},
+		Purpose: platform.TCPListenProxyNAT,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	if _, err := factory.ListenTCP(ctx, platform.TCPListenOptions{
+		Bind:    platform.TCPBindOptions{LocalAddr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}},
+		Purpose: platform.TCPListenDirect,
+	}); err == nil {
+		t.Fatal("external listener through proxy must fail")
 	}
 }

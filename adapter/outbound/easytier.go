@@ -83,7 +83,7 @@ func NewEasyTier(option EasyTierOption) (*EasyTier, error) {
 		option:     option,
 		configTOML: configTOML,
 		stateDir:   stateDir,
-		zone:       easytier.NormalizeZone(option.TLDDNSZone),
+		zone:       easytier.NormalizeZone(easyTierDNSZone(option.TLDDNSZone, configTOML)),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
@@ -424,6 +424,13 @@ func (t easyTierDNSTransport) ExchangeContext(ctx context.Context, msg *D.Msg) (
 		reply.Rcode = D.RcodeSuccess
 	}
 	return reply, nil
+}
+
+func easyTierDNSZone(optionZone, configTOML string) string {
+	if strings.TrimSpace(optionZone) != "" {
+		return optionZone
+	}
+	return easytier.TLDDNSZoneFromTOML(configTOML)
 }
 
 func loadInstanceID(stateDir string) string {
