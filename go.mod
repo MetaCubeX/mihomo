@@ -3,7 +3,7 @@ module github.com/metacubex/mihomo
 go 1.20
 
 require (
-	github.com/EasyTier/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552
+	github.com/EasyTier/EasyTier/easytier-go v0.0.0-20260908122752-b1f87f025bf6
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/dlclark/regexp2 v1.12.0
@@ -149,5 +149,3 @@ require (
 
 // for https://github.com/golang/protobuf/issues/1704
 replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20260306035419-7ceee0674686
-
-replace github.com/EasyTier/EasyTier/easytier-go => github.com/MiaM1ku/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552

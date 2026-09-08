@@ -1401,7 +1401,9 @@ proxies: # socks5
     # hostname: mihomo
     # ipv4: 10.144.0.1/24
     # dhcp: false
-    peers: ["tcp://192.0.2.10:11010"] # 默认不隐式连接 public.easytier.top；无 listeners 时必填
+    peers: # 可配置多个入口；默认不隐式连接 public.easytier.top；无 listeners 时至少填一个
+      - tcp://192.0.2.10:11010
+      - udp://192.0.2.11:11010
     # listeners: ["tcp://0.0.0.0:11010"]
     # no-listener: true # 默认 true，listeners 为空
     # mapped-listeners: ["tcp://203.0.113.10:11010"]

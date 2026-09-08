@@ -100,3 +100,23 @@ func TestRenderTOMLManualIPv4WithoutPrefix(t *testing.T) {
 		t.Fatalf("missing peer:\n%s", toml)
 	}
 }
+
+func TestRenderTOMLMultiplePeers(t *testing.T) {
+	toml, err := Config{
+		NetworkName:   "example",
+		NetworkSecret: "secret",
+		Peers: []string{
+			"tcp://192.0.2.10:11010",
+			"udp://192.0.2.11:11010",
+		},
+	}.RenderTOML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(toml, "[[peer]]") != 2 {
+		t.Fatalf("want 2 peer tables:\n%s", toml)
+	}
+	if !strings.Contains(toml, `uri = "tcp://192.0.2.10:11010"`) || !strings.Contains(toml, `uri = "udp://192.0.2.11:11010"`) {
+		t.Fatalf("missing peer uris:\n%s", toml)
+	}
+}

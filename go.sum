@@ -1,5 +1,5 @@
-github.com/MiaM1ku/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552 h1:3/VtnEHd4Lrm4squnhvuJtuoAX5J07Fm39yLbs47qds=
-github.com/MiaM1ku/EasyTier/easytier-go v0.0.0-20260908110801-1b909a0b8552/go.mod h1:GhOIqDSHxG9fddZhPTreOowzvXVLsshi6SJU2+AKS0Y=
+github.com/EasyTier/EasyTier/easytier-go v0.0.0-20260908122752-b1f87f025bf6 h1:WZGt2vsAUddtCRuTWIwdprCt66StlV/4GPjcg3qDTHU=
+github.com/EasyTier/EasyTier/easytier-go v0.0.0-20260908122752-b1f87f025bf6/go.mod h1:GhOIqDSHxG9fddZhPTreOowzvXVLsshi6SJU2+AKS0Y=
 github.com/RyuaNerin/go-krypto v1.3.0 h1:smavTzSMAx8iuVlGb4pEwl9MD2qicqMzuXR2QWp2/Pg=
 github.com/RyuaNerin/go-krypto v1.3.0/go.mod h1:9R9TU936laAIqAmjcHo/LsaXYOZlymudOAxjaBf62UM=
 github.com/RyuaNerin/testingutil v0.1.0 h1:IYT6JL57RV3U2ml3dLHZsVtPOP6yNK7WUVdzzlpNrss=
