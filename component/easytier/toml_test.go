@@ -120,3 +120,23 @@ func TestRenderTOMLMultiplePeers(t *testing.T) {
 		t.Fatalf("missing peer uris:\n%s", toml)
 	}
 }
+
+func TestApplyRequiredFlagsSectionComment(t *testing.T) {
+	got := ApplyRequiredFlags("[flags] # tun flags\nno_tun = false\nmtu = 1200\n", false)
+	if strings.Count(got, "[flags]") != 1 {
+		t.Fatalf("duplicate flags table:\n%s", got)
+	}
+	if !strings.Contains(got, "no_tun = true") || !strings.Contains(got, "mtu = 1200") {
+		t.Fatalf("did not rewrite flags:\n%s", got)
+	}
+}
+
+func TestApplyRequiredFlagsQuotedKey(t *testing.T) {
+	got := ApplyRequiredFlags("[flags]\n\"no_tun\" = false\n", false)
+	if strings.Count(got, "no_tun") != 1 {
+		t.Fatalf("duplicate no_tun:\n%s", got)
+	}
+	if !strings.Contains(got, "no_tun = true") {
+		t.Fatalf("did not replace quoted no_tun:\n%s", got)
+	}
+}

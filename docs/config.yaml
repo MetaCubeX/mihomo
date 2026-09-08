@@ -314,7 +314,6 @@ dns:
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
     # - ts://tailscale # 使用指定 Tailscale 出站的 DNS 配置查询
-    # - et://easytier # 使用指定 EasyTier 出站的 overlay MagicDNS 查询
     # - '8.8.8.8#RULES' # 效果同respect-rules，但仅对该服务器生效
     # - '8.8.8.8#en0' # 兼容指定 DNS 出口网卡
 
@@ -356,6 +355,9 @@ dns:
 
   # 配置查询域名使用的 DNS 服务器
   nameserver-policy:
+    # EasyTier 仅解析 overlay A/PTR；不要放入 nameserver 主列表，以免公网查询被 NXDOMAIN 抢先返回
+    # '+.et.net': et://easytier # 修改 tld-dns-zone 后需同步修改此规则
+    # '+.144.10.in-addr.arpa': et://easytier # 按实际 overlay 网段配置 PTR 区域
     #   'www.baidu.com': '114.114.114.114'
     #   '+.internal.crop.com': '10.0.0.1'
     "geosite:cn,private,apple":
@@ -1394,6 +1396,8 @@ proxies: # socks5
     # ip-version: ipv4-prefer
 
   # easytier
+  # overlay 仅支持 IPv4；ip-version 只影响底层 peer 连接，不启用 overlay IPv6
+  # WASM 吞吐低于原生 EasyTier，实际性能取决于设备和网络，部署前请实测
   - name: "easytier"
     type: easytier
     network-name: example

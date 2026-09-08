@@ -50,9 +50,6 @@ func IsMagicDNS(host, zone string) bool {
 	if host == "" {
 		return false
 	}
-	if !strings.Contains(host, ".") {
-		return true
-	}
 	zone = NormalizeZone(zone)
 	return host == zone || strings.HasSuffix(host, "."+zone)
 }

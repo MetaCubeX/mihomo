@@ -211,21 +211,33 @@ func ApplyRequiredFlags(configTOML string, bindDeviceFalse bool) string {
 }
 
 func isTOMLSection(trimmed string) bool {
-	return strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")
+	if !strings.HasPrefix(trimmed, "[") {
+		return false
+	}
+	end := strings.IndexByte(trimmed, ']')
+	if end < 0 {
+		return false
+	}
+	rest := strings.TrimSpace(trimmed[end+1:])
+	return rest == "" || strings.HasPrefix(rest, "#")
 }
 
 func sectionName(trimmed string) string {
-	name := strings.TrimSpace(trimmed)
+	end := strings.IndexByte(trimmed, ']')
+	if end < 0 {
+		return ""
+	}
+	name := strings.TrimSpace(trimmed[:end+1])
 	name = strings.TrimPrefix(name, "[[")
 	name = strings.TrimPrefix(name, "[")
 	name = strings.TrimSuffix(name, "]]")
 	name = strings.TrimSuffix(name, "]")
-	return name
+	return strings.Trim(name, `"'`)
 }
 
 func flagKey(trimmed string) string {
 	if idx := strings.IndexByte(trimmed, '='); idx >= 0 {
-		return strings.TrimSpace(trimmed[:idx])
+		return strings.Trim(strings.TrimSpace(trimmed[:idx]), `"'`)
 	}
 	return ""
 }

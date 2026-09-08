@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 
-	"github.com/EasyTier/EasyTier/easytier-go/platform"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
+
+	"github.com/EasyTier/EasyTier/easytier-go/platform"
+	D "github.com/miekg/dns"
 )
 
 // Services wraps a mihomo dialer as EasyTier platform capabilities.
@@ -79,6 +82,13 @@ func udpBind(options platform.UDPBindOptions) (network, address string) {
 			}
 			return "udp", address
 		}
+		if options.OnlyV6 || options.Context.IPVersion == platform.IPVersionV6 {
+			return "udp6", address
+		}
+		if options.Context.IPVersion == platform.IPVersionV4 {
+			return "udp4", address
+		}
+		return "udp", address
 	}
 	switch {
 	case options.OnlyV6 || options.Context.IPVersion == platform.IPVersionV6:
@@ -107,20 +117,57 @@ func (DNSResolver) LookupIP(ctx context.Context, query platform.DNSQuery) ([]net
 	}
 }
 
+func exchangeDNS(ctx context.Context, host string, qtype uint16) (*D.Msg, error) {
+	r := resolver.ProxyServerHostResolver
+	if r == nil || !r.Invalid() {
+		r = resolver.SystemResolver
+	}
+	if r == nil {
+		return nil, fmt.Errorf("easytier: DNS resolver is unavailable")
+	}
+	request := new(D.Msg)
+	request.SetQuestion(D.Fqdn(host), qtype)
+	reply, err := r.ExchangeContext(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	if reply == nil {
+		return nil, fmt.Errorf("easytier: empty DNS response for %q", host)
+	}
+	if reply.Rcode != D.RcodeSuccess {
+		return nil, fmt.Errorf("easytier: DNS query for %q returned %s", host, D.RcodeToString[reply.Rcode])
+	}
+	return reply, nil
+}
+
 func (DNSResolver) LookupTXT(ctx context.Context, query platform.DNSQuery) (string, error) {
-	records, err := net.DefaultResolver.LookupTXT(ctx, query.Host)
+	reply, err := exchangeDNS(ctx, query.Host, D.TypeTXT)
 	if err != nil {
 		return "", err
 	}
-	if len(records) == 0 {
-		return "", fmt.Errorf("easytier: DNS TXT query for %q returned no records", query.Host)
+	for _, answer := range reply.Answer {
+		if txt, ok := answer.(*D.TXT); ok {
+			return strings.Join(txt.Txt, ""), nil
+		}
 	}
-	return records[0], nil
+	return "", fmt.Errorf("easytier: DNS TXT query for %q returned no records", query.Host)
 }
 
 func (DNSResolver) LookupSRV(ctx context.Context, query platform.DNSQuery) ([]*net.SRV, error) {
-	_, records, err := net.DefaultResolver.LookupSRV(ctx, "", "", query.Host)
-	return records, err
+	reply, err := exchangeDNS(ctx, query.Host, D.TypeSRV)
+	if err != nil {
+		return nil, err
+	}
+	var records []*net.SRV
+	for _, answer := range reply.Answer {
+		if srv, ok := answer.(*D.SRV); ok {
+			records = append(records, &net.SRV{Target: srv.Target, Port: srv.Port, Priority: srv.Priority, Weight: srv.Weight})
+		}
+	}
+	if len(records) == 0 {
+		return nil, fmt.Errorf("easytier: DNS SRV query for %q returned no records", query.Host)
+	}
+	return records, nil
 }
 
 // ConnectorEnvironment reports the local address used toward a remote UDP peer.

@@ -13,12 +13,13 @@ import (
 	"strings"
 	"sync"
 
-	corehost "github.com/EasyTier/EasyTier/easytier-go"
 	"github.com/metacubex/mihomo/component/easytier"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
+
+	corehost "github.com/EasyTier/EasyTier/easytier-go"
 	D "github.com/miekg/dns"
 )
 

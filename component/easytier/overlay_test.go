@@ -29,7 +29,10 @@ func TestParsePTRAndNodeIPv4(t *testing.T) {
 }
 
 func TestIsMagicDNS(t *testing.T) {
-	if !IsMagicDNS("peer", "et.net.") || !IsMagicDNS("peer.et.net", "") {
+	if IsMagicDNS("peer", "et.net.") {
+		t.Fatal("single-label name should not be magic dns")
+	}
+	if !IsMagicDNS("peer.et.net", "") {
 		t.Fatal("expected magic dns")
 	}
 	if IsMagicDNS("example.com", "et.net.") {
