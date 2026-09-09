@@ -7,6 +7,14 @@ import (
 
 func boolPtr(v bool) *bool { return &v }
 
+func peers(uris ...string) []Peer {
+	out := make([]Peer, len(uris))
+	for i, uri := range uris {
+		out[i] = Peer{URI: uri}
+	}
+	return out
+}
+
 func TestRenderTOMLDefaultNoListenerRequiresPeers(t *testing.T) {
 	_, err := Config{NetworkName: "example"}.RenderTOML()
 	if err == nil {
@@ -34,7 +42,7 @@ func TestRenderTOMLExplicitEmptyListenersWithPeers(t *testing.T) {
 	toml, err := Config{
 		NetworkName:   "example",
 		NetworkSecret: "secret",
-		Peers:         []string{"tcp://192.0.2.10:11010"},
+		Peers:         peers("tcp://192.0.2.10:11010"),
 		Hostname:      "node-a",
 		IPv4:          "10.144.0.1/24",
 	}.RenderTOML()
@@ -88,7 +96,7 @@ func TestRenderTOMLManualIPv4WithoutPrefix(t *testing.T) {
 		NetworkName:   "example",
 		NetworkSecret: "example",
 		IPv4:          "10.144.0.10",
-		Peers:         []string{"tcp://192.0.2.10:11010"},
+		Peers:         peers("tcp://192.0.2.10:11010"),
 	}.RenderTOML()
 	if err != nil {
 		t.Fatal(err)
@@ -105,10 +113,10 @@ func TestRenderTOMLMultiplePeers(t *testing.T) {
 	toml, err := Config{
 		NetworkName:   "example",
 		NetworkSecret: "secret",
-		Peers: []string{
+		Peers: peers(
 			"tcp://192.0.2.10:11010",
 			"udp://192.0.2.11:11010",
-		},
+		),
 	}.RenderTOML()
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +153,7 @@ func TestRenderTOMLDefaultsDHCPWhenIPv4Omitted(t *testing.T) {
 	toml, err := Config{
 		NetworkName:   "example",
 		NetworkSecret: "secret",
-		Peers:         []string{"tcp://192.0.2.10:11010"},
+		Peers:         peers("tcp://192.0.2.10:11010"),
 	}.RenderTOML()
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +171,7 @@ func TestRenderTOMLStaticIPv4OmitsDHCP(t *testing.T) {
 		NetworkName:   "example",
 		NetworkSecret: "secret",
 		IPv4:          "10.144.0.10",
-		Peers:         []string{"tcp://192.0.2.10:11010"},
+		Peers:         peers("tcp://192.0.2.10:11010"),
 	}.RenderTOML()
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +185,7 @@ func TestRenderTOMLWritesTLDDNSZone(t *testing.T) {
 	toml, err := Config{
 		NetworkName:   "example",
 		NetworkSecret: "secret",
-		Peers:         []string{"tcp://192.0.2.10:11010"},
+		Peers:         peers("tcp://192.0.2.10:11010"),
 		TLDDNSZone:    "overlay.example.",
 	}.RenderTOML()
 	if err != nil {
@@ -185,5 +193,89 @@ func TestRenderTOMLWritesTLDDNSZone(t *testing.T) {
 	}
 	if !strings.Contains(toml, `tld_dns_zone = "overlay.example."`) {
 		t.Fatalf("missing tld_dns_zone:\n%s", toml)
+	}
+}
+
+func TestRenderTOMLSecureMode(t *testing.T) {
+	toml, err := Config{
+		NetworkName:     "example",
+		NetworkSecret:   "secret",
+		Peers:           peers("tcp://192.0.2.10:11010"),
+		SecureMode:      boolPtr(true),
+		LocalPrivateKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+		LocalPublicKey:  "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+	}.RenderTOML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(toml, "[secure_mode]") || !strings.Contains(toml, "enabled = true") {
+		t.Fatalf("missing secure_mode:\n%s", toml)
+	}
+	if !strings.Contains(toml, `local_private_key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="`) {
+		t.Fatalf("missing local_private_key:\n%s", toml)
+	}
+	if !strings.Contains(toml, `local_public_key = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="`) {
+		t.Fatalf("missing local_public_key:\n%s", toml)
+	}
+}
+
+func TestRenderTOMLPeerPublicKeyEnablesSecureMode(t *testing.T) {
+	toml, err := Config{
+		NetworkName:   "example",
+		NetworkSecret: "secret",
+		Peers: []Peer{{
+			URI:           "tcp://relay.example.com:11010",
+			PeerPublicKey: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+		}},
+	}.RenderTOML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(toml, "[secure_mode]") || !strings.Contains(toml, "enabled = true") {
+		t.Fatalf("pinning should enable secure_mode:\n%s", toml)
+	}
+	if !strings.Contains(toml, `uri = "tcp://relay.example.com:11010"`) {
+		t.Fatalf("missing peer uri:\n%s", toml)
+	}
+	if !strings.Contains(toml, `peer_public_key = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="`) {
+		t.Fatalf("missing peer_public_key:\n%s", toml)
+	}
+}
+
+func TestRenderTOMLSecureModeFalseRejectsPinnedPeer(t *testing.T) {
+	err := Config{
+		NetworkName:   "example",
+		NetworkSecret: "secret",
+		SecureMode:    boolPtr(false),
+		Peers: []Peer{{
+			URI:           "tcp://relay.example.com:11010",
+			PeerPublicKey: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+		}},
+	}.ValidateStructured()
+	if err == nil {
+		t.Fatal("expected pinned peer without secure-mode to fail")
+	}
+}
+
+func TestRenderTOMLLocalPublicKeyRequiresPrivateKey(t *testing.T) {
+	err := Config{
+		NetworkName:    "example",
+		NetworkSecret:  "secret",
+		Peers:          peers("tcp://192.0.2.10:11010"),
+		LocalPublicKey: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+	}.ValidateStructured()
+	if err == nil {
+		t.Fatal("expected local-public-key without private key to fail")
+	}
+}
+
+func TestRenderTOMLEmptyPeerURI(t *testing.T) {
+	err := Config{
+		NetworkName:   "example",
+		NetworkSecret: "secret",
+		Peers:         []Peer{{PeerPublicKey: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="}},
+	}.ValidateStructured()
+	if err == nil {
+		t.Fatal("expected empty peer uri to fail")
 	}
 }

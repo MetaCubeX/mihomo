@@ -20,7 +20,7 @@ type Config struct {
 	Hostname            string
 	IPv4                string
 	DHCP                bool
-	Peers               []string
+	Peers               []Peer
 	Listeners           []string
 	NoListener          *bool
 	MappedListeners     []string
@@ -40,6 +40,15 @@ type Config struct {
 	DisableQUICInput    *bool
 	MTU                 int
 	TLDDNSZone          string
+	SecureMode          *bool
+	LocalPrivateKey     string
+	LocalPublicKey      string
+}
+
+// Peer is one EasyTier [[peer]] table.
+type Peer struct {
+	URI           string
+	PeerPublicKey string
 }
 
 func (c Config) listeners() []string {
@@ -66,7 +75,37 @@ func (c Config) ValidateStructured() error {
 	if len(c.Peers) == 0 && len(c.listeners()) == 0 {
 		return fmt.Errorf("easytier: peers is required when listeners are empty; implicit public.easytier.top is disabled")
 	}
+	for i, peer := range c.Peers {
+		if strings.TrimSpace(peer.URI) == "" {
+			return fmt.Errorf("easytier: peers[%d] uri is required", i)
+		}
+	}
+	if c.LocalPublicKey != "" && c.LocalPrivateKey == "" {
+		return fmt.Errorf("easytier: local-public-key requires local-private-key")
+	}
+	if c.SecureMode != nil && !*c.SecureMode && c.hasSecureModeMaterial() {
+		return fmt.Errorf("easytier: local keys and peer-public-key require secure-mode")
+	}
 	return nil
+}
+
+func (c Config) hasSecureModeMaterial() bool {
+	if c.LocalPrivateKey != "" || c.LocalPublicKey != "" {
+		return true
+	}
+	for _, peer := range c.Peers {
+		if peer.PeerPublicKey != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Config) secureModeEnabled() bool {
+	if c.SecureMode != nil {
+		return *c.SecureMode
+	}
+	return c.hasSecureModeMaterial()
 }
 
 // RenderTOML converts structured fields to EasyTier TOML.
@@ -99,9 +138,23 @@ func (c Config) RenderTOML() (string, error) {
 	writeTOMLStringField(&encoded, "network_name", c.NetworkName)
 	writeTOMLStringField(&encoded, "network_secret", c.NetworkSecret)
 
+	if c.secureModeEnabled() {
+		encoded.WriteString("\n[secure_mode]\n")
+		writeTOMLBoolField(&encoded, "enabled", true)
+		if c.LocalPrivateKey != "" {
+			writeTOMLStringField(&encoded, "local_private_key", c.LocalPrivateKey)
+		}
+		if c.LocalPublicKey != "" {
+			writeTOMLStringField(&encoded, "local_public_key", c.LocalPublicKey)
+		}
+	}
+
 	for _, peer := range c.Peers {
 		encoded.WriteString("\n[[peer]]\n")
-		writeTOMLStringField(&encoded, "uri", peer)
+		writeTOMLStringField(&encoded, "uri", peer.URI)
+		if peer.PeerPublicKey != "" {
+			writeTOMLStringField(&encoded, "peer_public_key", peer.PeerPublicKey)
+		}
 	}
 	for _, network := range c.ProxyNetworks {
 		encoded.WriteString("\n[[proxy_network]]\n")
