@@ -3,6 +3,7 @@ package easytier
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -20,7 +21,7 @@ type Config struct {
 	Hostname            string
 	IPv4                string
 	DHCP                bool
-	Peers               []Peer
+	Peers               []string
 	Listeners           []string
 	NoListener          *bool
 	MappedListeners     []string
@@ -45,7 +46,7 @@ type Config struct {
 	LocalPublicKey      string
 }
 
-// Peer is one EasyTier [[peer]] table.
+// Peer is one EasyTier [[peer]] table after URI query parameters are extracted.
 type Peer struct {
 	URI           string
 	PeerPublicKey string
@@ -75,10 +76,8 @@ func (c Config) ValidateStructured() error {
 	if len(c.Peers) == 0 && len(c.listeners()) == 0 {
 		return fmt.Errorf("easytier: peers is required when listeners are empty; implicit public.easytier.top is disabled")
 	}
-	for i, peer := range c.Peers {
-		if strings.TrimSpace(peer.URI) == "" {
-			return fmt.Errorf("easytier: peers[%d] uri is required", i)
-		}
+	if _, err := c.parsedPeers(); err != nil {
+		return err
 	}
 	if c.LocalPublicKey != "" && c.LocalPrivateKey == "" {
 		return fmt.Errorf("easytier: local-public-key requires local-private-key")
@@ -89,11 +88,70 @@ func (c Config) ValidateStructured() error {
 	return nil
 }
 
+func (c Config) parsedPeers() ([]Peer, error) {
+	out := make([]Peer, 0, len(c.Peers))
+	for i, raw := range c.Peers {
+		peer, err := parsePeerURI(raw)
+		if err != nil {
+			return nil, fmt.Errorf("easytier: peers[%d]: %w", i, err)
+		}
+		out = append(out, peer)
+	}
+	return out, nil
+}
+
+func parsePeerURI(raw string) (Peer, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return Peer{}, fmt.Errorf("uri is required")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return Peer{}, fmt.Errorf("invalid uri: %w", err)
+	}
+	if u.RawQuery == "" {
+		return Peer{URI: raw}, nil
+	}
+	kept := make([]string, 0)
+	key := ""
+	stripped := false
+	for _, pair := range strings.Split(u.RawQuery, "&") {
+		if pair == "" {
+			continue
+		}
+		name, value, _ := strings.Cut(pair, "=")
+		decodedName, err := url.PathUnescape(name)
+		if err != nil {
+			return Peer{}, fmt.Errorf("invalid uri query: %w", err)
+		}
+		switch decodedName {
+		case "peer-public-key", "peer_public_key":
+			decodedValue, err := url.PathUnescape(value)
+			if err != nil {
+				return Peer{}, fmt.Errorf("invalid peer-public-key: %w", err)
+			}
+			key = decodedValue
+			stripped = true
+		default:
+			kept = append(kept, pair)
+		}
+	}
+	if !stripped {
+		return Peer{URI: raw}, nil
+	}
+	u.RawQuery = strings.Join(kept, "&")
+	return Peer{URI: u.String(), PeerPublicKey: key}, nil
+}
+
 func (c Config) hasSecureModeMaterial() bool {
 	if c.LocalPrivateKey != "" || c.LocalPublicKey != "" {
 		return true
 	}
-	for _, peer := range c.Peers {
+	peers, err := c.parsedPeers()
+	if err != nil {
+		return false
+	}
+	for _, peer := range peers {
 		if peer.PeerPublicKey != "" {
 			return true
 		}
@@ -138,6 +196,11 @@ func (c Config) RenderTOML() (string, error) {
 	writeTOMLStringField(&encoded, "network_name", c.NetworkName)
 	writeTOMLStringField(&encoded, "network_secret", c.NetworkSecret)
 
+	peers, err := c.parsedPeers()
+	if err != nil {
+		return "", err
+	}
+
 	if c.secureModeEnabled() {
 		encoded.WriteString("\n[secure_mode]\n")
 		writeTOMLBoolField(&encoded, "enabled", true)
@@ -149,7 +212,7 @@ func (c Config) RenderTOML() (string, error) {
 		}
 	}
 
-	for _, peer := range c.Peers {
+	for _, peer := range peers {
 		encoded.WriteString("\n[[peer]]\n")
 		writeTOMLStringField(&encoded, "uri", peer.URI)
 		if peer.PeerPublicKey != "" {

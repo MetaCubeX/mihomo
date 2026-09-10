@@ -1405,9 +1405,8 @@ proxies: # socks5
     peers: # 可配置多个入口；默认不隐式连接 public.easytier.top；无 listeners 时至少填一个
       - tcp://192.0.2.10:11010
       - udp://192.0.2.11:11010
-      # - uri: tcp://relay.example.com:11010
-      #   peer-public-key: "base64-x25519-public-key" # 锁定共享节点公钥，防止中间人
-    # secure-mode: true # Noise E2EE；配置 local-*-key 或 peer-public-key 时会自动开启
+      # - "tcp://relay.example.com:11010?peer-public-key=base64-x25519-public-key" # 锁定共享节点公钥，防止中间人
+    # secure-mode: true # Noise E2EE；配置 local-*-key 或 peer URI 中的 peer-public-key 时会自动开启
     # local-private-key: "base64-x25519-private-key" # 可选，固定本机身份，避免每次启动更换公钥
     # local-public-key: "base64-x25519-public-key" # 可选，通常可由私钥派生
     # listeners: ["tcp://0.0.0.0:11010"]

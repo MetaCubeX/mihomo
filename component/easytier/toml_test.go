@@ -7,13 +7,7 @@ import (
 
 func boolPtr(v bool) *bool { return &v }
 
-func peers(uris ...string) []Peer {
-	out := make([]Peer, len(uris))
-	for i, uri := range uris {
-		out[i] = Peer{URI: uri}
-	}
-	return out
-}
+func peers(uris ...string) []string { return uris }
 
 func TestRenderTOMLDefaultNoListenerRequiresPeers(t *testing.T) {
 	_, err := Config{NetworkName: "example"}.RenderTOML()
@@ -223,10 +217,7 @@ func TestRenderTOMLPeerPublicKeyEnablesSecureMode(t *testing.T) {
 	toml, err := Config{
 		NetworkName:   "example",
 		NetworkSecret: "secret",
-		Peers: []Peer{{
-			URI:           "tcp://relay.example.com:11010",
-			PeerPublicKey: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
-		}},
+		Peers:         peers("tcp://relay.example.com:11010?peer-public-key=CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="),
 	}.RenderTOML()
 	if err != nil {
 		t.Fatal(err)
@@ -236,6 +227,9 @@ func TestRenderTOMLPeerPublicKeyEnablesSecureMode(t *testing.T) {
 	}
 	if !strings.Contains(toml, `uri = "tcp://relay.example.com:11010"`) {
 		t.Fatalf("missing peer uri:\n%s", toml)
+	}
+	if strings.Contains(toml, "peer-public-key=") {
+		t.Fatalf("peer-public-key should be stripped from uri:\n%s", toml)
 	}
 	if !strings.Contains(toml, `peer_public_key = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="`) {
 		t.Fatalf("missing peer_public_key:\n%s", toml)
@@ -247,10 +241,7 @@ func TestRenderTOMLSecureModeFalseRejectsPinnedPeer(t *testing.T) {
 		NetworkName:   "example",
 		NetworkSecret: "secret",
 		SecureMode:    boolPtr(false),
-		Peers: []Peer{{
-			URI:           "tcp://relay.example.com:11010",
-			PeerPublicKey: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
-		}},
+		Peers:         peers("tcp://relay.example.com:11010?peer-public-key=CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="),
 	}.ValidateStructured()
 	if err == nil {
 		t.Fatal("expected pinned peer without secure-mode to fail")
@@ -273,9 +264,38 @@ func TestRenderTOMLEmptyPeerURI(t *testing.T) {
 	err := Config{
 		NetworkName:   "example",
 		NetworkSecret: "secret",
-		Peers:         []Peer{{PeerPublicKey: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="}},
+		Peers:         []string{""},
 	}.ValidateStructured()
 	if err == nil {
 		t.Fatal("expected empty peer uri to fail")
+	}
+}
+
+func TestParsePeerURIQuery(t *testing.T) {
+	peer, err := parsePeerURI(" tcp://relay.example.com:11010?foo=1&peer-public-key=CC%2BCC/CC=&bar=2 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if peer.URI != "tcp://relay.example.com:11010?foo=1&bar=2" {
+		t.Fatalf("uri: %q", peer.URI)
+	}
+	if peer.PeerPublicKey != "CC+CC/CC=" {
+		t.Fatalf("key: %q", peer.PeerPublicKey)
+	}
+
+	peer, err = parsePeerURI("tcp://relay.example.com:11010?peer_public_key=CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if peer.URI != "tcp://relay.example.com:11010" || peer.PeerPublicKey == "" {
+		t.Fatalf("snake_case: %+v", peer)
+	}
+
+	peer, err = parsePeerURI("tcp://192.0.2.10:11010?foo=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if peer.URI != "tcp://192.0.2.10:11010?foo=1" || peer.PeerPublicKey != "" {
+		t.Fatalf("other query: %+v", peer)
 	}
 }
