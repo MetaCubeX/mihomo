@@ -1724,6 +1724,7 @@ proxy-groups:
     # tolerance: 150
     # lazy: true
     # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
+    # download-size: 1048576 # 健康检查最多读取的响应体字节数；需配合能返回足够字节的 url（如 https://speed.cloudflare.com/__down?bytes=1048576），读取耗时计入延迟，带宽不足的节点会因超时被剔除
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 
@@ -1810,6 +1811,7 @@ proxy-providers:
       # lazy: true
       url: https://cp.cloudflare.com/generate_204
       # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
+      # download-size: 1048576 # 健康检查最多读取的响应体字节数，需配合能返回足够字节的 url；读取耗时计入延迟，带宽不足的节点会因超时被剔除
     override: # 覆写节点加载时的一些配置项
       skip-cert-verify: true
       name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
