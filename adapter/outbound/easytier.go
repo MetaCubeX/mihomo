@@ -19,7 +19,7 @@ import (
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
 
-	corehost "github.com/EasyTier/EasyTier/easytier-go"
+	corehost "github.com/easytier/easytier/easytier-go"
 	D "github.com/miekg/dns"
 )
 

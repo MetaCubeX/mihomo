@@ -11,7 +11,7 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 
-	"github.com/EasyTier/EasyTier/easytier-go/platform"
+	"github.com/easytier/easytier/easytier-go/platform"
 	D "github.com/miekg/dns"
 )
 
