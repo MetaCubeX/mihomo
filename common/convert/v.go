@@ -44,10 +44,16 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		proxy["servername"] = sni
 	}
 	if realityPublicKey := query.Get("pbk"); realityPublicKey != "" {
-		proxy["reality-opts"] = map[string]any{
+		realityOpts := map[string]any{
 			"public-key": realityPublicKey,
 			"short-id":   query.Get("sid"),
 		}
+		if value := query.Get("support-x25519mlkem768"); value != "" {
+			if enabled, err := strconv.ParseBool(value); err == nil {
+				realityOpts["support-x25519mlkem768"] = enabled
+			}
+		}
+		proxy["reality-opts"] = realityOpts
 	}
 
 	switch query.Get("packetEncoding") {
