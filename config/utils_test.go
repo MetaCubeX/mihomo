@@ -4,7 +4,66 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestParseDirectNameServerFallback(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  direct-nameserver:
+    - tls://223.5.5.5
+  direct-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	dnsCfg, err := parseDNS(rawCfg, nil)
+	require.NoError(t, err)
+	require.Len(t, dnsCfg.DirectNameServerFallback, 1)
+	assert.Equal(t, "system", dnsCfg.DirectNameServerFallback[0].Net)
+	assert.Equal(t, uint(300000), dnsCfg.NameServerFallbackRecoveryInterval)
+}
+
+func TestRejectDirectNameServerFallbackWithoutPrimary(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  direct-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	_, err = parseDNS(rawCfg, nil)
+	assert.ErrorContains(t, err, "disallow empty `direct-nameserver`")
+}
+
+func TestParseProxyServerNameServerFallback(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  proxy-server-nameserver:
+    - tls://223.5.5.5
+  proxy-server-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	dnsCfg, err := parseDNS(rawCfg, nil)
+	require.NoError(t, err)
+	require.Len(t, dnsCfg.ProxyServerNameserverFallback, 1)
+	assert.Equal(t, "system", dnsCfg.ProxyServerNameserverFallback[0].Net)
+	assert.Equal(t, uint(300000), dnsCfg.NameServerFallbackRecoveryInterval)
+}
+
+func TestRejectProxyServerNameServerFallbackWithoutPrimary(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  proxy-server-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	_, err = parseDNS(rawCfg, nil)
+	assert.ErrorContains(t, err, "disallow empty `proxy-server-nameserver`")
+}
 
 func TestValidateDialerProxies(t *testing.T) {
 	testCases := []struct {

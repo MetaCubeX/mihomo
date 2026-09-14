@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/arc"
@@ -36,6 +38,45 @@ type result struct {
 	Error error
 }
 
+const fallbackCircuitMaxDomains = 4096
+
+type fallbackScope uint8
+
+const (
+	fallbackScopeNone fallbackScope = iota
+	fallbackScopeDomain
+	fallbackScopeGroup
+)
+
+type fallbackCircuit struct {
+	mu              sync.Mutex
+	groupUntil      time.Time
+	domains         *lru.LruCache[string, time.Time]
+	interval        time.Duration
+	probeRunning    bool
+	probeGeneration uint64
+	probeCancel     context.CancelFunc
+	fallbackCache   *lru.LruCache[string, *D.Msg]
+}
+
+func newFallbackCircuit(interval time.Duration) *fallbackCircuit {
+	if interval <= 0 {
+		return nil
+	}
+	fallbackCache := lru.New(
+		lru.WithSize[string, *D.Msg](fallbackCircuitMaxDomains),
+		lru.WithStale[string, *D.Msg](true),
+	)
+	return &fallbackCircuit{
+		domains: lru.New(
+			lru.WithSize[string, time.Time](fallbackCircuitMaxDomains),
+			lru.WithEvict(func(key string, _ time.Time) { fallbackCache.Delete(key) }),
+		),
+		interval:      interval,
+		fallbackCache: fallbackCache,
+	}
+}
+
 type Resolver struct {
 	ipv6                  bool
 	ipv6Timeout           time.Duration
@@ -44,6 +85,10 @@ type Resolver struct {
 	fallbackDomainFilters []C.DomainMatcher
 	fallbackIPFilters     []C.IpMatcher
 	fallbackLazyQuery     bool
+	fallbackTimeout       time.Duration
+	delayedFallback       bool
+	fallbackCircuit       *fallbackCircuit
+	fallbackLabel         string
 	group                 singleflight.Group[*D.Msg]
 	cache                 dnsCache
 	policy                []dnsPolicy
@@ -189,7 +234,11 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	retryNum := 0
 	retryMax := 3
 	fn := func() (result *D.Msg, err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout) // reset timeout in singleflight
+		queryTimeout := resolver.DefaultDNSTimeout
+		if r.delayedFallback {
+			queryTimeout = 2 * r.fallbackQueryTimeout()
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), queryTimeout) // reset timeout in singleflight
 		defer cancel()
 		cache := false
 
@@ -208,8 +257,8 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 
 		isIPReq := isIPRequest(q)
 		if isIPReq {
-			cache = true
-			return r.ipExchange(ctx, m)
+			result, cache, err = r.ipExchange(ctx, m)
+			return
 		}
 
 		if matched := r.matchPolicy(m); len(matched) != 0 {
@@ -296,17 +345,20 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 	return false
 }
 
-func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
+func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, cache bool, err error) {
 	if matched := r.matchPolicy(m); len(matched) != 0 {
 		res := <-r.asyncExchange(ctx, matched, m)
-		return res.Msg, res.Error
+		return res.Msg, true, res.Error
+	}
+	if r.delayedFallback {
+		return r.ipExchangeWithDelayedFallback(ctx, m)
 	}
 
 	onlyFallback := r.shouldOnlyQueryFallback(m)
 
 	if onlyFallback {
 		res := <-r.asyncExchange(ctx, r.fallback, m)
-		return res.Msg, res.Error
+		return res.Msg, true, res.Error
 	}
 
 	msgCh := r.asyncExchange(ctx, r.main, m)
@@ -314,7 +366,7 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	if r.fallback == nil { // directly return if no fallback servers are available
 		res := <-msgCh
 		msg, err = res.Msg, res.Error
-		return
+		return msg, true, err
 	}
 
 	var fallbackMsg <-chan *result
@@ -329,7 +381,7 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 			})
 			if shouldNotFallback {
 				msg, err = res.Msg, res.Error // no need to wait for fallback result
-				return
+				return msg, true, err
 			}
 		}
 	}
@@ -339,7 +391,336 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	}
 	res = <-fallbackMsg
 	msg, err = res.Msg, res.Error
-	return
+	return msg, true, err
+}
+
+func (r *Resolver) fallbackQueryTimeout() time.Duration {
+	if r.fallbackTimeout > 0 {
+		return r.fallbackTimeout
+	}
+	return resolver.DefaultDNSTimeout
+}
+
+func validFallbackResult(query *D.Msg, res *result) bool {
+	if res == nil || res.Error != nil || res.Msg == nil || len(query.Question) == 0 {
+		return false
+	}
+	if query.Question[0].Qtype == D.TypeCNAME {
+		for _, answer := range res.Msg.Answer {
+			if _, ok := answer.(*D.CNAME); ok {
+				return true
+			}
+		}
+		return false
+	}
+	return len(msgToIP(res.Msg)) != 0
+}
+
+func fallbackQueryKey(m *D.Msg) string {
+	if m == nil || len(m.Question) == 0 {
+		return ""
+	}
+	return strings.ToLower(m.Question[0].String())
+}
+
+func (r *Resolver) getFallbackCache(m *D.Msg) (*D.Msg, bool) {
+	circuit := r.fallbackCircuit
+	key := fallbackQueryKey(m)
+	if circuit == nil || key == "" {
+		return nil, false
+	}
+	msg, expireTime, hit := getMsgFromCacheKey(circuit.fallbackCache, key)
+	if !hit || msg == nil {
+		return nil, false
+	}
+	if !expireTime.After(time.Now()) {
+		circuit.fallbackCache.Delete(key)
+		return nil, false
+	}
+	updateMsgTTL(msg, uint32(time.Until(expireTime).Seconds()))
+	return msg, true
+}
+
+func (r *Resolver) putFallbackCache(m *D.Msg, res *result) {
+	circuit := r.fallbackCircuit
+	key := fallbackQueryKey(m)
+	if circuit == nil || key == "" || res == nil || res.Error != nil || res.Msg == nil || len(m.Question) == 0 {
+		return
+	}
+	putMsgToCacheKey(circuit.fallbackCache, key, m.Question[0], res.Msg)
+}
+
+func (r *Resolver) fallbackState(m *D.Msg, claimRetry bool) (fallbackScope, bool) {
+	circuit := r.fallbackCircuit
+	if circuit == nil {
+		return fallbackScopeNone, false
+	}
+
+	now := time.Now()
+	key := fallbackQueryKey(m)
+	circuit.mu.Lock()
+	defer circuit.mu.Unlock()
+	if !circuit.groupUntil.IsZero() {
+		retry := !now.Before(circuit.groupUntil)
+		if retry && claimRetry {
+			circuit.groupUntil = now.Add(circuit.interval)
+		}
+		return fallbackScopeGroup, retry
+	}
+	if key == "" {
+		return fallbackScopeNone, false
+	}
+	until, found := circuit.domains.Get(key)
+	if !found {
+		return fallbackScopeNone, false
+	}
+	retry := !now.Before(until)
+	if retry && claimRetry {
+		circuit.domains.Set(key, now.Add(circuit.interval))
+	}
+	return fallbackScopeDomain, retry
+}
+
+func (r *Resolver) openDomainFallback(m *D.Msg) bool {
+	circuit := r.fallbackCircuit
+	key := fallbackQueryKey(m)
+	if circuit == nil || key == "" {
+		return false
+	}
+
+	circuit.mu.Lock()
+	_, found := circuit.domains.Get(key)
+	if !found {
+		circuit.domains.Set(key, time.Now().Add(circuit.interval))
+	}
+	circuit.mu.Unlock()
+	if !found {
+		log.Warnln("[DNS] %s query %s is using fallback", r.fallbackLabel, key)
+	}
+	return !found
+}
+
+func (r *Resolver) finishRootProbe(generation uint64, failed bool) {
+	circuit := r.fallbackCircuit
+	if circuit == nil {
+		return
+	}
+
+	circuit.mu.Lock()
+	if !circuit.probeRunning || circuit.probeGeneration != generation {
+		circuit.mu.Unlock()
+		return
+	}
+	circuit.probeRunning = false
+	circuit.probeCancel = nil
+	opened := false
+	if failed {
+		opened = circuit.groupUntil.IsZero()
+		circuit.groupUntil = time.Now().Add(circuit.interval)
+	}
+	circuit.mu.Unlock()
+	if opened {
+		log.Warnln("[DNS] %s primary servers are unavailable, using fallback", r.fallbackLabel)
+	}
+}
+
+func (r *Resolver) recoverFallback(scope fallbackScope, m *D.Msg) {
+	circuit := r.fallbackCircuit
+	if circuit == nil {
+		return
+	}
+
+	key := fallbackQueryKey(m)
+	circuit.mu.Lock()
+	clearAllFallbackCache := false
+	switch scope {
+	case fallbackScopeGroup:
+		circuit.groupUntil = time.Time{}
+		clearAllFallbackCache = true
+		if key != "" {
+			circuit.domains.Delete(key)
+		}
+	case fallbackScopeDomain:
+		circuit.domains.Delete(key)
+	}
+	probeCancel := circuit.probeCancel
+	circuit.probeGeneration++
+	circuit.probeRunning = false
+	circuit.probeCancel = nil
+	circuit.mu.Unlock()
+	if probeCancel != nil {
+		probeCancel()
+	}
+	if clearAllFallbackCache {
+		circuit.fallbackCache.Clear()
+	} else if key != "" {
+		circuit.fallbackCache.Delete(key)
+	}
+	log.Infoln("[DNS] %s primary query recovered for %s", r.fallbackLabel, key)
+}
+
+func (r *Resolver) classifyNewFailure(m *D.Msg) {
+	circuit := r.fallbackCircuit
+	if circuit == nil || !r.openDomainFallback(m) {
+		return
+	}
+
+	probeCtx, probeCancel := context.WithTimeout(context.Background(), r.fallbackQueryTimeout())
+	circuit.mu.Lock()
+	if circuit.probeRunning || !circuit.groupUntil.IsZero() {
+		circuit.mu.Unlock()
+		probeCancel()
+		return
+	}
+	circuit.probeRunning = true
+	circuit.probeGeneration++
+	generation := circuit.probeGeneration
+	circuit.probeCancel = probeCancel
+	circuit.mu.Unlock()
+
+	go func() {
+		defer probeCancel()
+		probe := &D.Msg{}
+		probe.SetQuestion(".", D.TypeNS)
+		msg, _, err := batchExchange(probeCtx, r.main, probe)
+		r.finishRootProbe(generation, err != nil || msg == nil)
+	}()
+}
+
+func (r *Resolver) exchangeFallbackOnly(ctx context.Context, m *D.Msg) (*D.Msg, error) {
+	if msg, hit := r.getFallbackCache(m); hit {
+		return msg, nil
+	}
+	res := <-r.asyncExchange(ctx, r.fallback, m)
+	r.putFallbackCache(m, res)
+	return res.Msg, res.Error
+}
+
+func (r *Resolver) startPrimaryRecovery(m *D.Msg, scope fallbackScope) <-chan *result {
+	mainCtx, cancelMain := context.WithTimeout(context.Background(), r.fallbackQueryTimeout())
+	mainCh := r.asyncExchange(mainCtx, r.main, m)
+	recoveryCh := make(chan *result, 1)
+	go func() {
+		res := <-mainCh
+		if validFallbackResult(m, res) {
+			r.recoverFallback(scope, m)
+		}
+		cancelMain()
+		recoveryCh <- res
+	}()
+	return recoveryCh
+}
+
+func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fallbackScope) (*D.Msg, error) {
+	recoveryCh := r.startPrimaryRecovery(m, scope)
+	fallbackCh := r.asyncExchange(ctx, r.fallback, m)
+	var mainResult, fallbackResult *result
+	for recoveryCh != nil || fallbackCh != nil {
+		select {
+		case res := <-recoveryCh:
+			recoveryCh = nil
+			mainResult = res
+			if validFallbackResult(m, res) {
+				return res.Msg, nil
+			}
+		case res := <-fallbackCh:
+			fallbackCh = nil
+			fallbackResult = res
+			r.putFallbackCache(m, res)
+			if validFallbackResult(m, res) {
+				return res.Msg, nil
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if fallbackResult != nil {
+		return fallbackResult.Msg, fallbackResult.Error
+	}
+	if mainResult != nil {
+		return mainResult.Msg, mainResult.Error
+	}
+	return nil, errors.New("all DNS requests failed")
+}
+
+// ipExchangeWithDelayedFallback starts the fallback query after Mihomo's DNS
+// timeout, or immediately when all primary servers fail first. Once both tiers
+// are running, the first usable response wins.
+func (r *Resolver) ipExchangeWithDelayedFallback(ctx context.Context, m *D.Msg) (*D.Msg, bool, error) {
+	if scope, retry := r.fallbackState(m, true); scope != fallbackScopeNone {
+		if retry {
+			if msg, hit := r.getFallbackCache(m); hit {
+				r.startPrimaryRecovery(m, scope)
+				return msg, false, nil
+			}
+			msg, err := r.exchangeRecoveryRace(ctx, m, scope)
+			return msg, false, err
+		}
+		msg, err := r.exchangeFallbackOnly(ctx, m)
+		return msg, false, err
+	}
+
+	mainCh := r.asyncExchange(ctx, r.main, m)
+	var fallbackCh <-chan *result
+	fallbackStarted := false
+	startFallback := func() {
+		if !fallbackStarted {
+			fallbackStarted = true
+			fallbackCh = r.asyncExchange(ctx, r.fallback, m)
+		}
+	}
+
+	timer := time.NewTimer(r.fallbackQueryTimeout())
+	defer timer.Stop()
+	timerCh := timer.C
+
+	var mainResult, fallbackResult *result
+	failureClassified := false
+	cacheable := true
+	classifyFailure := func() {
+		if !failureClassified {
+			failureClassified = true
+			cacheable = r.fallbackCircuit == nil
+			r.classifyNewFailure(m)
+		}
+	}
+	for mainCh != nil || fallbackCh != nil {
+		select {
+		case res := <-mainCh:
+			mainCh = nil
+			mainResult = res
+			if validFallbackResult(m, res) {
+				return res.Msg, cacheable, nil
+			}
+			if res == nil || res.Error != nil {
+				classifyFailure()
+			}
+			startFallback()
+		case <-timerCh:
+			classifyFailure()
+			startFallback()
+			timerCh = nil
+		case res := <-fallbackCh:
+			fallbackCh = nil
+			fallbackResult = res
+			if !cacheable {
+				r.putFallbackCache(m, res)
+			}
+			if validFallbackResult(m, res) {
+				return res.Msg, cacheable, nil
+			}
+		case <-ctx.Done():
+			return nil, false, ctx.Err()
+		}
+	}
+
+	if fallbackResult != nil {
+		return fallbackResult.Msg, cacheable, fallbackResult.Error
+	}
+	if mainResult != nil {
+		return mainResult.Msg, cacheable, mainResult.Error
+	}
+	return nil, false, errors.New("all DNS requests failed")
 }
 
 func (r *Resolver) lookupIP(ctx context.Context, host string, dnsType uint16) (ips []netip.Addr, err error) {
@@ -472,7 +853,10 @@ type Config struct {
 	Main, Fallback       []NameServer
 	Default              []NameServer
 	ProxyServer          []NameServer
+	ProxyFallback        []NameServer
 	DirectServer         []NameServer
+	DirectFallback       []NameServer
+	RecoveryInterval     uint
 	DirectFollowPolicy   bool
 	IPv6                 bool
 	IPv6Timeout          uint
@@ -524,6 +908,10 @@ func NewResolverFromClient(client dnsClient) *Resolver {
 }
 
 func NewResolver(config Config) (rs Resolvers) {
+	makeFallbackCircuit := func() *fallbackCircuit {
+		return newFallbackCircuit(time.Duration(config.RecoveryInterval) * time.Millisecond)
+	}
+
 	defaultResolver := &Resolver{
 		main:        transform(config.Default, nil),
 		cache:       config.newCache(),
@@ -606,20 +994,32 @@ func NewResolver(config Config) (rs Resolvers) {
 
 	if len(config.ProxyServer) != 0 {
 		rs.ProxyResolver = &Resolver{
-			ipv6:        config.IPv6,
-			main:        cacheTransform(config.ProxyServer),
-			cache:       config.newCache(),
-			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
-			policy:      makePolicy(config.ProxyServerPolicy),
+			ipv6:            config.IPv6,
+			main:            cacheTransform(config.ProxyServer),
+			fallback:        cacheTransform(config.ProxyFallback),
+			delayedFallback: len(config.ProxyFallback) != 0,
+			fallbackLabel:   "proxy-server-nameserver",
+			cache:           config.newCache(),
+			ipv6Timeout:     time.Duration(config.IPv6Timeout) * time.Millisecond,
+			policy:          makePolicy(config.ProxyServerPolicy),
+		}
+		if rs.ProxyResolver.delayedFallback {
+			rs.ProxyResolver.fallbackCircuit = makeFallbackCircuit()
 		}
 	}
 
 	if len(config.DirectServer) != 0 {
 		rs.DirectResolver = &Resolver{
-			ipv6:        config.IPv6,
-			main:        cacheTransform(config.DirectServer),
-			cache:       config.newCache(),
-			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+			ipv6:            config.IPv6,
+			main:            cacheTransform(config.DirectServer),
+			fallback:        cacheTransform(config.DirectFallback),
+			delayedFallback: len(config.DirectFallback) != 0,
+			fallbackLabel:   "direct-nameserver",
+			cache:           config.newCache(),
+			ipv6Timeout:     time.Duration(config.IPv6Timeout) * time.Millisecond,
+		}
+		if rs.DirectResolver.delayedFallback {
+			rs.DirectResolver.fallbackCircuit = makeFallbackCircuit()
 		}
 		if config.DirectFollowPolicy {
 			rs.DirectResolver.policy = r.policy
