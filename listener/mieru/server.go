@@ -55,6 +55,7 @@ func Handle(conn net.Conn, tunnel C.Tunnel, request *mierumodel.Request, additio
 	case mieruconstant.Socks5UDPAssociateCmd: // UDP
 		pc := mierucommon.NewPacketOverStreamTunnel(conn)
 		ep := N.NewEnhancePacketConn(pc)
+		defer ep.Close()
 		for {
 			data, put, addr, err := ep.WaitReadFrom()
 			if err != nil {
