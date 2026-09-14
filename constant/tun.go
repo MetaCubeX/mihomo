@@ -9,12 +9,14 @@ var StackTypeMapping = map[string]TUNStack{
 	strings.ToLower(TunGvisor.String()): TunGvisor,
 	strings.ToLower(TunSystem.String()): TunSystem,
 	strings.ToLower(TunMixed.String()):  TunMixed,
+	strings.ToLower(TunMips.String()):   TunMips,
 }
 
 const (
 	TunGvisor TUNStack = iota
 	TunSystem
 	TunMixed
+	TunMips
 )
 
 type TUNStack int
@@ -42,6 +44,8 @@ func (e TUNStack) String() string {
 		return "System"
 	case TunMixed:
 		return "Mixed"
+	case TunMips:
+		return "Mips"
 	default:
 		return "unknown"
 	}

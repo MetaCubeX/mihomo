@@ -291,7 +291,12 @@ func NewSnell(option SnellOption) (*Snell, error) {
 				return nil, err
 			}
 
-			return s.streamConnContext(ctx, c)
+			sc, err := s.streamConnContext(ctx, c)
+			if err != nil {
+				_ = c.Close()
+				return nil, err
+			}
+			return sc, nil
 		})
 	}
 	return s, nil
