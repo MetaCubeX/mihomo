@@ -73,6 +73,9 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 		})
 	}
 
+	if err == nil {
+		c = u.LimitConn(c)
+	}
 	return c, err
 }
 
@@ -82,6 +85,7 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 	pc, err := proxy.ListenPacketContext(ctx, metadata)
 	if err == nil {
 		pc.AppendToChains(u)
+		pc = u.LimitPacketConn(pc)
 	} else {
 		u.onDialFailed(proxy.Type(), err, u.healthCheck)
 	}
@@ -192,7 +196,7 @@ func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.
 	return u.GroupBase.URLTest(ctx, u.testUrl, expectedStatus)
 }
 
-func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (*URLTest, error) {
+func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFallback C.Proxy, providers []P.ProxyProvider, bandwidth uint64) (*URLTest, error) {
 	if emptyFallback == nil {
 		return nil, errors.New("empty fallback proxy not exist")
 	}
@@ -209,6 +213,7 @@ func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFall
 			MaxFailedTimes: option.MaxFailedTimes,
 			EmptyFallback:  emptyFallback,
 			Providers:      providers,
+			Bandwidth:      bandwidth,
 		}),
 		fastSingle:     singledo.NewSingle[C.Proxy](time.Second * 10),
 		disableUDP:     option.DisableUDP,

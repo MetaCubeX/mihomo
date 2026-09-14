@@ -48,6 +48,9 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 		})
 	}
 
+	if err == nil {
+		c = f.LimitConn(c)
+	}
 	return c, err
 }
 
@@ -57,6 +60,7 @@ func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	pc, err := proxy.ListenPacketContext(ctx, metadata)
 	if err == nil {
 		pc.AppendToChains(f)
+		pc = f.LimitPacketConn(pc)
 	}
 
 	return pc, err
@@ -159,7 +163,7 @@ func (f *Fallback) Proxies() []C.Proxy {
 	return f.GetProxies(false)
 }
 
-func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (*Fallback, error) {
+func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyFallback C.Proxy, providers []P.ProxyProvider, bandwidth uint64) (*Fallback, error) {
 	return &Fallback{
 		GroupBase: NewGroupBase(GroupBaseOption{
 			Name:           option.Name,
@@ -173,6 +177,7 @@ func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyF
 			MaxFailedTimes: option.MaxFailedTimes,
 			EmptyFallback:  emptyFallback,
 			Providers:      providers,
+			Bandwidth:      bandwidth,
 		}),
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
