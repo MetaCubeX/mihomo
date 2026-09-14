@@ -62,6 +62,7 @@ func (c *Client) createConn(ctx context.Context, dial DialFn) (*smux.Session, er
 	convid := randv2.Uint32()
 	kcpconn, err := kcp.NewConn4(convid, addr, c.block, config.DataShard, config.ParityShard, true, conn)
 	if err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
 	kcpconn.SetStreamMode(true)
@@ -86,6 +87,7 @@ func (c *Client) createConn(ctx context.Context, dial DialFn) (*smux.Session, er
 	}
 
 	if err := smux.VerifyConfig(smuxConfig); err != nil {
+		_ = kcpconn.Close()
 		return nil, err
 	}
 

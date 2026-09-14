@@ -64,6 +64,7 @@ func (s *Server) Serve(pc net.PacketConn, handler func(net.Conn)) error {
 
 			mux, err := smux.Server(netConn, smuxConfig)
 			if err != nil {
+				_ = netConn.Close()
 				return
 			}
 			defer mux.Close()
