@@ -188,8 +188,8 @@ func (u *URLTest) Proxies() []C.Proxy {
 	return u.GetProxies(false)
 }
 
-func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (map[string]uint16, error) {
-	return u.GroupBase.URLTest(ctx, u.testUrl, expectedStatus)
+func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], options ...C.HealthCheckOption) (map[string]uint16, error) {
+	return u.GroupBase.URLTest(ctx, u.testUrl, expectedStatus, options...)
 }
 
 func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (*URLTest, error) {
