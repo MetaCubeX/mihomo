@@ -133,6 +133,7 @@ profile: # 存储 select 选择记录
 # Tun 配置
 tun:
   enable: false
+  # driver: wfp # Windows WFP 接管，见 docs/wfp.md
   stack: system # gvisor/mixed
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS

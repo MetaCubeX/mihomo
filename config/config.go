@@ -272,6 +272,7 @@ type RawNTP struct {
 
 type RawTun struct {
 	Enable              bool       `yaml:"enable" json:"enable"`
+	Driver              string     `yaml:"driver" json:"driver"`
 	Device              string     `yaml:"device" json:"device"`
 	Stack               C.TUNStack `yaml:"stack" json:"stack"`
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
@@ -1691,6 +1692,7 @@ func parseTun(rawTun RawTun, dns *DNS, general *General) error {
 
 	general.Tun = LC.Tun{
 		Enable:              rawTun.Enable,
+		Driver:              rawTun.Driver,
 		Device:              rawTun.Device,
 		Stack:               rawTun.Stack,
 		DNSHijack:           rawTun.DNSHijack,

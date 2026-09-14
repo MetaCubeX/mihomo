@@ -11,6 +11,7 @@ import (
 
 type Tun struct {
 	Enable              bool       `yaml:"enable" json:"enable"`
+	Driver              string     `yaml:"driver" json:"driver"`
 	Device              string     `yaml:"device" json:"device"`
 	Stack               C.TUNStack `yaml:"stack" json:"stack"`
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
@@ -96,7 +97,7 @@ func (t *Tun) Sort() {
 }
 
 func (t *Tun) Equal(other Tun) bool {
-	if t.Enable != other.Enable {
+	if t.Enable != other.Enable || t.Driver != other.Driver {
 		return false
 	}
 	if t.Device != other.Device {
