@@ -19,7 +19,7 @@ import (
 
 type ServerOption struct {
 	Config
-	ConnHandler func(net.Conn)
+	ConnHandler func(net.Conn, *http.Request)
 	HttpHandler http.Handler
 }
 
@@ -97,7 +97,7 @@ func (s *httpSession) markConnected() {
 
 type requestHandler struct {
 	config      Config
-	connHandler func(net.Conn)
+	connHandler func(net.Conn, *http.Request)
 	httpHandler http.Handler
 
 	xPaddingBytes        Range
@@ -456,7 +456,7 @@ func (h *requestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		httputils.SetAddrFromRequest(&conn.NetAddr, r)
 
-		go h.connHandler(N.NewDeadlineConn(conn))
+		go h.connHandler(N.NewDeadlineConn(conn), r)
 
 		select {
 		case <-r.Context().Done():
@@ -484,7 +484,7 @@ func (h *requestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		httputils.SetAddrFromRequest(&conn.NetAddr, r)
 
-		go h.connHandler(N.NewDeadlineConn(conn))
+		go h.connHandler(N.NewDeadlineConn(conn), r)
 
 		select {
 		case <-r.Context().Done():
