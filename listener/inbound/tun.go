@@ -12,6 +12,7 @@ import (
 
 type TunOption struct {
 	BaseOption
+	Driver              string     `inbound:"driver,omitempty"`
 	Device              string     `inbound:"device,omitempty"`
 	Stack               C.TUNStack `inbound:"stack,omitempty"`
 	DNSHijack           []string   `inbound:"dns-hijack,omitempty"`
@@ -94,6 +95,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 		config: options,
 		tun: LC.Tun{
 			Enable:                                true,
+			Driver:                                options.Driver,
 			Device:                                options.Device,
 			Stack:                                 options.Stack,
 			DNSHijack:                             options.DNSHijack,
