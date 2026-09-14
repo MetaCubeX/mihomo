@@ -2,7 +2,7 @@
 
 `driver: wfp` 通过 WinDivert 2.2 接管本机其他进程的出站 TCP/UDP，使用 mihomo 的规则、代理和 DNS 处理。支持 Windows x86/x64，需管理员权限。
 
-`stack: system` 使用 Windows TCP 协议栈并直接处理 UDP；`mixed` 使用 Windows TCP 协议栈和 gVisor UDP；`gvisor` 使用 gVisor 处理 TCP/UDP；`mips` 使用 mihomo IP stack（MIPS）处理 TCP/UDP，无需 `with_gvisor` 构建标签。
+`stack: system` 使用 Windows TCP 协议栈并直接处理 UDP；`mixed` 使用 Windows TCP 协议栈和 gVisor UDP；`gvisor` 使用 gVisor 处理 TCP/UDP；`mips` 使用 mihomo IP stack（MIPS）处理 TCP/UDP。
 
 `system` 和 `mixed` 会为当前程序添加 TCP 入站防火墙规则，关闭监听器时移除。
 
@@ -35,7 +35,7 @@ WFP 使用 `mtu`（默认 1500）、`dns-hijack`、`udp-timeout`（秒，默认 
 
 驱动和许可证位于 `component/windivert/driver`。嵌入的驱动会自动释放到运行账户 Local AppData 下的 `mihomo\windivert\2.2.2` 并加载。
 
-管理员可运行四种协议栈的驱动集成测试（不带 `with_gvisor` 时测试 system 和 mips）：
+管理员可运行驱动集成测试：
 
 ```powershell
 $env:MIHOMO_WFP_TEST = '1'

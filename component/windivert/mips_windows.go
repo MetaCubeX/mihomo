@@ -40,14 +40,13 @@ func (t *Tun) startMIPS() error {
 	if err = ipStack.Start(); err != nil {
 		return err
 	}
-	// Only local source addresses need an interface entry, as in the gVisor path.
 	var interfaceMu sync.RWMutex
 	interfaces := make(map[netip.Addr]address)
 	t.deliver = func(p []byte, info packetInfo, addr address) {
 		interfaceMu.Lock()
 		interfaces[info.source.Addr()] = addr
 		interfaceMu.Unlock()
-		// Write consumes the packet synchronously, so the receive buffer can be reused.
+		// Write consumes p before returning.
 		_, _ = ipStack.Write([][]byte{p[:info.size]}, 0)
 	}
 	t.running.Add(1)
@@ -62,21 +61,14 @@ func (t *Tun) startMIPS() error {
 			n, err := ipStack.Read(buffers, sizes, 0)
 			for i := 0; i < n; i++ {
 				p := buffers[i][:sizes[i]]
-				// Stack output is valid IP, including fragments of large UDP replies.
+				// Replies may be IP fragments.
 				destination, _ := netip.AddrFromSlice(p[16:20])
 				if p[0]>>4 == 6 {
 					destination, _ = netip.AddrFromSlice(p[24:40])
 				}
 				interfaceMu.RLock()
-				addr, ok := interfaces[destination]
+				addr := interfaces[destination]
 				interfaceMu.RUnlock()
-				if !ok {
-					if t.ctx.Err() == nil {
-						log.Warnln("[WFP] response interface not found for %s", destination)
-					}
-					continue
-				}
-				// MIPS already calculated these checksums; inject as inbound.
 				addr.Flags = flagIPChecksum | flagTCPChecksum | flagUDPChecksum
 				if _, err := t.handle.send(p, &addr); err != nil && t.ctx.Err() == nil {
 					log.Warnln("[WFP] send: packet dropped: %s", err)
@@ -99,14 +91,12 @@ func (t *Tun) forwardMIPSTCP(request *mipstack.TCPForwarderRequest) {
 	if err != nil {
 		return
 	}
-	go func() {
-		defer conn.Close()
-		if err := t.options.Handler.NewConnection(t.ctx, conn, M.Metadata{
-			Source: M.SocksaddrFromNetIP(flow.Source), Destination: M.SocksaddrFromNetIP(flow.Destination),
-		}); err != nil {
-			_ = conn.SetLinger(0)
-		}
-	}()
+	defer conn.Close()
+	if err := t.options.Handler.NewConnection(t.ctx, conn, M.Metadata{
+		Source: M.SocksaddrFromNetIP(flow.Source), Destination: M.SocksaddrFromNetIP(flow.Destination),
+	}); err != nil {
+		_ = conn.SetLinger(0)
+	}
 }
 
 func (t *Tun) forwardMIPSUDP(request *mipstack.UDPForwarderRequest) {
@@ -130,8 +120,6 @@ func (w *mipsUDPWriter) WritePacket(buffer *buf.Buffer, source M.Socksaddr) erro
 	return err
 }
 
-// Complete outbound checksums before MIPS validates the packet.
-// info comes from parsePacket, which excludes fragments and truncated headers.
 func completeChecksums(p []byte, info packetInfo, flags uint32) bool {
 	// Windows can leave the IPv4 checksum zero even with IPChecksum set.
 	if info.source.Addr().Is4() && (flags&flagIPChecksum == 0 || binary.BigEndian.Uint16(p[10:]) == 0) {
@@ -150,10 +138,7 @@ func completeChecksums(p []byte, info packetInfo, flags uint32) bool {
 	}
 	if flags&checksumFlag == 0 {
 		payload[checksumOffset], payload[checksumOffset+1] = 0, 0
-		checksum, err := mipstack.IPTransportChecksum(info.source.Addr(), info.destination.Addr(), int(info.protocol), payload)
-		if err != nil {
-			return false
-		}
+		checksum, _ := mipstack.IPTransportChecksum(info.source.Addr(), info.destination.Addr(), int(info.protocol), payload)
 		if info.protocol == 17 && checksum == 0 {
 			checksum = 0xffff
 		}
