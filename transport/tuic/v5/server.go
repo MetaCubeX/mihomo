@@ -125,6 +125,7 @@ func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode types.UdpRelayM
 func (s *serverHandler) HandleStream(conn *N.BufferedConn) (err error) {
 	connect, err := ReadConnect(conn)
 	if err != nil {
+		_ = conn.Close()
 		return err
 	}
 	<-s.authCh
