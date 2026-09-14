@@ -328,11 +328,12 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	ctx := sing.WithAdditions(context.TODO(), additions...)
 	if l.decryption != nil {
-		var err error
-		conn, err = l.decryption.Handshake(conn, nil)
+		c, err := l.decryption.Handshake(conn, nil)
 		if err != nil {
+			_ = conn.Close()
 			return
 		}
+		conn = c
 	}
 	err := l.service.NewConnection(ctx, conn, metadata.Metadata{
 		Protocol: "vless",
