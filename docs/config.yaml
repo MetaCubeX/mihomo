@@ -1746,6 +1746,10 @@ proxy-groups:
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
   # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
+  # hash-key: in-user # 可选,仅 consistent-hashing 和 sticky-sessions 支持。
+  #                   # 默认按目标地址哈希,一个任务访问多个域名时会换节点;
+  #                   # 设为 in-user 后改按 inbound 认证用户(与 IN-USER 规则同一个值)哈希,
+  #                   # 使同一用户的所有请求固定在同一节点。未认证的请求仍用该策略默认的 key。
 
   # select 用户自行选择节点
   - name: Proxy

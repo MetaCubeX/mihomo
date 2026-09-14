@@ -73,15 +73,17 @@ func getKeyWithSrcAndDst(metadata *C.Metadata) string {
 	return fmt.Sprintf("%s%s", src, dst)
 }
 
-// getKeyWithUser pins on the authenticated inbound user instead of on an
+// getKeyWithInUser pins on the authenticated inbound user instead of on an
 // address. Both address-derived keys assume one client's traffic to one
 // destination is one unit of work, which is false for a client whose single
 // unit of work walks several destinations: the hash moves with the host, and
 // the egress IP changes underneath a session the destination is tracking.
 // The inbound user is the only identity the client itself controls, and
-// `IN-USER` rules already match on it. An unauthenticated request keeps the
-// strategy's own key rather than collapsing every such request onto one node.
-func getKeyWithUser(fallback keyFn) keyFn {
+// `IN-USER` rules already match on it -- hence the option value `in-user`,
+// which names the same thing those rules do. An unauthenticated request keeps
+// the strategy's own key rather than collapsing every such request onto one
+// node.
+func getKeyWithInUser(fallback keyFn) keyFn {
 	return func(metadata *C.Metadata) string {
 		if metadata != nil && metadata.InUser != "" {
 			return metadata.InUser
@@ -97,8 +99,8 @@ func hashKey(name string) (func(keyFn) keyFn, error) {
 	switch name {
 	case "":
 		return func(fn keyFn) keyFn { return fn }, nil
-	case "user":
-		return getKeyWithUser, nil
+	case "in-user":
+		return getKeyWithInUser, nil
 	}
 
 	return nil, fmt.Errorf("%w: %s", errHashKey, name)

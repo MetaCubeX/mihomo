@@ -46,11 +46,11 @@ func request(user, host string) *C.Metadata {
 // One unit of work walking several destinations is the case both address-derived
 // keys get wrong: the group is meant to hold that work on one egress, and the
 // default key moves it as soon as the host changes.
-func TestLoadBalanceHashKeyUserSurvivesADestinationChange(t *testing.T) {
+func TestLoadBalanceHashKeyInUserSurvivesADestinationChange(t *testing.T) {
 	proxies := balancedProxies(8)
 	hosts := []string{"a.example.com", "b.example.org", "c.example.net", "d.example.io"}
 
-	byUser := strategyConsistentHashing(testUrl, getKeyWithUser(getKey))
+	byUser := strategyConsistentHashing(testUrl, getKeyWithInUser(getKey))
 	pinned := indexOf(t, proxies, byUser(proxies, request("job-1", hosts[0]), false))
 	for _, host := range hosts {
 		selected := byUser(proxies, request("job-1", host), false)
@@ -68,9 +68,9 @@ func TestLoadBalanceHashKeyUserSurvivesADestinationChange(t *testing.T) {
 }
 
 // Pinning must not become a single node: distinct users still spread.
-func TestLoadBalanceHashKeyUserSpreadsUsers(t *testing.T) {
+func TestLoadBalanceHashKeyInUserSpreadsUsers(t *testing.T) {
 	proxies := balancedProxies(8)
-	strategy := strategyConsistentHashing(testUrl, getKeyWithUser(getKey))
+	strategy := strategyConsistentHashing(testUrl, getKeyWithInUser(getKey))
 
 	seen := map[int]bool{}
 	for _, user := range []string{"job-1", "job-2", "job-3", "job-4", "job-5", "job-6"} {
@@ -82,9 +82,9 @@ func TestLoadBalanceHashKeyUserSpreadsUsers(t *testing.T) {
 
 // Sticky sessions keys on source and destination; a client behind one source
 // address cannot separate its own concurrent jobs without a supplied identity.
-func TestLoadBalanceHashKeyUserSeparatesJobsSharingASourceAddress(t *testing.T) {
+func TestLoadBalanceHashKeyInUserSeparatesJobsSharingASourceAddress(t *testing.T) {
 	proxies := balancedProxies(8)
-	strategy := strategyStickySessions(testUrl, getKeyWithUser(getKeyWithSrcAndDst))
+	strategy := strategyStickySessions(testUrl, getKeyWithInUser(getKeyWithSrcAndDst))
 
 	first := indexOf(t, proxies, strategy(proxies, request("job-1", "a.example.com"), false))
 	require.Equal(t, first,
@@ -99,19 +99,39 @@ func TestLoadBalanceHashKeyUserSeparatesJobsSharingASourceAddress(t *testing.T) 
 
 // An unauthenticated request keeps the strategy's own key. Returning a constant
 // instead would herd every anonymous request onto one member.
-func TestLoadBalanceHashKeyUserFallsBackWhenUnauthenticated(t *testing.T) {
-	keyed := getKeyWithUser(getKey)
+func TestLoadBalanceHashKeyInUserFallsBackWhenUnauthenticated(t *testing.T) {
+	keyed := getKeyWithInUser(getKey)
 	require.Equal(t, "example.com", keyed(request("", "a.example.com")))
 	require.Equal(t, "job-1", keyed(request("job-1", "a.example.com")))
 	require.Equal(t, getKey(nil), keyed(nil))
+}
+
+// The option name is the contract with the config file, and nothing else here
+// exercises it: every other test reaches the decorator directly, so renaming
+// the case would leave them all green while `hash-key: in-user` stopped working.
+func TestLoadBalanceHashKeyResolvesTheOptionName(t *testing.T) {
+	withInUser, err := hashKey("in-user")
+	require.NoError(t, err)
+	require.Equal(t, "job-1", withInUser(getKey)(request("job-1", "a.example.com")))
+
+	identity, err := hashKey("")
+	require.NoError(t, err)
+	require.Equal(t, getKey(request("job-1", "a.example.com")),
+		identity(getKey)(request("job-1", "a.example.com")))
 }
 
 func TestLoadBalanceHashKeyRejectsUnusableConfigs(t *testing.T) {
 	_, err := hashKey("session")
 	require.ErrorIs(t, err, errHashKey)
 
+	// `user` was the name this option carried before review. Rejecting it keeps
+	// the rename honest: without this the case above could still read `user`
+	// and every test here would stay green.
+	_, err = hashKey("user")
+	require.ErrorIs(t, err, errHashKey)
+
 	_, err = NewLoadBalance(GroupCommonOption{Name: "lb"},
-		LoadBalanceOption{Strategy: "round-robin", HashKey: "user"}, nil, nil)
+		LoadBalanceOption{Strategy: "round-robin", HashKey: "in-user"}, nil, nil)
 	require.ErrorIs(t, err, errHashKey)
 
 	_, err = NewLoadBalance(GroupCommonOption{Name: "lb"},
