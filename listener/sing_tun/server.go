@@ -134,9 +134,6 @@ func checkTunName(tunName string) (ok bool) {
 }
 
 func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	if options.Driver != "" && options.Driver != "normal" && options.Driver != "wfp" {
-		return nil, fmt.Errorf("unknown tun driver: %s", options.Driver)
-	}
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-TUN"),
@@ -161,10 +158,13 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (*Liste
 		return nil, err
 	}
 	l := &Listener{options: options, handler: &ListenerHandler{ListenerHandler: h, DnsAddrPorts: dnsAdds}}
-	if options.Driver == "wfp" {
-		err = l.startWFP()
-	} else {
+	switch options.InterceptMode {
+	case C.TunInterceptVNIC:
 		err = l.startTun()
+	case C.TunInterceptWFP:
+		err = l.startWFP()
+	default:
+		err = fmt.Errorf("unsupported tun intercept-mode: %s", options.InterceptMode)
 	}
 	if err != nil {
 		l.Close()

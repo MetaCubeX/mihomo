@@ -79,7 +79,7 @@ func wfpTestClient(t *testing.T) string {
 
 func testWFPStack(t *testing.T, stack C.TUNStack, client string) {
 	echo := &wfpEchoTunnel{table: nat.New(), seen: make(chan *C.Metadata, 8)}
-	options := LC.Tun{Driver: "wfp", Stack: stack, RouteAddress: []netip.Prefix{netip.MustParsePrefix("203.0.113.1/32")}}
+	options := LC.Tun{InterceptMode: C.TunInterceptWFP, Stack: stack, RouteAddress: []netip.Prefix{netip.MustParsePrefix("203.0.113.1/32")}}
 	networks := []string{"tcp4", "udp4"}
 	if os.Getenv("MIHOMO_WFP_TEST_IPV6") == "1" {
 		options.Inet6Address = []netip.Prefix{netip.MustParsePrefix("fdfe::1/126")}

@@ -271,13 +271,13 @@ type RawNTP struct {
 }
 
 type RawTun struct {
-	Enable              bool       `yaml:"enable" json:"enable"`
-	Driver              string     `yaml:"driver" json:"driver"`
-	Device              string     `yaml:"device" json:"device"`
-	Stack               C.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	Enable              bool               `yaml:"enable" json:"enable"`
+	InterceptMode       C.TUNInterceptMode `yaml:"intercept-mode" json:"intercept-mode"`
+	Device              string             `yaml:"device" json:"device"`
+	Stack               C.TUNStack         `yaml:"stack" json:"stack"`
+	DNSHijack           []string           `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool               `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool               `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 
 	MTU        uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        bool   `yaml:"gso" json:"gso,omitempty"`
@@ -543,7 +543,7 @@ func DefaultRawConfig() *RawConfig {
 		},
 		Tun: RawTun{
 			Enable:               false,
-			Driver:               "normal",
+			InterceptMode:        C.TunInterceptVNIC,
 			Device:               "",
 			Stack:                C.TunGvisor,
 			DNSHijack:            []string{"0.0.0.0:53"}, // default hijack all dns query
@@ -1693,7 +1693,7 @@ func parseTun(rawTun RawTun, dns *DNS, general *General) error {
 
 	general.Tun = LC.Tun{
 		Enable:              rawTun.Enable,
-		Driver:              rawTun.Driver,
+		InterceptMode:       rawTun.InterceptMode,
 		Device:              rawTun.Device,
 		Stack:               rawTun.Stack,
 		DNSHijack:           rawTun.DNSHijack,
