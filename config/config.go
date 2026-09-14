@@ -543,6 +543,7 @@ func DefaultRawConfig() *RawConfig {
 		},
 		Tun: RawTun{
 			Enable:               false,
+			Driver:               "normal",
 			Device:               "",
 			Stack:                C.TunGvisor,
 			DNSHijack:            []string{"0.0.0.0:53"}, // default hijack all dns query

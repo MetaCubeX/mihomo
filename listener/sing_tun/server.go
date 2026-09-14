@@ -134,7 +134,7 @@ func checkTunName(tunName string) (ok bool) {
 }
 
 func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	if options.Driver != "" && options.Driver != "wfp" {
+	if options.Driver != "" && options.Driver != "normal" && options.Driver != "wfp" {
 		return nil, fmt.Errorf("unknown tun driver: %s", options.Driver)
 	}
 	if len(additions) == 0 {

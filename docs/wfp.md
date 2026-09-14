@@ -25,7 +25,7 @@ tun:
 go build -tags with_gvisor -o mihomo.exe .
 ```
 
-省略 `driver` 时使用默认 TUN 驱动。
+`driver` 可选 `normal`（默认，普通 TUN 驱动）或 `wfp`（Windows WFP 接管）。
 
 WFP 使用 `mtu`（默认 1500）、`dns-hijack`、`udp-timeout`（秒，默认 300）、`route-address`、`route-exclude-address`、`include-interface`、`exclude-interface`、`exclude-src-port` 和 `exclude-dst-port`。每个进程可启用一个 WFP 监听器。
 
