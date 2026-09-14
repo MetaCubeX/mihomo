@@ -65,11 +65,15 @@ func (r *tcpRedirect) port(ip netip.Addr) uint16 {
 	return r.ports[0]
 }
 
-func (r *tcpRedirect) redirect(p []byte, info packetInfo) {
-	port := r.nat.Lookup(info.source, info.destination)
+func (r *tcpRedirect) redirect(p []byte, info packetInfo) bool {
+	port, err := r.nat.Lookup(info.source, info.destination)
+	if err != nil {
+		return false
+	}
 	// Reflect the outbound packet into a local Windows TCP listener.
 	rewriteTCP(p, info, netip.AddrPortFrom(info.destination.Addr(), port),
 		netip.AddrPortFrom(info.source.Addr(), r.port(info.source.Addr())))
+	return true
 }
 
 func (r *tcpRedirect) reply(p []byte, info packetInfo) bool {

@@ -91,10 +91,14 @@ func New(options Options) (_ *Tun, err error) {
 		if err = t.startGVisor(); err != nil {
 			return nil, err
 		}
+	case "mips":
+		if err = t.startMIPS(); err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unknown WFP stack: %s", options.Stack)
 	}
-	if options.Stack != "gvisor" {
+	if options.Stack == "system" || options.Stack == "mixed" {
 		if err = t.startTCP(); err != nil {
 			return nil, err
 		}
@@ -200,11 +204,13 @@ func (t *Tun) processPacket(p []byte, addr address) (address, bool) {
 	if !ok || !t.selected(info, addr) || !t.capture(info) {
 		return addr, true
 	}
+	if t.options.Stack == "mips" && !completeChecksums(p, info, addr.Flags) {
+		return address{}, false
+	}
 	// Replies are inbound on this interface; zero checksum flags request recalculation.
 	addr = address{IfIdx: addr.IfIdx, SubIfIdx: addr.SubIfIdx}
 	if info.protocol == 6 && t.tcp != nil {
-		t.tcp.redirect(p, info)
-		return addr, true
+		return addr, t.tcp.redirect(p, info)
 	}
 	t.deliver(p, info, addr)
 	return address{}, false

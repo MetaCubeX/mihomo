@@ -54,7 +54,7 @@ func TestWFPIntegration(t *testing.T) {
 	}))
 	defer func() { resolver.DefaultService = previous }()
 	client := wfpTestClient(t)
-	stacks := []C.TUNStack{C.TunSystem}
+	stacks := []C.TUNStack{C.TunSystem, C.TunMips}
 	if tun.WithGVisor {
 		stacks = append(stacks, C.TunMixed, C.TunGvisor)
 	}
@@ -79,7 +79,8 @@ func wfpTestClient(t *testing.T) string {
 
 func testWFPStack(t *testing.T, stack C.TUNStack, client string) {
 	echo := &wfpEchoTunnel{table: nat.New(), seen: make(chan *C.Metadata, 8)}
-	options := LC.Tun{Driver: "wfp", Stack: stack, RouteAddress: []netip.Prefix{netip.MustParsePrefix("198.18.0.1/32")}}
+	// TEST-NET-3 stays separate from mihomo's usual local TUN address.
+	options := LC.Tun{Driver: "wfp", Stack: stack, RouteAddress: []netip.Prefix{netip.MustParsePrefix("203.0.113.1/32")}}
 	networks := []string{"tcp4", "udp4"}
 	if os.Getenv("MIHOMO_WFP_TEST_IPV6") == "1" {
 		options.Inet6Address = []netip.Prefix{netip.MustParsePrefix("fdfe::1/126")}
@@ -97,7 +98,7 @@ func testWFPStack(t *testing.T, stack C.TUNStack, client string) {
 				runWFPClient(t, client, "TestWFPClient", network)
 				select {
 				case metadata := <-echo.seen:
-					destination := "198.18.0.1"
+					destination := "203.0.113.1"
 					if network[len(network)-1] == '6' {
 						destination = "2001:db8::1"
 					}
@@ -109,7 +110,7 @@ func testWFPStack(t *testing.T, stack C.TUNStack, client string) {
 				}
 			})
 		}
-		conn, err := net.DialTimeout("tcp4", "198.18.0.1:18473", 500*time.Millisecond)
+		conn, err := net.DialTimeout("tcp4", "203.0.113.1:18473", 500*time.Millisecond)
 		if err == nil {
 			conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
 			payload := []byte{0}
@@ -155,7 +156,7 @@ func TestWFPClient(t *testing.T) {
 	if network == "" {
 		t.Skip("integration-test subprocess")
 	}
-	destination := "198.18.0.1:18473"
+	destination := "203.0.113.1:18473"
 	if network[len(network)-1] == '6' {
 		destination = "[2001:db8::1]:18473"
 	}

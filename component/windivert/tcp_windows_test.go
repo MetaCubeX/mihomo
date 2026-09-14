@@ -3,6 +3,7 @@
 package windivert
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"net/netip"
@@ -35,7 +36,9 @@ func TestTCPRedirect(t *testing.T) {
 		}
 		p[headerLen+12], p[headerLen+13] = 0x50, 2
 		info := packetInfo{flow: flow{source: source, destination: destination, protocol: 6}, offset: headerLen}
-		r.redirect(p, info)
+		if !r.redirect(p, info) {
+			t.Fatal("TCP redirect failed")
+		}
 		redirected, ok := parsePacket(p)
 		if !ok || redirected.destination != netip.AddrPortFrom(source.Addr(), r.port(source.Addr())) ||
 			redirected.source.Addr() != destination.Addr() {
@@ -52,5 +55,22 @@ func TestTCPRedirect(t *testing.T) {
 		if !ok || restored.source != destination || restored.destination != source {
 			t.Fatalf("original endpoints lost: %+v", restored)
 		}
+	}
+}
+
+func TestTCPRedirectExhausted(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := &tcpRedirect{nat: tun.NewNat(ctx, time.Minute), ports: [2]uint16{18474, 18475}}
+	p, info := mipsTestPacket(t, false, 6, nil)
+	for port := 1; port <= 65535-10000+1; port++ {
+		if _, err := r.nat.Lookup(netip.AddrPortFrom(info.source.Addr(), uint16(port)), info.destination); err != nil {
+			t.Fatal(err)
+		}
+	}
+	info.source = netip.AddrPortFrom(info.source.Addr(), 65535)
+	before := append([]byte(nil), p...)
+	if r.redirect(p, info) || !bytes.Equal(p, before) {
+		t.Fatal("NAT exhaustion must drop the packet without rewriting it")
 	}
 }

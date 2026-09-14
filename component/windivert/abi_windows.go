@@ -21,6 +21,9 @@ const (
 	ioctlSend       = 0x12e491
 	accept          = 0x7ffe
 	reject          = 0x7fff
+	flagIPChecksum  = 1 << 21
+	flagTCPChecksum = 1 << 22
+	flagUDPChecksum = 1 << 23
 )
 
 type address struct {

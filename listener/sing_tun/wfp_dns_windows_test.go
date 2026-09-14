@@ -17,7 +17,7 @@ func TestWFPDNSClient(t *testing.T) {
 	if mode == "" {
 		t.Skip("DNS integration subprocess")
 	}
-	destination := "198.18.0.1:53"
+	destination := "203.0.113.1:53"
 	if strings.HasSuffix(mode, "6") {
 		destination = "[2001:db8::1]:53"
 	}
