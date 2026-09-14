@@ -133,7 +133,7 @@ profile: # 存储 select 选择记录
 # Tun 配置
 tun:
   enable: false
-  stack: system # gvisor/mixed
+  stack: system # gvisor/mixed/mips
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
   # auto-detect-interface: true # 自动识别出口网卡
@@ -2788,7 +2788,7 @@ listeners:
     type: tun
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
-    stack: system # gvisor / mixed
+    stack: system # gvisor / mixed / mips
     dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
