@@ -171,6 +171,7 @@ func GetGeneral() *config.General {
 		GeodataLoader:     geodata.LoaderName(),
 		GeositeMatcher:    geodata.SiteMatcherName(),
 		TCPConcurrent:     dialer.GetTcpConcurrent(),
+		TCPConnectTimeout: tunnel.TCPConnectTimeout().Milliseconds(),
 		FindProcessMode:   tunnel.FindProcessMode(),
 		Sniffing:          tunnel.IsSniffing(),
 		GlobalUA:          mihomoHttp.UA(),
@@ -396,6 +397,7 @@ func updateGeneral(general *config.General, logging bool) {
 	resolver.DisableIPv6 = !general.IPv6
 
 	dialer.SetTcpConcurrent(general.TCPConcurrent)
+	_ = tunnel.SetTCPConnectTimeout(general.TCPConnectTimeout)
 	if logging && general.TCPConcurrent {
 		log.Infoln("Use tcp concurrent")
 	}
