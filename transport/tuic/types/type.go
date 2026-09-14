@@ -27,6 +27,10 @@ type Client interface {
 	LastVisited() time.Time
 	SetLastVisited(last time.Time)
 	Close()
+	// ForceClose closes the QUIC connection now, open streams included, and
+	// refuses further dials. Close waits for the open streams to drain; on a
+	// session the server has already dropped they drain only by timing out.
+	ForceClose(err error)
 }
 
 type ServerHandler interface {
