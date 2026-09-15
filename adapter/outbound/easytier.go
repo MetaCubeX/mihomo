@@ -334,8 +334,9 @@ func (e *EasyTier) serve() string {
 	if instance == nil {
 		return "instance is not ready"
 	}
-	// EasyTier reconnects peers itself. The host only has to drain Events();
-	// a full queue returns WouldBlock to the WASM core and can stall it.
+	// Manual connectors retry inside core (reconnect_interval, default 1s).
+	// Events() is best-effort: a full host queue drops the event and does not
+	// stall the guest. Drain it for logs; recreate only when the stream closes.
 	events := instance.Events()
 	if events == nil {
 		if err := instance.Wait(e.ctx); err != nil && e.ctx.Err() == nil {
