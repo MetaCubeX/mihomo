@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/metacubex/mihomo/component/easytier"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -27,6 +28,8 @@ const (
 	easyTierDefaultStateDir = "easytier"
 	easyTierInstanceIDFile  = "instance_id"
 	easyTierDNSTTL          = 60
+	easyTierMinBackoff      = time.Second
+	easyTierMaxBackoff      = 30 * time.Second
 )
 
 var errEasyTierClosed = errors.New("easytier outbound closed")
@@ -40,8 +43,10 @@ type EasyTier struct {
 	zone       string
 	ctx        context.Context
 	cancel     context.CancelFunc
-	startOnce  sync.Once
-	startErr   error
+	loopOnce   sync.Once
+	startMu    sync.Mutex
+	closed     bool
+	readyCh    chan struct{}
 	mu         sync.Mutex
 	host       *corehost.Host
 	instance   *corehost.Instance
@@ -164,26 +169,115 @@ func NewEasyTier(option EasyTierOption) (*EasyTier, error) {
 	return outbound, nil
 }
 
-func (e *EasyTier) start() error {
-	e.startOnce.Do(func() {
-		if err := e.init(); err != nil {
-			e.startErr = err
-			_ = e.shutdown()
-		}
+func (e *EasyTier) ensureStarted(ctx context.Context) error {
+	e.loopOnce.Do(func() {
+		go e.loop()
 	})
-	return e.startErr
+	for {
+		if err := e.ctx.Err(); err != nil {
+			return errEasyTierClosed
+		}
+		e.startMu.Lock()
+		closed := e.closed
+		readyCh := e.readyCh
+		e.startMu.Unlock()
+		if closed {
+			return errEasyTierClosed
+		}
+		e.mu.Lock()
+		instance := e.instance
+		e.mu.Unlock()
+		if instance != nil && instance.State() == corehost.StateRunning {
+			return nil
+		}
+		if readyCh == nil {
+			e.startMu.Lock()
+			if e.readyCh == nil {
+				e.readyCh = make(chan struct{})
+			}
+			readyCh = e.readyCh
+			e.startMu.Unlock()
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-e.ctx.Done():
+			return errEasyTierClosed
+		case <-readyCh:
+		}
+	}
 }
 
-func (e *EasyTier) ensureStarted(ctx context.Context) error {
-	done := make(chan error, 1)
-	go func() {
-		done <- e.start()
-	}()
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
+func (e *EasyTier) signalReady() {
+	e.startMu.Lock()
+	if e.readyCh != nil {
+		close(e.readyCh)
+		e.readyCh = nil
+	}
+	e.startMu.Unlock()
+}
+
+func (e *EasyTier) loop() {
+	backoff := easyTierMinBackoff
+	for {
+		if e.ctx.Err() != nil {
+			return
+		}
+		e.startMu.Lock()
+		closed := e.closed
+		e.startMu.Unlock()
+		if closed {
+			return
+		}
+		err := e.init()
+		if err != nil {
+			log.Warnln("[EasyTier](%s) start failed: %v; retry in %s", e.Name(), err, backoff)
+			_ = e.shutdown()
+			timer := time.NewTimer(backoff)
+			select {
+			case <-e.ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			if backoff < easyTierMaxBackoff {
+				backoff *= 2
+				if backoff > easyTierMaxBackoff {
+					backoff = easyTierMaxBackoff
+				}
+			}
+			continue
+		}
+		backoff = easyTierMinBackoff
+		e.signalReady()
+		reason := e.serve()
+		_ = e.shutdown()
+		if e.ctx.Err() != nil {
+			return
+		}
+		e.startMu.Lock()
+		closed = e.closed
+		e.startMu.Unlock()
+		if closed {
+			return
+		}
+		if reason == "" {
+			reason = "instance stopped"
+		}
+		log.Warnln("[EasyTier](%s) %s; restarting in %s", e.Name(), reason, backoff)
+		timer := time.NewTimer(backoff)
+		select {
+		case <-e.ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		if backoff < easyTierMaxBackoff {
+			backoff *= 2
+			if backoff > easyTierMaxBackoff {
+				backoff = easyTierMaxBackoff
+			}
+		}
 	}
 }
 
@@ -231,6 +325,41 @@ func (e *EasyTier) currentInstance() (*corehost.Instance, error) {
 		return nil, errors.New("easytier instance is not ready")
 	}
 	return e.instance, nil
+}
+
+func (e *EasyTier) serve() string {
+	e.mu.Lock()
+	instance := e.instance
+	e.mu.Unlock()
+	if instance == nil {
+		return "instance is not ready"
+	}
+	// Manual connectors retry inside core (reconnect_interval, default 1s).
+	// Events() is best-effort: a full host queue drops the event and does not
+	// stall the guest. Drain it for logs; recreate only when the stream closes.
+	events := instance.Events()
+	if events == nil {
+		if err := instance.Wait(e.ctx); err != nil && e.ctx.Err() == nil {
+			return err.Error()
+		}
+		return "instance stopped"
+	}
+	for {
+		select {
+		case <-e.ctx.Done():
+			return ""
+		case event, ok := <-events:
+			if !ok {
+				return "instance stopped"
+			}
+			switch event.Kind {
+			case "peer_added", "peer_removed":
+				log.Infoln("[EasyTier](%s) %s: %s", e.Name(), event.Kind, event.Message)
+			default:
+				log.Debugln("[EasyTier](%s) %s: %s", e.Name(), event.Kind, event.Message)
+			}
+		}
+	}
 }
 
 func (e *EasyTier) overlayNodes(ctx context.Context) ([]easytier.Node, error) {
@@ -378,9 +507,13 @@ func (e *EasyTier) Close() error {
 	if e.unregister != nil {
 		e.unregister()
 	}
-	e.startOnce.Do(func() {
-		e.startErr = errEasyTierClosed
-	})
+	e.startMu.Lock()
+	e.closed = true
+	if e.readyCh != nil {
+		close(e.readyCh)
+		e.readyCh = nil
+	}
+	e.startMu.Unlock()
 	return e.shutdown()
 }
 
