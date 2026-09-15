@@ -28,10 +28,6 @@ const (
 	easyTierDefaultStateDir = "easytier"
 	easyTierInstanceIDFile  = "instance_id"
 	easyTierDNSTTL          = 60
-	easyTierHealthInterval  = 10 * time.Second
-	easyTierHealthTimeout   = 5 * time.Second
-	easyTierStartGrace      = 30 * time.Second
-	easyTierUnhealthyLimit  = 3
 	easyTierMinBackoff      = time.Second
 	easyTierMaxBackoff      = 30 * time.Second
 )
@@ -338,18 +334,22 @@ func (e *EasyTier) serve() string {
 	if instance == nil {
 		return "instance is not ready"
 	}
+	// EasyTier reconnects peers itself. The host only has to drain Events();
+	// a full queue returns WouldBlock to the WASM core and can stall it.
 	events := instance.Events()
-	ticker := time.NewTicker(easyTierHealthInterval)
-	defer ticker.Stop()
-	deadline := time.Now().Add(easyTierStartGrace)
-	misses := 0
+	if events == nil {
+		if err := instance.Wait(e.ctx); err != nil && e.ctx.Err() == nil {
+			return err.Error()
+		}
+		return "instance stopped"
+	}
 	for {
 		select {
 		case <-e.ctx.Done():
 			return ""
 		case event, ok := <-events:
 			if !ok {
-				return "event stream closed"
+				return "instance stopped"
 			}
 			switch event.Kind {
 			case "peer_added", "peer_removed":
@@ -357,56 +357,8 @@ func (e *EasyTier) serve() string {
 			default:
 				log.Debugln("[EasyTier](%s) %s: %s", e.Name(), event.Kind, event.Message)
 			}
-			if event.Kind == "peer_added" {
-				misses = 0
-			}
-		case <-ticker.C:
-			if instance.State() != corehost.StateRunning {
-				return "instance stopped"
-			}
-			if time.Now().Before(deadline) {
-				continue
-			}
-			if e.overlayHealthy(instance) {
-				misses = 0
-				continue
-			}
-			misses++
-			log.Warnln("[EasyTier](%s) overlay health check failed (%d/%d)", e.Name(), misses, easyTierUnhealthyLimit)
-			if misses >= easyTierUnhealthyLimit {
-				return "overlay disconnected"
-			}
 		}
 	}
-}
-
-func (e *EasyTier) overlayHealthy(instance *corehost.Instance) bool {
-	if instance == nil {
-		return false
-	}
-	ctx, cancel := context.WithTimeout(e.ctx, easyTierHealthTimeout)
-	defer cancel()
-	if len(e.option.Peers) == 0 {
-		_, err := instance.ShowNodeInfo(ctx)
-		return err == nil
-	}
-	peers, err := instance.ListPeer(ctx)
-	if err != nil {
-		return false
-	}
-	return easyTierHasPeerConn(peers)
-}
-
-func easyTierHasPeerConn(peers []*corehost.PeerInfo) bool {
-	for _, peer := range peers {
-		if peer == nil {
-			continue
-		}
-		if len(peer.GetConns()) > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func (e *EasyTier) overlayNodes(ctx context.Context) ([]easytier.Node, error) {
