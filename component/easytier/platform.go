@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 
@@ -42,7 +43,12 @@ func (s SocketFactory) ConnectTCP(ctx context.Context, options platform.TCPConne
 		return nil, fmt.Errorf("easytier: TCP connect is missing a remote address")
 	}
 	network := tcpNetwork(options.Bind)
-	return s.Dialer.DialContext(ctx, network, options.RemoteAddr.String())
+	conn, err := s.Dialer.DialContext(ctx, network, options.RemoteAddr.String())
+	if err != nil {
+		return nil, err
+	}
+	keepalive.TCPKeepAlive(conn)
+	return conn, nil
 }
 
 func (s SocketFactory) BindUDP(ctx context.Context, options platform.UDPBindOptions) (net.PacketConn, error) {
