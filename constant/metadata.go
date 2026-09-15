@@ -217,6 +217,8 @@ type Metadata struct {
 	RawDstAddr net.Addr `json:"-"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
+	// Only PROTOCOL rule, the application protocol reported by a protocol sniffer
+	SniffProtocol string `json:"sniffProtocol"`
 }
 
 func (m *Metadata) RemoteAddress() string {
