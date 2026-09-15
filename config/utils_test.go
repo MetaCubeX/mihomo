@@ -4,7 +4,61 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestParseProxyServerNameserverFallbacks(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  fallback-lazy-query: true
+  proxy-server-nameserver:
+    - 223.5.5.5
+  proxy-server-nameserver-fallback:
+    - 119.29.29.29
+  proxy-server-nameserver-policy:
+    node.example.com:
+      - 1.1.1.1
+  proxy-server-nameserver-policy-fallback:
+    node.example.com:
+      - 8.8.8.8
+`))
+	require.NoError(t, err)
+
+	dnsCfg, err := parseDNS(rawCfg, nil)
+	require.NoError(t, err)
+	require.Len(t, dnsCfg.ProxyServerNameserverFallback, 1)
+	require.Len(t, dnsCfg.ProxyServerPolicyFallback, 1)
+	assert.True(t, dnsCfg.FallbackLazyQuery)
+	assert.Equal(t, "119.29.29.29:53", dnsCfg.ProxyServerNameserverFallback[0].Addr)
+	assert.Equal(t, "node.example.com", dnsCfg.ProxyServerPolicyFallback[0].Domain)
+}
+
+func TestRejectProxyServerNameserverFallbackWithoutPrimary(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  proxy-server-nameserver-fallback:
+    - 119.29.29.29
+`))
+	require.NoError(t, err)
+
+	_, err = parseDNS(rawCfg, nil)
+	assert.ErrorContains(t, err, "disallow empty `proxy-server-nameserver`")
+}
+
+func TestRejectProxyServerPolicyFallbackWithoutPrimaryPolicy(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  proxy-server-nameserver:
+    - 223.5.5.5
+  proxy-server-nameserver-policy-fallback:
+    node.example.com:
+      - 8.8.8.8
+`))
+	require.NoError(t, err)
+
+	_, err = parseDNS(rawCfg, nil)
+	assert.ErrorContains(t, err, "disallow empty `proxy-server-nameserver-policy`")
+}
 
 func TestValidateDialerProxies(t *testing.T) {
 	testCases := []struct {

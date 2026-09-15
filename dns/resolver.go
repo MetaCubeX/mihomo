@@ -47,6 +47,7 @@ type Resolver struct {
 	group                 singleflight.Group[*D.Msg]
 	cache                 dnsCache
 	policy                []dnsPolicy
+	policyFallback        []dnsPolicy
 	defaultResolver       *Resolver
 }
 
@@ -213,7 +214,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 		}
 
 		if matched := r.matchPolicy(m); len(matched) != 0 {
-			result, cache, err = batchExchange(ctx, matched, m)
+			result, cache, err = r.exchangePolicy(ctx, matched, m)
 			return
 		}
 		result, cache, err = batchExchange(ctx, r.main, m)
@@ -258,8 +259,43 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	return
 }
 
+func (r *Resolver) exchangePolicy(ctx context.Context, matched []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
+	fallback := r.matchPolicyFallback(m)
+	if len(fallback) == 0 {
+		return batchExchange(ctx, matched, m)
+	}
+	return r.exchangeWithFallback(ctx, matched, fallback, m)
+}
+
+func (r *Resolver) exchangeWithFallback(ctx context.Context, primaryClients, fallbackClients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
+	primaryCh := r.asyncExchange(ctx, primaryClients, m)
+	var fallbackCh <-chan *result
+	if !r.fallbackLazyQuery {
+		fallbackCh = r.asyncExchange(ctx, fallbackClients, m)
+	}
+	primary := <-primaryCh
+	if primary.Error == nil {
+		if !isIPRequest(m.Question[0]) || len(msgToIP(primary.Msg)) != 0 {
+			return primary.Msg, true, nil
+		}
+	}
+	if fallbackCh == nil {
+		fallbackCh = r.asyncExchange(ctx, fallbackClients, m)
+	}
+	secondary := <-fallbackCh
+	return secondary.Msg, true, secondary.Error
+}
+
 func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
-	if r.policy == nil {
+	return matchPolicy(r.policy, m)
+}
+
+func (r *Resolver) matchPolicyFallback(m *D.Msg) []dnsClient {
+	return matchPolicy(r.policyFallback, m)
+}
+
+func matchPolicy(policies []dnsPolicy, m *D.Msg) []dnsClient {
+	if policies == nil {
 		return nil
 	}
 
@@ -268,7 +304,7 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 		return nil
 	}
 
-	for _, policy := range r.policy {
+	for _, policy := range policies {
 		if dnsClients := policy.Match(domain); len(dnsClients) > 0 {
 			return dnsClients
 		}
@@ -298,8 +334,8 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 
 func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	if matched := r.matchPolicy(m); len(matched) != 0 {
-		res := <-r.asyncExchange(ctx, matched, m)
-		return res.Msg, res.Error
+		msg, _, err = r.exchangePolicy(ctx, matched, m)
+		return
 	}
 
 	onlyFallback := r.shouldOnlyQueryFallback(m)
@@ -469,20 +505,22 @@ type Policy struct {
 }
 
 type Config struct {
-	Main, Fallback       []NameServer
-	Default              []NameServer
-	ProxyServer          []NameServer
-	DirectServer         []NameServer
-	DirectFollowPolicy   bool
-	IPv6                 bool
-	IPv6Timeout          uint
-	FallbackIPFilter     []C.IpMatcher
-	FallbackDomainFilter []C.DomainMatcher
-	FallbackLazyQuery    bool
-	Policy               []Policy
-	ProxyServerPolicy    []Policy
-	CacheAlgorithm       string
-	CacheMaxSize         int
+	Main, Fallback            []NameServer
+	Default                   []NameServer
+	ProxyServer               []NameServer
+	ProxyServerFallback       []NameServer
+	DirectServer              []NameServer
+	DirectFollowPolicy        bool
+	IPv6                      bool
+	IPv6Timeout               uint
+	FallbackIPFilter          []C.IpMatcher
+	FallbackDomainFilter      []C.DomainMatcher
+	FallbackLazyQuery         bool
+	Policy                    []Policy
+	ProxyServerPolicy         []Policy
+	ProxyServerPolicyFallback []Policy
+	CacheAlgorithm            string
+	CacheMaxSize              int
 }
 
 func (config Config) newCache() dnsCache {
@@ -606,11 +644,14 @@ func NewResolver(config Config) (rs Resolvers) {
 
 	if len(config.ProxyServer) != 0 {
 		rs.ProxyResolver = &Resolver{
-			ipv6:        config.IPv6,
-			main:        cacheTransform(config.ProxyServer),
-			cache:       config.newCache(),
-			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
-			policy:      makePolicy(config.ProxyServerPolicy),
+			ipv6:              config.IPv6,
+			main:              cacheTransform(config.ProxyServer),
+			fallback:          cacheTransform(config.ProxyServerFallback),
+			fallbackLazyQuery: config.FallbackLazyQuery,
+			cache:             config.newCache(),
+			ipv6Timeout:       time.Duration(config.IPv6Timeout) * time.Millisecond,
+			policy:            makePolicy(config.ProxyServerPolicy),
+			policyFallback:    makePolicy(config.ProxyServerPolicyFallback),
 		}
 	}
 
