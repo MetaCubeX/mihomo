@@ -14,6 +14,7 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/muxcool"
 
 	"github.com/gofrs/uuid/v5"
 	mux "github.com/metacubex/sing-mux"
@@ -55,6 +56,7 @@ type ListenerHandler struct {
 	ListenerConfig
 	handlerId  uuid.UUID
 	muxService *mux.Service
+	muxCool    *muxcool.ServerRuntime
 }
 
 func UpstreamMetadata(metadata M.Metadata) M.Metadata {
@@ -75,6 +77,7 @@ func ConvertMetadata(metadata *C.Metadata) M.Metadata {
 func NewListenerHandler(lc ListenerConfig) (h *ListenerHandler, err error) {
 	h = &ListenerHandler{ListenerConfig: lc}
 	h.handlerId = utils.NewUUIDV4()
+	h.muxCool = muxcool.NewServerRuntime(muxcool.ServerOptions{})
 	h.muxService, err = mux.NewService(mux.ServiceOptions{
 		NewStreamContext: func(ctx context.Context, conn net.Conn) context.Context {
 			return ctx
@@ -108,7 +111,7 @@ func (h *ListenerHandler) ParseSpecialFqdn(ctx context.Context, conn net.Conn, m
 	case mux.Destination.Fqdn:
 		return h.muxService.NewConnection(ctx, conn, UpstreamMetadata(metadata))
 	case vmess.MuxDestination.Fqdn:
-		return vmess.HandleMuxConnection(ctx, conn, metadata, h)
+		return h.muxCool.Serve(ctx, conn, metadata, h)
 	case uot.MagicAddress:
 		request, err := uot.ReadRequest(conn)
 		if err != nil {
@@ -121,6 +124,10 @@ func (h *ListenerHandler) ParseSpecialFqdn(ctx context.Context, conn net.Conn, m
 		return h.NewPacketConnection(ctx, uot.NewConn(conn, uot.Request{}), metadata)
 	}
 	return errors.New("not special fqdn")
+}
+
+func (h *ListenerHandler) Close() error {
+	return h.muxCool.Close()
 }
 
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
