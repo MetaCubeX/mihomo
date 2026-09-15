@@ -47,11 +47,10 @@ type EasyTier struct {
 	zone       string
 	ctx        context.Context
 	cancel     context.CancelFunc
+	loopOnce   sync.Once
 	startMu    sync.Mutex
 	closed     bool
-	gen        uint64
-	backoff    time.Duration
-	startErr   error
+	readyCh    chan struct{}
 	mu         sync.Mutex
 	host       *corehost.Host
 	instance   *corehost.Instance
@@ -174,45 +173,115 @@ func NewEasyTier(option EasyTierOption) (*EasyTier, error) {
 	return outbound, nil
 }
 
-func (e *EasyTier) start() error {
-	e.startMu.Lock()
-	defer e.startMu.Unlock()
-	if e.closed || e.ctx.Err() != nil {
-		return errEasyTierClosed
+func (e *EasyTier) ensureStarted(ctx context.Context) error {
+	e.loopOnce.Do(func() {
+		go e.loop()
+	})
+	for {
+		if err := e.ctx.Err(); err != nil {
+			return errEasyTierClosed
+		}
+		e.startMu.Lock()
+		closed := e.closed
+		readyCh := e.readyCh
+		e.startMu.Unlock()
+		if closed {
+			return errEasyTierClosed
+		}
+		e.mu.Lock()
+		instance := e.instance
+		e.mu.Unlock()
+		if instance != nil && instance.State() == corehost.StateRunning {
+			return nil
+		}
+		if readyCh == nil {
+			e.startMu.Lock()
+			if e.readyCh == nil {
+				e.readyCh = make(chan struct{})
+			}
+			readyCh = e.readyCh
+			e.startMu.Unlock()
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-e.ctx.Done():
+			return errEasyTierClosed
+		case <-readyCh:
+		}
 	}
-	e.mu.Lock()
-	instance := e.instance
-	e.mu.Unlock()
-	if instance != nil && instance.State() == corehost.StateRunning {
-		e.startErr = nil
-		return nil
-	}
-	_ = e.shutdown()
-	if err := e.init(); err != nil {
-		_ = e.shutdown()
-		e.startErr = err
-		return err
-	}
-	e.startErr = nil
-	e.gen++
-	e.mu.Lock()
-	instance = e.instance
-	gen := e.gen
-	e.mu.Unlock()
-	go e.supervise(instance, gen)
-	return nil
 }
 
-func (e *EasyTier) ensureStarted(ctx context.Context) error {
-	done := make(chan error, 1)
-	go func() {
-		done <- e.start()
-	}()
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
+func (e *EasyTier) signalReady() {
+	e.startMu.Lock()
+	if e.readyCh != nil {
+		close(e.readyCh)
+		e.readyCh = nil
+	}
+	e.startMu.Unlock()
+}
+
+func (e *EasyTier) loop() {
+	backoff := easyTierMinBackoff
+	for {
+		if e.ctx.Err() != nil {
+			return
+		}
+		e.startMu.Lock()
+		closed := e.closed
+		e.startMu.Unlock()
+		if closed {
+			return
+		}
+		err := e.init()
+		if err != nil {
+			log.Warnln("[EasyTier](%s) start failed: %v; retry in %s", e.Name(), err, backoff)
+			_ = e.shutdown()
+			timer := time.NewTimer(backoff)
+			select {
+			case <-e.ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			if backoff < easyTierMaxBackoff {
+				backoff *= 2
+				if backoff > easyTierMaxBackoff {
+					backoff = easyTierMaxBackoff
+				}
+			}
+			continue
+		}
+		backoff = easyTierMinBackoff
+		e.signalReady()
+		reason := e.serve()
+		_ = e.shutdown()
+		if e.ctx.Err() != nil {
+			return
+		}
+		e.startMu.Lock()
+		closed = e.closed
+		e.startMu.Unlock()
+		if closed {
+			return
+		}
+		if reason == "" {
+			reason = "instance stopped"
+		}
+		log.Warnln("[EasyTier](%s) %s; restarting in %s", e.Name(), reason, backoff)
+		timer := time.NewTimer(backoff)
+		select {
+		case <-e.ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		if backoff < easyTierMaxBackoff {
+			backoff *= 2
+			if backoff > easyTierMaxBackoff {
+				backoff = easyTierMaxBackoff
+			}
+		}
 	}
 }
 
@@ -262,78 +331,25 @@ func (e *EasyTier) currentInstance() (*corehost.Instance, error) {
 	return e.instance, nil
 }
 
-func (e *EasyTier) currentGen() uint64 {
-	e.startMu.Lock()
-	defer e.startMu.Unlock()
-	return e.gen
-}
-
-func (e *EasyTier) supervise(instance *corehost.Instance, gen uint64) {
+func (e *EasyTier) serve() string {
+	e.mu.Lock()
+	instance := e.instance
+	e.mu.Unlock()
 	if instance == nil {
-		return
+		return "instance is not ready"
 	}
-	go e.drainEvents(instance)
-	go e.drainPackets(instance)
-
-	waitCh := make(chan error, 1)
-	go func() {
-		waitCh <- instance.Wait(e.ctx)
-	}()
-
+	events := instance.Events()
 	ticker := time.NewTicker(easyTierHealthInterval)
 	defer ticker.Stop()
-	grace := time.NewTimer(easyTierStartGrace)
-	defer grace.Stop()
-	inGrace := true
+	deadline := time.Now().Add(easyTierStartGrace)
 	misses := 0
-
 	for {
 		select {
 		case <-e.ctx.Done():
-			return
-		case err := <-waitCh:
-			if e.currentGen() != gen || e.ctx.Err() != nil {
-				return
-			}
-			reason := "instance stopped"
-			if err != nil {
-				reason = fmt.Sprintf("instance stopped: %v", err)
-			}
-			e.restart(gen, reason)
-			return
-		case <-grace.C:
-			inGrace = false
-		case <-ticker.C:
-			if inGrace || e.currentGen() != gen {
-				continue
-			}
-			if e.overlayHealthy(instance) {
-				misses = 0
-				e.resetBackoff()
-				continue
-			}
-			misses++
-			log.Warnln("[EasyTier](%s) overlay health check failed (%d/%d)", e.Name(), misses, easyTierUnhealthyLimit)
-			if misses >= easyTierUnhealthyLimit {
-				e.restart(gen, "overlay disconnected")
-				return
-			}
-		}
-	}
-}
-
-func (e *EasyTier) drainEvents(instance *corehost.Instance) {
-	events := instance.Events()
-	if events == nil {
-		return
-	}
-	for {
-		select {
-		case <-e.ctx.Done():
-			return
+			return ""
 		case event, ok := <-events:
 			if !ok {
-				return
+				return "event stream closed"
 			}
 			switch event.Kind {
 			case "peer_added", "peer_removed":
@@ -341,23 +357,31 @@ func (e *EasyTier) drainEvents(instance *corehost.Instance) {
 			default:
 				log.Debugln("[EasyTier](%s) %s: %s", e.Name(), event.Kind, event.Message)
 			}
-		}
-	}
-}
-
-func (e *EasyTier) drainPackets(instance *corehost.Instance) {
-	for {
-		if e.ctx.Err() != nil {
-			return
-		}
-		if _, err := instance.ReceivePacket(e.ctx); err != nil {
-			return
+			if event.Kind == "peer_added" {
+				misses = 0
+			}
+		case <-ticker.C:
+			if instance.State() != corehost.StateRunning {
+				return "instance stopped"
+			}
+			if time.Now().Before(deadline) {
+				continue
+			}
+			if e.overlayHealthy(instance) {
+				misses = 0
+				continue
+			}
+			misses++
+			log.Warnln("[EasyTier](%s) overlay health check failed (%d/%d)", e.Name(), misses, easyTierUnhealthyLimit)
+			if misses >= easyTierUnhealthyLimit {
+				return "overlay disconnected"
+			}
 		}
 	}
 }
 
 func (e *EasyTier) overlayHealthy(instance *corehost.Instance) bool {
-	if instance == nil || instance.State() != corehost.StateRunning {
+	if instance == nil {
 		return false
 	}
 	ctx, cancel := context.WithTimeout(e.ctx, easyTierHealthTimeout)
@@ -383,46 +407,6 @@ func easyTierHasPeerConn(peers []*corehost.PeerInfo) bool {
 		}
 	}
 	return false
-}
-
-func (e *EasyTier) resetBackoff() {
-	e.startMu.Lock()
-	e.backoff = 0
-	e.startMu.Unlock()
-}
-
-func (e *EasyTier) restart(gen uint64, reason string) {
-	e.startMu.Lock()
-	if e.closed || e.gen != gen {
-		e.startMu.Unlock()
-		return
-	}
-	e.gen++
-	backoff := e.backoff
-	if backoff < easyTierMinBackoff {
-		backoff = easyTierMinBackoff
-	}
-	next := backoff * 2
-	if next > easyTierMaxBackoff {
-		next = easyTierMaxBackoff
-	}
-	e.backoff = next
-	e.startMu.Unlock()
-
-	log.Warnln("[EasyTier](%s) %s; restarting in %s", e.Name(), reason, backoff)
-	_ = e.shutdown()
-
-	timer := time.NewTimer(backoff)
-	defer timer.Stop()
-	select {
-	case <-e.ctx.Done():
-		return
-	case <-timer.C:
-	}
-	if err := e.start(); err != nil && !errors.Is(err, errEasyTierClosed) {
-		log.Errorln("[EasyTier](%s) restart failed: %v", e.Name(), err)
-		go e.restart(e.currentGen(), "start failed")
-	}
 }
 
 func (e *EasyTier) overlayNodes(ctx context.Context) ([]easytier.Node, error) {
@@ -572,7 +556,10 @@ func (e *EasyTier) Close() error {
 	}
 	e.startMu.Lock()
 	e.closed = true
-	e.startErr = errEasyTierClosed
+	if e.readyCh != nil {
+		close(e.readyCh)
+		e.readyCh = nil
+	}
 	e.startMu.Unlock()
 	return e.shutdown()
 }
