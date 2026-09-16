@@ -45,6 +45,12 @@ type Tun struct {
 	excludeIf    map[uint32]bool
 	tcpFlows     map[flow]uint32
 	socketBuffer []byte
+	socketTables [4]map[flow]uint32
+	socketValid  uint8
+	interfaceMu  sync.RWMutex
+	interfaces   map[netip.Addr]address
+	lastSource   netip.Addr
+	lastAddress  address
 	closeOnce    sync.Once
 	running      sync.WaitGroup
 }
@@ -57,8 +63,9 @@ func New(options Options) (_ *Tun, err error) {
 	}
 	t := &Tun{
 		options: options, pid: uint32(os.Getpid()),
-		tcpFlows:  make(map[flow]uint32),
-		includeIf: make(map[uint32]bool), excludeIf: make(map[uint32]bool),
+		tcpFlows:   make(map[flow]uint32),
+		interfaces: make(map[netip.Addr]address),
+		includeIf:  make(map[uint32]bool), excludeIf: make(map[uint32]bool),
 	}
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	defer func() {
@@ -151,19 +158,29 @@ func (t *Tun) capture(info packetInfo) bool {
 		}
 		return captured
 	}
-	// Resolve SYNs and UDP packets against current ownership to handle port reuse.
-	entries, err := t.socketTable(info.flow)
-	owner := entries[info.flow]
-	capture := err == nil && owner != 0 && owner != t.pid
-	if info.protocol == 6 {
-		// Reclaim flows that have closed or changed owners.
-		if err == nil {
+	// Share the current ownership snapshot within this receive batch.
+	index := socketIndex(info.flow)
+	entries := t.socketTables[index]
+	if t.socketValid&(1<<index) == 0 {
+		var err error
+		entries, err = t.socketTable(info.flow)
+		if err != nil {
+			delete(t.tcpFlows, info.flow)
+			return false
+		}
+		t.socketValid |= 1 << index
+		if info.protocol == 6 {
+			// Reclaim flows that have closed or changed owners.
 			for key, previous := range t.tcpFlows {
 				if key.source.Addr().Is6() == info.source.Addr().Is6() && entries[key] != previous {
 					delete(t.tcpFlows, key)
 				}
 			}
 		}
+	}
+	owner := socketOwner(entries, info.flow)
+	capture := owner != 0 && owner != t.pid
+	if info.protocol == 6 {
 		if capture {
 			t.tcpFlows[info.flow] = owner
 		} else {
@@ -175,19 +192,35 @@ func (t *Tun) capture(info packetInfo) bool {
 
 func (t *Tun) readLoop() {
 	defer t.running.Done()
-	p := make([]byte, 65575) // IPv6 header plus its maximum non-jumbo payload.
+	p := make([]byte, batchBytes)
+	addresses := make([]address, batchSize)
 	for {
-		var addr address
-		n, err := t.handle.recv(p, &addr)
+		n, count, err := t.handle.recvBatch(p, addresses)
 		if err != nil {
 			if t.ctx.Err() == nil {
 				t.close(fmt.Errorf("receive: %w", err))
 			}
 			return
 		}
-		addr, inject := t.processPacket(p[:n], addr)
-		if inject {
-			if _, err = t.handle.send(p[:n], &addr); err != nil && t.ctx.Err() == nil {
+		t.socketValid = 0
+		read, written, sent := 0, 0, 0
+		for i := 0; i < count; i++ {
+			size := packetSize(p[read:n])
+			if size == 0 {
+				t.close(fmt.Errorf("invalid packet in receive batch"))
+				return
+			}
+			packet := p[read : read+size]
+			addr, inject := t.processPacket(packet, addresses[i])
+			if inject {
+				written += copy(p[written:], packet)
+				addresses[sent] = addr
+				sent++
+			}
+			read += size
+		}
+		if sent > 0 {
+			if _, err = t.handle.sendBatch(p[:written], addresses[:sent]); err != nil && t.ctx.Err() == nil {
 				log.Warnln("[WFP] inject: packet dropped: %s", err)
 			}
 		}
@@ -212,8 +245,21 @@ func (t *Tun) processPacket(p []byte, addr address) (address, bool) {
 	if info.protocol == 6 && t.tcp != nil {
 		return addr, t.tcp.redirect(p, info)
 	}
+	if t.options.Stack != "system" && (t.lastSource != info.source.Addr() || t.lastAddress != addr) {
+		t.interfaceMu.Lock()
+		t.interfaces[info.source.Addr()] = addr
+		t.interfaceMu.Unlock()
+		t.lastSource, t.lastAddress = info.source.Addr(), addr
+	}
 	t.deliver(p, info, addr)
 	return address{}, false
+}
+
+func (t *Tun) responseInterface(destination netip.Addr) (address, bool) {
+	t.interfaceMu.RLock()
+	addr, ok := t.interfaces[destination]
+	t.interfaceMu.RUnlock()
+	return addr, ok
 }
 
 func (t *Tun) close(err error) {

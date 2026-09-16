@@ -3,8 +3,6 @@
 package windivert
 
 import (
-	"sync"
-
 	"github.com/metacubex/gvisor/pkg/buffer"
 	"github.com/metacubex/gvisor/pkg/tcpip"
 	"github.com/metacubex/gvisor/pkg/tcpip/header"
@@ -25,23 +23,20 @@ func (t *Tun) startGVisor() error {
 		endpoint.Close()
 		return err
 	}
+	// SACK recovery handles the short RTT of the local Windows TCP leg.
+	recovery := tcpip.TCPRecovery(0)
+	ipStack.SetTransportProtocolOption(tcp.ProtocolNumber, &recovery)
 	if t.options.Stack == "gvisor" {
 		ipStack.SetTransportProtocolHandler(tcp.ProtocolNumber, tun.NewTCPForwarder(t.ctx, ipStack, t.options.Handler).HandlePacket)
 	}
 	ipStack.SetTransportProtocolHandler(udp.ProtocolNumber, tun.NewUDPForwarder(t.ctx, ipStack, t.options.Handler).HandlePacket)
-	// Asynchronous replies recover the interface from their destination address.
-	var interfaceMu sync.RWMutex
-	interfaces := make(map[tcpip.Address]address)
-	t.deliver = func(p []byte, info packetInfo, addr address) {
-		interfaceMu.Lock()
-		interfaces[tun.AddressFromAddr(info.source.Addr())] = addr
-		interfaceMu.Unlock()
+	t.deliver = func(p []byte, info packetInfo, _ address) {
 		protocol := header.IPv4ProtocolNumber
 		if info.source.Addr().Is6() {
 			protocol = header.IPv6ProtocolNumber
 		}
 		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Payload: buffer.MakeWithData(append([]byte(nil), p...)), IsForwardedPacket: true,
+			Payload: buffer.MakeWithData(p), IsForwardedPacket: true,
 		})
 		endpoint.InjectInbound(protocol, pkt)
 		pkt.DecRef()
@@ -57,31 +52,25 @@ func (t *Tun) startGVisor() error {
 	t.running.Add(1)
 	go func() {
 		defer t.running.Done()
+		batch := newPacketBatch(t)
 		for {
 			pkt := endpoint.ReadContext(t.ctx)
 			if pkt == nil {
 				return
 			}
-			var destination tcpip.Address
-			if pkt.NetworkProtocolNumber == header.IPv4ProtocolNumber {
-				destination = header.IPv4(pkt.NetworkHeader().Slice()).DestinationAddress()
-			} else {
-				destination = header.IPv6(pkt.NetworkHeader().Slice()).DestinationAddress()
-			}
-			interfaceMu.RLock()
-			addr, ok := interfaces[destination]
-			interfaceMu.RUnlock()
-			if ok {
-				view := pkt.ToView()
-				_, err := t.handle.send(view.AsSlice(), &addr)
-				view.Release()
-				if err != nil && t.ctx.Err() == nil {
-					log.Warnln("[WFP] send: packet dropped: %s", err)
+			for pkt != nil {
+				destination := packetDestination(pkt.NetworkHeader().Slice())
+				addr, ok := t.responseInterface(destination)
+				if ok {
+					addr.Flags = flagIPChecksum | flagTCPChecksum | flagUDPChecksum
+					batch.append(addr, pkt.AsSlices()...)
+				} else if t.ctx.Err() == nil {
+					log.Warnln("[WFP] response interface not found for %s", destination)
 				}
-			} else if t.ctx.Err() == nil {
-				log.Warnln("[WFP] response interface not found for %s", destination)
+				pkt.DecRef()
+				pkt = endpoint.Read()
 			}
-			pkt.DecRef()
+			batch.flush()
 		}
 	}()
 	return nil

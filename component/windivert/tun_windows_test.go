@@ -45,6 +45,7 @@ func TestTCPCapture(t *testing.T) {
 	device.pid = 0 // Treat the test socket as a different process.
 	stale := flow{source: netip.MustParseAddrPort("127.0.0.1:0"), protocol: 6}
 	device.tcpFlows[stale] = uint32(os.Getpid())
+	device.socketValid = 0
 	if !device.capture(info) {
 		t.Fatal("did not capture a new connection")
 	}

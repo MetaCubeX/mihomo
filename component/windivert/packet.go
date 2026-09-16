@@ -18,6 +18,40 @@ type packetInfo struct {
 	size     int
 }
 
+func packetSize(p []byte) int {
+	if len(p) < 20 {
+		return 0
+	}
+	var size int
+	switch p[0] >> 4 {
+	case 4:
+		size = int(binary.BigEndian.Uint16(p[2:]))
+		if size < 20 {
+			return 0
+		}
+	case 6:
+		if len(p) < 40 {
+			return 0
+		}
+		size = 40 + int(binary.BigEndian.Uint16(p[4:]))
+	default:
+		return 0
+	}
+	if size > len(p) {
+		return 0
+	}
+	return size
+}
+
+func packetDestination(p []byte) netip.Addr {
+	start, end := 16, 20
+	if p[0]>>4 == 6 {
+		start, end = 24, 40
+	}
+	addr, _ := netip.AddrFromSlice(p[start:end])
+	return addr
+}
+
 // Non-TCP/UDP packets and fragments are left to the Windows network stack.
 func parsePacket(p []byte) (info packetInfo, ok bool) {
 	if len(p) < 20 {

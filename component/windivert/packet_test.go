@@ -42,18 +42,28 @@ func TestParsePacket(t *testing.T) {
 			binary.BigEndian.PutUint16(p[headerSize:], 50000)
 			binary.BigEndian.PutUint16(p[headerSize+2:], 443)
 			info, ok := parsePacket(p)
-			if !ok || info.source != netip.AddrPortFrom(src, 50000) || info.destination != netip.AddrPortFrom(dst, 443) || info.protocol != protocol {
+			if !ok || info.source != netip.AddrPortFrom(src, 50000) || info.destination != netip.AddrPortFrom(dst, 443) || info.protocol != protocol || packetDestination(p) != dst {
 				t.Fatalf("IPv6=%v TCP=%v: %#v, %v", ipv6, tcp, info, ok)
+			}
+			batch := append(append([]byte(nil), p...), p...)
+			if n := packetSize(batch); n != len(p) || packetSize(batch[n:]) != len(p) {
+				t.Fatal("lost packet boundary in batch")
 			}
 			for _, i := range []int{0, len(p) - 1} {
 				if _, ok := parsePacket(p[:i]); ok {
 					t.Fatalf("accepted truncated packet at %d", i)
+				}
+				if packetSize(p[:i]) != 0 {
+					t.Fatal("accepted truncated batch packet")
 				}
 			}
 			if !ipv6 {
 				p[6] |= 0x20
 				if _, ok := parsePacket(p); ok {
 					t.Fatal("accepted a fragment")
+				}
+				if packetSize(p) != len(p) {
+					t.Fatal("lost fragment boundary")
 				}
 			}
 		}

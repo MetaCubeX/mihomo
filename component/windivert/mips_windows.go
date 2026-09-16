@@ -5,11 +5,8 @@ package windivert
 import (
 	"encoding/binary"
 	"fmt"
-	"net/netip"
-	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mipstack"
 	"github.com/metacubex/sing/common/buf"
 	M "github.com/metacubex/sing/common/metadata"
@@ -40,18 +37,14 @@ func (t *Tun) startMIPS() error {
 	if err = ipStack.Start(); err != nil {
 		return err
 	}
-	var interfaceMu sync.RWMutex
-	interfaces := make(map[netip.Addr]address)
-	t.deliver = func(p []byte, info packetInfo, addr address) {
-		interfaceMu.Lock()
-		interfaces[info.source.Addr()] = addr
-		interfaceMu.Unlock()
+	t.deliver = func(p []byte, info packetInfo, _ address) {
 		// Write consumes p before returning.
 		_, _ = ipStack.Write([][]byte{p[:info.size]}, 0)
 	}
 	t.running.Add(1)
 	go func() {
 		defer t.running.Done()
+		batch := newPacketBatch(t)
 		buffers := make([][]byte, ipStack.BatchSize())
 		for i := range buffers {
 			buffers[i] = make([]byte, t.options.MTU)
@@ -61,19 +54,11 @@ func (t *Tun) startMIPS() error {
 			n, err := ipStack.Read(buffers, sizes, 0)
 			for i := 0; i < n; i++ {
 				p := buffers[i][:sizes[i]]
-				// Replies may be IP fragments.
-				destination, _ := netip.AddrFromSlice(p[16:20])
-				if p[0]>>4 == 6 {
-					destination, _ = netip.AddrFromSlice(p[24:40])
-				}
-				interfaceMu.RLock()
-				addr := interfaces[destination]
-				interfaceMu.RUnlock()
+				addr, _ := t.responseInterface(packetDestination(p))
 				addr.Flags = flagIPChecksum | flagTCPChecksum | flagUDPChecksum
-				if _, err := t.handle.send(p, &addr); err != nil && t.ctx.Err() == nil {
-					log.Warnln("[WFP] send: packet dropped: %s", err)
-				}
+				batch.append(addr, p)
 			}
+			batch.flush()
 			if err != nil {
 				if t.ctx.Err() == nil {
 					t.close(fmt.Errorf("read MIPS packet: %w", err))

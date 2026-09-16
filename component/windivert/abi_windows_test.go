@@ -32,8 +32,13 @@ func TestSocketOwner(t *testing.T) {
 		}
 		key := flow{source: netip.AddrPortFrom(ip, addr.Port()), protocol: 17}
 		owners, err := device.socketTable(key)
-		if err != nil || owners[key] != uint32(os.Getpid()) {
-			t.Fatalf("%s owner=%d err=%v", network, owners[key], err)
+		if err != nil || socketOwner(owners, key) != uint32(os.Getpid()) {
+			t.Fatalf("%s owner=%d err=%v", network, socketOwner(owners, key), err)
+		}
+		conn.Close()
+		owners, err = device.socketTable(key)
+		if err != nil || socketOwner(owners, key) != 0 {
+			t.Fatalf("%s retained closed socket: %v", network, err)
 		}
 	}
 }
@@ -56,13 +61,13 @@ func TestSharedUDPSocket(t *testing.T) {
 		}
 		for _, owner := range []uint32{7, 8} {
 			binary.LittleEndian.PutUint32(exact[pidOffset:], owner)
-			owners := parseSocketTable(data, key)
+			owners := parseSocketTable(data, key, nil)
 			want := uint32(7)
 			if owner != 7 {
 				want = 0
 			}
-			if owners[key] != want {
-				t.Fatalf("%s owner=%d: got %d, want %d", source, owner, owners[key], want)
+			if got := socketOwner(owners, key); got != want {
+				t.Fatalf("%s owner=%d: got %d, want %d", source, owner, got, want)
 			}
 		}
 	}

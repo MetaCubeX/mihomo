@@ -16,6 +16,17 @@ var (
 	udpTable = ipHelper.NewProc("GetExtendedUdpTable")
 )
 
+func socketIndex(key flow) int {
+	index := 0
+	if key.protocol == 17 {
+		index = 2
+	}
+	if key.source.Addr().Is6() {
+		index++
+	}
+	return index
+}
+
 func (t *Tun) socketTable(key flow) (map[flow]uint32, error) {
 	ipv6, tcp := key.source.Addr().Is6(), key.protocol == 6
 	family := uintptr(windows.AF_INET)
@@ -41,11 +52,13 @@ func (t *Tun) socketTable(key flow) (map[flow]uint32, error) {
 		if code != 0 {
 			return nil, windows.Errno(code)
 		}
-		return parseSocketTable(t.socketBuffer[:size], key), nil
+		index := socketIndex(key)
+		t.socketTables[index] = parseSocketTable(t.socketBuffer[:size], key, t.socketTables[index])
+		return t.socketTables[index], nil
 	}
 }
 
-func parseSocketTable(data []byte, key flow) map[flow]uint32 {
+func parseSocketTable(data []byte, key flow, result map[flow]uint32) map[flow]uint32 {
 	ipv6, tcp := key.source.Addr().Is6(), key.protocol == 6
 	// MIB_{TCP,UDP}{,6}ROW_OWNER_PID from the Windows IP Helper ABI.
 	rowSize, ipSize, srcIP, srcPort, dstIP, dstPort, pid := 12, 4, 0, 4, 0, 0, 8
@@ -59,7 +72,13 @@ func parseSocketTable(data []byte, key flow) map[flow]uint32 {
 		}
 	}
 	count := int(binary.LittleEndian.Uint32(data))
-	result := make(map[flow]uint32)
+	if result == nil {
+		result = make(map[flow]uint32)
+	} else {
+		for key := range result {
+			delete(result, key)
+		}
+	}
 	for i := 0; i < count; i++ {
 		row := data[4+i*rowSize:][:rowSize]
 		local, _ := netip.AddrFromSlice(row[srcIP : srcIP+ipSize])
@@ -67,11 +86,6 @@ func parseSocketTable(data []byte, key flow) map[flow]uint32 {
 		if tcp {
 			remote, _ := netip.AddrFromSlice(row[dstIP : dstIP+ipSize])
 			entry.destination = netip.AddrPortFrom(remote, binary.BigEndian.Uint16(row[dstPort:]))
-		} else {
-			if entry.source.Port() != key.source.Port() || (local != key.source.Addr() && !local.IsUnspecified()) {
-				continue
-			}
-			entry = key
 		}
 		owner := binary.LittleEndian.Uint32(row[pid:])
 		if previous, exists := result[entry]; exists && previous != owner {
@@ -81,4 +95,24 @@ func parseSocketTable(data []byte, key flow) map[flow]uint32 {
 		result[entry] = owner
 	}
 	return result
+}
+
+func socketOwner(entries map[flow]uint32, key flow) uint32 {
+	if key.protocol == 6 {
+		return entries[key]
+	}
+	key.destination = netip.AddrPort{}
+	owner, exact := entries[key]
+	wildcard := netip.IPv4Unspecified()
+	if key.source.Addr().Is6() {
+		wildcard = netip.IPv6Unspecified()
+	}
+	key.source = netip.AddrPortFrom(wildcard, key.source.Port())
+	if anyOwner, found := entries[key]; found {
+		if exact && owner != anyOwner {
+			return 0
+		}
+		owner = anyOwner
+	}
+	return owner
 }

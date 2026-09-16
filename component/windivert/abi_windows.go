@@ -24,6 +24,8 @@ const (
 	flagIPChecksum  = 1 << 21
 	flagTCPChecksum = 1 << 22
 	flagUDPChecksum = 1 << 23
+	batchSize       = 128
+	batchBytes      = 1 << 20
 )
 
 type address struct {
@@ -159,23 +161,27 @@ func (h *handle) ioctl(code uint32, args *[16]byte, data []byte) (uint32, error)
 	return n, err
 }
 
-func (h *handle) recv(packet []byte, addr *address) (int, error) {
-	return h.packetIO(ioctlRecv, packet, uintptr(unsafe.Pointer(addr)))
+func (h *handle) recvBatch(packets []byte, addresses []address) (int, int, error) {
+	addrLen := uint32(len(addresses)) * uint32(unsafe.Sizeof(address{}))
+	n, err := h.packetIO(ioctlRecv, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(unsafe.Pointer(&addrLen)))
+	return n, int(addrLen) / int(unsafe.Sizeof(address{})), err
 }
 
 func (h *handle) send(packet []byte, addr *address) (int, error) {
-	return h.packetIO(ioctlSend, packet, uintptr(unsafe.Pointer(addr)))
+	return h.packetIO(ioctlSend, packet, uintptr(unsafe.Pointer(addr)), unsafe.Sizeof(address{}))
+}
+
+func (h *handle) sendBatch(packets []byte, addresses []address) (int, error) {
+	return h.packetIO(ioctlSend, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(len(addresses))*unsafe.Sizeof(address{}))
 }
 
 // Keep the nested address pointer on the heap until overlapped I/O completes.
 //
 //go:uintptrescapes
-func (h *handle) packetIO(code uint32, packet []byte, addr uintptr) (int, error) {
+func (h *handle) packetIO(code uint32, packet []byte, addr, addrLen uintptr) (int, error) {
 	var args [16]byte
 	binary.LittleEndian.PutUint64(args[:], uint64(addr))
-	if code == ioctlSend {
-		binary.LittleEndian.PutUint64(args[8:], uint64(unsafe.Sizeof(address{})))
-	}
+	binary.LittleEndian.PutUint64(args[8:], uint64(addrLen))
 	n, err := h.ioctl(code, &args, packet)
 	return int(n), err
 }
