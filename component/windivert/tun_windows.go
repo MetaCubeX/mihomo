@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,8 @@ type Options struct {
 
 type Tun struct {
 	handle       *handle
+	output       [ioParallelism]packetOutput
+	batchPool    sync.Pool
 	ctx          context.Context
 	cancel       context.CancelFunc
 	tcp          *tcpRedirect
@@ -91,6 +94,7 @@ func New(options Options) (_ *Tun, err error) {
 	if err != nil {
 		return nil, err
 	}
+	t.startOutput()
 	switch options.Stack {
 	case "system":
 		t.deliver = t.deliverUDP
@@ -192,10 +196,51 @@ func (t *Tun) capture(info packetInfo) bool {
 
 func (t *Tun) readLoop() {
 	defer t.running.Done()
-	p := make([]byte, batchBytes)
-	addresses := make([]address, batchSize)
+
+	type receivedBatch struct {
+		packets   []byte
+		addresses []address
+		n, count  int
+		err       error
+	}
+	free := make(chan *receivedBatch, 2)
+	ready := make(chan *receivedBatch)
+	for i := 0; i < 2; i++ {
+		free <- &receivedBatch{packets: make([]byte, batchBytes), addresses: make([]address, batchSize)}
+	}
+	t.running.Add(1)
+	go func() {
+		defer t.running.Done()
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		for {
+			var b *receivedBatch
+			select {
+			case b = <-free:
+			case <-t.ctx.Done():
+				return
+			}
+			b.n, b.count, b.err = t.handle.recvBatch(b.packets, b.addresses)
+			select {
+			case ready <- b:
+			case <-t.ctx.Done():
+				return
+			}
+			if b.err != nil {
+				return
+			}
+		}
+	}()
+	batch := newPacketWriter(t)
 	for {
-		n, count, err := t.handle.recvBatch(p, addresses)
+		var received *receivedBatch
+		select {
+		case received = <-ready:
+		case <-t.ctx.Done():
+			return
+		}
+		p, addresses := received.packets, received.addresses
+		n, count, err := received.n, received.count, received.err
 		if err != nil {
 			if t.ctx.Err() == nil {
 				t.close(fmt.Errorf("receive: %w", err))
@@ -203,7 +248,7 @@ func (t *Tun) readLoop() {
 			return
 		}
 		t.socketValid = 0
-		read, written, sent := 0, 0, 0
+		read := 0
 		for i := 0; i < count; i++ {
 			size := packetSize(p[read:n])
 			if size == 0 {
@@ -213,17 +258,12 @@ func (t *Tun) readLoop() {
 			packet := p[read : read+size]
 			addr, inject := t.processPacket(packet, addresses[i])
 			if inject {
-				written += copy(p[written:], packet)
-				addresses[sent] = addr
-				sent++
+				batch.append(addr, packetKey(packet), packet)
 			}
 			read += size
 		}
-		if sent > 0 {
-			if _, err = t.handle.sendBatch(p[:written], addresses[:sent]); err != nil && t.ctx.Err() == nil {
-				log.Warnln("[WFP] inject: packet dropped: %s", err)
-			}
-		}
+		batch.flush()
+		free <- received
 	}
 }
 

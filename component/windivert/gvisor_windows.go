@@ -3,6 +3,7 @@
 package windivert
 
 import (
+	"encoding/binary"
 	"github.com/metacubex/gvisor/pkg/buffer"
 	"github.com/metacubex/gvisor/pkg/tcpip"
 	"github.com/metacubex/gvisor/pkg/tcpip/header"
@@ -52,7 +53,7 @@ func (t *Tun) startGVisor() error {
 	t.running.Add(1)
 	go func() {
 		defer t.running.Done()
-		batch := newPacketBatch(t)
+		batch := newPacketWriter(t)
 		for {
 			pkt := endpoint.ReadContext(t.ctx)
 			if pkt == nil {
@@ -63,7 +64,11 @@ func (t *Tun) startGVisor() error {
 				addr, ok := t.responseInterface(destination)
 				if ok {
 					addr.Flags = flagIPChecksum | flagTCPChecksum | flagUDPChecksum
-					batch.append(addr, pkt.AsSlices()...)
+					var key uint32
+					if transport := pkt.TransportHeader().Slice(); len(transport) >= 4 {
+						key = binary.BigEndian.Uint32(transport)
+					}
+					batch.append(addr, key, pkt.AsSlices()...)
 				} else if t.ctx.Err() == nil {
 					log.Warnln("[WFP] response interface not found for %s", destination)
 				}

@@ -24,7 +24,8 @@ const (
 	flagIPChecksum  = 1 << 21
 	flagTCPChecksum = 1 << 22
 	flagUDPChecksum = 1 << 23
-	batchSize       = 128
+	ioParallelism   = 4
+	batchSize       = 255
 	batchBytes      = 1 << 20
 )
 
@@ -57,11 +58,10 @@ var networkFilter = []instruction{
 }
 
 type handle struct {
-	mu      sync.Mutex
-	value   windows.Handle
-	closed  bool
-	receive ioOperation
-	sendIO  ioOperation
+	mu         sync.RWMutex
+	value      windows.Handle
+	closed     bool
+	operations [1 + ioParallelism]ioOperation
 }
 
 type ioOperation struct {
@@ -88,7 +88,8 @@ func openHandle() (*handle, error) {
 		return nil, fmt.Errorf("open WinDivert: %w", err)
 	}
 	h := &handle{value: v}
-	for _, operation := range []*ioOperation{&h.receive, &h.sendIO} {
+	for i := range h.operations {
+		operation := &h.operations[i]
 		operation.overlap.HEvent, err = windows.CreateEvent(nil, 1, 0, nil)
 		if err != nil {
 			h.close()
@@ -102,7 +103,7 @@ func openHandle() (*handle, error) {
 	binary.LittleEndian.PutUint32(version[8:], 2)
 	binary.LittleEndian.PutUint32(version[12:], 2)
 	binary.LittleEndian.PutUint32(version[16:], uint32(unsafe.Sizeof(uintptr(0))*8))
-	if _, err = h.ioctl(ioctlInitialize, &args, version[:]); err == nil {
+	if _, err = h.ioctl(&h.operations[0], ioctlInitialize, &args, version[:]); err == nil {
 		if binary.LittleEndian.Uint64(version[:]) != 0x5359537669645723 ||
 			binary.LittleEndian.Uint32(version[8:]) != 2 || binary.LittleEndian.Uint32(version[12:]) != 2 {
 			err = fmt.Errorf("expected WinDivert driver ABI 2.2")
@@ -127,20 +128,16 @@ func (h *handle) start() error {
 			binary.LittleEndian.PutUint32(b[8+4*j:], arg)
 		}
 	}
-	_, err := h.ioctl(ioctlStartup, &args, filter)
+	_, err := h.ioctl(&h.operations[0], ioctlStartup, &args, filter)
 	return err
 }
 
-func (h *handle) ioctl(code uint32, args *[16]byte, data []byte) (uint32, error) {
-	operation := &h.sendIO
-	if code == ioctlRecv {
-		operation = &h.receive
-	}
+func (h *handle) ioctl(operation *ioOperation, code uint32, args *[16]byte, data []byte) (uint32, error) {
 	operation.mu.Lock()
 	defer operation.mu.Unlock()
-	h.mu.Lock()
+	h.mu.RLock()
 	if h.closed {
-		h.mu.Unlock()
+		h.mu.RUnlock()
 		return 0, windows.ERROR_OPERATION_ABORTED
 	}
 	overlap := &operation.overlap
@@ -153,7 +150,7 @@ func (h *handle) ioctl(code uint32, args *[16]byte, data []byte) (uint32, error)
 		p = &data[0]
 	}
 	err := windows.DeviceIoControl(h.value, code, &operation.args[0], 16, p, uint32(len(data)), &n, overlap)
-	h.mu.Unlock()
+	h.mu.RUnlock()
 	if errors.Is(err, windows.ERROR_IO_PENDING) {
 		err = windows.GetOverlappedResult(h.value, overlap, &n, true)
 	}
@@ -163,26 +160,22 @@ func (h *handle) ioctl(code uint32, args *[16]byte, data []byte) (uint32, error)
 
 func (h *handle) recvBatch(packets []byte, addresses []address) (int, int, error) {
 	addrLen := uint32(len(addresses)) * uint32(unsafe.Sizeof(address{}))
-	n, err := h.packetIO(ioctlRecv, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(unsafe.Pointer(&addrLen)))
+	n, err := h.packetIO(ioctlRecv, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(unsafe.Pointer(&addrLen)), &h.operations[0])
 	return n, int(addrLen) / int(unsafe.Sizeof(address{})), err
 }
 
-func (h *handle) send(packet []byte, addr *address) (int, error) {
-	return h.packetIO(ioctlSend, packet, uintptr(unsafe.Pointer(addr)), unsafe.Sizeof(address{}))
-}
-
-func (h *handle) sendBatch(packets []byte, addresses []address) (int, error) {
-	return h.packetIO(ioctlSend, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(len(addresses))*unsafe.Sizeof(address{}))
+func (h *handle) sendBatch(packets []byte, addresses []address, sender int) (int, error) {
+	return h.packetIO(ioctlSend, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(len(addresses))*unsafe.Sizeof(address{}), &h.operations[1+sender])
 }
 
 // Keep the nested address pointer on the heap until overlapped I/O completes.
 //
 //go:uintptrescapes
-func (h *handle) packetIO(code uint32, packet []byte, addr, addrLen uintptr) (int, error) {
+func (h *handle) packetIO(code uint32, packet []byte, addr, addrLen uintptr, operation *ioOperation) (int, error) {
 	var args [16]byte
 	binary.LittleEndian.PutUint64(args[:], uint64(addr))
 	binary.LittleEndian.PutUint64(args[8:], uint64(addrLen))
-	n, err := h.ioctl(code, &args, packet)
+	n, err := h.ioctl(operation, code, &args, packet)
 	return int(n), err
 }
 
@@ -195,14 +188,15 @@ func (h *handle) close() {
 	h.closed = true
 	windows.CancelIoEx(h.value, nil)
 	h.mu.Unlock()
-	operations := []*ioOperation{&h.receive, &h.sendIO}
 	// Each operation holds its lock through completion, including cancellation.
-	for _, operation := range operations {
+	for i := range h.operations {
+		operation := &h.operations[i]
 		operation.mu.Lock()
 		defer operation.mu.Unlock()
 	}
 	windows.CloseHandle(h.value)
-	for _, operation := range operations {
+	for i := range h.operations {
+		operation := &h.operations[i]
 		if operation.overlap.HEvent != 0 {
 			windows.CloseHandle(operation.overlap.HEvent)
 		}

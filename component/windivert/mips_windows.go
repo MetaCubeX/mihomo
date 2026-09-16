@@ -19,6 +19,8 @@ func (t *Tun) startMIPS() error {
 		MTU:         t.options.MTU,
 		TCP: mipstack.TCPSocketDefaults{
 			KeepAlive: true,
+			// Limit bursts from the local Windows TCP peer.
+			MaximumReceiveBuffer: 1 << 20,
 			KeepAliveConfig: mipstack.KeepAliveConfig{
 				Idle: 15 * time.Second, Interval: 15 * time.Second,
 			},
@@ -44,7 +46,7 @@ func (t *Tun) startMIPS() error {
 	t.running.Add(1)
 	go func() {
 		defer t.running.Done()
-		batch := newPacketBatch(t)
+		batch := newPacketWriter(t)
 		buffers := make([][]byte, ipStack.BatchSize())
 		for i := range buffers {
 			buffers[i] = make([]byte, t.options.MTU)
@@ -56,7 +58,7 @@ func (t *Tun) startMIPS() error {
 				p := buffers[i][:sizes[i]]
 				addr, _ := t.responseInterface(packetDestination(p))
 				addr.Flags = flagIPChecksum | flagTCPChecksum | flagUDPChecksum
-				batch.append(addr, p)
+				batch.append(addr, packetKey(p), p)
 			}
 			batch.flush()
 			if err != nil {
