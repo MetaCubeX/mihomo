@@ -119,8 +119,10 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 		minDelay := fast.LastDelayForTestUrl(u.testUrl)
 		fastNotExist := true
 
-		for _, proxy := range proxies[1:] {
+		for _, proxy := range proxies {
 			if u.fastNode != nil && proxy.Name() == u.fastNode.Name() {
+				// Providers may replace the proxy instance while keeping its name.
+				u.fastNode = proxy
 				fastNotExist = false
 			}
 
@@ -135,9 +137,16 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 			}
 
 		}
-		// tolerance
-		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {
+		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) {
 			u.fastNode = fast
+		} else {
+			currentDelay := u.fastNode.LastDelayForTestUrl(u.testUrl)
+			// A replacement proxy can be alive before its first health check finishes.
+			// Keep the selection until it has a measured delay or a confirmed failure.
+			// Widen the addition to avoid overflowing uint16.
+			if currentDelay != 0xffff && uint32(currentDelay) > uint32(fast.LastDelayForTestUrl(u.testUrl))+uint32(u.tolerance) {
+				u.fastNode = fast
+			}
 		}
 		return u.fastNode, nil
 	})
