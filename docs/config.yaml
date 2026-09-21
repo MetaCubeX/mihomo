@@ -1498,8 +1498,8 @@ proxies: # socks5
     #   congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; ignored by gVisor
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
-    # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
-    # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
+    # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false；未配置 dns 时使用服务端 push 的 DNS，两者均未提供或远程 DNS 查询失败时回退默认 resolver
+    # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效；优先于服务端 push 的 DNS
 
   # masque
   - name: "masque"

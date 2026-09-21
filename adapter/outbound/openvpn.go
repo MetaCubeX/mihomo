@@ -18,6 +18,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 	ovpn "github.com/metacubex/mihomo/transport/openvpn"
 
+	D "github.com/miekg/dns"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -35,6 +36,78 @@ type OpenVPN struct {
 	runCancel context.CancelFunc
 	runLock   *semaphore.Weighted
 	running   bool
+}
+
+type openVPNFallbackResolver struct {
+	primary resolver.Resolver
+}
+
+var _ resolver.Resolver = (*openVPNFallbackResolver)(nil)
+
+func (r *openVPNFallbackResolver) LookupIP(ctx context.Context, host string) ([]netip.Addr, error) {
+	addresses, err := r.primary.LookupIP(ctx, host)
+	if err == nil && len(addresses) != 0 {
+		return addresses, nil
+	}
+	return resolver.LookupIPWithResolver(ctx, host, resolver.DefaultResolver)
+}
+
+func (r *openVPNFallbackResolver) LookupIPv4(ctx context.Context, host string) ([]netip.Addr, error) {
+	addresses, err := r.primary.LookupIPv4(ctx, host)
+	if err == nil && len(addresses) != 0 {
+		return addresses, nil
+	}
+	return resolver.LookupIPv4WithResolver(ctx, host, resolver.DefaultResolver)
+}
+
+func (r *openVPNFallbackResolver) LookupIPv6(ctx context.Context, host string) ([]netip.Addr, error) {
+	addresses, err := r.primary.LookupIPv6(ctx, host)
+	if err == nil && len(addresses) != 0 {
+		return addresses, nil
+	}
+	return resolver.LookupIPv6WithResolver(ctx, host, resolver.DefaultResolver)
+}
+
+func (r *openVPNFallbackResolver) ResolveECH(ctx context.Context, host string) ([]byte, error) {
+	config, err := r.primary.ResolveECH(ctx, host)
+	if err == nil && len(config) != 0 {
+		return config, nil
+	}
+	return resolver.ResolveECHWithResolver(ctx, host, resolver.DefaultResolver)
+}
+
+func (r *openVPNFallbackResolver) ExchangeContext(ctx context.Context, message *D.Msg) (*D.Msg, error) {
+	response, err := r.primary.ExchangeContext(ctx, message)
+	if err == nil && response != nil && response.Rcode == D.RcodeSuccess && len(response.Answer) != 0 {
+		return response, nil
+	}
+	fallback := resolver.DefaultResolver
+	if fallback == nil || !fallback.Invalid() {
+		fallback = resolver.SystemResolver
+	}
+	if fallback == nil {
+		if err != nil {
+			return nil, err
+		}
+		return response, resolver.ErrIPNotFound
+	}
+	return fallback.ExchangeContext(ctx, message)
+}
+
+func (r *openVPNFallbackResolver) Invalid() bool {
+	return r != nil && r.primary != nil && r.primary.Invalid()
+}
+
+func (r *openVPNFallbackResolver) ClearCache() {
+	if r != nil && r.primary != nil {
+		r.primary.ClearCache()
+	}
+}
+
+func (r *openVPNFallbackResolver) ResetConnection() {
+	if r != nil && r.primary != nil {
+		r.primary.ResetConnection()
+	}
 }
 
 type OpenVPNOption struct {
@@ -344,21 +417,51 @@ func (o *OpenVPN) startLocked(handshakeCtx context.Context) (ipStack, resolver.R
 		_ = tunDevice.Close()
 		return nil, nil, err
 	}
+	remoteResolver, err := o.resolverForPush(push)
+	if err != nil {
+		_ = client.Close()
+		_ = tunDevice.Close()
+		return nil, nil, err
+	}
+	if o.option.RemoteDnsResolve && remoteResolver == nil {
+		log.Warnln("[OpenVPN](%s) remote DNS resolution enabled but no configured or pushed DNS servers are available; using default resolver", o.name)
+	}
 	o.client = client
 	o.tunDevice = tunDevice
+	o.resolver = remoteResolver
 	o.running = true
-	if o.option.RemoteDnsResolve && len(o.dns) > 0 && o.resolver == nil {
-		nss := append([]dns.NameServer(nil), o.dns...)
-		for i := range nss {
-			nss[i].ProxyAdapter = o
-		}
-		o.resolver = dns.NewResolver(dns.Config{
-			Main: nss,
-			IPv6: openVPNPrefixesHas6(push.Prefixes),
-		})
-	}
 	o.startPacketLoops()
 	return o.tunDevice, o.resolver, nil
+}
+
+func (o *OpenVPN) resolverForPush(push *ovpn.PushReply) (resolver.Resolver, error) {
+	if !o.option.RemoteDnsResolve {
+		return nil, nil
+	}
+	nameServers := o.dns
+	if len(nameServers) == 0 && len(push.DNS) != 0 {
+		servers := make([]string, 0, len(push.DNS))
+		for _, server := range push.DNS {
+			servers = append(servers, server.String())
+		}
+		var err error
+		nameServers, err = dns.ParseNameServer(servers)
+		if err != nil {
+			return nil, fmt.Errorf("parse OpenVPN pushed DNS servers: %w", err)
+		}
+	}
+	if len(nameServers) == 0 {
+		return nil, nil
+	}
+	nameServers = append([]dns.NameServer(nil), nameServers...)
+	for i := range nameServers {
+		nameServers[i].ProxyAdapter = o
+	}
+	primary := dns.NewResolver(dns.Config{
+		Main: nameServers,
+		IPv6: openVPNPrefixesHas6(push.Prefixes),
+	})
+	return &openVPNFallbackResolver{primary: primary}, nil
 }
 
 func openVPNPrefixesHas6(prefixes []netip.Prefix) bool {
