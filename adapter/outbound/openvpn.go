@@ -39,74 +39,171 @@ type OpenVPN struct {
 }
 
 type openVPNFallbackResolver struct {
-	primary resolver.Resolver
+	resolvers []resolver.Resolver
 }
 
 var _ resolver.Resolver = (*openVPNFallbackResolver)(nil)
 
-func (r *openVPNFallbackResolver) LookupIP(ctx context.Context, host string) ([]netip.Addr, error) {
-	addresses, err := r.primary.LookupIP(ctx, host)
-	if err == nil && len(addresses) != 0 {
-		return addresses, nil
+func openVPNResolveWithFallback[T any](
+	ctx context.Context,
+	resolvers []resolver.Resolver,
+	query func(context.Context, resolver.Resolver) (T, error),
+	fallback func(context.Context) (T, error),
+	valid func(T) bool,
+) (T, error) {
+	var zero T
+	var lastErr error
+	totalQueries := len(resolvers) + 1
+	for i := 0; i < totalQueries; i++ {
+		if err := ctx.Err(); err != nil {
+			return zero, err
+		}
+
+		queryCtx := ctx
+		cancel := func() {}
+		if deadline, ok := ctx.Deadline(); ok {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return zero, context.DeadlineExceeded
+			}
+			// Split the remaining time between unresolved DNS tiers and one
+			// final slot reserved for establishing the target connection.
+			remainingQueries := totalQueries - i
+			queryCtx, cancel = context.WithTimeout(ctx, remaining/time.Duration(remainingQueries+1))
+		} else {
+			queryCtx, cancel = context.WithTimeout(ctx, resolver.DefaultDNSTimeout)
+		}
+
+		var value T
+		var err error
+		if i < len(resolvers) {
+			value, err = query(queryCtx, resolvers[i])
+		} else {
+			value, err = fallback(queryCtx)
+		}
+		cancel()
+		if err == nil && valid(value) {
+			return value, nil
+		}
+		if err != nil {
+			lastErr = err
+		} else {
+			lastErr = resolver.ErrIPNotFound
+		}
 	}
-	return resolver.LookupIPWithResolver(ctx, host, resolver.DefaultResolver)
+	return zero, lastErr
+}
+
+func (r *openVPNFallbackResolver) LookupIP(ctx context.Context, host string) ([]netip.Addr, error) {
+	return openVPNResolveWithFallback(
+		ctx,
+		r.resolvers,
+		func(ctx context.Context, current resolver.Resolver) ([]netip.Addr, error) {
+			return current.LookupIP(ctx, host)
+		},
+		func(ctx context.Context) ([]netip.Addr, error) {
+			return resolver.LookupIPWithResolver(ctx, host, resolver.DefaultResolver)
+		},
+		func(addresses []netip.Addr) bool { return len(addresses) != 0 },
+	)
 }
 
 func (r *openVPNFallbackResolver) LookupIPv4(ctx context.Context, host string) ([]netip.Addr, error) {
-	addresses, err := r.primary.LookupIPv4(ctx, host)
-	if err == nil && len(addresses) != 0 {
-		return addresses, nil
-	}
-	return resolver.LookupIPv4WithResolver(ctx, host, resolver.DefaultResolver)
+	return openVPNResolveWithFallback(
+		ctx,
+		r.resolvers,
+		func(ctx context.Context, current resolver.Resolver) ([]netip.Addr, error) {
+			return current.LookupIPv4(ctx, host)
+		},
+		func(ctx context.Context) ([]netip.Addr, error) {
+			return resolver.LookupIPv4WithResolver(ctx, host, resolver.DefaultResolver)
+		},
+		func(addresses []netip.Addr) bool { return len(addresses) != 0 },
+	)
 }
 
 func (r *openVPNFallbackResolver) LookupIPv6(ctx context.Context, host string) ([]netip.Addr, error) {
-	addresses, err := r.primary.LookupIPv6(ctx, host)
-	if err == nil && len(addresses) != 0 {
-		return addresses, nil
-	}
-	return resolver.LookupIPv6WithResolver(ctx, host, resolver.DefaultResolver)
+	return openVPNResolveWithFallback(
+		ctx,
+		r.resolvers,
+		func(ctx context.Context, current resolver.Resolver) ([]netip.Addr, error) {
+			return current.LookupIPv6(ctx, host)
+		},
+		func(ctx context.Context) ([]netip.Addr, error) {
+			return resolver.LookupIPv6WithResolver(ctx, host, resolver.DefaultResolver)
+		},
+		func(addresses []netip.Addr) bool { return len(addresses) != 0 },
+	)
 }
 
 func (r *openVPNFallbackResolver) ResolveECH(ctx context.Context, host string) ([]byte, error) {
-	config, err := r.primary.ResolveECH(ctx, host)
-	if err == nil && len(config) != 0 {
-		return config, nil
-	}
-	return resolver.ResolveECHWithResolver(ctx, host, resolver.DefaultResolver)
+	return openVPNResolveWithFallback(
+		ctx,
+		r.resolvers,
+		func(ctx context.Context, current resolver.Resolver) ([]byte, error) {
+			return current.ResolveECH(ctx, host)
+		},
+		func(ctx context.Context) ([]byte, error) {
+			return resolver.ResolveECHWithResolver(ctx, host, resolver.DefaultResolver)
+		},
+		func(config []byte) bool { return len(config) != 0 },
+	)
 }
 
 func (r *openVPNFallbackResolver) ExchangeContext(ctx context.Context, message *D.Msg) (*D.Msg, error) {
-	response, err := r.primary.ExchangeContext(ctx, message)
-	if err == nil && response != nil && response.Rcode == D.RcodeSuccess && len(response.Answer) != 0 {
-		return response, nil
-	}
-	fallback := resolver.DefaultResolver
-	if fallback == nil || !fallback.Invalid() {
-		fallback = resolver.SystemResolver
-	}
-	if fallback == nil {
-		if err != nil {
-			return nil, err
-		}
-		return response, resolver.ErrIPNotFound
-	}
-	return fallback.ExchangeContext(ctx, message)
+	return openVPNResolveWithFallback(
+		ctx,
+		r.resolvers,
+		func(ctx context.Context, current resolver.Resolver) (*D.Msg, error) {
+			return current.ExchangeContext(ctx, message)
+		},
+		func(ctx context.Context) (*D.Msg, error) {
+			fallback := resolver.DefaultResolver
+			if fallback == nil || !fallback.Invalid() {
+				fallback = resolver.SystemResolver
+			}
+			if fallback == nil {
+				return nil, resolver.ErrIPNotFound
+			}
+			return fallback.ExchangeContext(ctx, message)
+		},
+		func(response *D.Msg) bool {
+			return response != nil && response.Rcode == D.RcodeSuccess && len(response.Answer) != 0
+		},
+	)
 }
 
 func (r *openVPNFallbackResolver) Invalid() bool {
-	return r != nil && r.primary != nil && r.primary.Invalid()
+	if r == nil {
+		return false
+	}
+	for _, current := range r.resolvers {
+		if current != nil && current.Invalid() {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *openVPNFallbackResolver) ClearCache() {
-	if r != nil && r.primary != nil {
-		r.primary.ClearCache()
+	if r == nil {
+		return
+	}
+	for _, current := range r.resolvers {
+		if current != nil {
+			current.ClearCache()
+		}
 	}
 }
 
 func (r *openVPNFallbackResolver) ResetConnection() {
-	if r != nil && r.primary != nil {
-		r.primary.ResetConnection()
+	if r == nil {
+		return
+	}
+	for _, current := range r.resolvers {
+		if current != nil {
+			current.ResetConnection()
+		}
 	}
 }
 
@@ -438,30 +535,36 @@ func (o *OpenVPN) resolverForPush(push *ovpn.PushReply) (resolver.Resolver, erro
 	if !o.option.RemoteDnsResolve {
 		return nil, nil
 	}
-	nameServers := o.dns
-	if len(nameServers) == 0 && len(push.DNS) != 0 {
+	remoteResolvers := make([]resolver.Resolver, 0, 2)
+	if len(o.dns) != 0 {
+		remoteResolvers = append(remoteResolvers, o.newRemoteDNSResolver(o.dns, push.Prefixes))
+	}
+	if len(push.DNS) != 0 {
 		servers := make([]string, 0, len(push.DNS))
 		for _, server := range push.DNS {
 			servers = append(servers, server.String())
 		}
-		var err error
-		nameServers, err = dns.ParseNameServer(servers)
+		nameServers, err := dns.ParseNameServer(servers)
 		if err != nil {
 			return nil, fmt.Errorf("parse OpenVPN pushed DNS servers: %w", err)
 		}
+		remoteResolvers = append(remoteResolvers, o.newRemoteDNSResolver(nameServers, push.Prefixes))
 	}
-	if len(nameServers) == 0 {
+	if len(remoteResolvers) == 0 {
 		return nil, nil
 	}
+	return &openVPNFallbackResolver{resolvers: remoteResolvers}, nil
+}
+
+func (o *OpenVPN) newRemoteDNSResolver(nameServers []dns.NameServer, prefixes []netip.Prefix) resolver.Resolver {
 	nameServers = append([]dns.NameServer(nil), nameServers...)
 	for i := range nameServers {
 		nameServers[i].ProxyAdapter = o
 	}
-	primary := dns.NewResolver(dns.Config{
+	return dns.NewResolver(dns.Config{
 		Main: nameServers,
-		IPv6: openVPNPrefixesHas6(push.Prefixes),
+		IPv6: openVPNPrefixesHas6(prefixes),
 	})
-	return &openVPNFallbackResolver{primary: primary}, nil
 }
 
 func openVPNPrefixesHas6(prefixes []netip.Prefix) bool {

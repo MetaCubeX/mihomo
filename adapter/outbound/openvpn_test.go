@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/dns"
@@ -18,23 +19,31 @@ type openVPNTestResolver struct {
 	addresses []netip.Addr
 	err       error
 	calls     int
+	wait      bool
 }
 
-func (r *openVPNTestResolver) lookup() ([]netip.Addr, error) {
+func (r *openVPNTestResolver) lookup(ctx context.Context) ([]netip.Addr, error) {
 	r.calls++
+	if r.wait {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return r.addresses, r.err
 }
 
-func (r *openVPNTestResolver) LookupIP(context.Context, string) ([]netip.Addr, error) {
-	return r.lookup()
+func (r *openVPNTestResolver) LookupIP(ctx context.Context, _ string) ([]netip.Addr, error) {
+	return r.lookup(ctx)
 }
 
-func (r *openVPNTestResolver) LookupIPv4(context.Context, string) ([]netip.Addr, error) {
-	return r.lookup()
+func (r *openVPNTestResolver) LookupIPv4(ctx context.Context, _ string) ([]netip.Addr, error) {
+	return r.lookup(ctx)
 }
 
-func (r *openVPNTestResolver) LookupIPv6(context.Context, string) ([]netip.Addr, error) {
-	return r.lookup()
+func (r *openVPNTestResolver) LookupIPv6(ctx context.Context, _ string) ([]netip.Addr, error) {
+	return r.lookup(ctx)
 }
 
 func (r *openVPNTestResolver) ResolveECH(context.Context, string) ([]byte, error) {
@@ -70,12 +79,13 @@ func TestOpenVPNResolverForPushDisabled(t *testing.T) {
 	}
 }
 
-func TestOpenVPNResolverForPushPrefersConfiguredDNS(t *testing.T) {
+func TestOpenVPNResolverForPushBuildsConfiguredThenPushedDNS(t *testing.T) {
 	originalParseNameServer := dns.ParseNameServer
 	t.Cleanup(func() { dns.ParseNameServer = originalParseNameServer })
-	dns.ParseNameServer = func([]string) ([]dns.NameServer, error) {
-		t.Fatal("pushed DNS should not be parsed when configured DNS is available")
-		return nil, nil
+	var parsedServers []string
+	dns.ParseNameServer = func(servers []string) ([]dns.NameServer, error) {
+		parsedServers = append([]string(nil), servers...)
+		return []dns.NameServer{{Net: "udp", Addr: "10.0.0.53:53"}}, nil
 	}
 
 	openVPN := &OpenVPN{
@@ -90,7 +100,17 @@ func TestOpenVPNResolverForPushPrefersConfiguredDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 	if remoteResolver == nil {
-		t.Fatal("configured DNS should create a remote resolver")
+		t.Fatal("configured and pushed DNS should create a remote resolver chain")
+	}
+	fallbackResolver, ok := remoteResolver.(*openVPNFallbackResolver)
+	if !ok {
+		t.Fatalf("unexpected resolver type %T", remoteResolver)
+	}
+	if len(fallbackResolver.resolvers) != 2 {
+		t.Fatalf("expected configured and pushed DNS resolvers, got %d", len(fallbackResolver.resolvers))
+	}
+	if !slices.Equal(parsedServers, []string{"10.0.0.53"}) {
+		t.Fatalf("unexpected pushed DNS servers: %v", parsedServers)
 	}
 	if openVPN.dns[0].ProxyAdapter != nil {
 		t.Fatal("configured DNS should not be mutated")
@@ -128,6 +148,13 @@ func TestOpenVPNResolverForPushUsesPushedDNS(t *testing.T) {
 	if remoteResolver == nil {
 		t.Fatal("pushed DNS should create a remote resolver")
 	}
+	fallbackResolver, ok := remoteResolver.(*openVPNFallbackResolver)
+	if !ok {
+		t.Fatalf("unexpected resolver type %T", remoteResolver)
+	}
+	if len(fallbackResolver.resolvers) != 1 {
+		t.Fatalf("expected one pushed DNS resolver, got %d", len(fallbackResolver.resolvers))
+	}
 	if !slices.Equal(parsedServers, []string{"10.0.0.53", "2001:db8::53"}) {
 		t.Fatalf("unexpected pushed DNS servers: %v", parsedServers)
 	}
@@ -145,44 +172,127 @@ func TestOpenVPNResolverForPushFallsBackToDefaultDNS(t *testing.T) {
 	}
 }
 
-func TestOpenVPNRemoteDNSFailureFallsBack(t *testing.T) {
+func TestOpenVPNDNSResolverPriority(t *testing.T) {
 	originalDefaultResolver := resolver.DefaultResolver
-	defaultResolver := &openVPNTestResolver{
-		addresses: []netip.Addr{netip.MustParseAddr("203.0.113.1")},
-	}
-	resolver.DefaultResolver = defaultResolver
 	t.Cleanup(func() { resolver.DefaultResolver = originalDefaultResolver })
 
+	explicitAddress := netip.MustParseAddr("192.0.2.10")
+	pushedAddress := netip.MustParseAddr("192.0.2.20")
+	defaultAddress := netip.MustParseAddr("192.0.2.30")
 	testCases := []struct {
-		name      string
-		addresses []netip.Addr
-		err       error
+		name              string
+		explicitAddresses []netip.Addr
+		explicitErr       error
+		pushedAddresses   []netip.Addr
+		pushedErr         error
+		expected          netip.Addr
+		explicitCalls     int
+		pushedCalls       int
+		defaultCalls      int
 	}{
-		{name: "query error", err: resolver.ErrIPNotFound},
-		{name: "empty response"},
+		{
+			name:              "configured DNS succeeds",
+			explicitAddresses: []netip.Addr{explicitAddress},
+			pushedAddresses:   []netip.Addr{pushedAddress},
+			expected:          explicitAddress,
+			explicitCalls:     1,
+		},
+		{
+			name:            "configured DNS error uses pushed DNS",
+			explicitErr:     resolver.ErrIPNotFound,
+			pushedAddresses: []netip.Addr{pushedAddress},
+			expected:        pushedAddress,
+			explicitCalls:   1,
+			pushedCalls:     1,
+		},
+		{
+			name:            "configured DNS empty response uses pushed DNS",
+			pushedAddresses: []netip.Addr{pushedAddress},
+			expected:        pushedAddress,
+			explicitCalls:   1,
+			pushedCalls:     1,
+		},
+		{
+			name:          "remote DNS failures use default DNS",
+			explicitErr:   resolver.ErrIPNotFound,
+			pushedErr:     resolver.ErrIPNotFound,
+			expected:      defaultAddress,
+			explicitCalls: 1,
+			pushedCalls:   1,
+			defaultCalls:  1,
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			primaryResolver := &openVPNTestResolver{
-				addresses: testCase.addresses,
-				err:       testCase.err,
+			explicitResolver := &openVPNTestResolver{
+				addresses: testCase.explicitAddresses,
+				err:       testCase.explicitErr,
 			}
-			remoteResolver := &openVPNFallbackResolver{primary: primaryResolver}
-			defaultCalls := defaultResolver.calls
+			pushedResolver := &openVPNTestResolver{
+				addresses: testCase.pushedAddresses,
+				err:       testCase.pushedErr,
+			}
+			defaultResolver := &openVPNTestResolver{
+				addresses: []netip.Addr{defaultAddress},
+			}
+			resolver.DefaultResolver = defaultResolver
+			remoteResolver := &openVPNFallbackResolver{
+				resolvers: []resolver.Resolver{explicitResolver, pushedResolver},
+			}
 
 			addresses, err := remoteResolver.LookupIP(context.Background(), "internal.example")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !slices.Equal(addresses, defaultResolver.addresses) {
-				t.Fatalf("unexpected fallback addresses: %v", addresses)
+			if !slices.Equal(addresses, []netip.Addr{testCase.expected}) {
+				t.Fatalf("unexpected resolved addresses: %v", addresses)
 			}
-			if primaryResolver.calls == 0 {
-				t.Fatal("remote DNS resolver was not queried")
+			if explicitResolver.calls != testCase.explicitCalls {
+				t.Fatalf("configured DNS calls = %d, want %d", explicitResolver.calls, testCase.explicitCalls)
 			}
-			if defaultResolver.calls != defaultCalls+1 {
-				t.Fatalf("default resolver should be queried once, got %d new calls", defaultResolver.calls-defaultCalls)
+			if pushedResolver.calls != testCase.pushedCalls {
+				t.Fatalf("pushed DNS calls = %d, want %d", pushedResolver.calls, testCase.pushedCalls)
+			}
+			if defaultResolver.calls != testCase.defaultCalls {
+				t.Fatalf("default DNS calls = %d, want %d", defaultResolver.calls, testCase.defaultCalls)
 			}
 		})
+	}
+}
+
+func TestOpenVPNDNSResolverReservesTimeForFallback(t *testing.T) {
+	originalDefaultResolver := resolver.DefaultResolver
+	defaultResolver := &openVPNTestResolver{
+		addresses: []netip.Addr{netip.MustParseAddr("192.0.2.30")},
+	}
+	resolver.DefaultResolver = defaultResolver
+	t.Cleanup(func() { resolver.DefaultResolver = originalDefaultResolver })
+
+	explicitResolver := &openVPNTestResolver{wait: true}
+	pushedAddress := netip.MustParseAddr("192.0.2.20")
+	pushedResolver := &openVPNTestResolver{addresses: []netip.Addr{pushedAddress}}
+	remoteResolver := &openVPNFallbackResolver{
+		resolvers: []resolver.Resolver{explicitResolver, pushedResolver},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+
+	addresses, err := remoteResolver.LookupIP(ctx, "internal.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(addresses, []netip.Addr{pushedAddress}) {
+		t.Fatalf("unexpected resolved addresses: %v", addresses)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("configured DNS exhausted the parent timeout before fallback")
+	}
+	if explicitResolver.calls != 1 || pushedResolver.calls != 1 || defaultResolver.calls != 0 {
+		t.Fatalf(
+			"unexpected resolver calls: configured=%d pushed=%d default=%d",
+			explicitResolver.calls,
+			pushedResolver.calls,
+			defaultResolver.calls,
+		)
 	}
 }
