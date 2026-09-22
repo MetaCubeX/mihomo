@@ -28,18 +28,18 @@ require (
 	github.com/metacubex/jls-tls v0.0.0-20260723084315-67adc0e2f796
 	github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604
 	github.com/metacubex/mhurl v0.1.0
-	github.com/metacubex/mipstack v0.0.0-20260910230046-ba762df4c91d
+	github.com/metacubex/mipstack v0.0.0-20260922000335-dbef50b1df45
 	github.com/metacubex/mlkem v0.1.0
 	github.com/metacubex/quic-go v0.61.1-0.20260727080200-2548683b76f4
 	github.com/metacubex/randv2 v0.2.0
 	github.com/metacubex/restls-client-go v0.1.9
 	github.com/metacubex/sevenzip v1.6.4
-	github.com/metacubex/sing v0.5.7
+	github.com/metacubex/sing v0.5.8
 	github.com/metacubex/sing-mux v0.3.10
 	github.com/metacubex/sing-quic v0.0.0-20260904234848-1c242664697a
 	github.com/metacubex/sing-shadowsocks v0.2.13
 	github.com/metacubex/sing-shadowsocks2 v0.2.8
-	github.com/metacubex/sing-tun v0.4.24
+	github.com/metacubex/sing-tun v0.4.25
 	github.com/metacubex/sing-vmess v0.2.5
 	github.com/metacubex/sing-wireguard v0.0.0-20260826105301-c3ae17d19f9e
 	github.com/metacubex/smux v0.0.0-20260105030934-d0c8756d3141
@@ -61,7 +61,7 @@ require (
 	gitlab.com/go-extension/aes-ccm v0.0.0-20230221065045-e58665ef23c7
 	go.uber.org/automaxprocs v1.6.0
 	go.yaml.in/yaml/v3 v3.0.5
-	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
+	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
 )
 
 // lastest version compatible with golang1.20
@@ -110,7 +110,7 @@ require (
 	github.com/klauspost/reedsolomon v1.12.3 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/metacubex/ascon v0.1.0 // indirect
-	github.com/metacubex/gvisor v0.0.0-20260826100401-79317d808312 // indirect
+	github.com/metacubex/gvisor v0.0.0-20260922041103-e2cbcd6e7400 // indirect
 	github.com/metacubex/hkdf v0.1.0 // indirect
 	github.com/metacubex/hpke v0.1.0 // indirect
 	github.com/metacubex/jsonv2 v0.0.0-20260721082349-16b4998c8f89 // indirect
