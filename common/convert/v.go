@@ -196,6 +196,10 @@ func parseXHTTPExtra(extra map[string]any, opts map[string]any) {
 		return reuse
 	}
 
+	if headers, ok := extra["headers"].(map[string]any); ok && len(headers) > 0 {
+		opts["headers"] = headers
+	}
+
 	if v, ok := extra["noGRPCHeader"].(bool); ok && v {
 		opts["no-grpc-header"] = true
 	}
