@@ -10,7 +10,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +20,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	MDNS "github.com/metacubex/mihomo/dns"
 	LC "github.com/metacubex/mihomo/listener/config"
+
 	tun "github.com/metacubex/sing-tun"
 )
 
@@ -53,31 +54,20 @@ func TestWFPIntegration(t *testing.T) {
 		EnhancedMode: C.DNSFakeIP, FakeIPPool: pool, FakeIPSkipper: &fakeip.Skipper{}, FakeIPTTL: 1,
 	}))
 	defer func() { resolver.DefaultService = previous }()
-	client := wfpTestClient(t)
+	for _, stack := range wfpStacks() {
+		t.Run(stack.String(), func(t *testing.T) { testWFPStack(t, stack) })
+	}
+}
+
+func wfpStacks() []C.TUNStack {
 	stacks := []C.TUNStack{C.TunSystem, C.TunMips}
 	if tun.WithGVisor {
 		stacks = append(stacks, C.TunMixed, C.TunGvisor)
 	}
-	for _, stack := range stacks {
-		t.Run(stack.String(), func(t *testing.T) { testWFPStack(t, stack, client) })
-	}
+	return stacks
 }
 
-// A separate executable prevents the relay's firewall rule from also allowing the client.
-func wfpTestClient(t *testing.T) string {
-	t.Helper()
-	input, err := os.ReadFile(os.Args[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "wfp-client.exe")
-	if err := os.WriteFile(path, input, 0600); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-func testWFPStack(t *testing.T, stack C.TUNStack, client string) {
+func testWFPStack(t *testing.T, stack C.TUNStack) {
 	echo := &wfpEchoTunnel{table: nat.New(), seen: make(chan *C.Metadata, 8)}
 	options := LC.Tun{InterceptMode: C.TunInterceptWFP, Stack: stack, RouteAddress: []netip.Prefix{netip.MustParsePrefix("203.0.113.1/32")}}
 	networks := []string{"tcp4", "udp4"}
@@ -94,7 +84,7 @@ func testWFPStack(t *testing.T, stack C.TUNStack, client string) {
 		defer l.Close()
 		for _, network := range networks {
 			t.Run(network, func(t *testing.T) {
-				runWFPClient(t, client, "TestWFPClient", network)
+				runWFPClient(t, "TestWFPClient", network)
 				select {
 				case metadata := <-echo.seen:
 					destination := "203.0.113.1"
@@ -133,17 +123,17 @@ func testWFPStack(t *testing.T, stack C.TUNStack, client string) {
 		defer l.Close()
 		for _, network := range networks {
 			t.Run(network, func(t *testing.T) {
-				runWFPClient(t, client, "TestWFPDNSClient", network)
+				runWFPClient(t, "TestWFPDNSClient", network)
 			})
 		}
 	})
 }
 
-func runWFPClient(t *testing.T, client, test, network string) {
+func runWFPClient(t *testing.T, test, network string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	child := exec.CommandContext(ctx, client, "-test.run=^"+test+"$")
+	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^"+test+"$")
 	child.Env = append(os.Environ(), "MIHOMO_WFP_CLIENT="+network)
 	if output, err := child.CombinedOutput(); err != nil {
 		t.Fatalf("%s: %v\n%s", test, err, output)
@@ -159,7 +149,10 @@ func TestWFPClient(t *testing.T) {
 	if network[len(network)-1] == '6' {
 		destination = "[2001:db8::1]:18473"
 	}
-	conn, err := net.DialTimeout(network, destination, 5*time.Second)
+	if address := os.Getenv("MIHOMO_WFP_CLIENT_ADDRESS"); address != "" {
+		destination = address
+	}
+	conn, err := wfpClientDialer(network, destination).Dial(network, destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,27 +160,85 @@ func TestWFPClient(t *testing.T) {
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	repeat := 40
 	if network[:3] == "tcp" {
-		repeat = 1000
+		repeat = 1 << 15
 	}
 	payload := bytes.Repeat([]byte("mihomo WFP TCP/UDP round trip"), repeat)
-	if _, err := conn.Write(payload); err != nil {
-		t.Fatal(err)
-	}
-	if network[:3] == "tcp" {
-		if err := conn.(*net.TCPConn).CloseWrite(); err != nil {
-			t.Fatal(err)
+	written := make(chan error, 1)
+	go func() {
+		_, err := conn.Write(payload)
+		if err == nil && network[:3] == "tcp" {
+			err = conn.(*net.TCPConn).CloseWrite()
 		}
-	}
+		written <- err
+	}()
 	reply := make([]byte, len(payload))
 	if _, err := io.ReadFull(conn, reply); err != nil {
 		t.Fatal(err)
 	}
+	if err := <-written; err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(reply, payload) {
-		t.Fatalf("incorrect reply: %q", reply)
+		t.Fatal("incorrect reply")
 	}
 	if network[:3] == "tcp" {
 		if _, err := conn.Read(make([]byte, 1)); err != io.EOF {
 			t.Fatalf("TCP close handshake failed: %v", err)
 		}
 	}
+}
+
+func wfpClientDialer(network, destination string) *net.Dialer {
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	// Bind the configured source for the IPv6 test destination.
+	if source := os.Getenv("MIHOMO_WFP_TEST_LOCAL_IPV6"); source != "" {
+		remote, err := netip.ParseAddrPort(destination)
+		if err == nil && remote.Addr() == netip.MustParseAddr("2001:db8::1") {
+			if network == "tcp6" {
+				dialer.LocalAddr = &net.TCPAddr{IP: net.ParseIP(source)}
+			}
+			if network == "udp6" {
+				dialer.LocalAddr = &net.UDPAddr{IP: net.ParseIP(source)}
+			}
+		}
+	}
+	return dialer
+}
+
+func wfpLoopbackServer(t *testing.T, network string) string {
+	t.Helper()
+	address := "127.0.0.1:0"
+	if strings.HasSuffix(network, "6") {
+		address = "[::1]:0"
+	}
+	if strings.HasPrefix(network, "tcp") {
+		listener, err := net.Listen(network, address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = listener.Close() })
+		go func() {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+			_, _ = io.Copy(conn, conn)
+		}()
+		return listener.Addr().String()
+	}
+	conn, err := net.ListenPacket(network, address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	go func() {
+		buffer := make([]byte, 65535)
+		n, addr, err := conn.ReadFrom(buffer)
+		if err == nil {
+			_, _ = conn.WriteTo(buffer[:n], addr)
+		}
+	}()
+	return conn.LocalAddr().String()
 }

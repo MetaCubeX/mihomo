@@ -4,9 +4,11 @@ package windivert
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net/netip"
 
 	"github.com/metacubex/mihomo/common/pool"
+
 	"github.com/metacubex/sing/common/buf"
 	M "github.com/metacubex/sing/common/metadata"
 	N "github.com/metacubex/sing/common/network"
@@ -14,9 +16,6 @@ import (
 
 func (t *Tun) deliverUDP(p []byte, info packetInfo, addr address) {
 	length := int(binary.BigEndian.Uint16(p[info.offset+4:]))
-	if length < 8 || info.offset+length > info.size {
-		return
-	}
 	metadata := M.Metadata{Source: M.SocksaddrFromNetIP(info.source), Destination: M.SocksaddrFromNetIP(info.destination)}
 	t.options.Handler.NewPacket(t.ctx, info.source, buf.As(p[info.offset+8:info.offset+length]).ToOwned(), metadata,
 		func(N.PacketConn) N.PacketWriter {
@@ -32,9 +31,20 @@ type udpWriter struct {
 
 func (w *udpWriter) WritePacket(buffer *buf.Buffer, source M.Socksaddr) error {
 	defer buffer.Release()
+	if !source.Addr.IsValid() || source.Addr.Unmap().Is4() != w.destination.Addr().Is4() {
+		return fmt.Errorf("WFP UDP reply address family mismatch")
+	}
+	source.Addr = source.Addr.Unmap()
 	headerLen := 20
 	if w.destination.Addr().Is6() {
 		headerLen = 40
+	}
+	maxPayload := 65535 - headerLen - 8
+	if headerLen == 40 {
+		maxPayload = 65535 - 8
+	}
+	if buffer.Len() > maxPayload {
+		return fmt.Errorf("WFP UDP reply exceeds IP packet length")
 	}
 	p := pool.Get(headerLen + 8 + buffer.Len())
 	for i := range p[:headerLen+8] {

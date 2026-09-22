@@ -9,18 +9,6 @@ import (
 	"testing"
 )
 
-func TestDNSWithoutIPv6Traffic(t *testing.T) {
-	device := &Tun{options: Options{HijackDNS: func(destination netip.AddrPort) bool { return destination.Port() == 53 }}}
-	info := packetInfo{flow: flow{destination: netip.MustParseAddrPort("[fd00::1]:53")}}
-	if !device.selected(info, address{}) {
-		t.Fatal("IPv6 DNS was bypassed")
-	}
-	info.destination = netip.MustParseAddrPort("[fd00::1]:443")
-	if device.selected(info, address{}) {
-		t.Fatal("IPv6 traffic was captured while disabled")
-	}
-}
-
 func TestTCPCapture(t *testing.T) {
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {

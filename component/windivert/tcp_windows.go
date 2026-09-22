@@ -3,22 +3,12 @@
 package windivert
 
 import (
-	"context"
-	"fmt"
 	"net"
 	"net/netip"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"sync"
-	"syscall"
-	"time"
 
-	"github.com/metacubex/mihomo/log"
 	tun "github.com/metacubex/sing-tun"
 	M "github.com/metacubex/sing/common/metadata"
-	"golang.org/x/sys/windows"
 )
 
 type tcpRedirect struct {
@@ -27,24 +17,22 @@ type tcpRedirect struct {
 	ports     [2]uint16
 	mu        sync.Mutex
 	conns     map[net.Conn]struct{}
-	firewall  string
+	// Only the packet reader accesses routes.
+	routes map[uint16]address
 }
 
 func (t *Tun) startTCP() error {
-	r := &tcpRedirect{nat: tun.NewNat(t.ctx, t.options.UDPTimeout), conns: make(map[net.Conn]struct{})}
+	r := &tcpRedirect{nat: tun.NewNat(t.ctx, t.options.UDPTimeout), conns: make(map[net.Conn]struct{}), routes: make(map[uint16]address)}
 	t.tcp = r
-	program, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	rule := fmt.Sprintf("mihomo WFP TCP (%d)", os.Getpid())
-	if err = netsh("add", "rule", "name="+rule, "dir=in", "action=allow", "program="+program,
-		"protocol=TCP", "profile=any"); err != nil {
-		return err
-	}
-	r.firewall = rule
 	for i, network := range []string{"tcp4", "tcp6"} {
-		listener, err := net.Listen(network, ":0")
+		if i == 1 && !t.options.IPv6 && len(t.options.HijackDNS) == 0 {
+			continue
+		}
+		bind := "127.0.0.1:0"
+		if i == 1 {
+			bind = "[::1]:0"
+		}
+		listener, err := net.Listen(network, bind)
 		if err != nil {
 			return err
 		}
@@ -65,24 +53,45 @@ func (r *tcpRedirect) port(ip netip.Addr) uint16 {
 	return r.ports[0]
 }
 
-func (r *tcpRedirect) redirect(p []byte, info packetInfo) bool {
-	port, err := r.nat.Lookup(info.source, info.destination)
-	if err != nil {
-		return false
+func relayPeer(ip netip.Addr) netip.Addr {
+	if ip.Is6() {
+		return netip.IPv6Loopback()
 	}
-	// Reflect the outbound packet into a local Windows TCP listener.
-	rewriteTCP(p, info, netip.AddrPortFrom(info.destination.Addr(), port),
-		netip.AddrPortFrom(info.source.Addr(), r.port(info.source.Addr())))
-	return true
+	return netip.AddrFrom4([4]byte{127, 0, 0, 2})
 }
 
-func (r *tcpRedirect) reply(p []byte, info packetInfo) bool {
+func relayLocal(ip netip.Addr) netip.Addr {
+	if ip.Is6() {
+		return netip.IPv6Loopback()
+	}
+	return netip.AddrFrom4([4]byte{127, 0, 0, 1})
+}
+
+func (r *tcpRedirect) isReply(info packetInfo) bool {
+	return info.protocol == 6 && info.source.Port() == r.port(info.source.Addr()) &&
+		info.source.Addr() == relayLocal(info.source.Addr()) && info.destination.Addr() == relayPeer(info.source.Addr())
+}
+
+func (r *tcpRedirect) redirect(p []byte, info packetInfo, addr address) (address, bool) {
+	port, err := r.nat.Lookup(info.source, info.destination)
+	if err != nil {
+		return address{}, false
+	}
+	r.routes[port] = addr
+	// Relay both endpoints over loopback.
+	rewriteTCP(p, info, netip.AddrPortFrom(relayPeer(info.source.Addr()), port),
+		netip.AddrPortFrom(relayLocal(info.source.Addr()), r.port(info.source.Addr())))
+	return address{Flags: flagOutbound}, true
+}
+
+func (r *tcpRedirect) reply(p []byte, info packetInfo) (address, bool) {
 	session := r.nat.LookupBack(info.destination.Port())
-	if session == nil || info.source.Addr() != session.Source.Addr() || info.destination.Addr() != session.Destination.Addr() {
-		return false
+	addr, ok := r.routes[info.destination.Port()]
+	if session == nil || !ok || session.Source.Addr().Is6() != info.source.Addr().Is6() {
+		return address{}, false
 	}
 	rewriteTCP(p, info, session.Destination, session.Source)
-	return true
+	return addr, true
 }
 
 func (r *tcpRedirect) accept(t *Tun, listener net.Listener) {
@@ -95,7 +104,7 @@ func (r *tcpRedirect) accept(t *Tun, listener net.Listener) {
 		remote := conn.RemoteAddr().(*net.TCPAddr).AddrPort()
 		local := conn.LocalAddr().(*net.TCPAddr).AddrPort()
 		session := r.nat.LookupBack(remote.Port())
-		if session == nil || remote.Addr() != session.Destination.Addr() || local.Addr() != session.Source.Addr() {
+		if session == nil || remote.Addr() != relayPeer(session.Source.Addr()) || local.Addr() != relayLocal(session.Source.Addr()) {
 			conn.Close()
 			continue
 		}
@@ -132,24 +141,4 @@ func (r *tcpRedirect) close() {
 		conn.Close()
 	}
 	r.mu.Unlock()
-	if r.firewall != "" {
-		if err := netsh("delete", "rule", "name="+r.firewall); err != nil {
-			log.Warnln("[WFP] remove TCP firewall rule: %s", err)
-		}
-	}
-}
-
-func netsh(args ...string) error {
-	directory, err := windows.GetSystemDirectory()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, filepath.Join(directory, "netsh.exe"), append([]string{"advfirewall", "firewall"}, args...)...)
-	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	if output, err := command.CombinedOutput(); err != nil {
-		return fmt.Errorf("configure WFP TCP firewall: %w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return nil
 }

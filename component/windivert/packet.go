@@ -96,9 +96,17 @@ func parsePacket(p []byte) (info packetInfo, ok bool) {
 		if offset+20 > size {
 			return info, false
 		}
+		headerSize := int(p[offset+12]>>4) * 4
+		if headerSize < 20 || offset+headerSize > size {
+			return info, false
+		}
 		info.tcpFlags = p[offset+13]
 	case 17:
 		if offset+8 > size {
+			return info, false
+		}
+		length := int(binary.BigEndian.Uint16(p[offset+4:]))
+		if length < 8 || offset+length > size {
 			return info, false
 		}
 	default:

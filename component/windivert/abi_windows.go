@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"unsafe"
 
@@ -22,6 +23,8 @@ const (
 	accept          = 0x7ffe
 	reject          = 0x7fff
 	flagIPChecksum  = 1 << 21
+	flagOutbound    = 1 << 17
+	flagLoopback    = 1 << 18
 	flagTCPChecksum = 1 << 22
 	flagUDPChecksum = 1 << 23
 	ioParallelism   = 4
@@ -42,19 +45,6 @@ type instruction struct {
 	FieldTestSuccess uint32
 	Failure          uint32
 	Arg              [4]uint32
-}
-
-func equal(field uint32, value uint32, yes, no uint16) instruction {
-	return instruction{FieldTestSuccess: field | uint32(yes)<<16, Failure: uint32(no), Arg: [4]uint32{value}}
-}
-
-// outbound and !loopback and !impostor and (tcp or udp).
-var networkFilter = []instruction{
-	equal(2, 1, 1, reject),
-	equal(58, 0, 2, reject),
-	equal(59, 0, 3, reject),
-	equal(8, 1, accept, 4),
-	equal(9, 1, accept, reject),
 }
 
 type handle struct {
@@ -116,9 +106,13 @@ func openHandle() (*handle, error) {
 	return h, nil
 }
 
-func (h *handle) start() error {
+func (h *handle) start(networkFilter []instruction, ipv6 bool) error {
 	var args [16]byte
-	binary.LittleEndian.PutUint64(args[:], 0x20|0x40|0x80) // outbound, IPv4, IPv6
+	flags := uint64(0x20 | 0x40) // outbound, IPv4
+	if ipv6 {
+		flags |= 0x80
+	}
+	binary.LittleEndian.PutUint64(args[:], flags)
 	filter := make([]byte, 24*len(networkFilter))
 	for i, ins := range networkFilter {
 		b := filter[i*24:]
@@ -165,7 +159,11 @@ func (h *handle) recvBatch(packets []byte, addresses []address) (int, int, error
 }
 
 func (h *handle) sendBatch(packets []byte, addresses []address, sender int) (int, error) {
-	return h.packetIO(ioctlSend, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(len(addresses))*unsafe.Sizeof(address{}), &h.operations[1+sender])
+	n, err := h.packetIO(ioctlSend, packets, uintptr(unsafe.Pointer(&addresses[0])), uintptr(len(addresses))*unsafe.Sizeof(address{}), &h.operations[1+sender])
+	if err == nil && n != len(packets) {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }
 
 // Keep the nested address pointer on the heap until overlapped I/O completes.

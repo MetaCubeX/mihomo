@@ -8,29 +8,31 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/log"
+
 	tun "github.com/metacubex/sing-tun"
-	"golang.org/x/exp/slices"
+	"github.com/metacubex/sing/common/ranges"
 )
 
 type Options struct {
-	Stack            string
-	Handler          tun.Handler
-	UDPTimeout       time.Duration
-	MTU              uint32
-	IPv6             bool
-	HijackDNS        func(netip.AddrPort) bool
-	RouteAddress     []netip.Prefix
-	ExcludeAddress   []netip.Prefix
-	IncludeInterface []string
-	ExcludeInterface []string
-	ExcludeSrcPort   []uint16
-	ExcludeDstPort   []uint16
+	Stack               string
+	Handler             tun.Handler
+	UDPTimeout          time.Duration
+	MTU                 uint32
+	IPv6                bool
+	HijackDNS           []netip.AddrPort
+	RouteAddress        []netip.Prefix
+	ExcludeAddress      []netip.Prefix
+	IncludeInterface    []string
+	ExcludeInterface    []string
+	ExcludeSrcPort      []uint16
+	ExcludeDstPort      []uint16
+	ExcludeSrcPortRange []ranges.Range[uint16]
+	ExcludeDstPortRange []ranges.Range[uint16]
 }
 
 type Tun struct {
@@ -55,20 +57,44 @@ type Tun struct {
 	lastSource   netip.Addr
 	lastAddress  address
 	closeOnce    sync.Once
+	packetMu     sync.Mutex
+	outputMu     sync.RWMutex
+	outputClosed bool
+	outputDone   chan struct{}
 	running      sync.WaitGroup
 }
 
-var active atomic.Bool
+var active atomic.Pointer[Tun]
 
 func New(options Options) (_ *Tun, err error) {
-	if !active.CompareAndSwap(false, true) {
-		return nil, fmt.Errorf("only one WFP listener can be active")
+	for _, prefixes := range [][]netip.Prefix{options.RouteAddress, options.ExcludeAddress} {
+		for _, prefix := range prefixes {
+			if !prefix.IsValid() || prefix.Addr().Is4In6() {
+				return nil, fmt.Errorf("invalid WFP route prefix: %s", prefix)
+			}
+		}
+	}
+	for _, target := range options.HijackDNS {
+		if !target.IsValid() || target.Addr().Is4In6() {
+			return nil, fmt.Errorf("invalid WFP DNS target: %s", target)
+		}
+	}
+	if (options.Stack == "gvisor" || options.Stack == "mixed") && !tun.WithGVisor {
+		return nil, fmt.Errorf("gVisor is not included in this build, rebuild with -tags with_gvisor")
+	}
+	switch options.Stack {
+	case "system", "gvisor", "mixed", "mips":
+	default:
+		return nil, fmt.Errorf("unknown WFP stack: %s", options.Stack)
 	}
 	t := &Tun{
 		options: options, pid: uint32(os.Getpid()),
 		tcpFlows:   make(map[flow]uint32),
 		interfaces: make(map[netip.Addr]address),
 		includeIf:  make(map[uint32]bool), excludeIf: make(map[uint32]bool),
+	}
+	if !active.CompareAndSwap(nil, t) {
+		return nil, fmt.Errorf("only one WFP listener can be active")
 	}
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	defer func() {
@@ -106,8 +132,6 @@ func New(options Options) (_ *Tun, err error) {
 		if err = t.startMIPS(); err != nil {
 			return nil, err
 		}
-	default:
-		return nil, fmt.Errorf("unknown WFP stack: %s", options.Stack)
 	}
 	if options.Stack == "system" || options.Stack == "mixed" {
 		if err = t.startTCP(); err != nil {
@@ -118,40 +142,16 @@ func New(options Options) (_ *Tun, err error) {
 }
 
 func (t *Tun) Start() error {
-	if err := t.handle.start(); err != nil {
+	filter, err := t.networkFilter()
+	if err != nil {
+		return err
+	}
+	if err := t.handle.start(filter, t.options.IPv6 || len(t.options.HijackDNS) > 0); err != nil {
 		return err
 	}
 	t.running.Add(1)
 	go t.readLoop()
 	return nil
-}
-
-func (t *Tun) selected(info packetInfo, addr address) bool {
-	dst := info.destination.Addr()
-	if !dst.IsGlobalUnicast() || t.excludeIf[addr.IfIdx] || (len(t.includeIf) > 0 && !t.includeIf[addr.IfIdx]) {
-		return false
-	}
-	// DNS transport can use IPv6 even when IPv6 proxy traffic is disabled.
-	if !t.options.IPv6 && dst.Is6() && (t.options.HijackDNS == nil || !t.options.HijackDNS(info.destination)) {
-		return false
-	}
-	if len(t.options.RouteAddress) > 0 && !containsAddress(t.options.RouteAddress, dst) {
-		return false
-	}
-	if containsAddress(t.options.ExcludeAddress, dst) {
-		return false
-	}
-	return !slices.Contains(t.options.ExcludeSrcPort, info.source.Port()) &&
-		!slices.Contains(t.options.ExcludeDstPort, info.destination.Port())
-}
-
-func containsAddress(prefixes []netip.Prefix, addr netip.Addr) bool {
-	for _, prefix := range prefixes {
-		if prefix.Contains(addr) {
-			return true
-		}
-	}
-	return false
 }
 
 func (t *Tun) capture(info packetInfo) bool {
@@ -211,8 +211,6 @@ func (t *Tun) readLoop() {
 	t.running.Add(1)
 	go func() {
 		defer t.running.Done()
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
 		for {
 			var b *receivedBatch
 			select {
@@ -232,6 +230,7 @@ func (t *Tun) readLoop() {
 		}
 	}()
 	batch := newPacketWriter(t)
+	defer batch.release()
 	for {
 		var received *receivedBatch
 		select {
@@ -256,7 +255,13 @@ func (t *Tun) readLoop() {
 				return
 			}
 			packet := p[read : read+size]
+			t.packetMu.Lock()
+			if t.ctx.Err() != nil {
+				t.packetMu.Unlock()
+				return
+			}
 			addr, inject := t.processPacket(packet, addresses[i])
+			t.packetMu.Unlock()
 			if inject {
 				batch.append(addr, packetKey(packet), packet)
 			}
@@ -270,20 +275,20 @@ func (t *Tun) readLoop() {
 // processPacket returns the address and whether the packet needs reinjection.
 func (t *Tun) processPacket(p []byte, addr address) (address, bool) {
 	info, ok := parsePacket(p)
-	if ok && t.tcp != nil && info.protocol == 6 && info.source.Port() == t.tcp.port(info.source.Addr()) {
+	if ok && t.tcp != nil && t.tcp.isReply(info) {
 		// Expired or unsolicited relay connections must not escape to the network.
-		return address{IfIdx: addr.IfIdx, SubIfIdx: addr.SubIfIdx}, t.tcp.reply(p, info)
+		return t.tcp.reply(p, info)
 	}
-	if !ok || !t.selected(info, addr) || !t.capture(info) {
+	if !ok || !t.capture(info) {
 		return addr, true
 	}
-	if t.options.Stack == "mips" && !completeChecksums(p, info, addr.Flags) {
-		return address{}, false
+	if t.options.Stack == "mips" {
+		completeChecksums(p, info, addr.Flags)
 	}
 	// Replies are inbound on this interface; zero checksum flags request recalculation.
 	addr = address{IfIdx: addr.IfIdx, SubIfIdx: addr.SubIfIdx}
 	if info.protocol == 6 && t.tcp != nil {
-		return addr, t.tcp.redirect(p, info)
+		return t.tcp.redirect(p, info, addr)
 	}
 	if t.options.Stack != "system" && (t.lastSource != info.source.Addr() || t.lastAddress != addr) {
 		t.interfaceMu.Lock()
@@ -308,6 +313,16 @@ func (t *Tun) close(err error) {
 			log.Errorln("[WFP] %s", err)
 		}
 		t.cancel()
+		// Cancellation unblocks producers; stop senders only after every enqueue
+		// has either completed or released its buffers.
+		t.outputMu.Lock()
+		t.outputClosed = true
+		if t.outputDone != nil {
+			close(t.outputDone)
+		}
+		t.outputMu.Unlock()
+		t.packetMu.Lock()
+		defer t.packetMu.Unlock()
 		if t.tcp != nil {
 			t.tcp.close()
 		}
@@ -317,12 +332,13 @@ func (t *Tun) close(err error) {
 		if t.closeStack != nil {
 			t.closeStack()
 		}
-		active.Store(false)
+		go func() { t.running.Wait(); active.CompareAndSwap(t, nil) }()
 	})
 }
 
 func (t *Tun) Close() error {
 	t.close(nil)
 	t.running.Wait()
+	active.CompareAndSwap(t, nil)
 	return nil
 }

@@ -69,3 +69,62 @@ func TestParsePacket(t *testing.T) {
 		}
 	}
 }
+
+func FuzzParsePacket(f *testing.F) {
+	f.Add([]byte{})
+	f.Add([]byte{0x45, 0, 0, 20, 0, 0, 0, 0, 64, 6, 0, 0, 192, 0, 2, 1, 198, 51, 100, 1})
+	for _, ipSize := range []int{20, 40} {
+		for _, protocol := range []byte{6, 17} {
+			p := make([]byte, ipSize+20)
+			if ipSize == 20 {
+				p[0], p[9] = 0x45, protocol
+				binary.BigEndian.PutUint16(p[2:], uint16(len(p)))
+			} else {
+				p[0], p[6] = 0x60, protocol
+				binary.BigEndian.PutUint16(p[4:], 20)
+			}
+			if protocol == 6 {
+				p[ipSize+12] = 0x50
+			} else {
+				binary.BigEndian.PutUint16(p[ipSize+4:], 20)
+			}
+			f.Add(p)
+		}
+	}
+	f.Fuzz(func(t *testing.T, p []byte) {
+		size := packetSize(p)
+		if size < 0 || size > len(p) {
+			t.Fatal("invalid packet size")
+		}
+		if info, ok := parsePacket(p); ok {
+			if info.size > len(p) || info.offset < 20 || info.offset >= info.size {
+				t.Fatal("invalid packet bounds")
+			}
+			if info.protocol != 6 && info.protocol != 17 {
+				t.Fatal("unexpected transport")
+			}
+			if packetDestination(p) != info.destination.Addr() {
+				t.Fatal("incorrect packet destination")
+			}
+		}
+	})
+}
+
+func TestInvalidTransportHeaders(t *testing.T) {
+	for _, protocol := range []byte{6, 17} {
+		p := make([]byte, 40)
+		p[0], p[9] = 0x45, protocol
+		binary.BigEndian.PutUint16(p[2:], 40)
+		if _, ok := parsePacket(p); ok {
+			t.Fatal("zero transport length accepted")
+		}
+		if protocol == 6 {
+			p[32] = 0xf0
+		} else {
+			binary.BigEndian.PutUint16(p[24:], 100)
+		}
+		if _, ok := parsePacket(p); ok {
+			t.Fatal("truncated transport header accepted")
+		}
+	}
+}

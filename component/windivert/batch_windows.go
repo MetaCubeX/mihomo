@@ -4,7 +4,6 @@ package windivert
 
 import (
 	"net"
-	"runtime"
 
 	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/log"
@@ -109,11 +108,28 @@ func (w *packetWriter) flushOne(sender int) {
 		return
 	}
 	w.batches[sender] = nil
+	w.tun.outputMu.RLock()
+	defer w.tun.outputMu.RUnlock()
+	if w.tun.outputClosed {
+		b.packets, b.addresses = b.packets[:0], b.addresses[:0]
+		w.tun.batchPool.Put(b)
+		return
+	}
 	select {
 	case w.tun.output[sender].batches <- b:
 	case <-w.tun.ctx.Done():
 		b.packets, b.addresses = b.packets[:0], b.addresses[:0]
 		w.tun.batchPool.Put(b)
+	}
+}
+
+func (w *packetWriter) release() {
+	for sender, b := range w.batches {
+		if b != nil {
+			b.packets, b.addresses = b.packets[:0], b.addresses[:0]
+			w.tun.batchPool.Put(b)
+			w.batches[sender] = nil
+		}
 	}
 }
 
@@ -124,7 +140,9 @@ func (w *packetWriter) flush() {
 }
 
 func (t *Tun) queuePacket(p []byte, addr address) error {
-	if t.ctx.Err() != nil {
+	t.outputMu.RLock()
+	defer t.outputMu.RUnlock()
+	if t.outputClosed || t.ctx.Err() != nil {
 		_ = pool.Put(p)
 		return net.ErrClosed
 	}
@@ -138,6 +156,7 @@ func (t *Tun) queuePacket(p []byte, addr address) error {
 }
 
 func (t *Tun) startOutput() {
+	t.outputDone = make(chan struct{})
 	t.batchPool.New = func() any { return newPacketBatch(t) }
 	t.running.Add(ioParallelism)
 	for sender := range t.output {
@@ -145,9 +164,12 @@ func (t *Tun) startOutput() {
 		t.output[sender] = output
 		go func(sender int) {
 			defer t.running.Done()
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
 			defer func() {
+				for len(output.batches) > 0 {
+					b := <-output.batches
+					b.packets, b.addresses = b.packets[:0], b.addresses[:0]
+					t.batchPool.Put(b)
+				}
 				for len(output.datagrams) > 0 {
 					p := <-output.datagrams
 					_ = pool.Put(p.data)
@@ -183,7 +205,7 @@ func (t *Tun) startOutput() {
 					}
 					udp.flush()
 					t.batchPool.Put(udp)
-				case <-t.ctx.Done():
+				case <-t.outputDone:
 					return
 				}
 			}

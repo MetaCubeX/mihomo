@@ -12,7 +12,7 @@ import (
 )
 
 func TestAddressLayout(t *testing.T) {
-	if unsafe.Sizeof(address{}) != 80 || unsafe.Offsetof(address{}.IfIdx) != 16 {
+	if unsafe.Sizeof(address{}) != 80 || unsafe.Offsetof(address{}.IfIdx) != 16 || unsafe.Sizeof(instruction{}) != 24 {
 		t.Fatal("WinDivert ABI layout mismatch")
 	}
 }

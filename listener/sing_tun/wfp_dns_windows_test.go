@@ -24,6 +24,7 @@ func TestWFPDNSClient(t *testing.T) {
 	query := new(D.Msg)
 	query.SetQuestion("wfp.example.com.", D.TypeA)
 	client := &D.Client{Net: mode, Timeout: 5 * time.Second}
+	client.Dialer = wfpClientDialer(mode, destination)
 	reply, _, err := client.Exchange(query, destination)
 	if err != nil {
 		t.Fatal(err)
