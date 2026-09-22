@@ -635,5 +635,3 @@ func NewResolver(config Config) (rs Resolvers) {
 
 	return
 }
-
-var ParseNameServer func(servers []string) ([]NameServer, error) // define in config/config.go
