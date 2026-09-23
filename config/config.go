@@ -23,6 +23,7 @@ import (
 	"github.com/metacubex/mihomo/component/cidr"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/neighbor"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/sniffer"
@@ -46,6 +47,9 @@ import (
 
 // General config
 type General struct {
+	SrcMACProbe      bool     `json:"src-mac-probe"`
+	SrcMACTimeout    int      `json:"src-mac-timeout"`
+	SrcMACInterfaces []string `json:"src-mac-interfaces"`
 	Inbound
 	Mode              T.TunnelMode            `json:"mode"`
 	UnifiedDelay      bool                    `json:"unified-delay"`
@@ -400,6 +404,9 @@ type RawTLS struct {
 }
 
 type RawConfig struct {
+	SrcMACProbe                   bool                    `yaml:"src-mac-probe" json:"src-mac-probe"`
+	SrcMACTimeout                 int                     `yaml:"src-mac-timeout" json:"src-mac-timeout"`
+	SrcMACInterfaces              []string                `yaml:"src-mac-interfaces" json:"src-mac-interfaces"`
 	Port                          int                     `yaml:"port" json:"port"`
 	SocksPort                     int                     `yaml:"socks-port" json:"socks-port"`
 	RedirPort                     int                     `yaml:"redir-port" json:"redir-port"`
@@ -481,6 +488,7 @@ func Parse(buf []byte) (*Config, error) {
 
 func DefaultRawConfig() *RawConfig {
 	return &RawConfig{
+		SrcMACTimeout:     1000,
 		AllowLan:          false,
 		BindAddress:       "*",
 		LanAllowedIPs:     []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")},
@@ -757,10 +765,16 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 func temporaryUpdateGeneral(general *General) func()
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
+	if err := neighbor.ValidateTimeout(cfg.SrcMACTimeout); err != nil {
+		return nil, err
+	}
 	if cfg.GlobalClientFingerprint != "" {
 		log.Errorln("The `global-client-fingerprint` configuration is removed, please set `client-fingerprint` directly on the proxy instead")
 	}
 	return &General{
+		SrcMACProbe:      cfg.SrcMACProbe,
+		SrcMACTimeout:    cfg.SrcMACTimeout,
+		SrcMACInterfaces: cfg.SrcMACInterfaces,
 		Inbound: Inbound{
 			Port:              cfg.Port,
 			SocksPort:         cfg.SocksPort,

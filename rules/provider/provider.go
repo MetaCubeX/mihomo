@@ -7,6 +7,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/pool"
@@ -60,8 +61,35 @@ type mrsRuleStrategy interface {
 }
 
 type baseProvider struct {
-	behavior P.RuleBehavior
-	strategy ruleStrategy
+	behavior   P.RuleBehavior
+	strategyMu sync.RWMutex
+	strategy   ruleStrategy
+}
+
+func (bp *baseProvider) currentStrategy() ruleStrategy {
+	bp.strategyMu.RLock()
+	defer bp.strategyMu.RUnlock()
+	return bp.strategy
+}
+
+func (bp *baseProvider) setStrategy(strategy ruleStrategy) {
+	bp.strategyMu.Lock()
+	bp.strategy = strategy
+	bp.strategyMu.Unlock()
+}
+
+func (bp *baseProvider) NeedsSourceMAC() bool {
+	if s, ok := bp.currentStrategy().(interface{ NeedsSourceMAC() bool }); ok {
+		return s.NeedsSourceMAC()
+	}
+	return false
+}
+
+func (bp *baseProvider) ProviderNames() []string {
+	if s, ok := bp.currentStrategy().(interface{ ProviderNames() []string }); ok {
+		return s.ProviderNames()
+	}
+	return nil
 }
 
 func (bp *baseProvider) Type() P.ProviderType {
@@ -73,15 +101,19 @@ func (bp *baseProvider) Behavior() P.RuleBehavior {
 }
 
 func (bp *baseProvider) Count() int {
-	return bp.strategy.Count()
+	if s := bp.currentStrategy(); s != nil {
+		return s.Count()
+	}
+	return 0
 }
 
 func (bp *baseProvider) Match(metadata *C.Metadata, helper C.RuleMatchHelper) bool {
-	return bp.strategy != nil && bp.strategy.Match(metadata, helper)
+	strategy := bp.currentStrategy()
+	return strategy != nil && strategy.Match(metadata, helper)
 }
 
 func (bp *baseProvider) Strategy() any {
-	return bp.strategy
+	return bp.currentStrategy()
 }
 
 type ruleSetProvider struct {
@@ -110,7 +142,7 @@ func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
 			Behavior:    rp.behavior.String(),
 			Format:      rp.format.String(),
 			Name:        rp.Fetcher.Name(),
-			RuleCount:   rp.strategy.Count(),
+			RuleCount:   rp.Count(),
 			Type:        rp.Type().String(),
 			UpdatedAt:   rp.UpdatedAt(),
 			VehicleType: rp.VehicleType().String(),
@@ -131,7 +163,7 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 	}
 
 	onUpdate := func(strategy ruleStrategy) {
-		rp.strategy = strategy
+		rp.setStrategy(strategy)
 		tunnel.RuleUpdateCallback().Emit(rp)
 	}
 
@@ -311,7 +343,7 @@ func (i *inlineProvider) MarshalJSON() ([]byte, error) {
 		providerForApi{
 			Behavior:    i.behavior.String(),
 			Name:        i.Name(),
-			RuleCount:   i.strategy.Count(),
+			RuleCount:   i.Count(),
 			Type:        i.Type().String(),
 			VehicleType: i.VehicleType().String(),
 			UpdatedAt:   i.updateAt,

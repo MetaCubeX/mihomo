@@ -21,7 +21,13 @@ func (rs *RuleSet) RuleType() C.RuleType {
 }
 
 func (rs *RuleSet) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
-	if provider, ok := rs.getProvider(); ok {
+	var provider C.RuleSetMatcher
+	if helper.RuleSetLookup != nil {
+		provider = helper.RuleSetLookup(rs.ruleProviderName)
+	} else {
+		provider, _ = rs.getProvider()
+	}
+	if provider != nil {
 		if rs.isSrc {
 			metadata.SwapSrcDst()
 			defer metadata.SwapSrcDst()
