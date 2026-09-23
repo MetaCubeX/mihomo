@@ -11,7 +11,6 @@ import (
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/geodata"
-	_ "github.com/metacubex/mihomo/component/geodata/standard"
 	"github.com/metacubex/mihomo/component/mmdb"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
@@ -107,8 +106,6 @@ func UpdateASN() (err error) {
 }
 
 func UpdateGeoIp() (err error) {
-	geoLoader, err := geodata.GetGeoDataLoader("standard")
-
 	vehicle := resource.NewHTTPVehicle(geodata.GeoIpUrl(), C.Path.GeoIP(), "", nil, defaultHttpTimeout, 0)
 	var oldHash utils.HashType
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
@@ -125,8 +122,8 @@ func UpdateGeoIp() (err error) {
 		return fmt.Errorf("can't download GeoIP database file: no data")
 	}
 
-	if _, err = geoLoader.LoadIPByBytes(data, "cn"); err != nil {
-		return fmt.Errorf("invalid GeoIP database file: %s", err)
+	if err = geodata.VerifyGeodataBytes(data); err != nil {
+		return fmt.Errorf("invalid GeoIP database file: %w", err)
 	}
 
 	defer geodata.ClearGeoIPCache()
@@ -137,8 +134,6 @@ func UpdateGeoIp() (err error) {
 }
 
 func UpdateGeoSite() (err error) {
-	geoLoader, err := geodata.GetGeoDataLoader("standard")
-
 	vehicle := resource.NewHTTPVehicle(geodata.GeoSiteUrl(), C.Path.GeoSite(), "", nil, defaultHttpTimeout, 0)
 	var oldHash utils.HashType
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
@@ -155,8 +150,8 @@ func UpdateGeoSite() (err error) {
 		return fmt.Errorf("can't download GeoSite database file: no data")
 	}
 
-	if _, err = geoLoader.LoadSiteByBytes(data, "cn"); err != nil {
-		return fmt.Errorf("invalid GeoSite database file: %s", err)
+	if err = geodata.VerifyGeodataBytes(data); err != nil {
+		return fmt.Errorf("invalid GeoSite database file: %w", err)
 	}
 
 	defer geodata.ClearGeoSiteCache()
