@@ -201,6 +201,10 @@ sniffer:
   # 是否使用嗅探结果作为实际访问，默认 true
   # 全局配置，优先级低于 sniffer.sniff 实际配置
   override-destination: false
+  # 同一目标嗅探失败超过该次数后，在缓存有效期内跳过嗅探，默认 5
+  # 取值 uint8(0-255)，设为 255(-1) 表示永不跳过
+  # 全局配置，优先级低于 sniffer.sniff 实际配置
+  # skip-threshold: 5
   sniff: # TLS 和 QUIC 默认如果不配置 ports 默认嗅探 443
     QUIC:
     #  ports: [ 443 ]
@@ -212,6 +216,8 @@ sniffer:
       ports: [80, 8080-8880]
       # 可覆盖 sniffer.override-destination
       override-destination: true
+      # 可覆盖 sniffer.skip-threshold
+      # skip-threshold: 5
   force-domain:
     - +.v2ex.com
   # skip-src-address: # 对于来源ip跳过嗅探
