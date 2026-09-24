@@ -57,9 +57,10 @@ func rulesMrsParse(buf []byte, strategy ruleStrategy) (ruleStrategy, error) {
 			return nil, errors.New("length is invalid")
 		}
 		if length > 0 {
-			extra := make([]byte, length)
-			_, err = io.ReadFull(reader, extra)
-			if err != nil {
+			// length is untrusted and the extra bytes are currently unused; discard them via
+			// io.CopyN (which streams) instead of make([]byte, length), which a crafted huge
+			// length would otherwise use to OOM the process before any body is read.
+			if _, err = io.CopyN(io.Discard, reader, length); err != nil {
 				return nil, err
 			}
 		}
