@@ -60,6 +60,7 @@ type General struct {
 	GeodataLoader     string                  `json:"geodata-loader"`
 	GeositeMatcher    string                  `json:"geosite-matcher"`
 	TCPConcurrent     bool                    `json:"tcp-concurrent"`
+	TCPConnectTimeout int64                   `json:"tcp-connect-timeout"`
 	FindProcessMode   process.FindProcessMode `json:"find-process-mode"`
 	Sniffing          bool                    `json:"sniffing"`
 	GlobalUA          string                  `json:"global-ua"`
@@ -439,6 +440,7 @@ type RawConfig struct {
 	GeodataLoader                 string                  `yaml:"geodata-loader" json:"geodata-loader"`
 	GeositeMatcher                string                  `yaml:"geosite-matcher" json:"geosite-matcher"`
 	TCPConcurrent                 bool                    `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	TCPConnectTimeout             int64                   `yaml:"tcp-connect-timeout" json:"tcp-connect-timeout"`
 	FindProcessMode               process.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint       string                  `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
 	GlobalUA                      string                  `yaml:"global-ua" json:"global-ua"`
@@ -498,6 +500,7 @@ func DefaultRawConfig() *RawConfig {
 		Proxy:             []map[string]any{},
 		ProxyGroup:        []map[string]any{},
 		TCPConcurrent:     false,
+		TCPConnectTimeout: 5000,
 		FindProcessMode:   process.FindProcessStrict,
 		GlobalUA:          "clash.meta/" + C.Version,
 		ETagSupport:       true,
@@ -760,6 +763,9 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	if cfg.GlobalClientFingerprint != "" {
 		log.Errorln("The `global-client-fingerprint` configuration is removed, please set `client-fingerprint` directly on the proxy instead")
 	}
+	if err := T.ValidateTCPConnectTimeout(cfg.TCPConnectTimeout); err != nil {
+		return nil, fmt.Errorf("invalid tcp-connect-timeout: %w", err)
+	}
 	return &General{
 		Inbound: Inbound{
 			Port:              cfg.Port,
@@ -795,6 +801,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader:     cfg.GeodataLoader,
 		GeositeMatcher:    cfg.GeositeMatcher,
 		TCPConcurrent:     cfg.TCPConcurrent,
+		TCPConnectTimeout: cfg.TCPConnectTimeout,
 		FindProcessMode:   cfg.FindProcessMode,
 		GlobalUA:          cfg.GlobalUA,
 		ETagSupport:       cfg.ETagSupport,

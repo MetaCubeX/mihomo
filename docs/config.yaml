@@ -88,6 +88,11 @@ external-controller-routing-mark: 0
 
 # tcp-concurrent: true # TCP 并发连接所有 IP, 将使用最快握手的 TCP
 
+# TCP 出站连接建立总期限（毫秒），包含代理握手及重试，默认 5000。
+# 仅影响新连接，不影响已建立连接的读写、UDP 或健康检查。
+# 代理适配器内部更短的独立超时仍可能先到期。
+# tcp-connect-timeout: 15000
+
 # 配置 WEB UI 目录，使用 http://{{external-controller}}/ui 访问
 external-ui: /path/to/ui/folder/
 external-ui-name: xd

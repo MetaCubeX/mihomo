@@ -55,6 +55,7 @@ type configSchema struct {
 	IPv6              *bool                    `json:"ipv6"`
 	Sniffing          *bool                    `json:"sniffing"`
 	TcpConcurrent     *bool                    `json:"tcp-concurrent"`
+	TCPConnectTimeout *int64                   `json:"tcp-connect-timeout"`
 	FindProcessMode   *process.FindProcessMode `json:"find-process-mode"`
 	InterfaceName     *string                  `json:"interface-name"`
 }
@@ -329,6 +330,14 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
 		return
+	}
+
+	if general.TCPConnectTimeout != nil {
+		if err := tunnel.SetTCPConnectTimeout(*general.TCPConnectTimeout); err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, ErrBadRequest)
+			return
+		}
 	}
 
 	if general.AllowLan != nil {
