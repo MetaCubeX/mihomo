@@ -130,6 +130,13 @@ func getOrigDst(oob []byte) (netip.AddrPort, error) {
 	return rAddr, nil
 }
 
+// OriginalDestination decodes the destination preserved by Linux transparent
+// UDP delivery. Other transparent inbounds use it so packet metadata stays
+// identical to the TProxy listener.
+func OriginalDestination(oob []byte) (netip.AddrPort, error) {
+	return getOrigDst(oob)
+}
+
 func getDSCP(oob []byte) (uint8, error) {
 	scms, err := unix.ParseSocketControlMessage(oob)
 	if err != nil {
@@ -147,6 +154,11 @@ func getDSCP(oob []byte) (uint8, error) {
 		return 0, fmt.Errorf("retrieve DSCP: %w", err)
 	}
 	return dscp, nil
+}
+
+// DSCP decodes the received traffic class from transparent UDP control data.
+func DSCP(oob []byte) (uint8, error) {
+	return getDSCP(oob)
 }
 
 func parseDSCP(m *unix.SocketControlMessage) (uint8, error) {
