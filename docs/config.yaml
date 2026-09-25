@@ -133,6 +133,7 @@ profile: # 存储 select 选择记录
 # Tun 配置
 tun:
   enable: false
+  intercept-mode: vnic # vnic / wfp，见 docs/wfp.md
   stack: system # gvisor/mixed/mips
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
@@ -2795,6 +2796,7 @@ listeners:
   # 注意，listeners中的tun仅提供给高级用户使用，普通用户应使用顶层配置中的tun
   - name: tun-in-1
     type: tun
+    intercept-mode: vnic # vnic / wfp
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     stack: system # gvisor / mixed / mips

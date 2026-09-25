@@ -12,11 +12,12 @@ import (
 
 type TunOption struct {
 	BaseOption
-	Device              string     `inbound:"device,omitempty"`
-	Stack               C.TUNStack `inbound:"stack,omitempty"`
-	DNSHijack           []string   `inbound:"dns-hijack,omitempty"`
-	AutoRoute           bool       `inbound:"auto-route,omitempty"`
-	AutoDetectInterface bool       `inbound:"auto-detect-interface,omitempty"`
+	InterceptMode       C.TUNInterceptMode `inbound:"intercept-mode,omitempty"`
+	Device              string             `inbound:"device,omitempty"`
+	Stack               C.TUNStack         `inbound:"stack,omitempty"`
+	DNSHijack           []string           `inbound:"dns-hijack,omitempty"`
+	AutoRoute           bool               `inbound:"auto-route,omitempty"`
+	AutoDetectInterface bool               `inbound:"auto-detect-interface,omitempty"`
 
 	MTU                                   uint32         `inbound:"mtu,omitempty"`
 	GSO                                   bool           `inbound:"gso,omitempty"`
@@ -72,6 +73,7 @@ type TunOption struct {
 var _ encoding.TextUnmarshaler = (*netip.Addr)(nil)   // ensure netip.Addr can decode direct by structure package
 var _ encoding.TextUnmarshaler = (*netip.Prefix)(nil) // ensure netip.Prefix can decode direct by structure package
 var _ encoding.TextUnmarshaler = (*C.TUNStack)(nil)   // ensure C.TUNStack can decode direct by structure package
+var _ encoding.TextUnmarshaler = (*C.TUNInterceptMode)(nil)
 
 func (o TunOption) Equal(config C.InboundConfig) bool {
 	return optionToString(o) == optionToString(config)
@@ -94,6 +96,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 		config: options,
 		tun: LC.Tun{
 			Enable:                                true,
+			InterceptMode:                         options.InterceptMode,
 			Device:                                options.Device,
 			Stack:                                 options.Stack,
 			DNSHijack:                             options.DNSHijack,

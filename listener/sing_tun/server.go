@@ -15,7 +15,6 @@ import (
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
@@ -26,7 +25,6 @@ import (
 
 	tun "github.com/metacubex/sing-tun"
 	"github.com/metacubex/sing/common"
-	"github.com/metacubex/sing/common/control"
 	E "github.com/metacubex/sing/common/exceptions"
 	F "github.com/metacubex/sing/common/format"
 	"github.com/metacubex/sing/common/ranges"
@@ -46,7 +44,7 @@ type Listener struct {
 	tunName string
 	addrStr string
 
-	tunIf    tun.Tun
+	tunIf    io.Closer
 	tunStack tun.Stack
 
 	networkUpdateMonitor    tun.NetworkUpdateMonitor
@@ -133,15 +131,51 @@ func checkTunName(tunName string) (ok bool) {
 	return true
 }
 
-func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Listener, err error) {
+func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-TUN"),
 			inbound.WithSpecialRules(""),
 		}
 	}
+	var dnsAdds []netip.AddrPort
+	for _, d := range options.DNSHijack {
+		if _, after, ok := strings.Cut(d, "://"); ok {
+			d = after
+		}
+		addrPort, err := netip.ParseAddrPort(strings.Replace(d, "any", "0.0.0.0", 1))
+		if err != nil {
+			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
+		}
+		dnsAdds = append(dnsAdds, addrPort)
+	}
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
+		Tunnel: tunnel, Type: C.TUN, Additions: additions,
+	})
+	if err != nil {
+		return nil, err
+	}
+	l := &Listener{options: options, handler: &ListenerHandler{ListenerHandler: h, DnsAddrPorts: dnsAdds}}
+	switch options.InterceptMode {
+	case C.TunInterceptVNIC:
+		err = l.startTun()
+	case C.TunInterceptWFP:
+		err = l.startWFP()
+	default:
+		err = fmt.Errorf("unsupported tun intercept-mode: %s", options.InterceptMode)
+	}
+	if err != nil {
+		l.Close()
+		return nil, err
+	}
+	return l, nil
+}
+
+func (l *Listener) startTun() (err error) {
+	options := l.options
+	handler := l.handler
 	ctx := context.TODO()
-	rpTunnel := tunnel.(P.Tunnel)
+	rpTunnel := handler.Tunnel.(P.Tunnel)
 	if options.GSOMaxSize == 0 {
 		options.GSOMaxSize = 65536
 	}
@@ -230,7 +264,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		var err error
 		includeUID, err = parseRange(includeUID, options.IncludeUIDRange)
 		if err != nil {
-			return nil, E.Cause(err, "parse include_uid_range")
+			return E.Cause(err, "parse include_uid_range")
 		}
 	}
 	excludeUID := uidToRange(options.ExcludeUID)
@@ -238,7 +272,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		var err error
 		excludeUID, err = parseRange(excludeUID, options.ExcludeUIDRange)
 		if err != nil {
-			return nil, E.Cause(err, "parse exclude_uid_range")
+			return E.Cause(err, "parse exclude_uid_range")
 		}
 	}
 	excludeSrcPort := uidToRange(options.ExcludeSrcPort)
@@ -246,7 +280,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		var err error
 		excludeSrcPort, err = parseRange(excludeSrcPort, options.ExcludeSrcPortRange)
 		if err != nil {
-			return nil, E.Cause(err, "parse exclude_src_port_range")
+			return E.Cause(err, "parse exclude_src_port_range")
 		}
 	}
 	excludeDstPort := uidToRange(options.ExcludeDstPort)
@@ -254,14 +288,14 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		var err error
 		excludeDstPort, err = parseRange(excludeDstPort, options.ExcludeDstPortRange)
 		if err != nil {
-			return nil, E.Cause(err, "parse exclude_dst_port_range")
+			return E.Cause(err, "parse exclude_dst_port_range")
 		}
 	}
 	var includeMACAddress []net.HardwareAddr
 	for _, mac := range options.IncludeMACAddress {
 		addr, err := net.ParseMAC(mac)
 		if err != nil {
-			return nil, E.Cause(err, "parse include_mac_address")
+			return E.Cause(err, "parse include_mac_address")
 		}
 		includeMACAddress = append(includeMACAddress, addr)
 	}
@@ -269,120 +303,37 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	for _, mac := range options.ExcludeMACAddress {
 		addr, err := net.ParseMAC(mac)
 		if err != nil {
-			return nil, E.Cause(err, "parse exclude_mac_address")
+			return E.Cause(err, "parse exclude_mac_address")
 		}
 		excludeMACAddress = append(excludeMACAddress, addr)
-	}
-
-	var dnsAdds []netip.AddrPort
-
-	for _, d := range options.DNSHijack {
-		if _, after, ok := strings.Cut(d, "://"); ok {
-			d = after
-		}
-		d = strings.Replace(d, "any", "0.0.0.0", 1)
-		addrPort, err := netip.ParseAddrPort(d)
-		if err != nil {
-			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
-		}
-
-		dnsAdds = append(dnsAdds, addrPort)
 	}
 
 	var dnsServerIp []string
 	for _, a := range options.Inet4Address {
 		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsServerIp = append(dnsServerIp, a.Addr().Next().String())
-		dnsAdds = append(dnsAdds, addrPort)
+		handler.DnsAddrPorts = append(handler.DnsAddrPorts, addrPort)
 	}
 	for _, a := range options.Inet6Address {
 		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsServerIp = append(dnsServerIp, a.Addr().Next().String())
-		dnsAdds = append(dnsAdds, addrPort)
+		handler.DnsAddrPorts = append(handler.DnsAddrPorts, addrPort)
 	}
 
-	h, err := sing.NewListenerHandler(sing.ListenerConfig{
-		Tunnel:    tunnel,
-		Type:      C.TUN,
-		Additions: additions,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	handler := &ListenerHandler{
-		ListenerHandler:       h,
-		DnsAddrPorts:          dnsAdds,
-		Inet4Address:          options.Inet4Address,
-		Inet6Address:          options.Inet6Address,
-		DisableICMPForwarding: options.DisableICMPForwarding,
-	}
-	l = &Listener{
-		closed:  false,
-		options: options,
-		handler: handler,
-		tunName: tunName,
-	}
-	defer func() {
-		if err != nil {
-			l.Close()
-			l = nil
-		}
-	}()
+	handler.Inet4Address = options.Inet4Address
+	handler.Inet6Address = options.Inet6Address
+	handler.DisableICMPForwarding = options.DisableICMPForwarding
+	l.options = options
+	l.tunName = tunName
 
 	interfaceFinder := DefaultInterfaceFinder
 
-	var networkUpdateMonitor tun.NetworkUpdateMonitor
-	var defaultInterfaceMonitor tun.DefaultInterfaceMonitor
-	if options.AutoRoute || options.AutoDetectInterface { // don't start NetworkUpdateMonitor because netlink banned by google on Android14+
-		networkUpdateMonitor, err = tun.NewNetworkUpdateMonitor(log.SingLogger)
-		if err != nil {
-			err = E.Cause(err, "create NetworkUpdateMonitor")
-			return
-		}
-		l.networkUpdateMonitor = networkUpdateMonitor
-		err = networkUpdateMonitor.Start()
-		if err != nil {
-			err = E.Cause(err, "start NetworkUpdateMonitor")
-			return
-		}
-
-		overrideAndroidVPN := true
-		if disable, _ := strconv.ParseBool(os.Getenv("DISABLE_OVERRIDE_ANDROID_VPN")); disable {
-			overrideAndroidVPN = false
-		}
-		defaultInterfaceMonitor, err = tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, log.SingLogger, tun.DefaultInterfaceMonitorOptions{InterfaceFinder: interfaceFinder, OverrideAndroidVPN: overrideAndroidVPN})
-		if err != nil {
-			err = E.Cause(err, "create DefaultInterfaceMonitor")
-			return
-		}
-		l.defaultInterfaceMonitor = defaultInterfaceMonitor
-		defaultInterfaceMonitor.RegisterCallback(func(defaultInterface *control.Interface, event int) {
-			if defaultInterface != nil {
-				log.Warnln("[TUN] default interface changed by monitor, => %s", defaultInterface.Name)
-			} else {
-				log.Errorln("[TUN] default interface lost by monitor")
-			}
-			iface.FlushCache()
-			resolver.ResetConnection() // reset resolver's connection after default interface changed
-		})
-		err = defaultInterfaceMonitor.Start()
-		if err != nil {
-			err = E.Cause(err, "start DefaultInterfaceMonitor")
-			return
-		}
-
-		if options.AutoDetectInterface {
-			l.cDialerInterfaceFinder = &cDialerInterfaceFinder{
-				tunName:                 tunName,
-				defaultInterfaceMonitor: defaultInterfaceMonitor,
-			}
-			if !dialer.DefaultInterfaceFinder.CompareAndSwap(nil, l.cDialerInterfaceFinder) {
-				err = E.New("not allowed two tun listener using auto-detect-interface")
-				return
-			}
+	if options.AutoRoute || options.AutoDetectInterface { // Android 14+ restricts netlink access.
+		if err = l.startInterfaceMonitor(tunName); err != nil {
+			return err
 		}
 	}
+	defaultInterfaceMonitor := l.defaultInterfaceMonitor
 
 	tunOptions := tun.Options{
 		Name:                                  tunName,
@@ -426,7 +377,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		l.routeExcludeAddressMap = make(map[string]*netipx.IPSet)
 
 		if !options.AutoRoute {
-			return nil, E.New("`auto-route` is required by `auto-redirect`")
+			return E.New("`auto-route` is required by `auto-redirect`")
 		}
 		disableNFTables, dErr := strconv.ParseBool(os.Getenv("DISABLE_NFTABLES"))
 		l.autoRedirect, err = tun.NewAutoRedirect(tun.AutoRedirectOptions{
@@ -501,16 +452,14 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	}
 	l.tunIf = tunIf
 
-	tunStack, err := tun.NewStack(strings.ToLower(options.Stack.String()), stackOptions)
+	l.tunStack, err = tun.NewStack(strings.ToLower(options.Stack.String()), stackOptions)
 	if err != nil {
 		return
 	}
-
-	err = tunStack.Start()
+	err = l.tunStack.Start()
 	if err != nil {
 		return
 	}
-	l.tunStack = tunStack
 
 	if l.autoRedirect != nil {
 		if len(l.options.RouteAddressSet) > 0 && len(l.routeAddressSet) == 0 {

@@ -60,12 +60,13 @@ type configSchema struct {
 }
 
 type tunSchema struct {
-	Enable              bool        `yaml:"enable" json:"enable"`
-	Device              *string     `yaml:"device" json:"device"`
-	Stack               *C.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack           *[]string   `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           *bool       `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface *bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	Enable              bool                `yaml:"enable" json:"enable"`
+	InterceptMode       *C.TUNInterceptMode `yaml:"intercept-mode" json:"intercept-mode"`
+	Device              *string             `yaml:"device" json:"device"`
+	Stack               *C.TUNStack         `yaml:"stack" json:"stack"`
+	DNSHijack           *[]string           `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           *bool               `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface *bool               `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 
 	MTU        *uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        *bool   `yaml:"gso" json:"gso,omitempty"`
@@ -144,6 +145,9 @@ func pointerOrDefault[T any](p *T, def T) T {
 func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 	if p != nil {
 		def.Enable = p.Enable
+		if p.InterceptMode != nil {
+			def.InterceptMode = *p.InterceptMode
+		}
 		if p.Device != nil {
 			def.Device = *p.Device
 		}
