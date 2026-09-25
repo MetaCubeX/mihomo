@@ -131,6 +131,23 @@ func filterPorts(ports []uint16, intervals []ranges.Range[uint16], source bool) 
 	return filterAny(protocols...)
 }
 
+func filterDNS(targets []netip.AddrPort) filterExpr {
+	children := make([]filterExpr, 0, len(targets))
+	for _, target := range targets {
+		if target.Addr().IsUnspecified() {
+			// Match ListenerHandler.ShouldHijackDns wildcard semantics.
+			children = append(children, filterPorts([]uint16{53}, nil, false))
+			continue
+		}
+		field := uint32(29)
+		if target.Addr().Is4() {
+			field = 22
+		}
+		children = append(children, filterAll(filterIP(field, target.Addr(), 0), filterPorts([]uint16{target.Port()}, nil, false)))
+	}
+	return filterAny(children...)
+}
+
 func (t *Tun) networkFilter() ([]instruction, error) {
 	selected := []filterExpr{filterEqual(58, 0), filterAny(filterEqual(8, 1), filterEqual(9, 1))}
 	// Capture global unicast destinations.
@@ -139,45 +156,33 @@ func (t *Tun) networkFilter() ([]instruction, error) {
 		bypass = append(bypass, netip.MustParsePrefix(prefix))
 	}
 	selected = append(selected, filterNot(filterPrefixes(bypass)))
-	if !t.options.IPv6 {
-		// DNS hijacking can use IPv6 independently of proxy traffic.
-		var dns []filterExpr
-		for _, target := range t.options.HijackDNS {
-			port := target.Port()
-			if target.Addr().IsUnspecified() {
-				port = 53 // ListenerHandler.ShouldHijackDns wildcard semantics.
-			} else if target.Addr().Is4() {
-				continue
-			}
-			entry := filterPorts([]uint16{port}, nil, false)
-			if !target.Addr().IsUnspecified() {
-				entry = filterAll(filterIP(29, target.Addr(), 0), entry)
-			}
-			dns = append(dns, entry)
-		}
-		if len(dns) == 0 {
-			selected = append(selected, filterEqual(5, 1))
-		} else {
-			selected = append(selected, filterAny(filterEqual(5, 1), filterAll(filterEqual(6, 1), filterAny(dns...))))
-		}
-	}
 	if len(t.includeIf) > 0 {
 		selected = append(selected, filterInterfaces(t.includeIf))
 	}
 	if len(t.excludeIf) > 0 {
 		selected = append(selected, filterNot(filterInterfaces(t.excludeIf)))
 	}
-	if len(t.options.RouteAddress) > 0 {
-		selected = append(selected, filterPrefixes(t.options.RouteAddress))
-	}
-	if len(t.options.ExcludeAddress) > 0 {
-		selected = append(selected, filterNot(filterPrefixes(t.options.ExcludeAddress)))
-	}
 	if len(t.options.ExcludeSrcPort)+len(t.options.ExcludeSrcPortRange) > 0 {
 		selected = append(selected, filterNot(filterPorts(t.options.ExcludeSrcPort, t.options.ExcludeSrcPortRange, true)))
 	}
 	if len(t.options.ExcludeDstPort)+len(t.options.ExcludeDstPortRange) > 0 {
 		selected = append(selected, filterNot(filterPorts(t.options.ExcludeDstPort, t.options.ExcludeDstPortRange, false)))
+	}
+	var routed []filterExpr
+	if !t.options.IPv6 {
+		routed = append(routed, filterEqual(5, 1))
+	}
+	if len(t.options.RouteAddress) > 0 {
+		routed = append(routed, filterPrefixes(t.options.RouteAddress))
+	}
+	if len(t.options.ExcludeAddress) > 0 {
+		routed = append(routed, filterNot(filterPrefixes(t.options.ExcludeAddress)))
+	}
+	if len(t.options.HijackDNS) > 0 && len(routed) > 0 {
+		// DNS targets bypass proxy address restrictions.
+		selected = append(selected, filterAny(filterDNS(t.options.HijackDNS), filterAll(routed...)))
+	} else {
+		selected = append(selected, routed...)
 	}
 	expr := filterAll(selected...)
 	if t.tcp != nil {

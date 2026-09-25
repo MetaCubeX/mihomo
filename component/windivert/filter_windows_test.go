@@ -202,6 +202,59 @@ func TestKernelDNSWithoutIPv6Traffic(t *testing.T) {
 	}
 }
 
+func TestKernelDNSRoutePolicy(t *testing.T) {
+	for _, policy := range []struct {
+		name             string
+		routes, excludes []netip.Prefix
+	}{
+		{"excluded-address", nil, []netip.Prefix{netip.MustParsePrefix("192.168.0.0/16"), netip.MustParsePrefix("fc00::/7")}},
+		{"outside-route", []netip.Prefix{netip.MustParsePrefix("203.0.113.0/24"), netip.MustParsePrefix("2001:db8::/32")}, nil},
+	} {
+		t.Run(policy.name, func(t *testing.T) {
+			device := &Tun{options: Options{
+				IPv6:           true,
+				HijackDNS:      []netip.AddrPort{netip.MustParseAddrPort("0.0.0.0:53"), netip.MustParseAddrPort("192.168.160.1:5353")},
+				RouteAddress:   policy.routes,
+				ExcludeAddress: policy.excludes,
+				ExcludeSrcPort: []uint16{1234},
+			}, includeIf: map[uint32]bool{1: true, 2: true}, excludeIf: map[uint32]bool{2: true}}
+			code, err := device.networkFilter()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, test := range []struct {
+				destination string
+				srcPort     uint16
+				ifIdx       uint32
+				want        bool
+			}{
+				{"192.168.160.1:53", 50000, 1, true},
+				{"[fd00::53]:53", 50000, 1, true},
+				{"192.168.160.1:5353", 50000, 1, true},
+				{"192.168.160.2:5353", 50000, 1, false},
+				{"192.168.160.1:443", 50000, 1, false},
+				{"[fd00::53]:443", 50000, 1, false},
+				{"203.0.113.1:443", 50000, 1, true},
+				{"192.168.160.1:53", 1234, 1, false},
+				{"192.168.160.1:53", 50000, 2, false},
+				{"192.168.160.1:53", 50000, 3, false},
+			} {
+				for _, protocol := range []byte{6, 17} {
+					dst := netip.MustParseAddrPort(test.destination)
+					src := netip.MustParseAddr("198.51.100.1")
+					if dst.Addr().Is6() {
+						src = netip.MustParseAddr("2001:db8::1")
+					}
+					info := packetInfo{flow: flow{source: netip.AddrPortFrom(src, test.srcPort), destination: dst, protocol: protocol}}
+					if got := evaluateFilter(t, code, info, address{Flags: flagOutbound, IfIdx: test.ifIdx}); got != test.want {
+						t.Errorf("flow=%+v interface=%d: got %v, want %v", info, test.ifIdx, got, test.want)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestKernelFilterRelayScope(t *testing.T) {
 	device := &Tun{tcp: &tcpRedirect{ports: [2]uint16{50001, 50002}}, options: Options{RouteAddress: []netip.Prefix{netip.MustParsePrefix("203.0.113.1/32")}}}
 	code, err := device.networkFilter()

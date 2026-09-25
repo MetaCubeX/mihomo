@@ -29,7 +29,7 @@ WFP 在现有网络接口上拦截流量。`intercept-mode` 默认值为 `vnic`�
 
 地址、接口和端口条件决定内核拦截范围；编译后的过滤器最多包含 256 条指令，超出时需简化配置。`auto-route` 对 WFP 不生效。`gso`、`file-descriptor`、`auto-redirect`、`strict-route`、`loopback-address`、路由规则集以及 UID、Android 用户、包名、MAC 筛选不受支持。
 
-`dns-hijack` 需要启用 `dns.enable`，支持 TCP/UDP DNS。IPv6 代理流量由全局 `ipv6` 和 `inet6-address` 控制；DNS 劫持可独立使用 IPv6 传输。
+`dns-hijack` 需要启用 `dns.enable`，支持 TCP/UDP DNS。匹配的请求优先于 `route-address` 和 `route-exclude-address`，仍受接口和端口筛选约束。IPv6 代理流量由全局 `ipv6` 和 `inet6-address` 控制；DNS 劫持可独立使用 IPv6 传输。
 
 接管范围为目标地址属于全局单播、进程归属明确的完整 TCP/UDP 报文。当前进程、共享 UDP 端口归属有歧义的流量，以及 ICMP、分片、组播、链路本地和普通回环流量交由 Windows 处理。TCP 接管从启用后的新连接开始；关闭监听器后，已接管的 TCP 连接需要重新建立。
 

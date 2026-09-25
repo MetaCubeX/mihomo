@@ -114,8 +114,13 @@ func testWFPStack(t *testing.T, stack C.TUNStack) {
 		}
 	})
 	t.Run("dns", func(t *testing.T) {
-		options.DNSHijack = []string{"any:53"}
+		options.DNSHijack = []string{"203.0.113.1:53"}
+		if os.Getenv("MIHOMO_WFP_TEST_IPV6") == "1" {
+			options.DNSHijack = append(options.DNSHijack, "[2001:db8::1]:53")
+		}
 		options.Inet6Address = nil
+		options.RouteExcludeAddress = options.RouteAddress
+		options.RouteAddress = []netip.Prefix{netip.MustParsePrefix("203.0.113.2/32")}
 		l, err := New(options, echo)
 		if err != nil {
 			t.Fatal(err)
