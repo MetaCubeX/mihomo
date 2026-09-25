@@ -247,6 +247,12 @@ tunnels: # one line config
 # DNS 配置
 dns:
   cache-algorithm: arc
+  # 是否允许在上游解析失败或超时时返回过期缓存，默认 true
+  serve-expired: true
+  # 过期缓存的最大可复用时间，单位：秒；默认 86400，设置为 0 时不限制
+  serve-expired-ttl: 86400
+  # 返回过期缓存前等待上游解析的时间，单位：毫秒；默认 1800，设置为 0 时立即返回
+  serve-expired-client-timeout: 1800
   enable: false # 关闭将使用系统 DNS
   prefer-h3: false # 是否开启 DoH 支持 HTTP/3，将并发尝试
   listen: 0.0.0.0:53 # 开启 DNS 服务器监听
