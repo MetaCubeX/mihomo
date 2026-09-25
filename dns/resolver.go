@@ -416,6 +416,22 @@ func validFallbackResult(query *D.Msg, res *result) bool {
 	return len(msgToIP(res.Msg)) != 0
 }
 
+func (r *Resolver) acceptablePrimaryResult(query *D.Msg, res *result) bool {
+	if !validFallbackResult(query, res) {
+		return false
+	}
+	qtype := query.Question[0].Qtype
+	if qtype != D.TypeA && qtype != D.TypeAAAA {
+		return true
+	}
+	for _, ip := range msgToIP(res.Msg) {
+		if r.shouldIPFallback(ip) {
+			return false
+		}
+	}
+	return true
+}
+
 func fallbackQueryKey(m *D.Msg) string {
 	if m == nil || len(m.Question) == 0 {
 		return ""
@@ -451,9 +467,14 @@ func (r *Resolver) putFallbackCache(m *D.Msg, res *result) {
 }
 
 func (r *Resolver) fallbackState(m *D.Msg, claimRetry bool) (fallbackScope, bool) {
+	scope, retry, _ := r.fallbackStateWithToken(m, claimRetry)
+	return scope, retry
+}
+
+func (r *Resolver) fallbackStateWithToken(m *D.Msg, claimRetry bool) (fallbackScope, bool, time.Time) {
 	circuit := r.fallbackCircuit
 	if circuit == nil {
-		return fallbackScopeNone, false
+		return fallbackScopeNone, false, time.Time{}
 	}
 
 	now := time.Now()
@@ -465,20 +486,33 @@ func (r *Resolver) fallbackState(m *D.Msg, claimRetry bool) (fallbackScope, bool
 		if retry && claimRetry {
 			circuit.groupUntil = now.Add(circuit.interval)
 		}
-		return fallbackScopeGroup, retry
+		return fallbackScopeGroup, retry, circuit.groupUntil
 	}
 	if key == "" {
-		return fallbackScopeNone, false
+		return fallbackScopeNone, false, time.Time{}
 	}
 	until, found := circuit.domains.Get(key)
 	if !found {
-		return fallbackScopeNone, false
+		return fallbackScopeNone, false, time.Time{}
 	}
 	retry := !now.Before(until)
 	if retry && claimRetry {
-		circuit.domains.Set(key, now.Add(circuit.interval))
+		until = now.Add(circuit.interval)
+		circuit.domains.Set(key, until)
 	}
-	return fallbackScopeDomain, retry
+	return fallbackScopeDomain, retry, until
+}
+
+func (circuit *fallbackCircuit) recoveryCurrent(scope fallbackScope, key string, token time.Time) bool {
+	switch scope {
+	case fallbackScopeGroup:
+		return circuit.groupUntil.Equal(token)
+	case fallbackScopeDomain:
+		until, found := circuit.domains.Get(key)
+		return found && until.Equal(token)
+	default:
+		return false
+	}
 }
 
 func (r *Resolver) openDomainFallback(m *D.Msg) bool {
@@ -524,7 +558,7 @@ func (r *Resolver) finishRootProbe(generation uint64, failed bool) {
 	}
 }
 
-func (r *Resolver) recoverFallback(scope fallbackScope, m *D.Msg) {
+func (r *Resolver) recoverFallback(scope fallbackScope, m *D.Msg, token ...time.Time) {
 	circuit := r.fallbackCircuit
 	if circuit == nil {
 		return
@@ -532,6 +566,10 @@ func (r *Resolver) recoverFallback(scope fallbackScope, m *D.Msg) {
 
 	key := fallbackQueryKey(m)
 	circuit.mu.Lock()
+	if len(token) != 0 && !circuit.recoveryCurrent(scope, key, token[0]) {
+		circuit.mu.Unlock()
+		return
+	}
 	clearAllFallbackCache := false
 	switch scope {
 	case fallbackScopeGroup:
@@ -557,6 +595,27 @@ func (r *Resolver) recoverFallback(scope fallbackScope, m *D.Msg) {
 		circuit.fallbackCache.Delete(key)
 	}
 	log.Infoln("[DNS] %s primary query recovered for %s", r.fallbackLabel, key)
+}
+
+func (r *Resolver) keepFilteredDomainFallback(scope fallbackScope, m *D.Msg, token time.Time) {
+	circuit := r.fallbackCircuit
+	key := fallbackQueryKey(m)
+	if circuit == nil || key == "" {
+		return
+	}
+	circuit.mu.Lock()
+	if !circuit.recoveryCurrent(scope, key, token) {
+		circuit.mu.Unlock()
+		return
+	}
+	_, found := circuit.domains.Get(key)
+	if !found {
+		circuit.domains.Set(key, time.Now().Add(circuit.interval))
+	}
+	circuit.mu.Unlock()
+	if !found {
+		log.Warnln("[DNS] %s query %s is using fallback", r.fallbackLabel, key)
+	}
 }
 
 func (r *Resolver) classifyNewFailure(m *D.Msg) {
@@ -596,14 +655,16 @@ func (r *Resolver) exchangeFallbackOnly(ctx context.Context, m *D.Msg) (*D.Msg, 
 	return res.Msg, res.Error
 }
 
-func (r *Resolver) startPrimaryRecovery(m *D.Msg, scope fallbackScope) <-chan *result {
+func (r *Resolver) startPrimaryRecovery(m *D.Msg, scope fallbackScope, token time.Time) <-chan *result {
 	mainCtx, cancelMain := context.WithTimeout(context.Background(), r.fallbackQueryTimeout())
 	mainCh := r.asyncExchange(mainCtx, r.main, m)
 	recoveryCh := make(chan *result, 1)
 	go func() {
 		res := <-mainCh
-		if validFallbackResult(m, res) {
-			r.recoverFallback(scope, m)
+		if r.acceptablePrimaryResult(m, res) {
+			r.recoverFallback(scope, m, token)
+		} else if validFallbackResult(m, res) {
+			r.keepFilteredDomainFallback(scope, m, token)
 		}
 		cancelMain()
 		recoveryCh <- res
@@ -611,8 +672,8 @@ func (r *Resolver) startPrimaryRecovery(m *D.Msg, scope fallbackScope) <-chan *r
 	return recoveryCh
 }
 
-func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fallbackScope) (*D.Msg, error) {
-	recoveryCh := r.startPrimaryRecovery(m, scope)
+func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fallbackScope, token time.Time) (*D.Msg, error) {
+	recoveryCh := r.startPrimaryRecovery(m, scope, token)
 	fallbackCh := r.asyncExchange(ctx, r.fallback, m)
 	var mainResult, fallbackResult *result
 	for recoveryCh != nil || fallbackCh != nil {
@@ -620,7 +681,7 @@ func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fal
 		case res := <-recoveryCh:
 			recoveryCh = nil
 			mainResult = res
-			if validFallbackResult(m, res) {
+			if r.acceptablePrimaryResult(m, res) {
 				return res.Msg, nil
 			}
 		case res := <-fallbackCh:
@@ -637,23 +698,27 @@ func (r *Resolver) exchangeRecoveryRace(ctx context.Context, m *D.Msg, scope fal
 	if fallbackResult != nil {
 		return fallbackResult.Msg, fallbackResult.Error
 	}
-	if mainResult != nil {
+	if mainResult != nil && r.acceptablePrimaryResult(m, mainResult) {
 		return mainResult.Msg, mainResult.Error
 	}
-	return nil, errors.New("all DNS requests failed")
+	return nil, errors.New("all DNS requests failed or were rejected by fallback filter")
 }
 
 // ipExchangeWithDelayedFallback starts the fallback query after Mihomo's DNS
 // timeout, or immediately when all primary servers fail first. Once both tiers
 // are running, the first usable response wins.
 func (r *Resolver) ipExchangeWithDelayedFallback(ctx context.Context, m *D.Msg) (*D.Msg, bool, error) {
-	if scope, retry := r.fallbackState(m, true); scope != fallbackScopeNone {
+	if r.shouldOnlyQueryFallback(m) {
+		msg, err := r.exchangeFallbackOnly(ctx, m)
+		return msg, true, err
+	}
+	if scope, retry, token := r.fallbackStateWithToken(m, true); scope != fallbackScopeNone {
 		if retry {
 			if msg, hit := r.getFallbackCache(m); hit {
-				r.startPrimaryRecovery(m, scope)
+				r.startPrimaryRecovery(m, scope, token)
 				return msg, false, nil
 			}
-			msg, err := r.exchangeRecoveryRace(ctx, m, scope)
+			msg, err := r.exchangeRecoveryRace(ctx, m, scope, token)
 			return msg, false, err
 		}
 		msg, err := r.exchangeFallbackOnly(ctx, m)
@@ -689,10 +754,13 @@ func (r *Resolver) ipExchangeWithDelayedFallback(ctx context.Context, m *D.Msg) 
 		case res := <-mainCh:
 			mainCh = nil
 			mainResult = res
-			if validFallbackResult(m, res) {
+			if r.acceptablePrimaryResult(m, res) {
 				return res.Msg, cacheable, nil
 			}
-			if res == nil || res.Error != nil {
+			if validFallbackResult(m, res) {
+				cacheable = r.fallbackCircuit == nil
+				r.openDomainFallback(m)
+			} else if res == nil || res.Error != nil {
 				classifyFailure()
 			}
 			startFallback()
@@ -717,10 +785,10 @@ func (r *Resolver) ipExchangeWithDelayedFallback(ctx context.Context, m *D.Msg) 
 	if fallbackResult != nil {
 		return fallbackResult.Msg, cacheable, fallbackResult.Error
 	}
-	if mainResult != nil {
+	if mainResult != nil && r.acceptablePrimaryResult(m, mainResult) {
 		return mainResult.Msg, cacheable, mainResult.Error
 	}
-	return nil, false, errors.New("all DNS requests failed")
+	return nil, false, errors.New("all DNS requests failed or were rejected by fallback filter")
 }
 
 func (r *Resolver) lookupIP(ctx context.Context, host string, dnsType uint16) (ips []netip.Addr, err error) {
@@ -850,23 +918,26 @@ type Policy struct {
 }
 
 type Config struct {
-	Main, Fallback       []NameServer
-	Default              []NameServer
-	ProxyServer          []NameServer
-	ProxyFallback        []NameServer
-	DirectServer         []NameServer
-	DirectFallback       []NameServer
-	RecoveryInterval     uint
-	DirectFollowPolicy   bool
-	IPv6                 bool
-	IPv6Timeout          uint
-	FallbackIPFilter     []C.IpMatcher
-	FallbackDomainFilter []C.DomainMatcher
-	FallbackLazyQuery    bool
-	Policy               []Policy
-	ProxyServerPolicy    []Policy
-	CacheAlgorithm       string
-	CacheMaxSize         int
+	Main, Fallback             []NameServer
+	Default                    []NameServer
+	ProxyServer                []NameServer
+	ProxyFallback              []NameServer
+	ProxyFallbackIPFilter      []C.IpMatcher
+	DirectServer               []NameServer
+	DirectFallback             []NameServer
+	DirectFallbackIPFilter     []C.IpMatcher
+	DirectFallbackDomainFilter []C.DomainMatcher
+	RecoveryInterval           uint
+	DirectFollowPolicy         bool
+	IPv6                       bool
+	IPv6Timeout                uint
+	FallbackIPFilter           []C.IpMatcher
+	FallbackDomainFilter       []C.DomainMatcher
+	FallbackLazyQuery          bool
+	Policy                     []Policy
+	ProxyServerPolicy          []Policy
+	CacheAlgorithm             string
+	CacheMaxSize               int
 }
 
 func (config Config) newCache() dnsCache {
@@ -994,14 +1065,15 @@ func NewResolver(config Config) (rs Resolvers) {
 
 	if len(config.ProxyServer) != 0 {
 		rs.ProxyResolver = &Resolver{
-			ipv6:            config.IPv6,
-			main:            cacheTransform(config.ProxyServer),
-			fallback:        cacheTransform(config.ProxyFallback),
-			delayedFallback: len(config.ProxyFallback) != 0,
-			fallbackLabel:   "proxy-server-nameserver",
-			cache:           config.newCache(),
-			ipv6Timeout:     time.Duration(config.IPv6Timeout) * time.Millisecond,
-			policy:          makePolicy(config.ProxyServerPolicy),
+			ipv6:              config.IPv6,
+			main:              cacheTransform(config.ProxyServer),
+			fallback:          cacheTransform(config.ProxyFallback),
+			fallbackIPFilters: config.ProxyFallbackIPFilter,
+			delayedFallback:   len(config.ProxyFallback) != 0,
+			fallbackLabel:     "proxy-server-nameserver",
+			cache:             config.newCache(),
+			ipv6Timeout:       time.Duration(config.IPv6Timeout) * time.Millisecond,
+			policy:            makePolicy(config.ProxyServerPolicy),
 		}
 		if rs.ProxyResolver.delayedFallback {
 			rs.ProxyResolver.fallbackCircuit = makeFallbackCircuit()
@@ -1010,13 +1082,15 @@ func NewResolver(config Config) (rs Resolvers) {
 
 	if len(config.DirectServer) != 0 {
 		rs.DirectResolver = &Resolver{
-			ipv6:            config.IPv6,
-			main:            cacheTransform(config.DirectServer),
-			fallback:        cacheTransform(config.DirectFallback),
-			delayedFallback: len(config.DirectFallback) != 0,
-			fallbackLabel:   "direct-nameserver",
-			cache:           config.newCache(),
-			ipv6Timeout:     time.Duration(config.IPv6Timeout) * time.Millisecond,
+			ipv6:                  config.IPv6,
+			main:                  cacheTransform(config.DirectServer),
+			fallback:              cacheTransform(config.DirectFallback),
+			fallbackIPFilters:     config.DirectFallbackIPFilter,
+			fallbackDomainFilters: config.DirectFallbackDomainFilter,
+			delayedFallback:       len(config.DirectFallback) != 0,
+			fallbackLabel:         "direct-nameserver",
+			cache:                 config.newCache(),
+			ipv6Timeout:           time.Duration(config.IPv6Timeout) * time.Millisecond,
 		}
 		if rs.DirectResolver.delayedFallback {
 			rs.DirectResolver.fallbackCircuit = makeFallbackCircuit()

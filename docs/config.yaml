@@ -330,6 +330,9 @@ dns:
   # proxy-server-nameserver-fallback: # 主组未能及时返回有效 IP 时使用
   #   - system://
   #   - tls://223.5.5.5:853
+  # proxy-server-nameserver-fallback-filter:
+  #   ipcidr: # 主组返回的任意 IP 命中后使用 fallback；只熔断该域名和查询类型，不触发根区探针
+  #     - 127.0.0.0/8
   # proxy-server-nameserver-policy: # 格式同nameserver-policy，仅用于节点域名解析，当且仅当proxy-server-nameserver不为空时生效
   #   'www.yournode.com': '114.114.114.114'
 
@@ -338,6 +341,11 @@ dns:
   #   - system://
   # direct-nameserver-fallback: # 主组未能及时返回有效 IP 时使用
   #   - system://
+  # direct-nameserver-fallback-filter:
+  #   ipcidr: # 主组返回的任意 IP 命中后使用 fallback；只熔断该域名和查询类型，不触发根区探针
+  #     - 127.0.0.0/8
+  #   domain: # 命中域名直接使用 fallback，不查询主组，也不触发熔断
+  #     - '+.example.com'
   # direct-nameserver-follow-policy: false # 是否遵循nameserver-policy，默认为不遵守，仅当direct-nameserver不为空时生效
 
   # nameserver-fallback-recovery-interval: 300000 # direct/proxy fallback 恢复间隔，单位：ms；默认 5 分钟，0 表示禁用持续熔断

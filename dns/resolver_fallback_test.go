@@ -4,17 +4,175 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	componentResolver "github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
 
 	D "github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fallbackTestPrefix netip.Prefix
+
+func (p fallbackTestPrefix) MatchIp(ip netip.Addr) bool {
+	return netip.Prefix(p).Contains(ip)
+}
+
+type fallbackTestDomain string
+
+func (d fallbackTestDomain) MatchDomain(domain string) bool {
+	return domain == string(d)
+}
+
+func TestFilteredPrimaryAnswerUsesDomainCircuitWithoutRootProbe(t *testing.T) {
+	var mainQueries, fallbackQueries, rootQueries atomic.Int32
+	var healthy atomic.Bool
+	resolver := &Resolver{
+		main: []dnsClient{&fallbackTestClient{
+			address: "primary",
+			started: make(chan struct{}),
+			exchange: func(_ context.Context, query *D.Msg) (*D.Msg, error) {
+				if query.Question[0].Name == "." {
+					rootQueries.Add(1)
+				}
+				mainQueries.Add(1)
+				if healthy.Load() {
+					return fallbackTestResponse("192.0.2.1"), nil
+				}
+				return fallbackTestResponse("127.0.0.1"), nil
+			},
+		}},
+		fallback: []dnsClient{&fallbackTestClient{
+			address: "fallback",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				fallbackQueries.Add(1)
+				return fallbackTestResponse("192.0.2.2"), nil
+			},
+		}},
+		fallbackIPFilters: []C.IpMatcher{fallbackTestPrefix(netip.MustParsePrefix("127.0.0.0/8"))},
+		fallbackTimeout:   100 * time.Millisecond,
+		delayedFallback:   true,
+		fallbackCircuit:   newFallbackCircuit(time.Minute),
+		fallbackLabel:     "direct-nameserver",
+	}
+	query := fallbackTestQuery()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	msg, _, err := resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
+	scope, _ := resolver.fallbackState(query, false)
+	assert.Equal(t, fallbackScopeDomain, scope)
+	aaaa := &D.Msg{}
+	aaaa.SetQuestion("example.com.", D.TypeAAAA)
+	scope, _ = resolver.fallbackState(aaaa, false)
+	assert.Equal(t, fallbackScopeNone, scope)
+	assert.Equal(t, int32(0), rootQueries.Load())
+
+	msg, _, err = resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
+	assert.Equal(t, int32(1), mainQueries.Load())
+	assert.Equal(t, int32(1), fallbackQueries.Load())
+
+	key := fallbackQueryKey(query)
+	resolver.fallbackCircuit.domains.Set(key, time.Now().Add(-time.Second))
+	msg, _, err = resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
+	require.Eventually(t, func() bool { return mainQueries.Load() == 2 }, time.Second, time.Millisecond)
+	scope, _ = resolver.fallbackState(query, false)
+	assert.Equal(t, fallbackScopeDomain, scope, "a filtered recovery answer must keep the circuit open")
+	assert.Equal(t, int32(0), rootQueries.Load())
+
+	healthy.Store(true)
+	resolver.fallbackCircuit.domains.Set(key, time.Now().Add(-time.Second))
+	msg, _, err = resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String(), "cached fallback wins the current request")
+	require.Eventually(t, func() bool {
+		scope, _ := resolver.fallbackState(query, false)
+		return scope == fallbackScopeNone
+	}, time.Second, time.Millisecond)
+	_, hit := resolver.getFallbackCache(query)
+	assert.False(t, hit)
+	msg, _, err = resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.1", msgToIP(msg)[0].String())
+	assert.Equal(t, int32(1), fallbackQueries.Load())
+	assert.Equal(t, int32(0), rootQueries.Load())
+}
+
+func TestDirectFallbackDomainSkipsPrimaryWithoutCircuit(t *testing.T) {
+	var mainQueries atomic.Int32
+	resolver := &Resolver{
+		main: []dnsClient{&fallbackTestClient{
+			address: "primary",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				mainQueries.Add(1)
+				return fallbackTestResponse("192.0.2.1"), nil
+			},
+		}},
+		fallback: []dnsClient{&fallbackTestClient{
+			address: "fallback",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				return fallbackTestResponse("192.0.2.2"), nil
+			},
+		}},
+		fallbackDomainFilters: []C.DomainMatcher{fallbackTestDomain("example.com")},
+		delayedFallback:       true,
+		fallbackCircuit:       newFallbackCircuit(time.Minute),
+	}
+	query := fallbackTestQuery()
+	msg, _, err := resolver.ipExchangeWithDelayedFallback(context.Background(), query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
+	assert.Equal(t, int32(0), mainQueries.Load())
+	scope, _ := resolver.fallbackState(query, false)
+	assert.Equal(t, fallbackScopeNone, scope)
+}
+
+func TestFilteredRecoveryWaitsForUsableFallbackAnswer(t *testing.T) {
+	resolver := &Resolver{
+		main: []dnsClient{&fallbackTestClient{
+			address: "primary",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				return fallbackTestResponse("127.0.0.1"), nil
+			},
+		}},
+		fallback: []dnsClient{&fallbackTestClient{
+			address: "fallback",
+			started: make(chan struct{}),
+			exchange: func(context.Context, *D.Msg) (*D.Msg, error) {
+				time.Sleep(10 * time.Millisecond)
+				return fallbackTestResponse("192.0.2.2"), nil
+			},
+		}},
+		fallbackIPFilters: []C.IpMatcher{fallbackTestPrefix(netip.MustParsePrefix("127.0.0.0/8"))},
+		delayedFallback:   true,
+		fallbackCircuit:   newFallbackCircuit(time.Minute),
+	}
+	query := fallbackTestQuery()
+	resolver.openDomainFallback(query)
+	resolver.fallbackCircuit.domains.Set(fallbackQueryKey(query), time.Now().Add(-time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	msg, _, err := resolver.ipExchangeWithDelayedFallback(ctx, query)
+	require.NoError(t, err)
+	assert.Equal(t, "192.0.2.2", msgToIP(msg)[0].String())
+	scope, _ := resolver.fallbackState(query, false)
+	assert.Equal(t, fallbackScopeDomain, scope)
+}
 
 type fallbackTestClient struct {
 	address  string
@@ -475,11 +633,14 @@ func TestFallbackCircuitSeparatesAAndAAAAQueries(t *testing.T) {
 
 func TestNewResolverConfiguresDirectAndProxyFallback(t *testing.T) {
 	config := Config{
-		ProxyServer:      []NameServer{{Addr: "192.0.2.1:53"}},
-		ProxyFallback:    []NameServer{{Net: "system"}},
-		DirectServer:     []NameServer{{Addr: "192.0.2.2:53"}},
-		DirectFallback:   []NameServer{{Net: "system"}},
-		RecoveryInterval: 300000,
+		ProxyServer:                []NameServer{{Addr: "192.0.2.1:53"}},
+		ProxyFallback:              []NameServer{{Net: "system"}},
+		ProxyFallbackIPFilter:      []C.IpMatcher{fallbackTestPrefix(netip.MustParsePrefix("0.0.0.0/32"))},
+		DirectServer:               []NameServer{{Addr: "192.0.2.2:53"}},
+		DirectFallback:             []NameServer{{Net: "system"}},
+		DirectFallbackIPFilter:     []C.IpMatcher{fallbackTestPrefix(netip.MustParsePrefix("127.0.0.0/8"))},
+		DirectFallbackDomainFilter: []C.DomainMatcher{fallbackTestDomain("example.com")},
+		RecoveryInterval:           300000,
 	}
 
 	resolvers := NewResolver(config)
@@ -488,12 +649,16 @@ func TestNewResolverConfiguresDirectAndProxyFallback(t *testing.T) {
 	assert.Equal(t, componentResolver.DefaultDNSTimeout, resolvers.ProxyResolver.fallbackQueryTimeout())
 	require.NotNil(t, resolvers.ProxyResolver.fallbackCircuit)
 	assert.Equal(t, 5*time.Minute, resolvers.ProxyResolver.fallbackCircuit.interval)
+	assert.True(t, resolvers.ProxyResolver.shouldIPFallback(netip.MustParseAddr("0.0.0.0")))
+	assert.False(t, resolvers.ProxyResolver.shouldOnlyQueryFallback(fallbackTestQuery()))
 
 	require.NotNil(t, resolvers.DirectResolver)
 	assert.True(t, resolvers.DirectResolver.delayedFallback)
 	assert.Equal(t, componentResolver.DefaultDNSTimeout, resolvers.DirectResolver.fallbackQueryTimeout())
 	require.NotNil(t, resolvers.DirectResolver.fallbackCircuit)
 	assert.Equal(t, 5*time.Minute, resolvers.DirectResolver.fallbackCircuit.interval)
+	assert.True(t, resolvers.DirectResolver.shouldIPFallback(netip.MustParseAddr("127.0.0.1")))
+	assert.True(t, resolvers.DirectResolver.shouldOnlyQueryFallback(fallbackTestQuery()))
 
 	disabled := NewResolver(Config{
 		DirectServer:   []NameServer{{Addr: "192.0.2.2:53"}},

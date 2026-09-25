@@ -176,10 +176,13 @@ type DNS struct {
 	ProxyServerNameserver         []dns.NameServer
 	ProxyServerPolicy             []dns.Policy
 	ProxyServerNameserverFallback []dns.NameServer
+	ProxyServerFallbackIPFilter   []C.IpMatcher
 
-	DirectNameServer         []dns.NameServer
-	DirectNameServerFallback []dns.NameServer
-	DirectFollowPolicy       bool
+	DirectNameServer           []dns.NameServer
+	DirectNameServerFallback   []dns.NameServer
+	DirectFallbackIPFilter     []C.IpMatcher
+	DirectFallbackDomainFilter []C.DomainMatcher
+	DirectFollowPolicy         bool
 }
 
 // Profile config
@@ -253,13 +256,15 @@ type RawDNS struct {
 	CacheMaxSize      int                                 `yaml:"cache-max-size" json:"cache-max-size"`
 	NameServerPolicy  *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
 
-	ProxyServerNameserver         []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
-	ProxyServerNameserverPolicy   *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
-	ProxyServerNameserverFallback []string                            `yaml:"proxy-server-nameserver-fallback" json:"proxy-server-nameserver-fallback"`
+	ProxyServerNameserver               []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+	ProxyServerNameserverPolicy         *orderedmap.OrderedMap[string, any] `yaml:"proxy-server-nameserver-policy" json:"proxy-server-nameserver-policy"`
+	ProxyServerNameserverFallback       []string                            `yaml:"proxy-server-nameserver-fallback" json:"proxy-server-nameserver-fallback"`
+	ProxyServerNameserverFallbackFilter RawProxyServerFallbackFilter        `yaml:"proxy-server-nameserver-fallback-filter" json:"proxy-server-nameserver-fallback-filter"`
 
-	DirectNameServer             []string `yaml:"direct-nameserver" json:"direct-nameserver"`
-	DirectNameServerFallback     []string `yaml:"direct-nameserver-fallback" json:"direct-nameserver-fallback"`
-	DirectNameServerFollowPolicy bool     `yaml:"direct-nameserver-follow-policy" json:"direct-nameserver-follow-policy"`
+	DirectNameServer               []string                `yaml:"direct-nameserver" json:"direct-nameserver"`
+	DirectNameServerFallback       []string                `yaml:"direct-nameserver-fallback" json:"direct-nameserver-fallback"`
+	DirectNameServerFallbackFilter RawDirectFallbackFilter `yaml:"direct-nameserver-fallback-filter" json:"direct-nameserver-fallback-filter"`
+	DirectNameServerFollowPolicy   bool                    `yaml:"direct-nameserver-follow-policy" json:"direct-nameserver-follow-policy"`
 }
 
 type RawFallbackFilter struct {
@@ -268,6 +273,15 @@ type RawFallbackFilter struct {
 	IPCIDR    []string `yaml:"ipcidr" json:"ipcidr"`
 	Domain    []string `yaml:"domain" json:"domain"`
 	GeoSite   []string `yaml:"geosite" json:"geosite"`
+}
+
+type RawProxyServerFallbackFilter struct {
+	IPCIDR []string `yaml:"ipcidr" json:"ipcidr"`
+}
+
+type RawDirectFallbackFilter struct {
+	IPCIDR []string `yaml:"ipcidr" json:"ipcidr"`
+	Domain []string `yaml:"domain" json:"domain"`
 }
 
 type RawClashForAndroid struct {
@@ -1469,6 +1483,14 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	if len(dnsCfg.ProxyServerNameserverFallback) != 0 && len(dnsCfg.ProxyServerNameserver) == 0 {
 		return nil, errors.New("disallow empty `proxy-server-nameserver` when `proxy-server-nameserver-fallback` is set")
 	}
+	if len(cfg.ProxyServerNameserverFallbackFilter.IPCIDR) != 0 && len(dnsCfg.ProxyServerNameserverFallback) == 0 {
+		return nil, errors.New("disallow `proxy-server-nameserver-fallback-filter` without `proxy-server-nameserver-fallback`")
+	}
+	if matcher, err := parseFallbackIPCIDR(cfg.ProxyServerNameserverFallbackFilter.IPCIDR, "dns.proxy-server-nameserver-fallback-filter.ipcidr"); err != nil {
+		return nil, err
+	} else if matcher != nil {
+		dnsCfg.ProxyServerFallbackIPFilter = append(dnsCfg.ProxyServerFallbackIPFilter, matcher)
+	}
 
 	if dnsCfg.DirectNameServer, err = parseNameServer(cfg.DirectNameServer, false, cfg.PreferH3); err != nil {
 		return nil, err
@@ -1478,6 +1500,23 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	}
 	if len(dnsCfg.DirectNameServerFallback) != 0 && len(dnsCfg.DirectNameServer) == 0 {
 		return nil, errors.New("disallow empty `direct-nameserver` when `direct-nameserver-fallback` is set")
+	}
+	if filter := cfg.DirectNameServerFallbackFilter; (len(filter.IPCIDR) != 0 || len(filter.Domain) != 0) && len(dnsCfg.DirectNameServerFallback) == 0 {
+		return nil, errors.New("disallow `direct-nameserver-fallback-filter` without `direct-nameserver-fallback`")
+	}
+	if matcher, err := parseFallbackIPCIDR(cfg.DirectNameServerFallbackFilter.IPCIDR, "dns.direct-nameserver-fallback-filter.ipcidr"); err != nil {
+		return nil, err
+	} else if matcher != nil {
+		dnsCfg.DirectFallbackIPFilter = append(dnsCfg.DirectFallbackIPFilter, matcher)
+	}
+	if len(cfg.DirectNameServerFallbackFilter.Domain) != 0 {
+		domainTrie := trie.New[struct{}]()
+		for idx, domain := range cfg.DirectNameServerFallbackFilter.Domain {
+			if err := domainTrie.Insert(domain, struct{}{}); err != nil {
+				return nil, fmt.Errorf("dns.direct-nameserver-fallback-filter.domain[%d] format error: %w", idx, err)
+			}
+		}
+		dnsCfg.DirectFallbackDomainFilter = append(dnsCfg.DirectFallbackDomainFilter, domainTrie.NewDomainSet())
 	}
 	dnsCfg.DirectFollowPolicy = cfg.DirectNameServerFollowPolicy
 	dnsCfg.NameServerFallbackRecoveryInterval = cfg.NameServerFallbackRecoveryInterval
@@ -1634,6 +1673,22 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	}
 
 	return dnsCfg, nil
+}
+
+func parseFallbackIPCIDR(ranges []string, field string) (C.IpMatcher, error) {
+	if len(ranges) == 0 {
+		return nil, nil
+	}
+	cidrSet := cidr.NewIpCidrSet()
+	for idx, prefix := range ranges {
+		if err := cidrSet.AddIpCidrForString(prefix); err != nil {
+			return nil, fmt.Errorf("%s[%d] format error: %w", field, idx, err)
+		}
+	}
+	if err := cidrSet.Merge(); err != nil {
+		return nil, err
+	}
+	return cidrSet, nil
 }
 
 func parseFakeIPRules(rawRules []string, ruleProviders map[string]P.RuleProvider) ([]C.Rule, error) {
