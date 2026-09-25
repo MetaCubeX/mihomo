@@ -27,6 +27,12 @@ find-process-mode: strict
 
 mode: rule
 
+# SRC-MAC 仅在 Linux / OpenWrt 有后端；没有相关规则时不启用解析服务。
+# 缓存未命中先补查内核（合计最多 100 ms），可选探测只对明确的直连以太网来源生效。
+src-mac-probe: false # 允许内核 ARP/NDP 主动发现，需要 CAP_NET_ADMIN；默认关闭
+src-mac-timeout: 1000 # 补查与探测共用的总等待上限，毫秒，范围 1–60000
+# src-mac-interfaces: [br-lan] # 可选接口白名单，限制仅在指定接口上补查或探测，防止对 WAN 泄露 ARP/NDP
+
 #自定义 geodata url
 geox-url:
   geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
@@ -1989,6 +1995,10 @@ rule-providers:
       - 'books.itunes.apple.com'
 
 rules:
+  # Linux / OpenWrt：按邻居表中的来源 MAC 分流，支持 IPv4 / IPv6。
+  # 需能看到客户端真实来源 IP；MAC 未知时立即继续后续规则，不等待探测。
+  # 无 SRC-MAC 需求时不启动邻居监听；NOT 包裹未知 MAC 条件时仍按布尔取反。
+  # - SRC-MAC,aa:bb:cc:dd:ee:ff,PROXY
   - RULE-SET,rule1,REJECT
   - IP-ASN,1,PROXY
   - DOMAIN-REGEX,^abc,DIRECT
