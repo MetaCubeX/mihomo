@@ -22,6 +22,7 @@ import (
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/log"
+	T "github.com/metacubex/mihomo/tunnel"
 	"golang.org/x/exp/constraints"
 
 	tun "github.com/metacubex/sing-tun"
@@ -365,6 +366,9 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 			}
 			iface.FlushCache()
 			resolver.ResetConnection() // reset resolver's connection after default interface changed
+			// a QUIC outbound's session is a UDP socket bound to the path that just
+			// went away; quic-go would only notice after its idle timeout
+			T.ResetOutboundSessions("default interface changed")
 		})
 		err = defaultInterfaceMonitor.Start()
 		if err != nil {
