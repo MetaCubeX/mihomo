@@ -288,6 +288,9 @@ func TestCarrierFailureClosesSplitPeer(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("split lane survived failed carrier")
 	}
+	// done signals cancellation before Close tears down both lanes. Join the
+	// watcher-triggered Close (via sync.Once) before inspecting its effects.
+	_ = f.Close()
 	if _, err = f.writer.Write([]byte{1}); err == nil {
 		t.Fatal("TLS sibling remained open")
 	}
