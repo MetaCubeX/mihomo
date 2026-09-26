@@ -8,6 +8,8 @@ import (
 	"net"
 	"sync"
 
+	"github.com/metacubex/mihomo/common/pool"
+
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/hkdf"
 )
@@ -116,7 +118,8 @@ func (c *morphPacketConn) SetWriteBuffer(size int) error {
 }
 
 func (c *morphPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	buffer := make([]byte, 65535)
+	buffer := pool.Get(65535)
+	defer pool.Put(buffer)
 	for {
 		n, addr, err := c.PacketConn.ReadFrom(buffer)
 		if err != nil {
@@ -131,7 +134,8 @@ func (c *morphPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 }
 func (c *morphPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	buffer := make([]byte, 12+len(b))
+	buffer := pool.Get(12 + len(b))
+	defer pool.Put(buffer)
 	if _, err := rand.Read(buffer[:12]); err != nil {
 		return 0, err
 	}
