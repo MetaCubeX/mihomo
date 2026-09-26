@@ -62,11 +62,16 @@ func testCertificate(t *testing.T) *tls.Config {
 	}
 	return &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
 }
-func testServer(t *testing.T, morph bool) string {
+
+type testEndpoints struct {
+	tcp, udp string
+}
+
+func testServer(t *testing.T, morph bool) testEndpoints {
 	address, _ := testServerInstance(t, morph)
 	return address
 }
-func testServerInstance(t *testing.T, morph bool) (string, *Server) {
+func testServerInstance(t *testing.T, morph bool) (testEndpoints, *Server) {
 	t.Helper()
 	s, err := NewServer(ServerConfig{Password: "secret", Morph: morph, TLSConfig: testCertificate(t), Handler: echoHandler{}})
 	if err != nil {
@@ -77,7 +82,9 @@ func testServerInstance(t *testing.T, morph bool) (string, *Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pc, err := net.ListenPacket("udp", l.Addr().String())
+	// TCP and UDP have independent port reservations, notably on Windows.
+	// Let the OS allocate an available port for each transport.
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		l.Close()
 		t.Fatal(err)
@@ -88,12 +95,14 @@ func testServerInstance(t *testing.T, morph bool) (string, *Server) {
 	if err = s.ServeUDP(pc); err != nil {
 		t.Fatal(err)
 	}
-	return l.Addr().String(), s
+	return testEndpoints{tcp: l.Addr().String(), udp: pc.LocalAddr().String()}, s
 }
-func testClient(t *testing.T, address, up, down string, mux, morph bool) *Client {
+func testClient(t *testing.T, address testEndpoints, up, down string, mux, morph bool) *Client {
 	t.Helper()
-	c, err := NewClient(ClientConfig{Password: "secret", Up: up, Down: down, Mux: mux, Morph: morph, TLSConfig: &tls.Config{InsecureSkipVerify: true}, DialTCP: func(ctx context.Context) (net.Conn, error) { return (&net.Dialer{}).DialContext(ctx, "tcp", address) }, DialUDP: func(ctx context.Context) (net.PacketConn, net.Addr, error) {
-		addr, err := net.ResolveUDPAddr("udp", address)
+	c, err := NewClient(ClientConfig{Password: "secret", Up: up, Down: down, Mux: mux, Morph: morph, TLSConfig: &tls.Config{InsecureSkipVerify: true}, DialTCP: func(ctx context.Context) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "tcp", address.tcp)
+	}, DialUDP: func(ctx context.Context) (net.PacketConn, net.Addr, error) {
+		addr, err := net.ResolveUDPAddr("udp", address.udp)
 		if err != nil {
 			return nil, nil, err
 		}

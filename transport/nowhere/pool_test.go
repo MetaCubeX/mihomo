@@ -39,7 +39,7 @@ func TestMuxPendingOpenLimit(t *testing.T) {
 }
 
 func TestMuxRetiresClosedStateBudget(t *testing.T) {
-	c := testClient(t, "127.0.0.1:1", "tcp", "tcp", true, false)
+	c := testClient(t, testEndpoints{tcp: "127.0.0.1:1"}, "tcp", "tcp", true, false)
 	replaced := errors.New("replacement dial")
 	c.config.DialTCP = func(context.Context) (net.Conn, error) { return nil, replaced }
 	for i := 0; i < 8; i++ {
@@ -98,7 +98,7 @@ func TestMuxRetirementDrainsActiveStream(t *testing.T) {
 }
 
 func TestMuxParallelDialLimitAndCancellation(t *testing.T) {
-	c := testClient(t, "127.0.0.1:1", "tcp", "tcp", true, false)
+	c := testClient(t, testEndpoints{tcp: "127.0.0.1:1"}, "tcp", "tcp", true, false)
 	entered := make(chan struct{}, 16)
 	c.config.DialTCP = func(ctx context.Context) (net.Conn, error) {
 		entered <- struct{}{}
@@ -147,7 +147,7 @@ func TestMuxParallelDialLimitAndCancellation(t *testing.T) {
 }
 
 func TestMuxRetirementWakesWaiters(t *testing.T) {
-	c := testClient(t, "127.0.0.1:1", "tcp", "tcp", true, false)
+	c := testClient(t, testEndpoints{tcp: "127.0.0.1:1"}, "tcp", "tcp", true, false)
 	replaced := errors.New("replacement dial")
 	c.config.DialTCP = func(context.Context) (net.Conn, error) { return nil, replaced }
 	var first *muxStream
@@ -189,7 +189,7 @@ func TestMuxRetirementWakesWaiters(t *testing.T) {
 func TestClientCloseCancelsInitializers(t *testing.T) {
 	for _, carrier := range []byte{carrierTLS, carrierQUIC} {
 		t.Run(map[byte]string{carrierTLS: "mux", carrierQUIC: "quic"}[carrier], func(t *testing.T) {
-			c := testClient(t, "127.0.0.1:1", "tcp", "tcp", true, false)
+			c := testClient(t, testEndpoints{tcp: "127.0.0.1:1"}, "tcp", "tcp", true, false)
 			entered := make(chan struct{})
 			dial := func(ctx context.Context) error { close(entered); <-ctx.Done(); return ctx.Err() }
 			c.config.DialTCP = func(ctx context.Context) (net.Conn, error) { return nil, dial(ctx) }
@@ -210,7 +210,7 @@ func TestClientCloseCancelsInitializers(t *testing.T) {
 	}
 }
 
-func testUDPServer(t *testing.T) string {
+func testUDPServer(t *testing.T) testEndpoints {
 	t.Helper()
 	s, err := NewServer(ServerConfig{Password: "secret", TLSConfig: testCertificate(t), Handler: echoHandler{}})
 	if err != nil {
@@ -224,7 +224,7 @@ func testUDPServer(t *testing.T) string {
 	if err = s.ServeUDP(pc); err != nil {
 		t.Fatal(err)
 	}
-	return pc.LocalAddr().String()
+	return testEndpoints{udp: pc.LocalAddr().String()}
 }
 
 func TestQUICInitializerCancellationAndRetry(t *testing.T) {

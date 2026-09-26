@@ -120,7 +120,7 @@ func TestQUICCloseUnblocksWrite(t *testing.T) {
 	if err = server.ServeUDP(udp); err != nil {
 		t.Fatal(err)
 	}
-	c := testClient(t, udp.LocalAddr().String(), "udp", "udp", false, false)
+	c := testClient(t, testEndpoints{udp: udp.LocalAddr().String()}, "udp", "udp", false, false)
 	conn, err := c.DialContext(context.Background(), "echo.test:80")
 	if err != nil {
 		t.Fatal(err)
