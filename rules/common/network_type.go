@@ -24,8 +24,10 @@ func NewNetworkType(network, adapter string) (*NetworkType, error) {
 		ntType.network = C.TCP
 	case "UDP":
 		ntType.network = C.UDP
+	case "ICMP":
+		ntType.network = C.ICMP
 	default:
-		return nil, fmt.Errorf("unsupported network type, only TCP/UDP")
+		return nil, fmt.Errorf("unsupported network type, only TCP/UDP/ICMP")
 	}
 
 	return &ntType, nil
