@@ -398,6 +398,7 @@ type packetConn struct {
 	once          sync.Once
 	rmu, wmu      sync.Mutex
 	rd, wd        deadline.PipeDeadline
+	uot           uotReader // guarded by rmu
 }
 type targetAddr string
 
@@ -498,23 +499,11 @@ func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
 			return n, p.address, nil
 		}
 	}
-	var h [2]byte
-	if _, err := io.ReadFull(p.flow, h[:]); err != nil {
+	n, err := p.uot.read(p.flow, b)
+	if err != nil && !errors.Is(err, io.ErrShortBuffer) {
 		return 0, nil, err
 	}
-	n := int(binary.BigEndian.Uint16(h[:]))
-	if n > len(b) {
-		data := make([]byte, n)
-		if _, err := io.ReadFull(p.flow, data); err != nil {
-			return 0, nil, err
-		}
-		return copy(b, data), p.address, io.ErrShortBuffer
-	}
-	_, err := io.ReadFull(p.flow, b[:n])
-	if err != nil {
-		return 0, nil, err
-	}
-	return n, p.address, nil
+	return n, p.address, err
 }
 func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	p.wmu.Lock()
@@ -548,6 +537,13 @@ func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 }
 func (p *packetConn) Close() error {
 	p.once.Do(func() {
+		defer func() {
+			// Interrupt a pending stream read before reclaiming partial UoT data.
+			p.flow.Close()
+			p.rmu.Lock()
+			p.uot = uotReader{err: net.ErrClosed}
+			p.rmu.Unlock()
+		}()
 		p.stateMu.Lock()
 		close(p.done)
 		p.ready.Store(false)
@@ -577,12 +573,10 @@ func (p *packetConn) Close() error {
 					p.readQ.queued -= len(b) + 64
 				default:
 					p.readQ.mu.Unlock()
-					p.flow.Close()
 					return
 				}
 			}
 		}
-		p.flow.Close()
 	})
 	return nil
 }

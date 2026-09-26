@@ -208,7 +208,7 @@ func TestForwardingBudget(t *testing.T) {
 }
 
 func TestUOTTruncatedFrames(t *testing.T) {
-	for _, wire := range [][]byte{{0}, {0, 2, 1}} {
+	for _, wire := range [][]byte{{0}, {0, 2}, {0, 2, 1}} {
 		local, peer := net.Pipe()
 		l := &lane{Conn: local}
 		p, err := newPacket(&flowConn{reader: l, writer: l}, 1, "127.0.0.1:53", nil, nil)
