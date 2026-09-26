@@ -43,14 +43,13 @@ type muxConn struct {
 	retiring   bool
 	closeOnce  sync.Once
 	lastActive time.Time
-	windowMu   sync.Mutex
-	windows    map[uint32]int
+	windows    map[*muxStream]int // nil denotes connection credit; guarded by mu
 	windowWake chan struct{}
 }
 
 func newMux(conn net.Conn, onStream func(*muxStream)) *muxConn {
 	m := &muxConn{Conn: conn, streams: make(map[uint32]*muxStream), send: connWindow, recv: connWindow, changed: make(chan struct{}), done: make(chan struct{}), queue: make(chan muxFrame, 512), onStream: onStream, lastActive: time.Now()}
-	m.windows = make(map[uint32]int)
+	m.windows = make(map[*muxStream]int)
 	m.windowWake = make(chan struct{}, 1)
 	m.sendPeak = connWindow
 	m.incoming = make(chan struct{}, 4096)
@@ -65,22 +64,34 @@ func (m *muxConn) Close() error {
 	return nil
 }
 func (m *muxConn) control(f muxFrame) {
-	if f.kind == muxWindow {
-		m.windowMu.Lock()
-		m.windows[f.id] += int(f.value)
-		m.windowMu.Unlock()
-		select {
-		case m.windowWake <- struct{}{}:
-		default:
-		}
-		return
-	}
 	select {
 	case m.queue <- f:
 	case <-m.done:
 	default:
 		_ = m.Close()
 	}
+}
+
+// returnCredit and removeStream require mu. A stream may outlive its registry
+// entry while the application drains DATA ordered before RESET or FIN.
+func (m *muxConn) returnCredit(s *muxStream, n int) {
+	m.recv += n
+	m.windows[nil] += n / 1024
+	if s != nil && m.streams[s.id] == s && !s.closed && !s.finRecv {
+		s.recv += n
+		m.windows[s] += n / 1024
+	}
+	select {
+	case m.windowWake <- struct{}{}:
+	default:
+	}
+}
+
+func (m *muxConn) removeStream(s *muxStream) {
+	if m.streams[s.id] == s {
+		delete(m.streams, s.id)
+	}
+	delete(m.windows, s)
 }
 func (m *muxConn) idleLoop() {
 	t := time.NewTicker(10 * time.Second)
@@ -153,12 +164,22 @@ func (m *muxConn) writeLoop() {
 				return
 			}
 		case <-m.windowWake:
-			m.windowMu.Lock()
+			m.mu.Lock()
 			windows := m.windows
-			m.windows = make(map[uint32]int)
-			m.windowMu.Unlock()
-			for id, n := range windows {
+			m.windows = make(map[*muxStream]int)
+			m.mu.Unlock()
+			for s, n := range windows {
 				for n > 0 {
+					var id uint32
+					if s != nil {
+						m.mu.Lock()
+						current := m.streams[s.id] == s && !s.closed && !s.finRecv
+						m.mu.Unlock()
+						if !current {
+							break
+						}
+						id = s.id
+					}
 					v := n
 					if v > 65535 {
 						v = 65535
@@ -224,8 +245,7 @@ func (m *muxConn) readLoop() {
 			s.recv -= n
 			m.recv -= n
 			if s.closed {
-				m.recv += n
-				m.control(muxFrame{kind: muxWindow, value: uint16(n / 1024)})
+				m.returnCredit(nil, n)
 			} else {
 				s.buffers = append(s.buffers, data)
 			}
@@ -261,7 +281,7 @@ func (m *muxConn) readLoop() {
 				// Ordered DATA (including SetupResult) must remain readable even
 				// when RESET follows before the application is scheduled.
 				if s.finSent || kind == muxReset {
-					delete(m.streams, id)
+					m.removeStream(s)
 				}
 			}
 		default:
@@ -288,8 +308,7 @@ func (m *muxConn) discard(s *muxStream) {
 	}
 	s.buffers = nil
 	if n > 0 {
-		m.recv += n
-		m.control(muxFrame{kind: muxWindow, value: uint16(n / 1024)})
+		m.returnCredit(nil, n)
 	}
 }
 
@@ -326,11 +345,7 @@ func (s *muxStream) Read(p []byte) (int, error) {
 				s.buffers[0] = nil
 				s.buffers = s.buffers[1:]
 				s.offset = 0
-				c := credit(len(b))
-				s.recv += c
-				s.m.recv += c
-				s.m.control(muxFrame{kind: muxWindow, value: uint16(c / 1024), id: s.id})
-				s.m.control(muxFrame{kind: muxWindow, value: uint16(c / 1024)})
+				s.m.returnCredit(s, credit(len(b)))
 			}
 			s.m.mu.Unlock()
 			return n, nil
@@ -433,7 +448,7 @@ func (s *muxStream) CloseWrite() error {
 		s.finSent = true
 		s.m.control(muxFrame{kind: muxFIN, id: s.id})
 		if s.finRecv {
-			delete(s.m.streams, s.id)
+			s.m.removeStream(s)
 		}
 		s.m.signal()
 	}
@@ -450,11 +465,12 @@ func (s *muxStream) Close() error {
 			close(s.done)
 		}
 		s.m.discard(s)
+		delete(s.m.windows, s)
 		if !s.finSent {
 			s.m.control(muxFrame{kind: muxReset, id: s.id})
 		}
 		if s.finRecv {
-			delete(s.m.streams, s.id)
+			s.m.removeStream(s)
 		}
 		s.m.lastActive = time.Now()
 		s.m.signal()
