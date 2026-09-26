@@ -99,6 +99,22 @@ func wrapMorphUDP(pc net.PacketConn, keys *morphKeys, client bool) net.PacketCon
 	}
 	return &morphPacketConn{pc, r, w}
 }
+
+// Preserve socket buffer tuning without exposing raw UDP I/O methods, which
+// would allow QUIC's optimized path to bypass Morph encoding entirely.
+func (c *morphPacketConn) SetReadBuffer(size int) error {
+	if pc, ok := c.PacketConn.(interface{ SetReadBuffer(int) error }); ok {
+		return pc.SetReadBuffer(size)
+	}
+	return errors.New("nowhere: packet connection does not support read buffer tuning")
+}
+func (c *morphPacketConn) SetWriteBuffer(size int) error {
+	if pc, ok := c.PacketConn.(interface{ SetWriteBuffer(int) error }); ok {
+		return pc.SetWriteBuffer(size)
+	}
+	return errors.New("nowhere: packet connection does not support write buffer tuning")
+}
+
 func (c *morphPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	buffer := make([]byte, 65535)
 	for {
