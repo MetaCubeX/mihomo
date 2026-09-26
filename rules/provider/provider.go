@@ -122,7 +122,7 @@ func (rp *RuleSetProvider) Close() error {
 	return rp.ruleSetProvider.Close()
 }
 
-func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleFormat, interval time.Duration, vehicle P.Vehicle, payload []string, bundleFile resource.BundleFile, parse common.ParseRuleFunc) P.RuleProvider {
+func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleFormat, interval time.Duration, vehicle P.Vehicle, payload []string, bundleFile resource.BundleFile, parse common.ParseRuleFunc, jsonPaths []string) P.RuleProvider {
 	rp := &ruleSetProvider{
 		baseProvider: baseProvider{
 			behavior: behavior,
@@ -140,7 +140,7 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 		rp.strategy = rulesParseInline(payload, rp.strategy)
 	}
 	rp.Fetcher = resource.NewFetcher(name, interval, vehicle, bundleFile, func(bytes []byte) (ruleStrategy, error) {
-		return rulesParse(bytes, newStrategy(behavior, parse), format)
+		return rulesParse(bytes, newStrategy(behavior, parse), format, jsonPaths)
 	}, onUpdate)
 
 	wrapper := &RuleSetProvider{
@@ -172,10 +172,13 @@ var (
 	ErrInvalidFormat = errors.New("invalid format")
 )
 
-func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStrategy, error) {
+func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat, jsonPaths []string) (ruleStrategy, error) {
 	strategy.Reset()
 	if format == P.MrsRule {
 		return rulesMrsParse(buf, strategy)
+	}
+	if format == P.JsonRule {
+		return rulesJSONParse(buf, strategy, jsonPaths)
 	}
 
 	schema := &RulePayload{}
