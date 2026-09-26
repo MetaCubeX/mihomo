@@ -98,7 +98,11 @@ func (m *muxConn) poolLoad(id uint32) (active, pressure int, usable bool) {
 	default:
 	}
 	active = m.active
-	for _, occupancy := range []int{(m.sendPeak - m.send) * 1024 / m.sendPeak, (connWindow - m.recv) * 1024 / connWindow, len(m.queue) * 1024 / cap(m.queue)} {
+	for _, occupancy := range []int{
+		int(int64(m.sendPeak-m.send) * 1024 / int64(m.sendPeak)),
+		int(int64(connWindow-m.recv) * 1024 / connWindow),
+		len(m.queue) * 1024 / cap(m.queue),
+	} {
 		if occupancy > pressure {
 			pressure = occupancy
 		}

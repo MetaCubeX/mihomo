@@ -11,6 +11,31 @@ import (
 	"time"
 )
 
+func TestMuxPoolPressure(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		send, peak, recv int
+		queued, want     int
+	}{
+		{"idle", connWindow, connWindow, connWindow, 0, 0},
+		{"half-send", connWindow / 2, connWindow, connWindow, 0, 512},
+		{"extended-send", connWindow, 4 * connWindow, connWindow, 0, 768},
+		{"half-receive", connWindow, connWindow, connWindow / 2, 0, 512},
+		{"full-receive", connWindow, connWindow, 0, 0, 1024},
+		{"queue", connWindow, connWindow, connWindow, 384, 768},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &muxConn{send: tc.send, sendPeak: tc.peak, recv: tc.recv, done: make(chan struct{}), queue: make(chan muxFrame, 512)}
+			for i := 0; i < tc.queued; i++ {
+				m.queue <- muxFrame{}
+			}
+			if _, got, _ := m.poolLoad(1); got != tc.want {
+				t.Fatalf("pressure = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMuxPendingOpenLimit(t *testing.T) {
 	a, b := net.Pipe()
 	defer b.Close()
