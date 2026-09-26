@@ -101,7 +101,7 @@ func (m *muxConn) idleLoop() {
 	}
 }
 func (m *muxConn) stream(id uint32) *muxStream {
-	s := &muxStream{m: m, id: id, send: streamWindow, recv: streamWindow, rd: deadline.MakePipeDeadline(), wd: deadline.MakePipeDeadline(), done: make(chan struct{})}
+	s := &muxStream{m: m, id: id, send: streamWindow, recv: streamWindow, rd: deadline.MakePipeDeadline(), wd: deadline.MakePipeDeadline(), done: make(chan struct{}), localClosed: make(chan struct{})}
 	m.streams[id] = s
 	m.active++
 	m.lastActive = time.Now()
@@ -303,6 +303,7 @@ type muxStream struct {
 	finRecv, finSent, closed, reset bool
 	rd, wd                          deadline.PipeDeadline
 	done                            chan struct{}
+	localClosed                     chan struct{}
 }
 
 func (s *muxStream) Read(p []byte) (int, error) {
@@ -389,13 +390,17 @@ func (s *muxStream) Write(p []byte) (int, error) {
 		select {
 		case s.m.queue <- f:
 			s.m.mu.Unlock()
+			// Once queued, DATA belongs to the carrier writer. A peer can
+			// receive it and send a result followed by RESET before our socket
+			// Write returns. Preserve that write's completion so the caller
+			// can read the result; only local close may abandon the wait.
 			select {
 			case <-f.written:
 				total += n
 				p = p[n:]
 			case <-s.m.done:
 				return total, net.ErrClosed
-			case <-s.done:
+			case <-s.localClosed:
 				return total, net.ErrClosed
 			case <-s.wd.Wait():
 				_ = s.Close()
@@ -439,6 +444,7 @@ func (s *muxStream) Close() error {
 	defer s.m.mu.Unlock()
 	if !s.closed {
 		s.closed = true
+		close(s.localClosed)
 		s.m.active--
 		if !s.reset {
 			close(s.done)
