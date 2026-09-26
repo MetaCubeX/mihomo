@@ -34,13 +34,15 @@ import (
 
 type Tailscale struct {
 	*Base
-	server      *tsnet.Server
-	dnsResolver *dns.Resolver
-	option      TailscaleOption
-	ctx         context.Context
-	cancel      context.CancelFunc
-	startOnce   sync.Once
-	startErr    error
+	server           *tsnet.Server
+	dnsResolver      *dns.Resolver
+	option           TailscaleOption
+	ctx              context.Context
+	cancel           context.CancelFunc
+	startOnce        sync.Once
+	startErr         error
+	backgroundOnce   sync.Once
+	advertisedRoutes []netip.Prefix
 
 	backendInitOnce sync.Once
 	backendInitCh   chan struct{}
@@ -61,9 +63,10 @@ type TailscaleOption struct {
 	Ephemeral  bool   `proxy:"ephemeral,omitempty"`
 	UDP        bool   `proxy:"udp,omitempty"`
 
-	AcceptRoutes           *bool  `proxy:"accept-routes,omitempty"`
-	ExitNode               string `proxy:"exit-node,omitempty"`
-	ExitNodeAllowLANAccess *bool  `proxy:"exit-node-allow-lan-access,omitempty"`
+	AcceptRoutes           *bool    `proxy:"accept-routes,omitempty"`
+	AdvertiseRoutes        []string `proxy:"advertise-routes,omitempty"`
+	ExitNode               string   `proxy:"exit-node,omitempty"`
+	ExitNodeAllowLANAccess *bool    `proxy:"exit-node-allow-lan-access,omitempty"`
 }
 
 func init() {
@@ -115,6 +118,7 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	if _, err := buildTailscaleMaskedPrefs(option); err != nil {
 		return nil, err
 	}
+	routes, _ := parseTailscaleAdvertiseRoutes(option.AdvertiseRoutes)
 	if option.StateDir == "" {
 		option.StateDir = "tailscale"
 	}
@@ -139,10 +143,11 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 			RoutingMark:  option.RoutingMark,
 			Prefer:       option.IPVersion,
 		}),
-		option:        option,
-		ctx:           ctx,
-		cancel:        cancel,
-		backendInitCh: make(chan struct{}),
+		option:           option,
+		ctx:              ctx,
+		cancel:           cancel,
+		backendInitCh:    make(chan struct{}),
+		advertisedRoutes: routes,
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	outbound.server = &tsnet.Server{
@@ -177,6 +182,8 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 			log.Debugln("[Tailscale](%s) %s", option.Name, fmt.Sprintf(format, args...))
 		},
 	}
+	outbound.server.RegisterFallbackTCPHandler(outbound.tcpHandlerForAdvertisedRoute)
+	outbound.server.RegisterFallbackUDPHandler(outbound.udpHandlerForAdvertisedRoute)
 	dnsTransport := tailscaleDNSTransport{tailscale: outbound}
 	outbound.dnsResolver = dns.NewResolverFromClient(dnsTransport)
 	outbound.unregisterDNSResolver = dns.RegisterTailscaleDnsClient(option.Name, dnsTransport)
@@ -282,7 +289,17 @@ func (t *Tailscale) applyPrefs(ctx context.Context) error {
 		return err
 	}
 	_, err = lc.EditPrefs(ctx, mp)
-	return err
+	if err != nil {
+		return err
+	}
+	if mp.AdvertiseRoutesSet {
+		if len(mp.AdvertiseRoutes) == 0 {
+			log.Infoln("[Tailscale](%s) cleared advertised routes", t.Name())
+		} else {
+			log.Infoln("[Tailscale](%s) advertising routes: %s", t.Name(), formatTailscalePrefixes(mp.AdvertiseRoutes))
+		}
+	}
+	return nil
 }
 
 func (t *Tailscale) applyExitNodePrefs(ctx context.Context) error {
@@ -320,6 +337,18 @@ func buildTailscaleMaskedPrefs(option TailscaleOption) (*ipn.MaskedPrefs, error)
 		mp.RouteAllSet = true
 		changed = true
 	}
+	if option.AdvertiseRoutes != nil {
+		routes, err := parseTailscaleAdvertiseRoutes(option.AdvertiseRoutes)
+		if err != nil {
+			return nil, err
+		}
+		if option.ExitNode != "" && tailscaleAdvertisesExitNode(routes) {
+			return nil, errors.New("cannot advertise an exit node (0.0.0.0/0 and ::/0) and use an exit node at the same time")
+		}
+		mp.AdvertiseRoutes = routes
+		mp.AdvertiseRoutesSet = true
+		changed = true
+	}
 	if option.ExitNode != "" {
 		if autoExitNode, ok := ipn.ParseAutoExitNodeString(option.ExitNode); ok {
 			mp.AutoExitNode = autoExitNode
@@ -344,6 +373,56 @@ func tailscaleExitNodeNeedsStatus(option TailscaleOption) bool {
 	}
 	_, ok := ipn.ParseAutoExitNodeString(option.ExitNode)
 	return !ok
+}
+
+// parseTailscaleAdvertiseRoutes parses CIDRs advertised to the tailnet.
+// An empty input clears previously advertised routes. Prefixes are masked so host bits are ignored.
+func parseTailscaleAdvertiseRoutes(routes []string) ([]netip.Prefix, error) {
+	parsed := make([]netip.Prefix, 0, len(routes))
+	seen := make(map[netip.Prefix]struct{}, len(routes))
+	for _, route := range routes {
+		route = strings.TrimSpace(route)
+		if route == "" {
+			return nil, errors.New("tailscale advertise-routes contains an empty prefix")
+		}
+		prefix, err := netip.ParsePrefix(route)
+		if err != nil {
+			return nil, fmt.Errorf("invalid tailscale advertise-routes prefix %q: %w", route, err)
+		}
+		prefix = prefix.Masked()
+		if !prefix.IsValid() {
+			return nil, fmt.Errorf("invalid tailscale advertise-routes prefix %q", route)
+		}
+		if _, ok := seen[prefix]; ok {
+			return nil, fmt.Errorf("duplicate tailscale advertise-routes prefix %s", prefix)
+		}
+		seen[prefix] = struct{}{}
+		parsed = append(parsed, prefix)
+	}
+	return parsed, nil
+}
+
+func tailscaleAdvertisesExitNode(routes []netip.Prefix) bool {
+	var v4, v6 bool
+	for _, route := range routes {
+		if route.Bits() != 0 {
+			continue
+		}
+		if route.Addr().Is4() {
+			v4 = true
+		} else if route.Addr().Is6() {
+			v6 = true
+		}
+	}
+	return v4 && v6
+}
+
+func formatTailscalePrefixes(routes []netip.Prefix) string {
+	parts := make([]string, len(routes))
+	for i, route := range routes {
+		parts[i] = route.String()
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (t *Tailscale) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {

@@ -407,6 +407,12 @@ func (p *autoCloseProxyAdapter) Close() error {
 	return p.closeErr
 }
 
+func (p *autoCloseProxyAdapter) StartBackground() {
+	if starter, ok := p.ProxyAdapter.(C.BackgroundProxy); ok {
+		starter.StartBackground()
+	}
+}
+
 func NewAutoCloseProxyAdapter(adapter ProxyAdapter) ProxyAdapter {
 	proxy := &autoCloseProxyAdapter{
 		ProxyAdapter: adapter,

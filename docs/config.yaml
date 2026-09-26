@@ -1353,6 +1353,13 @@ proxies: # socks5
     # ephemeral: false # 是否作为 ephemeral node 登录，默认 false
     udp: true # 是否启用 UDP，默认 false
     # accept-routes: true # 是否接受 Tailnet 中发布的 subnet routes
+    # advertise-routes: # 把本机可达网段发布到 Tailnet，其他节点经此节点访问这些地址
+    #   - 192.168.1.0/24
+    #   - fd12:3456:789a::/64
+    # 路由需要在 Tailscale/Headscale 控制台批准后，其他节点才会使用。设为 [] 会清除已发布的路由。
+    # 配置此字段（包括 []）后，节点会在运行时主动启动；仅检查配置（-t）不会启动节点。
+    # 同时发布 0.0.0.0/0 和 ::/0 表示作为 exit node，此时不能再配置 exit-node。
+    # 进入这些网段的 TCP/UDP 由 userspace 网络栈从本机转发出去，沿用 interface-name、routing-mark 和 dialer-proxy。
     # exit-node: 100.64.0.1 # 使用指定 exit node，可填写节点 IP；也支持 auto:any
     # exit-node-allow-lan-access: true # 使用 exit node 时是否允许访问本地 LAN
     # 当目标不在 Tailscale 路由内时，连接会直接报错，不会回退到直连；
