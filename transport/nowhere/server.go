@@ -559,8 +559,9 @@ func failureCode(err error) byte {
 	return DialFailed
 }
 
-// ServerPacketConn activates the wire flow when the handler accepts setup.
-// QUIC payload received before READY is discarded.
+// ServerPacketConn commits reception before publishing the setup result.
+// Datagrams from before that local commitment are discarded; the handler must
+// not relay application data until HandshakeSuccess returns successfully.
 type ServerPacketConn struct {
 	*packetConn
 	resultOnce sync.Once
@@ -572,15 +573,21 @@ func (c *ServerPacketConn) WriteTo(b []byte, _ net.Addr) (int, error) {
 }
 func (c *ServerPacketConn) HandshakeSuccess() error {
 	c.resultOnce.Do(func() {
-		if err := c.prepare(); err != nil {
+		if err := c.start(); err != nil {
 			reject(c.flow.writer, InternalError)
 			c.resultErr = err
+			c.packetConn.Close()
 			return
 		}
+		// Never leave an activated route waiting indefinitely for the peer
+		// to read READY. No session-wide lock is held during this write.
+		_ = c.flow.writer.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		c.resultErr = writeFull(c.flow.writer, []byte{Ready})
-		if c.resultErr == nil {
-			c.start()
+		if c.resultErr != nil {
+			c.packetConn.Close()
+			return
 		}
+		_ = c.flow.writer.SetWriteDeadline(time.Time{})
 	})
 	return c.resultErr
 }

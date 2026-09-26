@@ -73,7 +73,11 @@ func testServer(t *testing.T, morph bool) testEndpoints {
 }
 func testServerInstance(t *testing.T, morph bool) (testEndpoints, *Server) {
 	t.Helper()
-	s, err := NewServer(ServerConfig{Password: "secret", Morph: morph, TLSConfig: testCertificate(t), Handler: echoHandler{}})
+	return testServerWithHandler(t, morph, echoHandler{})
+}
+func testServerWithHandler(t *testing.T, morph bool, handler Handler) (testEndpoints, *Server) {
+	t.Helper()
+	s, err := NewServer(ServerConfig{Password: "secret", Morph: morph, TLSConfig: testCertificate(t), Handler: handler})
 	if err != nil {
 		t.Fatal(err)
 	}

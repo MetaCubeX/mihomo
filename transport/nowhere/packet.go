@@ -38,8 +38,13 @@ type quicSession struct {
 	pc                net.PacketConn
 	readMu            sync.Mutex
 	cancelRead        context.CancelFunc
-	barriers          chan chan error
+	barriers          chan packetReadyRequest
 	sends             chan *datagramSend
+}
+
+type packetReadyRequest struct {
+	packet *packetConn
+	result chan error
 }
 
 // One bounded sender per carrier isolates the uncancellable QUIC send queue
@@ -53,7 +58,7 @@ type datagramSend struct {
 }
 
 func newQUICSession(conn *quic.Conn, pc net.PacketConn) *quicSession {
-	q := &quicSession{conn: conn, pc: pc, routes: make(map[uint32]*packetConn), fragments: make(map[fragmentKey]*assembly), barriers: make(chan chan error, 64), sends: make(chan *datagramSend, 64)}
+	q := &quicSession{conn: conn, pc: pc, routes: make(map[uint32]*packetConn), fragments: make(map[fragmentKey]*assembly), barriers: make(chan packetReadyRequest, 64), sends: make(chan *datagramSend, 64)}
 	go q.sendLoop()
 	return q
 }
@@ -141,7 +146,13 @@ func (q *quicSession) run() {
 	for {
 		select {
 		case ready := <-q.barriers:
-			ready <- q.drainBeforeReady()
+			err := q.drainBeforeReady()
+			if err == nil {
+				// The sole reader commits reception immediately after draining
+				// old packets, before it can dispatch another datagram.
+				err = ready.packet.activate()
+			}
+			ready.result <- err
 			continue
 		default:
 		}
@@ -169,7 +180,7 @@ func (q *quicSession) run() {
 
 // ReceiveDatagram drains already queued packets before checking its context.
 // Running this barrier in the sole reader prevents packets queued before
-// authentication/READY from being admitted after the route becomes active.
+// local setup commitment from being admitted after the route becomes active.
 func (q *quicSession) drainBeforeReady() error {
 	ctx, cancel := context.WithCancel(q.conn.Context())
 	cancel()
@@ -191,13 +202,13 @@ func (q *quicSession) drainBeforeReady() error {
 func (p *packetConn) prepare() error {
 	q := p.readQ
 	if q == nil {
-		return nil
+		return p.activate()
 	}
 	ready := make(chan error, 1)
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	select {
-	case q.barriers <- ready:
+	case q.barriers <- packetReadyRequest{packet: p, result: ready}:
 	case <-q.conn.Context().Done():
 		return net.ErrClosed
 	case <-p.flow.done:
@@ -383,6 +394,7 @@ type packetConn struct {
 	packets       chan []byte
 	done          chan struct{}
 	ready         atomic.Bool
+	stateMu       sync.Mutex
 	once          sync.Once
 	rmu, wmu      sync.Mutex
 	rd, wd        deadline.PipeDeadline
@@ -420,8 +432,28 @@ func newPacket(flow *flowConn, id uint32, target string, readQ, writeQ *quicSess
 	}
 	return p, nil
 }
-func (p *packetConn) start() {
+
+// activate commits local receive readiness, not permission to relay payload.
+// The server publishes READY only after this point and the handler starts
+// relaying only after that write succeeds. Queues retain their normal bounds.
+func (p *packetConn) activate() error {
+	p.stateMu.Lock()
+	defer p.stateMu.Unlock()
+	select {
+	case <-p.done:
+		return net.ErrClosed
+	case <-p.flow.done:
+		return net.ErrClosed
+	default:
+	}
 	p.ready.Store(true)
+	return nil
+}
+
+func (p *packetConn) start() error {
+	if err := p.prepare(); err != nil {
+		return err
+	}
 	go func() {
 		select {
 		case <-p.flow.done:
@@ -442,6 +474,7 @@ func (p *packetConn) start() {
 			}(l)
 		}
 	}
+	return nil
 }
 func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	p.rmu.Lock()
@@ -515,8 +548,10 @@ func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 }
 func (p *packetConn) Close() error {
 	p.once.Do(func() {
+		p.stateMu.Lock()
 		close(p.done)
 		p.ready.Store(false)
+		p.stateMu.Unlock()
 		for i, q := range []*quicSession{p.readQ, p.writeQ} {
 			if q == nil || i == 1 && q == p.readQ {
 				continue

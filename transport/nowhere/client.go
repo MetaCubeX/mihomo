@@ -393,10 +393,9 @@ func (c *Client) establish(ctx context.Context, target string, udp bool) (*flowC
 	}
 	_ = f.SetDeadline(time.Time{})
 	if p != nil {
-		if err = p.prepare(); err != nil {
+		if err = p.start(); err != nil {
 			return nil, nil, err
 		}
-		p.start()
 	}
 	c.mu.Lock()
 	if c.ctx.Err() != nil {

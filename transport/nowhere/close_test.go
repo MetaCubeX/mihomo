@@ -78,7 +78,9 @@ func TestPacketFlowClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer p.Close()
-	p.start()
+	if err = p.start(); err != nil {
+		t.Fatal(err)
+	}
 	// The Mux carrier fails while the QUIC carrier is still healthy.
 	m.Close()
 	p.SetReadDeadline(time.Now().Add(3 * time.Second))
