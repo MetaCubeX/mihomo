@@ -1689,6 +1689,25 @@ proxies: # socks5
       # multiplex: "off" # 兼容旧配置；设置时优先于顶层 multiplex
     enable-pure-downlink: false # 可选：false=带宽优化下行；true=纯 Sudoku 下行
 
+  # Nowhere v2 (nw2)
+  - name: nowhere
+    type: nowhere
+    server: relay.example.com
+    port: 2077
+    password: "replace-with-shared-key"
+    udp: true
+    up: tcp # tcp / udp(QUIC) / mix
+    down: udp # 可独立选择上下行载体
+    mux: true # TLS 多路复用；QUIC 本身支持多路复用
+    morph: false # 两端必须一致
+    sni: relay.example.com
+    # tcp-port: 2077 # TLS 单独端口，默认使用 port
+    # udp-port: 2078 # UDP(QUIC) 单独端口，默认使用 port
+    # morph-prelude: low7 # low7 / full8，仅影响 Morph TCP 客户端前缀
+    # fingerprint: "<certificate SHA-256>"
+    # skip-cert-verify: false
+    # dialer-proxy: DIRECT
+
   # anytls
   - name: anytls
     type: anytls
@@ -2517,6 +2536,19 @@ listeners:
     #   # rate-limit: 0 # fallback 双向转发限速，单位 bit/s；0 表示不限速
     ### 注意，对于vless listener, 如果 "allow-insecure" 不为 true, 至少需要填写 “certificate和private-key” 或 “shadow-tls” 或 “res-tls” 或 “jls-config” 或 “reality-config” 或 “decryption” 的其中一项 ###
     # allow-insecure: false # 是否允许不开启tls加密（注意：仅用于有 nginx, caddy 前置的情况）
+
+  - name: nowhere-in-1
+    type: nowhere
+    listen: 0.0.0.0
+    port: 2077
+    password: "replace-with-shared-key"
+    network: ["tcp", "udp"] # 默认同时监听 TCP 和 UDP(QUIC)，也可仅配置其中一种
+    certificate: ./server.crt
+    private-key: ./server.key
+    morph: false
+    # tcp-port: 2077
+    # udp-port: 2078
+    # proxy: DIRECT # 或使用正常规则路由
 
   - name: anytls-in-1
     type: anytls

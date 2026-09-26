@@ -44,6 +44,7 @@ const (
 	TRUSTTUNNEL
 	SHADOWQUIC
 	INNER
+	NOWHERE
 )
 
 type AddrType byte
@@ -116,6 +117,8 @@ func (t Type) String() string {
 		return "Hysteria2"
 	case ANYTLS:
 		return "AnyTLS"
+	case NOWHERE:
+		return "Nowhere"
 	case MIERU:
 		return "Mieru"
 	case SUDOKU:
@@ -166,6 +169,8 @@ func ParseType(t string) (*Type, error) {
 		res = HYSTERIA2
 	case "ANYTLS":
 		res = ANYTLS
+	case "NOWHERE":
+		res = NOWHERE
 	case "MIERU":
 		res = MIERU
 	case "SUDOKU":
@@ -215,6 +220,8 @@ type Metadata struct {
 
 	RawSrcAddr net.Addr `json:"-"`
 	RawDstAddr net.Addr `json:"-"`
+	// Remaining native Nowhere forwarding budget, not exposed through the API.
+	NowhereHops uint8 `json:"-"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
 }
