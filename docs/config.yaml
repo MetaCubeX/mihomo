@@ -144,6 +144,8 @@ tun:
   auto-redirect: false # 自动配置 iptables 以重定向 TCP 连接。仅支持 Linux。带有 auto-redirect 的 auto-route 现在可以在路由器上按预期工作，无需干预。
   # strict-route: true # 将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问
   # disable-icmp-forwarding: true # 禁用 ICMP 转发，防止某些情况下的 ICMP 环回问题，ping 将不会显示真实的延迟
+  # 启用转发时，ICMP 按规则选择 Tailscale 进行真实 echo 探测，REJECT 会丢弃请求。
+  # 不支持 ICMP 的其他代理保留直连行为；可用 NETWORK,ICMP,DIRECT 显式选择直连。
   route-address-set: # 将指定规则集中的目标 IP CIDR 规则添加到防火墙, 不匹配的流量将绕过路由, 仅支持 Linux，且需要 nftables，`auto-route` 和 `auto-redirect` 已启用。
     - ruleset-1
     - ruleset-2
@@ -1360,6 +1362,8 @@ proxies: # socks5
     # 配置此字段（包括 []）后，节点会在运行时主动启动；仅检查配置（-t）不会启动节点。
     # 同时发布 0.0.0.0/0 和 ::/0 表示作为 exit node，此时不能再配置 exit-node。
     # 进入这些网段的 TCP/UDP 由 userspace 网络栈从本机转发出去，沿用 interface-name、routing-mark 和 dialer-proxy。
+    # TUN 的普通 ping 也可按规则经此节点探测；仅收到目标 ICMP 回复后回包，本节点地址在上线后本地回应。
+    # 此功能是 echo 代理，探测包由 Tailscale 生成；不支持 traceroute、MTU 探测或任意 ICMP 报文透传。
     # exit-node: 100.64.0.1 # 使用指定 exit node，可填写节点 IP；也支持 auto:any
     # exit-node-allow-lan-access: true # 使用 exit node 时是否允许访问本地 LAN
     # 当目标不在 Tailscale 路由内时，连接会直接报错，不会回退到直连；
