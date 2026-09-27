@@ -10,7 +10,6 @@ import (
 const (
 	packedProtectedPrefixBytes = 14
 	packedIOBufferSize         = 32 * 1024
-	packedDecodeBufferSize     = 32 * 1024
 )
 
 // PackedConn encodes traffic with the packed Sudoku layout while preserving
@@ -21,8 +20,6 @@ type PackedConn struct {
 	reader *bufio.Reader
 
 	// Read-side buffers.
-	rawBuf      []byte
-	pendingData pendingBuffer
 
 	// Write-side state.
 	writeMu  sync.Mutex
@@ -68,8 +65,6 @@ func NewPackedConn(c net.Conn, table *Table, pMin, pMax int) *PackedConn {
 		Conn:             c,
 		table:            table,
 		reader:           bufio.NewReaderSize(c, packedIOBufferSize),
-		rawBuf:           make([]byte, packedDecodeBufferSize),
-		pendingData:      newPendingBuffer(4096),
 		writeBuf:         make([]byte, 0, 4096),
 		rng:              localRng,
 		paddingThreshold: pickPaddingThreshold(localRng, pMin, pMax),
@@ -187,8 +182,15 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 
 	i := prefixN
 	n := len(p)
+	if pc.bitCount == 0 && i+2 < n {
+		start := i
+		end := n - (n-i)%3
+		out = appendPackedBlocks(out, p[start:end], layout, rng, paddingThreshold, padPool)
+		i = end
+	}
 
 	for pc.bitCount > 0 && i < n {
+		out = maybeAppendPackedPadding(out, rng, paddingThreshold, padPool)
 		b := p[i]
 		i++
 		pc.bitBuf = (pc.bitBuf << 8) | uint64(b)
@@ -306,89 +308,26 @@ func (pc *PackedConn) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if pc == nil || pc.Conn == nil || pc.reader == nil || len(pc.rawBuf) == 0 || pc.table == nil || pc.table.layout == nil {
+	if pc == nil || pc.Conn == nil || pc.reader == nil || pc.table == nil || pc.table.layout == nil {
 		return 0, io.ErrClosedPipe
 	}
-	if n, ok := drainPending(p, &pc.pendingData); ok {
-		return n, nil
-	}
-
-	outN := 0
 	for {
-		nr, rErr := readRawLimited(pc.Conn, pc.reader, pc.rawBuf[:packedReadSize(len(p)-outN, len(pc.rawBuf))])
-		if nr > 0 {
-			rBuf := pc.readBitBuf
-			rBits := pc.readBits
-			padMarker := pc.padMarker
-			layout := pc.table.layout
-
-			chunk := pc.rawBuf[:nr]
-			for i := 0; i < len(chunk); {
-				if rBits == 0 && outN+3 <= len(p) && i+3 < len(chunk) &&
-					layout.hintTable[chunk[i]] && layout.hintTable[chunk[i+1]] &&
-					layout.hintTable[chunk[i+2]] && layout.hintTable[chunk[i+3]] {
-					g1 := layout.decodeGroup[chunk[i]]
-					g2 := layout.decodeGroup[chunk[i+1]]
-					g3 := layout.decodeGroup[chunk[i+2]]
-					g4 := layout.decodeGroup[chunk[i+3]]
-					p[outN] = (g1 << 2) | (g2 >> 4)
-					p[outN+1] = (g2 << 4) | (g3 >> 2)
-					p[outN+2] = (g3 << 6) | g4
-					outN += 3
-					i += 4
-					continue
-				}
-
-				b := chunk[i]
-				i++
-				if !layout.hintTable[b] {
-					if b == padMarker {
-						rBuf = 0
-						rBits = 0
-					}
-					continue
-				}
-
-				group, ok := layout.decodePackedGroup(b)
-				if !ok {
-					return 0, ErrInvalidSudokuMapMiss
-				}
-
-				rBuf = (rBuf << 6) | uint64(group)
-				rBits += 6
-
-				if rBits >= 8 {
-					rBits -= 8
-					val := byte(rBuf >> rBits)
-					outN = appendDecodedByte(p, outN, &pc.pendingData, val)
-					if rBits == 0 {
-						rBuf = 0
-					} else {
-						rBuf &= (uint64(1) << rBits) - 1
-					}
-				}
+		chunk, peekErr := peekBufferedChunk(pc.reader)
+		if len(chunk) > 0 {
+			n, consumed, decErr := pc.decode(p, chunk)
+			_, _ = pc.reader.Discard(consumed)
+			if decErr != nil {
+				return n, decErr
 			}
-
-			pc.readBitBuf = rBuf
-			pc.readBits = rBits
-		}
-
-		if rErr != nil {
-			if rErr == io.EOF {
-				pc.readBitBuf = 0
-				pc.readBits = 0
-			}
-			if outN > 0 {
-				return outN, nil
-			}
-			if n, ok := drainPending(p, &pc.pendingData); ok {
+			if n > 0 {
 				return n, nil
 			}
-			return 0, rErr
 		}
-
-		if outN > 0 {
-			return outN, nil
+		if peekErr != nil {
+			if peekErr == io.EOF {
+				pc.readBitBuf, pc.readBits = 0, 0
+			}
+			return 0, peekErr
 		}
 	}
 }

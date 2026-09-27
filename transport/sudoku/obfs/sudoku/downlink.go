@@ -78,9 +78,8 @@ func (w *sudokuDataWriter) Write(p []byte) (int, error) {
 		return 0, io.ErrClosedPipe
 	}
 
-	w.writeBuf = encodeSudokuPayload(w.writeBuf[:0], w.table, w.rng, w.paddingThreshold, p)
-	if _, err := w.writer.Write(w.writeBuf); err != nil {
-		return len(p), err
-	}
-	return len(p), nil
+	var n int
+	var err error
+	w.writeBuf, n, err = writeSudokuPayload(w.writer, w.writeBuf, w.table, w.rng, w.paddingThreshold, p)
+	return n, err
 }

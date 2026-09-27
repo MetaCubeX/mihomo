@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/metacubex/mihomo/transport/sudoku/connutil"
 )
 
 const (
@@ -29,6 +31,39 @@ const (
 )
 
 var errMuxReceiveQueueFull = errors.New("mux receive queue full")
+
+var muxPayloadPools = [...]sync.Pool{
+	{New: func() any { return make([]byte, 1<<10) }},
+	{New: func() any { return make([]byte, 2<<10) }},
+	{New: func() any { return make([]byte, 4<<10) }},
+	{New: func() any { return make([]byte, 8<<10) }},
+	{New: func() any { return make([]byte, 16<<10) }},
+	{New: func() any { return make([]byte, 32<<10) }},
+	{New: func() any { return make([]byte, 64<<10) }},
+	{New: func() any { return make([]byte, 128<<10) }},
+	{New: func() any { return make([]byte, 256<<10) }},
+}
+
+func acquireMuxPayload(n int) []byte {
+	for i := range muxPayloadPools {
+		if n <= 1<<(10+i) {
+			return muxPayloadPools[i].Get().([]byte)[:n]
+		}
+	}
+	return make([]byte, n)
+}
+
+func releaseMuxPayload(p []byte) {
+	if p == nil {
+		return
+	}
+	for i := range muxPayloadPools {
+		if cap(p) == 1<<(10+i) {
+			muxPayloadPools[i].Put(p[:1<<(10+i)])
+			return
+		}
+	}
+}
 
 type acceptEvent struct {
 	stream  *stream
@@ -196,7 +231,7 @@ func (s *Session) sendFrame(frameType byte, streamID uint32, payload []byte) err
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	if err := writeAllChunks(s.conn, header[:], payload); err != nil {
+	if _, err := connutil.WriteBuffers(s.conn, net.Buffers{header[:], payload}); err != nil {
 		s.closeWithError(err)
 		return err
 	}
@@ -292,7 +327,11 @@ func (s *Session) readLoop() {
 
 		var payload []byte
 		if n > 0 {
-			payload = make([]byte, n)
+			if frameType == frameData {
+				payload = acquireMuxPayload(n)
+			} else {
+				payload = make([]byte, n)
+			}
 			if _, err := io.ReadFull(s.conn, payload); err != nil {
 				s.closeWithError(err)
 				return
@@ -326,12 +365,15 @@ func (s *Session) readLoop() {
 		case frameData:
 			st := s.getStream(streamID)
 			if st == nil {
+				releaseMuxPayload(payload)
 				continue
 			}
 			if len(payload) == 0 {
+				releaseMuxPayload(payload)
 				continue
 			}
 			if err := st.enqueue(payload); err != nil {
+				releaseMuxPayload(payload)
 				st.closeNoSend(err)
 				s.removeStream(streamID)
 				go s.sendReset(streamID, err.Error())
@@ -340,6 +382,7 @@ func (s *Session) readLoop() {
 		case frameClose:
 			st := s.getStream(streamID)
 			if st == nil {
+				releaseMuxPayload(payload)
 				continue
 			}
 			if st.closeRemoteWrite() {
@@ -349,6 +392,7 @@ func (s *Session) readLoop() {
 		case frameReset:
 			st := s.getStream(streamID)
 			if st == nil {
+				releaseMuxPayload(payload)
 				continue
 			}
 			msg := trimASCII(payload)
@@ -356,6 +400,7 @@ func (s *Session) readLoop() {
 				msg = "reset"
 			}
 			st.closeNoSend(errors.New(msg))
+			releaseMuxPayload(payload)
 			s.removeStream(streamID)
 
 		default:
@@ -436,6 +481,12 @@ func (c *stream) closeNoSend(err error) {
 	if c.closeErr == nil {
 		c.closeErr = err
 	}
+	releaseMuxPayload(c.readBuf)
+	for _, p := range c.queue {
+		releaseMuxPayload(p)
+	}
+	c.readBuf, c.queue = nil, nil
+	c.queuedBytes = 0
 	c.cond.Broadcast()
 	c.mu.Unlock()
 }
@@ -499,6 +550,7 @@ func (c *stream) Read(p []byte) (int, error) {
 	n := copy(p, c.readBuf)
 	c.readBuf = c.readBuf[n:]
 	if len(c.readBuf) == 0 {
+		releaseMuxPayload(c.readBuf)
 		c.readBuf = nil
 	}
 	c.queuedBytes -= n
@@ -507,6 +559,86 @@ func (c *stream) Read(p []byte) (int, error) {
 	}
 	c.cond.Broadcast()
 	return n, nil
+}
+
+func (c *stream) WriteTo(w io.Writer) (int64, error) {
+	if c == nil {
+		return 0, io.ErrClosedPipe
+	}
+	if dst, ok := w.(*stream); ok && dst == c {
+		buf := make([]byte, 32*1024)
+		var total int64
+		for {
+			n, err := c.Read(buf)
+			if n > 0 {
+				m, werr := c.Write(buf[:n])
+				total += int64(m)
+				if werr != nil {
+					return total, werr
+				}
+				if m != n {
+					return total, io.ErrShortWrite
+				}
+			}
+			if err != nil {
+				if err == io.EOF {
+					return total, nil
+				}
+				return total, err
+			}
+		}
+	}
+	var total int64
+	for {
+		c.mu.Lock()
+		for len(c.readBuf) == 0 && len(c.queue) == 0 && !c.closed && !c.localReadClosed && !c.remoteWriteClosed {
+			c.cond.Wait()
+		}
+		if len(c.readBuf) == 0 && len(c.queue) > 0 {
+			c.readBuf, c.queue = c.queue[0], c.queue[1:]
+			if len(c.queue) == 0 {
+				c.queue = nil
+			}
+		}
+		if len(c.readBuf) == 0 {
+			var err error
+			switch {
+			case c.closed:
+				err = c.closedErrLocked()
+			case c.localReadClosed:
+				err = io.ErrClosedPipe
+			case c.remoteWriteClosed:
+				err = io.EOF
+			}
+			c.mu.Unlock()
+			if err == io.EOF {
+				return total, nil
+			}
+			return total, err
+		}
+		chunk := c.readBuf
+		n, err := w.Write(chunk)
+		if n < 0 || n > len(chunk) {
+			n, err = 0, io.ErrShortWrite
+		}
+		c.readBuf = chunk[n:]
+		c.queuedBytes -= n
+		if c.queuedBytes < 0 {
+			c.queuedBytes = 0
+		}
+		if len(c.readBuf) == 0 {
+			c.readBuf = nil
+		}
+		c.cond.Broadcast()
+		c.mu.Unlock()
+		total += int64(n)
+		if n < len(chunk) && err == nil {
+			err = io.ErrShortWrite
+		}
+		if err != nil {
+			return total, err
+		}
+	}
 }
 
 func (c *stream) Write(p []byte) (int, error) {
@@ -565,6 +697,10 @@ func (c *stream) Close() error {
 	if c.closeErr == nil {
 		c.closeErr = io.ErrClosedPipe
 	}
+	releaseMuxPayload(c.readBuf)
+	for _, p := range c.queue {
+		releaseMuxPayload(p)
+	}
 	c.readBuf = nil
 	c.queue = nil
 	c.queuedBytes = 0
@@ -610,6 +746,10 @@ func (c *stream) CloseRead() error {
 		return nil
 	}
 	c.localReadClosed = true
+	releaseMuxPayload(c.readBuf)
+	for _, p := range c.queue {
+		releaseMuxPayload(p)
+	}
 	c.readBuf = nil
 	c.queue = nil
 	c.queuedBytes = 0
@@ -639,6 +779,7 @@ func (c *stream) enqueue(payload []byte) error {
 	defer c.mu.Unlock()
 
 	if c.closed || c.localReadClosed || c.remoteWriteClosed {
+		releaseMuxPayload(payload)
 		return nil
 	}
 	if c.queuedBytes+len(payload) > maxQueuedBytesPerStream {

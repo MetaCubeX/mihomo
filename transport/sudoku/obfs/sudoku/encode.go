@@ -55,6 +55,50 @@ func encodeSudokuPayload(dst []byte, table *Table, rng *sudokuRand, paddingThres
 	return out
 }
 
+func appendSudokuPayload(dst []byte, table *Table, rng *sudokuRand, paddingThreshold uint64, p []byte) []byte {
+	if len(p) == 0 {
+		return dst
+	}
+	if paddingThreshold == 0 {
+		return appendSudokuPayloadNoPadding(dst, table, rng, p)
+	}
+	pads := table.PaddingPool
+	if paddingThreshold >= probOne {
+		for _, b := range p {
+			dst = append(dst, pads[rng.Intn(len(pads))])
+			puzzle := table.EncodeTable[b][rng.Intn(len(table.EncodeTable[b]))]
+			perm := perm4[rng.Intn(len(perm4))]
+			for _, idx := range perm {
+				dst = append(dst, pads[rng.Intn(len(pads))], puzzle[idx])
+			}
+		}
+		return dst
+	}
+	for _, b := range p {
+		if uint64(rng.Uint32()) < paddingThreshold {
+			dst = append(dst, pads[rng.Intn(len(pads))])
+		}
+		puzzle := table.EncodeTable[b][rng.Intn(len(table.EncodeTable[b]))]
+		perm := perm4[rng.Intn(len(perm4))]
+		for _, idx := range perm {
+			if uint64(rng.Uint32()) < paddingThreshold {
+				dst = append(dst, pads[rng.Intn(len(pads))])
+			}
+			dst = append(dst, puzzle[idx])
+		}
+	}
+	return dst
+}
+
+func appendSudokuPayloadNoPadding(dst []byte, table *Table, rng *sudokuRand, p []byte) []byte {
+	for _, b := range p {
+		puzzle := table.EncodeTable[b][rng.Intn(len(table.EncodeTable[b]))]
+		perm := perm4[rng.Intn(len(perm4))]
+		dst = append(dst, puzzle[perm[0]], puzzle[perm[1]], puzzle[perm[2]], puzzle[perm[3]])
+	}
+	return dst
+}
+
 func encodeSudokuPayloadNoPadding(dst []byte, table *Table, rng *sudokuRand, p []byte) []byte {
 	outCapacity := len(p) * 4
 	if cap(dst) < outCapacity {

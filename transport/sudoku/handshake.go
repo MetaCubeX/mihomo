@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/transport/sudoku/connutil"
 	"github.com/metacubex/mihomo/transport/sudoku/crypto"
 	"github.com/metacubex/mihomo/transport/sudoku/obfs/httpmask"
 	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
@@ -182,6 +183,20 @@ func (c *directionalConn) Read(p []byte) (int, error) {
 
 func (c *directionalConn) Write(p []byte) (int, error) {
 	return c.writer.Write(p)
+}
+
+func (c *directionalConn) WriteTo(w io.Writer) (int64, error) {
+	if c == nil || c.reader == nil {
+		return 0, io.ErrClosedPipe
+	}
+	return connutil.Copy(w, c.reader)
+}
+
+func (c *directionalConn) WriteBuffers(buffers net.Buffers) (int64, error) {
+	if c == nil || c.writer == nil {
+		return 0, io.ErrClosedPipe
+	}
+	return connutil.WriteBuffers(c.writer, buffers)
 }
 
 func (c *directionalConn) ReplaceWriter(writer io.Writer, closers ...func() error) {

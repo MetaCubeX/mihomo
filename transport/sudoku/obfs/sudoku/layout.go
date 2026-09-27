@@ -18,7 +18,6 @@ type byteLayout struct {
 	encodeHint  [4][16]byte
 	encodeGroup [64]byte
 	decodeGroup [256]byte
-	groupValid  [256]bool
 }
 
 func (l *byteLayout) isHint(b byte) bool {
@@ -37,7 +36,8 @@ func (l *byteLayout) decodePackedGroup(b byte) (byte, bool) {
 	if l == nil {
 		return 0, false
 	}
-	return l.decodeGroup[b], l.groupValid[b]
+	v := l.decodeGroup[b]
+	return v, v < 64
 }
 
 // resolveLayout picks the byte layout for a single traffic direction.
@@ -71,6 +71,9 @@ func newASCIILayout() *byteLayout {
 		padMarker:   0x3F,
 		paddingPool: padding,
 	}
+	for i := range layout.decodeGroup {
+		layout.decodeGroup[i] = 0xff
+	}
 
 	for val := 0; val < 4; val++ {
 		for pos := 0; pos < 16; pos++ {
@@ -93,12 +96,10 @@ func newASCIILayout() *byteLayout {
 		if (wire & 0x40) == 0x40 {
 			layout.hintTable[wire] = true
 			layout.decodeGroup[wire] = wire & 0x3F
-			layout.groupValid[wire] = true
 		}
 	}
 	layout.hintTable['\n'] = true
 	layout.decodeGroup['\n'] = 0x3F
-	layout.groupValid['\n'] = true
 
 	return layout
 }
@@ -117,6 +118,9 @@ func newEntropyLayout() *byteLayout {
 		padMarker:   0x80,
 		paddingPool: padding,
 	}
+	for i := range layout.decodeGroup {
+		layout.decodeGroup[i] = 0xff
+	}
 
 	for val := 0; val < 4; val++ {
 		for pos := 0; pos < 16; pos++ {
@@ -134,7 +138,6 @@ func newEntropyLayout() *byteLayout {
 		}
 		layout.hintTable[wire] = true
 		layout.decodeGroup[wire] = ((wire >> 1) & 0x30) | (wire & 0x0F)
-		layout.groupValid[wire] = true
 	}
 
 	return layout
@@ -217,6 +220,9 @@ func newCustomLayout(pattern string) (*byteLayout, error) {
 		padMarker:   padding[0],
 		paddingPool: padding,
 	}
+	for i := range layout.decodeGroup {
+		layout.decodeGroup[i] = 0xff
+	}
 
 	for val := 0; val < 4; val++ {
 		for pos := 0; pos < 16; pos++ {
@@ -248,7 +254,6 @@ func newCustomLayout(pattern string) (*byteLayout, error) {
 			}
 		}
 		layout.decodeGroup[wire] = (val << 4) | pos
-		layout.groupValid[wire] = true
 	}
 
 	return layout, nil

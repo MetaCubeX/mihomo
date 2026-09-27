@@ -1,7 +1,6 @@
 package crypto
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -16,6 +15,8 @@ import (
 	"sync/atomic"
 
 	"golang.org/x/crypto/chacha20poly1305"
+
+	"github.com/metacubex/mihomo/transport/sudoku/connutil"
 )
 
 // KeyUpdateAfterBytes controls automatic key rotation based on plaintext bytes.
@@ -67,7 +68,10 @@ type RecordConn struct {
 	recvSeq         uint64
 	recvInitialized bool
 
-	readBuf bytes.Buffer
+	readLength [2]byte
+	readFrame  []byte
+	readPlain  []byte
+	readOff    int
 
 	// writeFrame is a reusable buffer for [len||header||ciphertext] on the wire.
 	// Guarded by writeMu.
@@ -137,7 +141,9 @@ func (c *RecordConn) Rekey(baseSend, baseRecv []byte) error {
 	if err := c.resetTrafficState(); err != nil {
 		return err
 	}
-	c.readBuf.Reset()
+	c.readPlain = nil
+	c.readOff = 0
+	c.readFrame = nil
 
 	c.sendAEAD = nil
 	c.recvAEAD = nil
@@ -320,6 +326,91 @@ func (c *RecordConn) Write(p []byte) (int, error) {
 		return c.Conn.Write(p)
 	}
 
+	n, err := c.writeBuffers(net.Buffers{p})
+	return int(n), err
+}
+
+func (c *RecordConn) WriteBuffers(buffers net.Buffers) (int64, error) {
+	if c == nil || c.Conn == nil {
+		return 0, net.ErrClosed
+	}
+	if c.method == "none" {
+		return connutil.WriteBuffers(c.Conn, buffers)
+	}
+	return c.writeBuffers(buffers)
+}
+
+func (c *RecordConn) writeBuffers(buffers net.Buffers) (int64, error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	var total int64
+	offset := 0
+	for len(buffers) > 0 {
+		if offset == len(buffers[0]) {
+			buffers = buffers[1:]
+			offset = 0
+			continue
+		}
+		if c.sendAEAD == nil || c.sendAEADEpoch != c.sendEpoch {
+			a, err := c.newAEADFor(c.keys.baseSend, c.sendEpoch)
+			if err != nil {
+				return total, err
+			}
+			c.sendAEAD, c.sendAEADEpoch = a, c.sendEpoch
+		}
+		aead := c.sendAEAD
+		maxPlain := maxFrameBodySize - recordHeaderSize - aead.Overhead()
+		n := len(buffers[0]) - offset
+		if n > maxPlain {
+			n = maxPlain
+		}
+		for i := 1; n < maxPlain && i < len(buffers); i++ {
+			m := len(buffers[i])
+			if m > maxPlain-n {
+				m = maxPlain - n
+			}
+			n += m
+		}
+		bodyLen, frameLen := recordHeaderSize+n+aead.Overhead(), 2+recordHeaderSize+n+aead.Overhead()
+		if cap(c.writeFrame) < frameLen {
+			c.writeFrame = make([]byte, frameLen)
+		}
+		frame := c.writeFrame[:frameLen]
+		binary.BigEndian.PutUint16(frame[:2], uint16(bodyLen))
+		header := frame[2 : 2+recordHeaderSize]
+		binary.BigEndian.PutUint32(header[:4], c.sendEpoch)
+		binary.BigEndian.PutUint64(header[4:], c.sendSeq)
+		c.sendSeq++
+		dst := frame[2+recordHeaderSize : 2+recordHeaderSize : frameLen]
+		if len(buffers[0])-offset >= n {
+			_ = aead.Seal(dst[:0], header, buffers[0][offset:offset+n], header)
+			offset += n
+		} else {
+			plain := dst[:n]
+			copied := 0
+			for copied < n {
+				m := copy(plain[copied:], buffers[0][offset:])
+				copied += m
+				offset += m
+				if offset == len(buffers[0]) {
+					buffers = buffers[1:]
+					offset = 0
+				}
+			}
+			_ = aead.Seal(dst[:0], header, plain, header)
+		}
+		if err := connutil.WriteFull(c.Conn, frame); err != nil {
+			return total, err
+		}
+		total += int64(n)
+		if err := c.maybeBumpSendEpochLocked(n); err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+/*
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
@@ -377,7 +468,7 @@ func (c *RecordConn) Write(p []byte) (int, error) {
 		}
 	}
 	return total, nil
-}
+*/
 
 func (c *RecordConn) Read(p []byte) (int, error) {
 	if c == nil || c.Conn == nil {
@@ -389,16 +480,24 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 
 	c.readMu.Lock()
 	defer c.readMu.Unlock()
+	return c.readLocked(p)
+}
 
-	if c.readBuf.Len() > 0 {
-		return c.readBuf.Read(p)
+func (c *RecordConn) readLocked(p []byte) (int, error) {
+
+	if c.readOff < len(c.readPlain) {
+		n := copy(p, c.readPlain[c.readOff:])
+		c.readOff += n
+		if c.readOff == len(c.readPlain) {
+			c.readPlain = nil
+			c.readOff = 0
+		}
+		return n, nil
 	}
-
-	var lenBuf [2]byte
-	if _, err := io.ReadFull(c.Conn, lenBuf[:]); err != nil {
+	if _, err := io.ReadFull(c.Conn, c.readLength[:]); err != nil {
 		return 0, err
 	}
-	bodyLen := int(binary.BigEndian.Uint16(lenBuf[:]))
+	bodyLen := int(binary.BigEndian.Uint16(c.readLength[:]))
 	if bodyLen < recordHeaderSize {
 		return 0, errors.New("frame too short")
 	}
@@ -406,7 +505,10 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 		return 0, errors.New("frame too large")
 	}
 
-	body := make([]byte, bodyLen)
+	if cap(c.readFrame) < bodyLen {
+		c.readFrame = make([]byte, bodyLen)
+	}
+	body := c.readFrame[:bodyLen]
 	if _, err := io.ReadFull(c.Conn, body); err != nil {
 		return 0, err
 	}
@@ -430,12 +532,21 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 	}
 	aead := c.recvAEAD
 
-	plaintext, err := aead.Open(nil, header, ciphertext, header)
+	if cap(c.readPlain) < len(ciphertext) {
+		c.readPlain = make([]byte, 0, len(ciphertext))
+	}
+	plaintext, err := aead.Open(c.readPlain[:0], header, ciphertext, header)
 	if err != nil {
 		return 0, fmt.Errorf("decryption failed: epoch=%d seq=%d: %w", epoch, seq, err)
 	}
 	c.markRecvPosition(epoch, seq)
 
-	c.readBuf.Write(plaintext)
-	return c.readBuf.Read(p)
+	c.readPlain = plaintext
+	n := copy(p, c.readPlain)
+	c.readOff = n
+	if c.readOff == len(c.readPlain) {
+		c.readPlain = nil
+		c.readOff = 0
+	}
+	return n, nil
 }

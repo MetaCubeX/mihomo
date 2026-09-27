@@ -48,12 +48,10 @@ type Conn struct {
 	recording  atomic.Bool
 	recordLock sync.Mutex
 
-	rawBuf      []byte
-	pendingData pendingBuffer
-	hintBuf     [4]byte
-	hintCount   int
-	writeMu     sync.Mutex
-	writeBuf    []byte
+	hintBuf   [4]byte
+	hintCount int
+	writeMu   sync.Mutex
+	writeBuf  []byte
 
 	rng              *sudokuRand
 	paddingThreshold uint64
@@ -86,8 +84,6 @@ func NewConn(c net.Conn, table *Table, pMin, pMax int, record bool) *Conn {
 		Conn:             c,
 		table:            table,
 		reader:           bufio.NewReaderSize(c, IOBufferSize),
-		rawBuf:           make([]byte, IOBufferSize),
-		pendingData:      newPendingBuffer(4096),
 		writeBuf:         make([]byte, 0, 4096),
 		rng:              localRng,
 		paddingThreshold: pickPaddingThreshold(localRng, pMin, pMax),
@@ -147,87 +143,38 @@ func (sc *Conn) Write(p []byte) (n int, err error) {
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
 
-	sc.writeBuf = encodeSudokuPayload(sc.writeBuf[:0], sc.table, sc.rng, sc.paddingThreshold, p)
-	if _, err := sc.Conn.Write(sc.writeBuf); err != nil {
-		return len(p), err
-	}
-	return len(p), nil
+	sc.writeBuf, n, err = writeSudokuPayload(sc.Conn, sc.writeBuf, sc.table, sc.rng, sc.paddingThreshold, p)
+	return n, err
 }
 
 func (sc *Conn) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if sc == nil || sc.Conn == nil || sc.reader == nil || len(sc.rawBuf) == 0 || sc.table == nil || sc.table.layout == nil {
+	if sc == nil || sc.Conn == nil || sc.reader == nil || sc.table == nil || sc.table.layout == nil {
 		return 0, io.ErrClosedPipe
 	}
-	if n, ok := drainPending(p, &sc.pendingData); ok {
-		return n, nil
-	}
-
-	outN := 0
 	for {
-		nr, rErr := readRawLimited(sc.Conn, sc.reader, sc.rawBuf[:sudokuReadSize(len(p)-outN, len(sc.rawBuf))])
-		if nr > 0 {
-			chunk := sc.rawBuf[:nr]
-			if sc.recording.Load() {
+		chunk, peekErr := peekBufferedChunk(sc.reader)
+		if len(chunk) > 0 {
+			n, consumed, decErr := sc.decode(p, chunk)
+			_, _ = sc.reader.Discard(consumed)
+			if sc.recording.Load() && consumed > 0 {
 				sc.recordLock.Lock()
 				if sc.recording.Load() && sc.recorder != nil {
-					sc.recorder.Write(chunk)
+					_, _ = sc.recorder.Write(chunk[:consumed])
 				}
 				sc.recordLock.Unlock()
 			}
-
-			table := sc.table
-			layout := table.layout
-			for i := 0; i < len(chunk); {
-				if sc.hintCount == 0 && outN < len(p) && i+3 < len(chunk) &&
-					layout.hintTable[chunk[i]] &&
-					layout.hintTable[chunk[i+1]] &&
-					layout.hintTable[chunk[i+2]] &&
-					layout.hintTable[chunk[i+3]] {
-					val, ok := table.DecodeMap[packHintBytes(chunk[i], chunk[i+1], chunk[i+2], chunk[i+3])]
-					if !ok {
-						return 0, ErrInvalidSudokuMapMiss
-					}
-					p[outN] = val
-					outN++
-					i += 4
-					continue
-				}
-
-				b := chunk[i]
-				i++
-				if !layout.hintTable[b] {
-					continue
-				}
-
-				sc.hintBuf[sc.hintCount] = b
-				sc.hintCount++
-				if sc.hintCount != len(sc.hintBuf) {
-					continue
-				}
-
-				val, ok := table.DecodeMap[packHintBytes(sc.hintBuf[0], sc.hintBuf[1], sc.hintBuf[2], sc.hintBuf[3])]
-				if !ok {
-					return 0, ErrInvalidSudokuMapMiss
-				}
-				outN = appendDecodedByte(p, outN, &sc.pendingData, val)
-				sc.hintCount = 0
+			if decErr != nil {
+				return n, decErr
 			}
-		}
-
-		if rErr != nil {
-			if outN > 0 {
-				return outN, nil
-			}
-			if n, ok := drainPending(p, &sc.pendingData); ok {
+			if n > 0 {
 				return n, nil
 			}
-			return 0, rErr
 		}
-		if outN > 0 {
-			return outN, nil
+		if peekErr != nil {
+			return 0, peekErr
 		}
 	}
 }
