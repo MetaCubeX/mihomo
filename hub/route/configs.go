@@ -98,6 +98,7 @@ type tunSchema struct {
 	EndpointIndependentNat                *bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
 	UDPTimeout                            *int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
 	ICMPTimeout                           *int64          `yaml:"icmp-timeout" json:"icmp-timeout,omitempty"`
+	CongestionController                  *string         `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
 	FileDescriptor                        *int            `yaml:"file-descriptor" json:"file-descriptor"`
 
 	Inet4RouteAddress        *[]netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
@@ -263,6 +264,9 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		}
 		if p.ICMPTimeout != nil {
 			def.ICMPTimeout = *p.ICMPTimeout
+		}
+		if p.CongestionController != nil {
+			def.CongestionController = *p.CongestionController
 		}
 		if p.FileDescriptor != nil {
 			def.FileDescriptor = *p.FileDescriptor

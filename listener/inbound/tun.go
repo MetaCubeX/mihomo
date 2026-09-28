@@ -54,6 +54,7 @@ type TunOption struct {
 	UDPTimeout                            int64          `inbound:"udp-timeout,omitempty"`
 	ICMPTimeout                           int64          `inbound:"icmp-timeout,omitempty"`
 	DisableICMPForwarding                 bool           `inbound:"disable-icmp-forwarding,omitempty"`
+	CongestionController                  string         `inbound:"congestion-controller,omitempty"`
 	FileDescriptor                        int            `inbound:"file-descriptor,omitempty"`
 
 	Inet4RouteAddress        []netip.Prefix `inbound:"inet4-route-address,omitempty"`
@@ -135,6 +136,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 			UDPTimeout:                            options.UDPTimeout,
 			ICMPTimeout:                           options.ICMPTimeout,
 			DisableICMPForwarding:                 options.DisableICMPForwarding,
+			CongestionController:                  options.CongestionController,
 			FileDescriptor:                        options.FileDescriptor,
 
 			Inet4RouteAddress:        options.Inet4RouteAddress,

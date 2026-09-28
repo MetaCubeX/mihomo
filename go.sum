@@ -135,8 +135,8 @@ github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604 h1:hJwCVlE3ojViC3
 github.com/metacubex/kcp-go v0.0.0-20260105040817-550693377604/go.mod h1:lpmN3m269b3V5jFCWtffqBLS4U3QQoIid9ugtO+OhVc=
 github.com/metacubex/mhurl v0.1.0 h1:ZdW4Zxe3j3uJ89gNytOazHu6kbHn5owutN/VfXOI8GE=
 github.com/metacubex/mhurl v0.1.0/go.mod h1:2qpQImCbXoUs6GwJrjuEXKelPyoimsIXr07eNKZdS00=
-github.com/metacubex/mipstack v0.0.0-20260924131027-976adac53932 h1:AWc8VwR2SI8BZLwdnUZmudp/i5Z1d90MHYLXNae7XGI=
-github.com/metacubex/mipstack v0.0.0-20260924131027-976adac53932/go.mod h1:+bbwALZI0pbi2auSG5A3ptdpV2DZ2eLObziXo+P7oj0=
+github.com/metacubex/mipstack v0.0.0-20260926151545-332a03e253ef h1:Byx3R7dvNYfBC2Mu3b3n7MY8YF1li0woae6rKGxA4Pw=
+github.com/metacubex/mipstack v0.0.0-20260926151545-332a03e253ef/go.mod h1:+bbwALZI0pbi2auSG5A3ptdpV2DZ2eLObziXo+P7oj0=
 github.com/metacubex/mlkem v0.1.0 h1:wFClitonSFcmipzzQvax75beLQU+D7JuC+VK1RzSL8I=
 github.com/metacubex/mlkem v0.1.0/go.mod h1:amhaXZVeYNShuy9BILcR7P0gbeo/QLZsnqCdL8U2PDQ=
 github.com/metacubex/nftables v0.0.0-20260426003805-208c2c1ba2cb h1:wk6mHYPURSUvWcUv72gNP79oiylFsscBSDPJ6ieV6Iw=
@@ -163,8 +163,8 @@ github.com/metacubex/sing-shadowsocks v0.2.13 h1:PKmInHy9+4nY3FLhmKcWdASUBo9WZ/K
 github.com/metacubex/sing-shadowsocks v0.2.13/go.mod h1:2e5EIaw0rxKrm1YTRmiMnDulwbGxH9hAFlrwQLQMQkU=
 github.com/metacubex/sing-shadowsocks2 v0.2.8 h1:6MoODu7BAcnwIC0w9muq+2LZVz01wWD07L5IRhOty9Q=
 github.com/metacubex/sing-shadowsocks2 v0.2.8/go.mod h1:vOEbfKC60txi0ca+yUlqEwOGc3Obl6cnSgx9Gf45KjE=
-github.com/metacubex/sing-tun v0.4.25 h1:/dYsAE9EYex20WLWYy+llEJHQLUa4KliqGXZCmvRN7Y=
-github.com/metacubex/sing-tun v0.4.25/go.mod h1:+mS6xdBPSbJlujqM7MZ3JFdJ+DoLAbczAkPSFStlkkQ=
+github.com/metacubex/sing-tun v0.4.26 h1:3GszRouOvS2gX90J2vUFfaY0gGFVENgvam2kgWUxAoM=
+github.com/metacubex/sing-tun v0.4.26/go.mod h1:q3Cb+D3hmlRTFYmVKc8k1FFUpy5+iMxhaXVA5CM/dNA=
 github.com/metacubex/sing-vmess v0.2.5 h1:m9Zt5I27lB9fmLMZfism9sH2LcnAfShZfwSkf6/KJoE=
 github.com/metacubex/sing-vmess v0.2.5/go.mod h1:AwtlzUgf8COe9tRYAKqWZ+leDH7p5U98a0ZUpYehl8Q=
 github.com/metacubex/sing-wireguard v0.0.0-20260826105301-c3ae17d19f9e h1:KGKZt//rrELT/dEwgYcHCqNYEGr3a7uVutlZrzrZZWY=

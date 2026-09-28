@@ -53,6 +53,7 @@ type Tun struct {
 	UDPTimeout                            int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
 	ICMPTimeout                           int64          `yaml:"icmp-timeout" json:"icmp-timeout,omitempty"`
 	DisableICMPForwarding                 bool           `yaml:"disable-icmp-forwarding" json:"disable-icmp-forwarding,omitempty"`
+	CongestionController                  string         `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
 	FileDescriptor                        int            `yaml:"file-descriptor" json:"file-descriptor"`
 
 	Inet4RouteAddress        []netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
@@ -209,6 +210,9 @@ func (t *Tun) Equal(other Tun) bool {
 		return false
 	}
 	if t.DisableICMPForwarding != other.DisableICMPForwarding {
+		return false
+	}
+	if t.CongestionController != other.CongestionController {
 		return false
 	}
 	if t.FileDescriptor != other.FileDescriptor {

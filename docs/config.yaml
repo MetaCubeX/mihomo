@@ -133,7 +133,7 @@ profile: # 存储 select 选择记录
 # Tun 配置
 tun:
   enable: false
-  stack: system # gvisor/mixed/mips
+  stack: mips # gvisor/mixed/system
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
   # auto-detect-interface: true # 自动识别出口网卡
@@ -146,6 +146,7 @@ tun:
   # disable-icmp-forwarding: true # 禁用 ICMP 转发，防止某些情况下的 ICMP 环回问题，ping 将不会显示真实的延迟
   # 启用转发时，ICMP 按规则选择 Tailscale 进行真实 echo 探测，REJECT 会丢弃请求。
   # 不支持 ICMP 的其他代理保留直连行为；可用 NETWORK,ICMP,DIRECT 显式选择直连。
+  # congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; only effective on mips
   route-address-set: # 将指定规则集中的目标 IP CIDR 规则添加到防火墙, 不匹配的流量将绕过路由, 仅支持 Linux，且需要 nftables，`auto-route` 和 `auto-redirect` 已启用。
     - ruleset-1
     - ruleset-2
@@ -1296,7 +1297,7 @@ proxies: # socks5
     # reserved: [209,98,59]
     # persistent-keepalive: 0
     # ip-stack:
-    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   mode: auto # options: auto, mips, gvisor; auto uses mihomo IP stack (MIPS), gvisor needs compiled with -tags with_gvisor
     #   congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; ignored by gVisor
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
@@ -1385,7 +1386,7 @@ proxies: # socks5
     # mtu: 1400 # optional local MTU override; cannot exceed the controller MTU
     # physical-mtu: 1432 # optional ZeroTier UDP payload MTU (510-10324; default 1432)
     # ip-stack:
-    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   mode: auto # options: auto, mips, gvisor; auto uses mihomo IP stack (MIPS), gvisor needs compiled with -tags with_gvisor
     #   congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; ignored by gVisor
     # primary-port: 0 # primary UDP port; 0 selects an available port
     # secondary-port: 0 # second UDP port; 0 selects an available port, -1 disables it
@@ -1506,7 +1507,7 @@ proxies: # socks5
     # mtu: 1500
     udp: true
     # ip-stack:
-    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   mode: auto # options: auto, mips, gvisor; auto uses mihomo IP stack (MIPS), gvisor needs compiled with -tags with_gvisor
     #   congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; ignored by gVisor
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
@@ -1525,7 +1526,7 @@ proxies: # socks5
     mtu: 1280
     udp: true
     # ip-stack:
-    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   mode: auto # options: auto, mips, gvisor; auto uses mihomo IP stack (MIPS), gvisor needs compiled with -tags with_gvisor
     #   congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; ignored by gVisor
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
@@ -1563,7 +1564,7 @@ proxies: # socks5
     udp: true
     network: h2
     # ip-stack:
-    #   mode: auto # options: auto, gvisor, mips; auto uses gVisor when compiled in and mihomo IP stack (MIPS) otherwise
+    #   mode: auto # options: auto, mips, gvisor; auto uses mihomo IP stack (MIPS), gvisor needs compiled with -tags with_gvisor
     #   congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; ignored by gVisor
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
@@ -2809,7 +2810,7 @@ listeners:
     type: tun
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
-    stack: system # gvisor / mixed / mips
+    stack: mips # gvisor / mixed / system
     dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
@@ -2851,6 +2852,7 @@ listeners:
     # exclude-package: # 排除被路由的 Android 应用包名
     # - com.android.captiveportallogin
     # disable-icmp-forwarding: true # 禁用 ICMP 转发，防止某些情况下的 ICMP 环回问题，ping 将不会显示真实的延迟
+    # congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; only effective on mips
 # 入口配置与 Listener 等价，传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理
 # shadowsocks,vmess 入口配置（传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理）
 # ss-config: ss://2022-blake3-aes-256-gcm:vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=@:23456

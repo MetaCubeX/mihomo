@@ -497,6 +497,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		Logger:                 log.SingLogger,
 		ForwarderBindInterface: forwarderBindInterface,
 		InterfaceFinder:        interfaceFinder,
+		TCPCongestionControl:   options.CongestionController,
 		EnforceBindInterface:   EnforceBindInterface,
 	}
 	l.tunIf = tunIf
