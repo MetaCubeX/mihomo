@@ -1354,6 +1354,7 @@ proxies: # socks5
     # state-dir: ./tailscale # tsnet 状态目录，默认 tailscale
     # ephemeral: false # 是否作为 ephemeral node 登录，默认 false
     udp: true # 是否启用 UDP，默认 false
+    # port: 41641 # Tailscale 节点通信的 UDP 监听端口，默认 41641；设为 0 使用随机端口。防火墙需放行实际监听端口
     # accept-routes: true # 是否接受 Tailnet 中发布的 subnet routes
     # advertise-routes: # 把本机可达网段发布到 Tailnet，其他节点经此节点访问这些地址
     #   - 192.168.1.0/24

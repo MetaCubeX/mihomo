@@ -7,6 +7,30 @@ import (
 	"testing"
 )
 
+func TestTailscaleListenPort(t *testing.T) {
+	zero, custom := uint16(0), uint16(43210)
+	for _, tc := range []struct {
+		name string
+		port *uint16
+		want uint16
+	}{
+		{name: "default", want: 41641},
+		{name: "random", port: &zero, want: 0},
+		{name: "custom", port: &custom, want: custom},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			outbound, err := NewTailscale(TailscaleOption{Name: "tailscale-port-" + tc.name, Port: tc.port})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer outbound.Close()
+			if got := outbound.server.Port; got != tc.want {
+				t.Fatalf("listen port = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestBuildTailscaleMaskedPrefsAdvertiseRoutes(t *testing.T) {
 	mp, err := buildTailscaleMaskedPrefs(TailscaleOption{
 		AdvertiseRoutes: []string{" 192.168.1.5/24 ", "fd12:3456:789a::1/64"},

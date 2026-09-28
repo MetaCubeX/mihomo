@@ -55,13 +55,14 @@ type Tailscale struct {
 
 type TailscaleOption struct {
 	BasicOption
-	Name       string `proxy:"name"`
-	Hostname   string `proxy:"hostname,omitempty"`
-	AuthKey    string `proxy:"auth-key,omitempty"`
-	ControlURL string `proxy:"control-url,omitempty"`
-	StateDir   string `proxy:"state-dir,omitempty"`
-	Ephemeral  bool   `proxy:"ephemeral,omitempty"`
-	UDP        bool   `proxy:"udp,omitempty"`
+	Name       string  `proxy:"name"`
+	Hostname   string  `proxy:"hostname,omitempty"`
+	AuthKey    string  `proxy:"auth-key,omitempty"`
+	ControlURL string  `proxy:"control-url,omitempty"`
+	StateDir   string  `proxy:"state-dir,omitempty"`
+	Ephemeral  bool    `proxy:"ephemeral,omitempty"`
+	UDP        bool    `proxy:"udp,omitempty"`
+	Port       *uint16 `proxy:"port,omitempty"`
 
 	AcceptRoutes           *bool    `proxy:"accept-routes,omitempty"`
 	AdvertiseRoutes        []string `proxy:"advertise-routes,omitempty"`
@@ -126,6 +127,10 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	if !C.Path.IsSafePath(option.StateDir) {
 		return nil, C.Path.ErrNotSafePath(option.StateDir)
 	}
+	port := uint16(41641)
+	if option.Port != nil {
+		port = *option.Port
+	}
 
 	addr := option.ControlURL
 	if addr == "" {
@@ -156,6 +161,7 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		AuthKey:    option.AuthKey,
 		ControlURL: option.ControlURL,
 		Ephemeral:  option.Ephemeral,
+		Port:       port,
 		SystemDialer: func(ctx context.Context, network, address string) (net.Conn, error) {
 			log.Debugln("[Tailscale](%s) SystemDialer: start dial %s %s", option.Name, network, address)
 			conn, err := outbound.dialer.DialContext(ctx, network, address)
