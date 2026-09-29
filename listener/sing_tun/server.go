@@ -448,6 +448,7 @@ func (l *Listener) startTun() (err error) {
 		Logger:                 log.SingLogger,
 		ForwarderBindInterface: forwarderBindInterface,
 		InterfaceFinder:        interfaceFinder,
+		TCPCongestionControl:   options.CongestionController,
 		EnforceBindInterface:   EnforceBindInterface,
 	}
 	l.tunIf = tunIf
