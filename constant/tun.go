@@ -2,8 +2,44 @@ package constant
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
+
+// TUNInterceptMode selects how traffic is intercepted. Its zero value is vnic.
+type TUNInterceptMode int
+
+const (
+	TunInterceptVNIC TUNInterceptMode = iota
+	TunInterceptWFP
+)
+
+func (m *TUNInterceptMode) UnmarshalText(data []byte) error {
+	switch strings.ToLower(string(data)) {
+	case "vnic":
+		*m = TunInterceptVNIC
+	case "wfp":
+		*m = TunInterceptWFP
+	default:
+		return fmt.Errorf("invalid tun intercept-mode: %q", data)
+	}
+	return nil
+}
+
+func (m TUNInterceptMode) MarshalText() ([]byte, error) {
+	return []byte(m.String()), nil
+}
+
+func (m TUNInterceptMode) String() string {
+	switch m {
+	case TunInterceptVNIC:
+		return "vnic"
+	case TunInterceptWFP:
+		return "wfp"
+	default:
+		return "unknown"
+	}
+}
 
 var StackTypeMapping = map[string]TUNStack{
 	strings.ToLower(TunGvisor.String()): TunGvisor,
