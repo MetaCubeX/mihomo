@@ -9,6 +9,7 @@ import (
 type packet struct {
 	pc      net.PacketConn
 	rAddr   net.Addr
+	keyAddr net.Addr
 	payload []byte
 }
 
@@ -21,9 +22,9 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 	return c.pc.WriteTo(b, c.rAddr)
 }
 
-// LocalAddr returns the source IP/Port of UDP Packet
+// LocalAddr returns the listener-scoped address used as the packet's SNAT key.
 func (c *packet) LocalAddr() net.Addr {
-	return c.rAddr
+	return c.keyAddr
 }
 
 func (c *packet) Drop() {
