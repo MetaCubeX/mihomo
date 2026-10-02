@@ -1,11 +1,11 @@
 package route
 
 import (
-	"bytes"
 	"encoding/json"
 	"strconv"
 	"time"
 
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/metacubex/chi"
@@ -28,45 +28,72 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, _, err := wsUpgrade(r, w)
-	if err != nil {
-		return
-	}
-
 	intervalStr := r.URL.Query().Get("interval")
-	interval := 1000
+	interval := time.Second
 	if intervalStr != "" {
-		t, err := strconv.Atoi(intervalStr)
-		if err != nil {
+		const maxIntervalMilliseconds = (1<<63 - 1) / int64(time.Millisecond)
+		milliseconds, err := strconv.ParseInt(intervalStr, 10, 64)
+		if err != nil || milliseconds <= 0 || milliseconds > maxIntervalMilliseconds {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, ErrBadRequest)
 			return
 		}
 
-		interval = t
+		interval = time.Duration(milliseconds) * time.Millisecond
 	}
 
-	buf := &bytes.Buffer{}
+	conn, _, err := wsUpgrade(r, w)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	snapshotStream := statistic.DefaultManager.NewSnapshotStream()
+	defer snapshotStream.Close()
+
 	sendSnapshot := func() error {
-		buf.Reset()
-		snapshot := statistic.DefaultManager.Snapshot()
-		if err := json.NewEncoder(buf).Encode(snapshot); err != nil {
+		snapshot := snapshotStream.Snapshot()
+		data, err := json.Marshal(snapshot)
+		if err != nil {
+			return err
+		}
+		if err := conn.SetWriteDeadline(time.Now().Add(C.DefaultTCPTimeout)); err != nil {
 			return err
 		}
 
-		return wsWriteServerText(conn, buf.Bytes())
+		return wsWriteServerText(conn, data)
 	}
 
 	if err := sendSnapshot(); err != nil {
 		return
 	}
 
-	tick := time.NewTicker(time.Millisecond * time.Duration(interval))
-	defer tick.Stop()
-	for range tick.C {
+	nextSnapshot := time.Now().Add(interval)
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	updates := snapshotStream.Updates()
+	for {
+		select {
+		case <-timer.C:
+		case <-updates:
+			updates = nil
+			if time.Until(nextSnapshot) > C.DefaultTCPTimeout {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(C.DefaultTCPTimeout)
+				nextSnapshot = time.Now().Add(C.DefaultTCPTimeout)
+			}
+			continue
+		}
 		if err := sendSnapshot(); err != nil {
 			break
 		}
+		timer.Reset(interval)
+		nextSnapshot = time.Now().Add(interval)
+		updates = snapshotStream.Updates()
 	}
 }
 
