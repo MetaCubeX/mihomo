@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/log"
 )
 
@@ -20,8 +21,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 	proxies := make([]map[string]any, 0, len(rawLines))
 	names := make(map[string]int, 200)
+	appendProxy := func(proxy map[string]any, name string, line int) {
+		if err := validateProxyEndpoint(proxy); err != nil {
+			log.Warnln("skipping invalid %s proxy at line %d: %s", proxy["type"], line+1, err)
+			return
+		}
+		proxy["name"] = uniqueName(names, name)
+		proxies = append(proxies, proxy)
+	}
 
-	for _, raw := range rawLines {
+	for index, raw := range rawLines {
 		line := strings.TrimRight(string(raw), " \r")
 		if line == "" {
 			continue
@@ -41,10 +50,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			query := urlHysteria.Query()
-			name := uniqueName(names, urlHysteria.Fragment)
+			name := urlHysteria.Fragment
 			hysteria := make(map[string]any, 20)
 
-			hysteria["name"] = name
 			hysteria["type"] = scheme
 			hysteria["server"] = urlHysteria.Hostname()
 			hysteria["port"] = urlHysteria.Port()
@@ -67,7 +75,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["up"] = up
 			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
 
-			proxies = append(proxies, hysteria)
+			appendProxy(hysteria, name, index)
 
 		case "hysteria2", "hy2", "hysteria2+realm", "hy2+realm":
 			realmMode := strings.HasSuffix(scheme, "+realm")
@@ -78,10 +86,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			query := urlHysteria2.Query()
-			name := uniqueName(names, urlHysteria2.Fragment)
+			name := urlHysteria2.Fragment
 			hysteria2 := make(map[string]any, 20)
 
-			hysteria2["name"] = name
 			hysteria2["type"] = "hysteria2"
 			hysteria2["server"] = urlHysteria2.Hostname()
 			if port := urlHysteria2.Port(); port != "" {
@@ -113,7 +120,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				hysteria2["password"] = auth
 			}
 
-			proxies = append(proxies, hysteria2)
+			appendProxy(hysteria2, name, index)
 
 		case "tuic":
 			// A temporary unofficial TUIC share link standard
@@ -128,7 +135,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			query := urlTUIC.Query()
 
 			tuic := make(map[string]any, 20)
-			tuic["name"] = uniqueName(names, urlTUIC.Fragment)
 			tuic["type"] = scheme
 			tuic["server"] = urlTUIC.Hostname()
 			tuic["port"] = urlTUIC.Port()
@@ -156,7 +162,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				tuic["udp-relay-mode"] = udpRelayMode
 			}
 
-			proxies = append(proxies, tuic)
+			appendProxy(tuic, urlTUIC.Fragment, index)
 
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
@@ -166,10 +172,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			query := urlTrojan.Query()
 
-			name := uniqueName(names, urlTrojan.Fragment)
+			name := urlTrojan.Fragment
 			trojan := make(map[string]any, 20)
 
-			trojan["name"] = name
 			trojan["type"] = scheme
 			trojan["server"] = urlTrojan.Hostname()
 			trojan["port"] = urlTrojan.Port()
@@ -217,7 +222,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				trojan["fingerprint"] = pcs
 			}
 
-			proxies = append(proxies, trojan)
+			appendProxy(trojan, name, index)
 
 		case "vless":
 			urlVLess, err := url.Parse(line)
@@ -229,7 +234,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			query := urlVLess.Query()
 			vless := make(map[string]any, 20)
-			err = handleVShareLink(names, urlVLess, scheme, vless)
+			err = handleVShareLink(urlVLess, scheme, vless)
 			if err != nil {
 				log.Warnln("error:%s line:%s", err.Error(), line)
 				continue
@@ -240,7 +245,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if encryption := query.Get("encryption"); encryption != "" {
 				vless["encryption"] = encryption
 			}
-			proxies = append(proxies, vless)
+			appendProxy(vless, urlVLess.Fragment, index)
 
 		case "vmess":
 			// V2RayN-styled share link
@@ -254,7 +259,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 				query := urlVMess.Query()
 				vmess := make(map[string]any, 20)
-				err = handleVShareLink(names, urlVMess, scheme, vmess)
+				err = handleVShareLink(urlVMess, scheme, vmess)
 				if err != nil {
 					log.Warnln("error:%s line:%s", err.Error(), line)
 					continue
@@ -264,7 +269,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				if encryption := query.Get("encryption"); encryption != "" {
 					vmess["cipher"] = encryption
 				}
-				proxies = append(proxies, vmess)
+				appendProxy(vmess, urlVMess.Fragment, index)
 				continue
 			}
 
@@ -278,10 +283,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if !ok {
 				continue
 			}
-			name := uniqueName(names, tempName)
+			name := tempName
 			vmess := make(map[string]any, 20)
 
-			vmess["name"] = name
 			vmess["type"] = scheme
 			vmess["server"] = values["add"]
 			vmess["port"] = values["port"]
@@ -395,7 +399,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["grpc-opts"] = grpcOpts
 			}
 
-			proxies = append(proxies, vmess)
+			appendProxy(vmess, name, index)
 
 		case "ss":
 			urlSS, err := url.Parse(line)
@@ -403,7 +407,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				continue
 			}
 
-			name := uniqueName(names, urlSS.Fragment)
+			name := urlSS.Fragment
 			port := urlSS.Port()
 
 			if port == "" {
@@ -442,7 +446,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			ss := make(map[string]any, 10)
 
-			ss["name"] = name
 			ss["type"] = scheme
 			ss["server"] = urlSS.Hostname()
 			ss["port"] = urlSS.Port()
@@ -482,7 +485,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 			}
 
-			proxies = append(proxies, ss)
+			appendProxy(ss, name, index)
 
 		case "ssr":
 			dcBuf, err := TryDecodeBase64(body)
@@ -516,14 +519,13 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			remarks := decodeUrlSafe(query.Get("remarks"))
-			name := uniqueName(names, remarks)
+			name := remarks
 
 			obfsParam := decodeUrlSafe(query.Get("obfsparam"))
 			protocolParam := decodeUrlSafe(query.Get("protoparam"))
 
 			ssr := make(map[string]any, 20)
 
-			ssr["name"] = name
 			ssr["type"] = scheme
 			ssr["server"] = host
 			ssr["port"] = port
@@ -541,7 +543,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				ssr["protocol-param"] = protocolParam
 			}
 
-			proxies = append(proxies, ssr)
+			appendProxy(ssr, name, index)
 
 		case "socks", "socks5", "socks5h", "http", "https":
 			link, err := url.Parse(line)
@@ -560,7 +562,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if remarks == "" {
 				remarks = fmt.Sprintf("%s:%s", server, portStr)
 			}
-			name := uniqueName(names, remarks)
+			name := remarks
 			encodeStr := link.User.String()
 			var username, password string
 			if encodeStr != "" {
@@ -574,7 +576,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 			}
 			socks := make(map[string]any, 10)
-			socks["name"] = name
 			socks["type"] = func() string {
 				switch scheme {
 				case "socks", "socks5", "socks5h":
@@ -593,7 +594,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				socks["tls"] = true
 			}
 
-			proxies = append(proxies, socks)
+			appendProxy(socks, name, index)
 
 		case "anytls":
 			// https://github.com/anytls/anytls-go/blob/main/docs/uri_scheme.md
@@ -623,9 +624,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if remarks == "" {
 				remarks = fmt.Sprintf("%s:%s", server, portStr)
 			}
-			name := uniqueName(names, remarks)
+			name := remarks
 			anytls := make(map[string]any, 10)
-			anytls["name"] = name
 			anytls["type"] = "anytls"
 			anytls["server"] = server
 			anytls["port"] = portStr
@@ -636,7 +636,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			anytls["skip-cert-verify"] = insecureBool
 			anytls["udp"] = true
 
-			proxies = append(proxies, anytls)
+			appendProxy(anytls, name, index)
 
 		case "mierus":
 			urlMieru, err := url.Parse(line)
@@ -673,10 +673,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			for i, port := range portList {
 				protocol := protocolList[i]
-				name := uniqueName(names, fmt.Sprintf("%s:%s/%s", baseName, port, protocol))
+				name := fmt.Sprintf("%s:%s/%s", baseName, port, protocol)
 
 				mieru := make(map[string]any, 15)
-				mieru["name"] = name
 				mieru["type"] = "mieru"
 				mieru["server"] = server
 				mieru["transport"] = protocol
@@ -704,7 +703,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 					mieru["traffic-pattern"] = trafficPattern
 				}
 
-				proxies = append(proxies, mieru)
+				appendProxy(mieru, name, index)
 			}
 		}
 	}
@@ -714,6 +713,67 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 	}
 
 	return proxies, nil
+}
+
+// Validate only endpoint fields emitted by the converter. Leave credentials and
+// transport options to adapters, after provider overrides have been applied.
+func validateProxyEndpoint(proxy map[string]any) error {
+	switch server := proxy["server"].(type) {
+	case string:
+		if strings.TrimSpace(server) == "" {
+			return fmt.Errorf("empty server")
+		}
+	case float64: // Legacy VMess JSON: adapters also accept numeric scalars.
+	default:
+		return fmt.Errorf("invalid server")
+	}
+
+	if portRange, ok := proxy["port-range"].(string); ok {
+		// Mieru represents an endpoint with either a single port or a range.
+		beginText, endText, found := strings.Cut(portRange, "-")
+		begin, beginErr := strconv.ParseUint(beginText, 10, 16)
+		end, endErr := strconv.ParseUint(endText, 10, 16)
+		if !found || beginErr != nil || endErr != nil || begin == 0 || begin > end {
+			return fmt.Errorf("invalid port range")
+		}
+		return nil
+	}
+
+	var port int64
+	switch value := proxy["port"].(type) {
+	case string:
+		var err error
+		port, err = strconv.ParseInt(value, 0, strconv.IntSize)
+		if err != nil {
+			return fmt.Errorf("invalid port")
+		}
+	case float64: // Match the adapter's weak conversion of JSON numbers to int.
+		if value < 1 || value >= 65536 {
+			return fmt.Errorf("port must be between 1 and 65535")
+		}
+		port = int64(value)
+	case int:
+		port = int64(value)
+	default:
+		return fmt.Errorf("missing or invalid port")
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+
+	if ports, ok := proxy["ports"].(string); ok && ports != "" {
+		// Hysteria2 narrows hopping ports to uint16; check bounds beforehand.
+		ranges, err := utils.NewUnsignedRanges[uint64](ports)
+		if err != nil {
+			return fmt.Errorf("invalid hopping ports")
+		}
+		for _, ports := range ranges {
+			if ports.Start() < 1 || ports.End() > 65535 {
+				return fmt.Errorf("hopping ports must be between 1 and 65535")
+			}
+		}
+	}
+	return nil
 }
 
 func uniqueName(names map[string]int, name string) string {
