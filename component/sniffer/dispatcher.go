@@ -27,15 +27,18 @@ var (
 const maxSniffBufferSize = 64 * 1024
 
 type Dispatcher struct {
-	enable          bool
-	sniffers        []configuredSniffer
-	forceDomain     []C.DomainMatcher
-	skipSrcAddress  []C.IpMatcher
-	skipDstAddress  []C.IpMatcher
-	skipDomain      []C.DomainMatcher
-	skipList        *lru.LruCache[netip.AddrPort, uint8]
-	forceDnsMapping bool
-	parsePureIp     bool
+	enable bool
+	// sniffers recover the domain a connection is heading to, protocolSniffers
+	// only tag it with the application protocol and never touch the destination
+	sniffers         []configuredSniffer
+	protocolSniffers []sniffer.ProtocolSniffer
+	forceDomain      []C.DomainMatcher
+	skipSrcAddress   []C.IpMatcher
+	skipDstAddress   []C.IpMatcher
+	skipDomain       []C.DomainMatcher
+	skipList         *lru.LruCache[netip.AddrPort, uint8]
+	forceDnsMapping  bool
+	parsePureIp      bool
 }
 
 // configuredSniffer keeps protocol-specific behavior and policy together so
@@ -46,6 +49,10 @@ type configuredSniffer struct {
 }
 
 func (s configuredSniffer) supportsNetwork(network C.NetWork) bool {
+	return snifferSupportsNetwork(s, network)
+}
+
+func snifferSupportsNetwork(s sniffer.Sniffer, network C.NetWork) bool {
 	supported := s.SupportNetwork()
 	return supported == network || supported == C.ALLNet
 }
@@ -85,6 +92,8 @@ func (sd *Dispatcher) forceSniff(metadata *C.Metadata) bool {
 func (sd *Dispatcher) UDPSniff(packet C.PacketAdapter, packetSender C.PacketSender) C.PacketSender {
 	metadata := packet.Metadata()
 	if sd.shouldOverride(metadata) {
+		sd.sniffPacketProtocol(packet.Data(), metadata)
+
 		for _, current := range sd.sniffers {
 			if current.supportsNetwork(C.UDP) {
 				inWhitelist := current.SupportPort(metadata.DstPort)
@@ -131,7 +140,17 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 			}
 		}
 
-		if !inWhitelist {
+		// Protocol sniffers report no domain, so they are dispatched on their
+		// own and their outcome does not feed the domain result below.
+		protocolInWhitelist := false
+		for _, current := range sd.protocolSniffers {
+			if snifferSupportsNetwork(current, C.TCP) && current.SupportPort(metadata.DstPort) {
+				protocolInWhitelist = true
+				break
+			}
+		}
+
+		if !inWhitelist && !protocolInWhitelist {
 			return false
 		}
 		forceSniffer := sd.forceSniff(metadata)
@@ -142,6 +161,16 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 				log.Debugln("[Sniffer] Skip sniffing[%s] due to multiple failures", dst)
 				return false
 			}
+		}
+
+		if protocolInWhitelist {
+			sd.sniffStreamProtocol(conn, metadata)
+		}
+
+		// Nothing else to do when only a protocol was asked for: it yields no
+		// domain, which is what this function reports.
+		if !inWhitelist {
+			return false
 		}
 
 		host, config, err := sd.sniffDomain(conn, metadata)
@@ -298,6 +327,74 @@ func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (s
 	return "", SnifferConfig{}, ErrorSniffFailed
 }
 
+// sniffStreamProtocol tags the metadata with the application protocol of a TCP
+// connection. Unlike a domain, nothing downstream depends on the result, so a
+// miss is neither reported to the caller nor counted towards skipList.
+func (sd *Dispatcher) sniffStreamProtocol(conn *N.BufferedConn, metadata *C.Metadata) {
+	// The initial byte has its own window because client data may not have
+	// arrived yet. When domain sniffing follows, it finds the data buffered.
+	_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	_, err := conn.Peek(1)
+	_ = conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		log.Debugln("[Sniffer] [%s] the data length not enough, error: %v", metadata.DstIP, err)
+		return
+	}
+
+	deadline := time.Now().Add(1 * time.Second)
+	for _, current := range sd.protocolSniffers {
+		if !snifferSupportsNetwork(current, C.TCP) || !current.SupportPort(metadata.DstPort) {
+			continue
+		}
+
+		data, _ := conn.Peek(conn.Buffered())
+		protocol, err := current.SniffProtocol(C.TCP, data)
+
+		// Protocol signatures sit in a fixed-size header, so one refill is
+		// enough. Requests beyond the read-ahead bound are rejected outright.
+		var need *errNeedAtLeastData
+		if errors.As(err, &need) && need.length > len(data) && need.length <= maxSniffBufferSize {
+			conn.Grow(need.length)
+			_ = conn.SetReadDeadline(deadline)
+			_, err = conn.Peek(need.length)
+			_ = conn.SetReadDeadline(time.Time{})
+			if err != nil {
+				continue
+			}
+			data, _ = conn.Peek(conn.Buffered())
+			protocol, err = current.SniffProtocol(C.TCP, data)
+		}
+		if err != nil {
+			continue
+		}
+
+		log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s] as protocol [%s]",
+			metadata.SourceDetail(), metadata.RemoteAddress(), protocol)
+		metadata.SniffProtocol = protocol
+		return
+	}
+}
+
+// sniffPacketProtocol tags the metadata with the application protocol carried
+// by the first packet of a UDP session.
+func (sd *Dispatcher) sniffPacketProtocol(data []byte, metadata *C.Metadata) {
+	for _, current := range sd.protocolSniffers {
+		if !snifferSupportsNetwork(current, C.UDP) || !current.SupportPort(metadata.DstPort) {
+			continue
+		}
+
+		protocol, err := current.SniffProtocol(C.UDP, data)
+		if err != nil {
+			continue
+		}
+
+		log.Debugln("[Sniffer] Sniff UDP [%s]-->[%s] as protocol [%s]",
+			metadata.SourceDetail(), metadata.RemoteAddress(), protocol)
+		metadata.SniffProtocol = protocol
+		return
+	}
+}
+
 func (sd *Dispatcher) cacheSniffFailed(metadata *C.Metadata) {
 	dst := metadata.AddrPort()
 	sd.skipList.Compute(dst, func(oldValue uint8, loaded bool) (newValue uint8, delete bool) {
@@ -344,11 +441,17 @@ func NewDispatcher(snifferConfig *Config) (*Dispatcher, error) {
 			log.Errorln("Sniffer name[%s] is error", snifferName)
 			return &Dispatcher{enable: false}, err
 		}
+		// A protocol sniffer carries no domain, so it stays out of the domain
+		// candidate set and out of the OverrideDest policy that comes with it.
+		if ps, ok := s.(sniffer.ProtocolSniffer); ok {
+			dispatcher.protocolSniffers = append(dispatcher.protocolSniffers, ps)
+			continue
+		}
 		dispatcher.sniffers = append(dispatcher.sniffers, configuredSniffer{Sniffer: s, config: config})
 	}
 	// Entries absent from sniffer.List were not constructed by the ordered pass
 	// above. Preserve the previous behavior of rejecting such configurations.
-	if len(dispatcher.sniffers) != len(snifferConfig.Sniffers) {
+	if len(dispatcher.sniffers)+len(dispatcher.protocolSniffers) != len(snifferConfig.Sniffers) {
 		for snifferName := range snifferConfig.Sniffers {
 			found := false
 			for _, supported := range sniffer.List {
@@ -375,6 +478,8 @@ func NewSniffer(name sniffer.Type, snifferConfig SnifferConfig) (sniffer.Sniffer
 		return NewHTTPSniffer(snifferConfig)
 	case sniffer.QUIC:
 		return NewQUICSniffer(snifferConfig)
+	case sniffer.BitTorrent:
+		return NewBitTorrentSniffer(snifferConfig)
 	default:
 		return nil, ErrorUnsupportedSniffer
 	}
