@@ -3,6 +3,7 @@ package config
 import (
 	"testing"
 
+	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -76,4 +77,52 @@ func TestValidateDialerProxies(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseProxiesReservedDefaultProvider(t *testing.T) {
+	t.Run("WithoutDefaultGroup", func(t *testing.T) {
+		cfg := RawConfig{
+			Proxy: []map[string]any{
+				{"name": "node-a", "type": "socks5", "server": "127.0.0.1", "port": 1080},
+			},
+			ProxyGroup: []map[string]any{
+				{"name": "proxy", "type": "select", "proxies": []string{"node-a"}},
+			},
+		}
+		_, providers, err := parseProxies(&cfg)
+		assert.NoError(t, err)
+		pd, ok := providers[provider.ReservedName]
+		assert.True(t, ok)
+		assert.Empty(t, pd.HealthCheckURL())
+		assert.Greater(t, pd.Count(), 2)
+	})
+
+	t.Run("WithDefaultFallbackGroup", func(t *testing.T) {
+		const testURL = "http://www.gstatic.com/generate_204"
+		cfg := RawConfig{
+			Proxy: []map[string]any{
+				{"name": "node-a", "type": "socks5", "server": "127.0.0.1", "port": 1080},
+				{"name": "node-b", "type": "socks5", "server": "127.0.0.1", "port": 1081},
+			},
+			ProxyGroup: []map[string]any{
+				{
+					"name":     provider.ReservedName,
+					"type":     "fallback",
+					"url":      testURL,
+					"interval": 30,
+					"proxies":  []string{"node-a", "node-b"},
+				},
+			},
+		}
+		proxies, providers, err := parseProxies(&cfg)
+		assert.NoError(t, err)
+		pd, ok := providers[provider.ReservedName]
+		assert.True(t, ok)
+		assert.Equal(t, testURL, pd.HealthCheckURL())
+		assert.Equal(t, 2, pd.Count())
+		_, ok = proxies["GLOBAL"]
+		assert.True(t, ok)
+		_, ok = proxies[provider.ReservedName]
+		assert.True(t, ok)
+	})
 }
