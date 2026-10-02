@@ -23,26 +23,34 @@ var (
 )
 
 type GroupCommonOption struct {
-	Name                string   `group:"name"`
-	Type                string   `group:"type"`
-	Proxies             []string `group:"proxies,omitempty"`
-	Use                 []string `group:"use,omitempty"`
-	URL                 string   `group:"url,omitempty"`
-	Interval            int      `group:"interval,omitempty"`
-	TestTimeout         int      `group:"timeout,omitempty"`
-	MaxFailedTimes      int      `group:"max-failed-times,omitempty"`
-	EmptyFallback       string   `group:"empty-fallback,omitempty"`
-	Lazy                bool     `group:"lazy,omitempty"`
-	DisableUDP          bool     `group:"disable-udp,omitempty"`
-	Filter              string   `group:"filter,omitempty"`
-	ExcludeFilter       string   `group:"exclude-filter,omitempty"`
-	ExcludeType         string   `group:"exclude-type,omitempty"`
-	ExpectedStatus      string   `group:"expected-status,omitempty"`
-	IncludeAll          bool     `group:"include-all,omitempty"`
-	IncludeAllProxies   bool     `group:"include-all-proxies,omitempty"`
-	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
-	Hidden              bool     `group:"hidden,omitempty"`
-	Icon                string   `group:"icon,omitempty"`
+	Name                string              `group:"name"`
+	Type                string              `group:"type"`
+	Proxies             []string            `group:"proxies,omitempty"`
+	Use                 []string            `group:"use,omitempty"`
+	URL                 string              `group:"url,omitempty"`
+	Interval            int                 `group:"interval,omitempty"`
+	TestTimeout         int                 `group:"timeout,omitempty"`
+	MaxFailedTimes      int                 `group:"max-failed-times,omitempty"`
+	EmptyFallback       string              `group:"empty-fallback,omitempty"`
+	Lazy                bool                `group:"lazy,omitempty"`
+	DisableUDP          bool                `group:"disable-udp,omitempty"`
+	Filter              string              `group:"filter,omitempty"`
+	ExcludeFilter       string              `group:"exclude-filter,omitempty"`
+	ExcludeType         string              `group:"exclude-type,omitempty"`
+	ExpectedStatus      string              `group:"expected-status,omitempty"`
+	CheckMethod         string              `group:"check-method,omitempty"`
+	HTTPHeaders         any                 `group:"http-headers,omitempty"`
+	ExpectedBodyMatch   string              `group:"expected-body-match,omitempty"`
+	HealthCheck         C.HealthCheckOption `group:"-"`
+	IncludeAll          bool                `group:"include-all,omitempty"`
+	IncludeAllProxies   bool                `group:"include-all-proxies,omitempty"`
+	IncludeAllProviders bool                `group:"include-all-providers,omitempty"`
+	Hidden              bool                `group:"hidden,omitempty"`
+	Icon                string              `group:"icon,omitempty"`
+}
+
+func (o *GroupCommonOption) HealthCheckOption() C.HealthCheckOption {
+	return o.HealthCheck.WithDefault()
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]P.ProxyProvider, AllProxies []string, AllProviders []string) (ProxyGroup, error) {
@@ -122,12 +130,18 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", groupName, err)
 	}
+	healthCheckOption, err := C.NewHealthCheckOption(expectedStatus, groupOption.CheckMethod, groupOption.HTTPHeaders, groupOption.ExpectedBodyMatch)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", groupName, err)
+	}
 
 	status := strings.TrimSpace(groupOption.ExpectedStatus)
 	if status == "" {
 		status = "*"
 	}
 	groupOption.ExpectedStatus = status
+	groupOption.CheckMethod = healthCheckOption.Method
+	groupOption.HealthCheck = healthCheckOption
 
 	if len(groupOption.Use) != 0 {
 		PDs, err := getProviders(providersMap, groupOption.Use)
@@ -147,7 +161,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 				groupOption.URL = C.DefaultTestURL
 			}
 		} else {
-			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
+			addTestUrlToProviders(PDs, groupOption.URL, healthCheckOption, groupOption.Filter, uint(groupOption.Interval))
 		}
 		providers = append(providers, PDs...)
 	}
@@ -173,7 +187,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+		hc := provider.NewHealthCheckWithOption(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, healthCheckOption)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
@@ -248,12 +262,12 @@ func getProviders(mapping map[string]P.ProxyProvider, list []string) ([]P.ProxyP
 	return ps, nil
 }
 
-func addTestUrlToProviders(providers []P.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+func addTestUrlToProviders(providers []P.ProxyProvider, url string, option C.HealthCheckOption, filter string, interval uint) {
 	if len(providers) == 0 || len(url) == 0 {
 		return
 	}
 
 	for _, pd := range providers {
-		pd.RegisterHealthCheckTask(url, expectedStatus, filter, interval)
+		pd.RegisterHealthCheckTask(url, option, filter, interval)
 	}
 }
