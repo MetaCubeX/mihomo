@@ -72,6 +72,65 @@ var (
 
 type tunnel struct{}
 
+type bufferedProxyConn struct {
+	*N.BufferedConn
+	C.Connection
+}
+
+func newBufferedProxyConn(conn C.Conn) *bufferedProxyConn {
+	return &bufferedProxyConn{
+		BufferedConn: N.NewBufferedConn(conn),
+		Connection:   conn,
+	}
+}
+
+type firstDataResult struct {
+	client bool
+	err    error
+}
+
+// waitForLateSniffClientData reports whether the client produced application
+// data before the selected outbound did. Both reads are peeks, so the winner's
+// data remains buffered for sniffing or relaying.
+func waitForLateSniffClientData(clientConn, remoteConn *N.BufferedConn) bool {
+	result := make(chan firstDataResult, 2)
+	peek := func(client bool, conn *N.BufferedConn) {
+		_, err := conn.Peek(1)
+		result <- firstDataResult{client: client, err: err}
+	}
+
+	go peek(true, clientConn)
+	go peek(false, remoteConn)
+
+	first := <-result
+	if first.client {
+		_ = remoteConn.SetReadDeadline(time.Now())
+	} else {
+		_ = clientConn.SetReadDeadline(time.Now())
+	}
+	second := <-result
+
+	_ = clientConn.SetReadDeadline(time.Time{})
+	_ = remoteConn.SetReadDeadline(time.Time{})
+
+	if first.err != nil || !first.client {
+		return false
+	}
+	// If the server also produced data while its peek was being interrupted,
+	// preserve the fallback route so a server-first greeting is never discarded.
+	return second.err != nil
+}
+
+func hasPendingData(conn *N.BufferedConn) bool {
+	if conn.Buffered() > 0 {
+		return true
+	}
+	_ = conn.SetReadDeadline(time.Now())
+	_, err := conn.Peek(1)
+	_ = conn.SetReadDeadline(time.Time{})
+	return err == nil
+}
+
 var Tunnel = tunnel{}
 var _ C.Tunnel = Tunnel
 var _ P.Tunnel = Tunnel
@@ -524,13 +583,21 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	conn := connCtx.Conn()
 	conn.ResetPeeked() // reset before sniffer
+	lateSniffPending := false
 	if sniffingEnable && snifferDispatcher.Enable() {
 		// Try to sniff a domain when `preHandleMetadata` failed, this is usually
 		// caused by a "Fake DNS record missing" error when enhanced-mode is fake-ip.
-		if snifferDispatcher.TCPSniff(conn, metadata) {
+		sniffed := snifferDispatcher.TCPSniff(conn, metadata)
+		if sniffed {
 			// we now have a domain name
 			preHandleFailed = false
 		}
+		// A peeked connection with an empty buffer means the initial sniff waited
+		// for client data and returned without receiving any. Keep the ordinary
+		// metadata-based route as a speculative outbound, then give a later client
+		// first packet one final chance to supply a domain before any application
+		// data crosses that outbound.
+		lateSniffPending = !sniffed && conn.Peeked() && conn.Buffered() == 0
 	}
 
 	// If both trials have failed, we can do nothing but give up
@@ -557,65 +624,94 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	dialMetadata := metadata
-	if len(metadata.Host) > 0 {
-		if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
-			if dstIp, _ := node.RandIP(); !resolver.IsFakeIP(dstIp) {
-				dialMetadata.DstIP = dstIp
-				dialMetadata.DNSMode = C.DNSHosts
-				dialMetadata = dialMetadata.Pure()
+	dialRemote := func(metadata *C.Metadata, proxy C.Proxy, rule C.Rule) (remoteConn C.Conn, peekLen int, err error) {
+		dialMetadata := metadata
+		if len(metadata.Host) > 0 {
+			if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
+				if dstIp, _ := node.RandIP(); !resolver.IsFakeIP(dstIp) {
+					dialMetadata.DstIP = dstIp
+					dialMetadata.DNSMode = C.DNSHosts
+					dialMetadata = dialMetadata.Pure()
+				}
 			}
 		}
-	}
 
-	var peekBytes []byte
-	var peekLen int
-
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-	defer cancel()
-	remoteConn, err := retry(ctx, func(ctx context.Context) (remoteConn C.Conn, err error) {
-		remoteConn, err = proxy.DialContext(ctx, dialMetadata)
-		if err != nil {
-			return
-		}
-
-		if N.NeedHandshake(remoteConn) {
-			defer func() {
-				if err != nil {
-					_ = remoteConn.Close()
-					for _, chain := range remoteConn.Chains() {
-						if chain == "REJECT" {
-							err = nil
-							return
-						}
-					}
-					remoteConn = nil
-				}
-			}()
-			peekMutex.Lock()
-			defer peekMutex.Unlock()
-			peekBytes, _ = conn.Peek(conn.Buffered())
-			_, err = remoteConn.Write(peekBytes)
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
+		defer cancel()
+		remoteConn, err = retry(ctx, func(ctx context.Context) (remoteConn C.Conn, err error) {
+			remoteConn, err = proxy.DialContext(ctx, dialMetadata)
 			if err != nil {
 				return
 			}
-			if peekLen = len(peekBytes); peekLen > 0 {
-				_, _ = conn.Discard(peekLen)
+
+			if N.NeedHandshake(remoteConn) {
+				defer func() {
+					if err != nil {
+						_ = remoteConn.Close()
+						for _, chain := range remoteConn.Chains() {
+							if chain == "REJECT" {
+								err = nil
+								return
+							}
+						}
+						remoteConn = nil
+					}
+				}()
+				peekMutex.Lock()
+				defer peekMutex.Unlock()
+				peekBytes, _ := conn.Peek(conn.Buffered())
+				_, err = remoteConn.Write(peekBytes)
+				if err != nil {
+					return
+				}
+				if peekLen = len(peekBytes); peekLen > 0 {
+					_, _ = conn.Discard(peekLen)
+				}
 			}
-		}
+			return
+		}, func(err error) {
+			logMetadataErr(metadata, rule, proxy, err)
+		})
 		return
-	}, func(err error) {
-		logMetadataErr(metadata, rule, proxy, err)
-	})
+	}
+
+	remoteConn, peekLen, err := dialRemote(metadata, proxy, rule)
 	if err != nil {
 		return
 	}
+	defer func() {
+		if remoteConn != nil {
+			_ = remoteConn.Close()
+		}
+	}()
+
+	if lateSniffPending && remoteConn != nil {
+		bufferedRemote := newBufferedProxyConn(remoteConn)
+		remoteConn = bufferedRemote
+		if waitForLateSniffClientData(conn, bufferedRemote.BufferedConn) {
+			lateMetadata := metadata.Clone()
+			if snifferDispatcher.TCPSniff(conn, lateMetadata) && !hasPendingData(bufferedRemote.BufferedConn) {
+				lateProxy, lateRule, resolveErr := resolveMetadata(lateMetadata)
+				if resolveErr != nil {
+					log.Warnln("[Metadata] late sniff parse failed: %s", resolveErr.Error())
+					return
+				}
+
+				_ = remoteConn.Close()
+				*metadata = *lateMetadata
+				proxy = lateProxy
+				rule = lateRule
+				remoteConn, peekLen, err = dialRemote(metadata, proxy, rule)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}
+
 	logMetadata(metadata, rule, remoteConn)
 
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, int64(peekLen), 0, true)
-	defer func(remoteConn C.Conn) {
-		_ = remoteConn.Close()
-	}(remoteConn)
 
 	_ = conn.SetReadDeadline(time.Now()) // stop unfinished peek
 	peekMutex.Lock()
