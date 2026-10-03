@@ -9,8 +9,9 @@ import (
 )
 
 type SnifferConfig struct {
-	OverrideDest bool
-	Ports        utils.IntRanges[uint16]
+	OverrideDest  bool
+	Ports         utils.IntRanges[uint16]
+	SkipThreshold uint8 // max sniff-failure count before a dst is skipped (255 = never skip)
 }
 
 type BaseSniffer struct {
