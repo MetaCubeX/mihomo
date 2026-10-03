@@ -155,7 +155,9 @@ func ResolveIPv6(ctx context.Context, host string) (netip.Addr, error) {
 func LookupIPWithResolver(ctx context.Context, host string, r Resolver) ([]netip.Addr, error) {
 	if node, ok := DefaultHosts.Search(host, false); ok {
 		return node.IPs, nil
-	}
+	} else if node != nil && node.IsDomain {
+    return LookupIPWithResolver(ctx, node.Domain, r)
+  }
 
 	if r != nil && r.Invalid() {
 		if DisableIPv6 {
