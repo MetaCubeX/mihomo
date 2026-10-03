@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/httputils"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/ech"
 	C "github.com/metacubex/mihomo/constant"
@@ -172,7 +173,7 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			sl.HandleConn(conn, tunnel, additions...)
+			sl.HandleHTTPConn(r, conn, tunnel, additions...)
 		})
 		httpServer.Handler = httpMux
 		httpServer.Protocols.SetHTTP1(true)
@@ -181,8 +182,8 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	if config.GrpcServiceName != "" {
 		httpServer.Handler = gun.NewServerHandler(gun.ServerOption{
 			ServiceName: config.GrpcServiceName,
-			ConnHandler: func(conn net.Conn) {
-				sl.HandleConn(conn, tunnel, additions...)
+			ConnHandler: func(conn net.Conn, r *http.Request) {
+				sl.HandleHTTPConn(r, conn, tunnel, additions...)
 			},
 			HttpHandler: httpServer.Handler,
 		})
@@ -229,8 +230,8 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 				ScMaxBufferedPosts:   config.XHTTPConfig.ScMaxBufferedPosts,
 				ScMaxEachPostBytes:   config.XHTTPConfig.ScMaxEachPostBytes,
 			},
-			ConnHandler: func(conn net.Conn) {
-				sl.HandleConn(conn, tunnel, additions...)
+			ConnHandler: func(conn net.Conn, r *http.Request) {
+				sl.HandleHTTPConn(r, conn, tunnel, additions...)
 			},
 			HttpHandler: httpServer.Handler,
 		})
@@ -323,6 +324,13 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 		addrList = append(addrList, lis.Addr())
 	}
 	return
+}
+
+func (l *Listener) HandleHTTPConn(r *http.Request, conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
+	if ap := httputils.ClientAddrPortFromHeader(r, l.config.TrustedProxyHeader); ap.IsValid() {
+		additions = append(slices.Clip(additions), inbound.WithSrcAddrPort(ap))
+	}
+	l.HandleConn(conn, tunnel, additions...)
 }
 
 func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
