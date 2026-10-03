@@ -57,7 +57,13 @@ func ReadIpCidrSet(r io.Reader) (ss *IpCidrSet, err error) {
 	if length < 1 {
 		return nil, errors.New("length is invalid")
 	}
-	ss.rr = make([]netipx.IPRange, length)
+	// length is untrusted; grow via append so a crafted huge length hits EOF while reading the
+	// ranges instead of OOMing the process on the allocation.
+	rrCap := length
+	if rrCap > 64 {
+		rrCap = 64
+	}
+	ss.rr = make([]netipx.IPRange, 0, rrCap)
 	for i := int64(0); i < length; i++ {
 		var a16 [16]byte
 		err = binary.Read(r, binary.BigEndian, &a16)
@@ -70,7 +76,7 @@ func ReadIpCidrSet(r io.Reader) (ss *IpCidrSet, err error) {
 			return nil, err
 		}
 		to := netip.AddrFrom16(a16).Unmap()
-		ss.rr[i] = netipx.IPRangeFrom(from, to)
+		ss.rr = append(ss.rr, netipx.IPRangeFrom(from, to))
 	}
 
 	return ss, nil
