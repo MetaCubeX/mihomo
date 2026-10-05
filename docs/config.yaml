@@ -1356,6 +1356,15 @@ proxies: # socks5
     # ephemeral: false # 是否作为 ephemeral node 登录，默认 false
     udp: true # 是否启用 UDP，默认 false
     # port: 41641 # Tailscale 节点通信的 UDP 监听端口，默认 41641；设为 0 使用随机端口。防火墙需放行实际监听端口
+    # host-forward: # 可选；把节点自身 Tailscale IP 的入站连接转发到本机 loopback 同端口
+    #   enabled: true # 默认 false；启用后节点会主动启动，无需先发起出站连接
+    #   target: 127.0.0.1 # 默认 127.0.0.1；仅允许 loopback IP，也可设为 ::1
+    #   tcp: true # 默认 true
+    #   udp: true # 默认 true；独立于上面的出站 udp 选项
+    # 例如节点 IP 为 100.104.118.62，则访问 100.104.118.62:6767 会转发到 127.0.0.1:6767。
+    # 启用后，本机 loopback 上的服务也可通过 Tailnet 访问，仍受 Tailscale ACL/grants 控制。
+    # 服务看到的来源是本地转发连接；此模式与原生客户端的系统 TUN 模式不同。
+    # 本机转发直接连接 loopback，不使用 dialer-proxy、interface-name、routing-mark 或 ip-version。
     # accept-routes: true # 是否接受 Tailnet 中发布的 subnet routes
     # advertise-routes: # 把本机可达网段发布到 Tailnet，其他节点经此节点访问这些地址
     #   - 192.168.1.0/24

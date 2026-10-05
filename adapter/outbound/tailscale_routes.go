@@ -14,16 +14,17 @@ import (
 	"github.com/metacubex/tailscale/types/nettype"
 )
 
-// StartBackground publishes (or explicitly clears) routes even if no outbound
-// connection uses this adapter. Constructors remain free of network side effects.
+// StartBackground enables inbound forwarding and publishes (or explicitly clears)
+// routes even if no outbound connection uses this adapter. Constructors remain
+// free of network side effects.
 func (t *Tailscale) StartBackground() {
-	if t.option.AdvertiseRoutes == nil {
+	if t.option.AdvertiseRoutes == nil && t.hostForward == nil {
 		return
 	}
 	t.backgroundOnce.Do(func() {
 		go func() {
 			if err := t.start(); err != nil && t.ctx.Err() == nil {
-				log.Warnln("[Tailscale](%s) start route publisher failed: %v", t.Name(), err)
+				log.Warnln("[Tailscale](%s) start inbound forwarding failed: %v", t.Name(), err)
 			}
 		}()
 	})
@@ -42,25 +43,34 @@ func (t *Tailscale) advertisesDestination(dst netip.AddrPort) bool {
 	return false
 }
 
-func (t *Tailscale) tcpHandlerForAdvertisedRoute(_, dst netip.AddrPort) (func(net.Conn), bool) {
-	if !t.advertisesDestination(dst) {
+func (t *Tailscale) tcpHandlerForInboundFlow(_, dst netip.AddrPort) (func(net.Conn), bool) {
+	dst, local, ok := t.inboundDestination("tcp", dst)
+	if !ok {
 		return nil, false
 	}
-	return func(conn net.Conn) { t.forwardAdvertisedTCP(conn, dst) }, true
+	return func(conn net.Conn) { t.forwardTCP(conn, dst, t.inboundDialer(local)) }, true
 }
 
-func (t *Tailscale) udpHandlerForAdvertisedRoute(_, dst netip.AddrPort) (func(nettype.ConnPacketConn), bool) {
-	if !t.option.UDP || !t.advertisesDestination(dst) {
+func (t *Tailscale) udpHandlerForInboundFlow(_, dst netip.AddrPort) (func(nettype.ConnPacketConn), bool) {
+	dst, local, ok := t.inboundDestination("udp", dst)
+	if !ok {
 		return nil, false
 	}
-	return func(conn nettype.ConnPacketConn) { t.forwardAdvertisedUDP(conn, dst) }, true
+	return func(conn nettype.ConnPacketConn) { t.forwardUDP(conn, dst, t.inboundDialer(local)) }, true
 }
 
-func (t *Tailscale) forwardAdvertisedTCP(client net.Conn, dst netip.AddrPort) {
+func (t *Tailscale) inboundDialer(local bool) C.Dialer {
+	if local {
+		return tailscaleHostDialer{}
+	}
+	return t.dialer
+}
+
+func (t *Tailscale) forwardTCP(client net.Conn, dst netip.AddrPort, d C.Dialer) {
 	defer client.Close()
 	defer N.SetupContextForConn(t.ctx, client)(nil)
 	ctx, cancel := context.WithTimeout(t.ctx, C.DefaultTCPTimeout)
-	backend, err := t.dialer.DialContext(ctx, "tcp", dst.String())
+	backend, err := d.DialContext(ctx, "tcp", dst.String())
 	cancel()
 	if err != nil {
 		log.Debugln("[Tailscale](%s) forward TCP to %s: %v", t.Name(), dst, err)
@@ -70,7 +80,7 @@ func (t *Tailscale) forwardAdvertisedTCP(client net.Conn, dst netip.AddrPort) {
 	_ = N.RelayContext(t.ctx, client, backend)
 }
 
-func (t *Tailscale) forwardAdvertisedUDP(client net.Conn, dst netip.AddrPort) {
+func (t *Tailscale) forwardUDP(client net.Conn, dst netip.AddrPort, d C.Dialer) {
 	defer client.Close()
 	defer N.SetupContextForConn(t.ctx, client)(nil)
 	dialCtx, dialCancel := context.WithTimeout(t.ctx, C.DefaultTCPTimeout)
@@ -78,7 +88,7 @@ func (t *Tailscale) forwardAdvertisedUDP(client net.Conn, dst netip.AddrPort) {
 	if dst.Addr().Is6() {
 		network = "udp6"
 	}
-	backend, err := t.dialer.ListenPacket(dialCtx, network, "", dst)
+	backend, err := d.ListenPacket(dialCtx, network, "", dst)
 	dialCancel()
 	if err != nil {
 		log.Debugln("[Tailscale](%s) forward UDP to %s: %v", t.Name(), dst, err)

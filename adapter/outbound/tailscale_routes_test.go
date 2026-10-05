@@ -25,17 +25,17 @@ func TestTailscaleAdvertisedRouteHandlers(t *testing.T) {
 		{"192.168.123.1:0", false}, {"127.0.0.1:80", false},
 	} {
 		dst := netip.MustParseAddrPort(tc.dst)
-		tcp, intercept := ts.tcpHandlerForAdvertisedRoute(netip.AddrPort{}, dst)
+		tcp, intercept := ts.tcpHandlerForInboundFlow(netip.AddrPort{}, dst)
 		if intercept != tc.want || (tcp != nil) != tc.want {
 			t.Fatalf("TCP %s: intercept=%v handler=%v", tc.dst, intercept, tcp != nil)
 		}
-		udp, intercept := ts.udpHandlerForAdvertisedRoute(netip.AddrPort{}, dst)
+		udp, intercept := ts.udpHandlerForInboundFlow(netip.AddrPort{}, dst)
 		if intercept != tc.want || (udp != nil) != tc.want {
 			t.Fatalf("UDP %s: intercept=%v handler=%v", tc.dst, intercept, udp != nil)
 		}
 	}
 	ts.option.UDP = false
-	if h, ok := ts.udpHandlerForAdvertisedRoute(netip.AddrPort{}, netip.MustParseAddrPort("192.168.123.1:53")); h != nil || ok {
+	if h, ok := ts.udpHandlerForInboundFlow(netip.AddrPort{}, netip.MustParseAddrPort("192.168.123.1:53")); h != nil || ok {
 		t.Fatal("UDP disabled")
 	}
 	ts.advertisedRoutes = nil
@@ -74,7 +74,7 @@ func TestTailscaleForwardTCPAndCancel(t *testing.T) {
 	d := &tailscaleTestDialer{conn: backend}
 	ts := &Tailscale{Base: &Base{dialer: d}, ctx: ctx}
 	done := make(chan struct{})
-	go func() { ts.forwardAdvertisedTCP(incoming, netip.MustParseAddrPort("192.168.123.1:80")); close(done) }()
+	go func() { ts.forwardTCP(incoming, netip.MustParseAddrPort("192.168.123.1:80"), d); close(done) }()
 	go func() { _, _ = io.Copy(echo, echo) }()
 	_ = client.SetDeadline(time.Now().Add(3 * time.Second))
 	payload := []byte("forward through the configured system dialer")

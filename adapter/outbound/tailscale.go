@@ -43,6 +43,7 @@ type Tailscale struct {
 	startErr         error
 	backgroundOnce   sync.Once
 	advertisedRoutes []netip.Prefix
+	hostForward      *tailscaleHostForward
 
 	backendInitOnce sync.Once
 	backendInitCh   chan struct{}
@@ -64,10 +65,11 @@ type TailscaleOption struct {
 	UDP        bool    `proxy:"udp,omitempty"`
 	Port       *uint16 `proxy:"port,omitempty"`
 
-	AcceptRoutes           *bool    `proxy:"accept-routes,omitempty"`
-	AdvertiseRoutes        []string `proxy:"advertise-routes,omitempty"`
-	ExitNode               string   `proxy:"exit-node,omitempty"`
-	ExitNodeAllowLANAccess *bool    `proxy:"exit-node-allow-lan-access,omitempty"`
+	AcceptRoutes           *bool                       `proxy:"accept-routes,omitempty"`
+	AdvertiseRoutes        []string                    `proxy:"advertise-routes,omitempty"`
+	ExitNode               string                      `proxy:"exit-node,omitempty"`
+	ExitNodeAllowLANAccess *bool                       `proxy:"exit-node-allow-lan-access,omitempty"`
+	HostForward            *TailscaleHostForwardOption `proxy:"host-forward,omitempty"`
 }
 
 func init() {
@@ -116,6 +118,10 @@ func init() {
 }
 
 func NewTailscale(option TailscaleOption) (*Tailscale, error) {
+	hostForward, err := buildTailscaleHostForward(option.HostForward)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := buildTailscaleMaskedPrefs(option); err != nil {
 		return nil, err
 	}
@@ -153,6 +159,7 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		cancel:           cancel,
 		backendInitCh:    make(chan struct{}),
 		advertisedRoutes: routes,
+		hostForward:      hostForward,
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	outbound.server = &tsnet.Server{
@@ -188,8 +195,8 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 			log.Debugln("[Tailscale](%s) %s", option.Name, fmt.Sprintf(format, args...))
 		},
 	}
-	outbound.server.RegisterFallbackTCPHandler(outbound.tcpHandlerForAdvertisedRoute)
-	outbound.server.RegisterFallbackUDPHandler(outbound.udpHandlerForAdvertisedRoute)
+	outbound.server.RegisterFallbackTCPHandler(outbound.tcpHandlerForInboundFlow)
+	outbound.server.RegisterFallbackUDPHandler(outbound.udpHandlerForInboundFlow)
 	dnsTransport := tailscaleDNSTransport{tailscale: outbound}
 	outbound.dnsResolver = dns.NewResolverFromClient(dnsTransport)
 	outbound.unregisterDNSResolver = dns.RegisterTailscaleDnsClient(option.Name, dnsTransport)
