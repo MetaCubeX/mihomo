@@ -504,6 +504,9 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		log.Warnln("[%s] udp-remote-dns is incompatible with packetaddr encoding; disabling remote DNS", option.Name)
 		option.UDPRemoteDNS = false
 	}
+	if option.XUDP && option.UDPRemoteDNS {
+		log.Warnln("[%s] xudp with udp-remote-dns may fail to restore domain or FakeIP reply addresses when the server reuses a UDP session after reconnecting", option.Name)
+	}
 
 	v := &Vmess{
 		Base: NewBase(BaseOption{

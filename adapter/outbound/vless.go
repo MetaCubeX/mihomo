@@ -492,6 +492,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 		log.Warnln("[%s] udp-remote-dns is incompatible with packetaddr encoding; disabling remote DNS", option.Name)
 		option.UDPRemoteDNS = false
 	}
+	if option.XUDP && option.UDPRemoteDNS {
+		log.Warnln("[%s] xudp with udp-remote-dns may fail to restore domain or FakeIP reply addresses when the server reuses a UDP session after reconnecting", option.Name)
+	}
 
 	client, err := vless.NewClient(option.UUID, addons)
 	if err != nil {
