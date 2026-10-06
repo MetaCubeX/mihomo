@@ -88,7 +88,20 @@ func (p *Pool) IPNet() netip.Prefix {
 
 // CloneFrom clone cache from old pool
 func (p *Pool) CloneFrom(o *Pool) {
+	o.mux.Lock()
+	offset, cycle := o.offset, o.cycle
 	o.store.CloneTo(p.store)
+	o.mux.Unlock()
+
+	// the allocation state only matches the cloned entries if both pools
+	// cover the same range
+	if o.first != p.first || o.last != p.last {
+		return
+	}
+
+	p.mux.Lock()
+	p.offset, p.cycle = offset, cycle
+	p.mux.Unlock()
 }
 
 func (p *Pool) get(host string) netip.Addr {
