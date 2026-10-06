@@ -14,6 +14,7 @@ import (
 func ruleRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getRules)
+	r.Get("/match", matchRules)
 	if !embedMode { // disallow update/patch rules in embed mode
 		r.Patch("/disable", disableRules)
 	}

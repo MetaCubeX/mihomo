@@ -182,3 +182,24 @@ func TestCloneTo(t *testing.T) {
 	n.Set("5", 5)
 	assert.False(t, n.Exist("1"))
 }
+
+func TestPeekPreservesCacheState(t *testing.T) {
+	var evicted []string
+	c := New[string, int](WithSize[string, int](2), WithAge[string, int](60), WithUpdateAgeOnGet[string, int](),
+		WithEvict[string, int](func(key string, _ int) { evicted = append(evicted, key) }))
+	expires := time.Now().Add(time.Hour).Unix()
+	c.SetWithExpire("oldest", 1, time.Unix(expires, 0))
+	c.Set("newer", 2)
+	value, ok := c.Peek("oldest")
+	assert.True(t, ok)
+	assert.Equal(t, 1, value)
+	assert.Equal(t, expires, c.cache["oldest"].Value.expires)
+	c.Set("latest", 3)
+	assert.Equal(t, []string{"oldest"}, evicted)
+
+	c.SetWithExpire("latest", 3, time.Now().Add(-time.Hour))
+	_, ok = c.Peek("latest")
+	assert.False(t, ok)
+	assert.True(t, c.Exist("latest"))
+	assert.Equal(t, []string{"oldest"}, evicted)
+}

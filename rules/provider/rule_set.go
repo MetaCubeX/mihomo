@@ -21,15 +21,23 @@ func (rs *RuleSet) RuleType() C.RuleType {
 }
 
 func (rs *RuleSet) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
-	if provider, ok := rs.getProvider(); ok {
-		if rs.isSrc {
-			metadata.SwapSrcDst()
-			defer metadata.SwapSrcDst()
-
-			helper.ResolveIP = nil // src mode should not resolve ip
-		} else if rs.noResolveIP {
-			helper.ResolveIP = nil
+	if rs.isSrc {
+		metadata.SwapSrcDst()
+		defer metadata.SwapSrcDst()
+		if helper.Diagnostics != nil {
+			diagnostics := *helper.Diagnostics
+			diagnostics.SourceDestinationSwapped = !diagnostics.SourceDestinationSwapped
+			helper.Diagnostics = &diagnostics
 		}
+
+		helper.ResolveIP = nil // src mode should not resolve ip
+	} else if rs.noResolveIP {
+		helper.ResolveIP = nil
+	}
+	if helper.Diagnostics != nil && helper.Diagnostics.MatchProvider != nil {
+		return helper.Diagnostics.MatchProvider(rs.ruleProviderName, metadata, helper), rs.adapter
+	}
+	if provider, ok := rs.getProvider(); ok {
 		return provider.Match(metadata, helper), rs.adapter
 	}
 	return false, ""

@@ -3,8 +3,11 @@ package route
 import (
 	"context"
 	"math"
+	"net/url"
+	"strings"
 
 	"github.com/metacubex/mihomo/component/resolver"
+	MD "github.com/metacubex/mihomo/dns"
 
 	"github.com/metacubex/chi"
 	"github.com/metacubex/chi/render"
@@ -16,7 +19,49 @@ import (
 func dnsRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/query", queryDNS)
+	r.Get("/policy/match", matchDNSPolicy)
 	return r
+}
+
+type dnsPolicyMatcher interface {
+	MatchPolicy(domain string, qtype uint16) MD.PolicyMatch
+}
+
+func matchDNSPolicy(w http.ResponseWriter, r *http.Request) {
+	loaded := resolver.DefaultResolver
+	if loaded == nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, newError("DNS section is disabled"))
+		return
+	}
+
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+	domain := query.Get("domain")
+	if _, valid := dns.IsDomainName(dns.Fqdn(domain)); !valid || domain == "" || domain == "." ||
+		strings.ContainsAny(domain, " \t\r\n/\\:?#*@+") {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("invalid query domain"))
+		return
+	}
+	qTypeStr, _ := lo.Coalesce(query.Get("type"), "A")
+	qType, valid := dns.StringToType[strings.ToUpper(qTypeStr)]
+	if !valid {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("invalid query type"))
+		return
+	}
+	matcher, ok := loaded.(dnsPolicyMatcher)
+	if !ok {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, newError("DNS policy matching is unavailable"))
+		return
+	}
+	render.JSON(w, r, matcher.MatchPolicy(domain, qType))
 }
 
 func queryDNS(w http.ResponseWriter, r *http.Request) {

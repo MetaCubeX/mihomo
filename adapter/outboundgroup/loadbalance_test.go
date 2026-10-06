@@ -1,12 +1,20 @@
 package outboundgroup
 
 import (
+	"context"
+	"fmt"
 	"net/netip"
 	"testing"
 
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outbound"
+	AP "github.com/metacubex/mihomo/adapter/provider"
+	"github.com/metacubex/mihomo/common/lru"
+	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
+	P "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/rules"
+	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/stretchr/testify/require"
 )
@@ -84,13 +92,13 @@ func TestLoadBalanceHashKeyInUserSpreadsUsers(t *testing.T) {
 // address cannot separate its own concurrent jobs without a supplied identity.
 func TestLoadBalanceHashKeyInUserSeparatesJobsSharingASourceAddress(t *testing.T) {
 	proxies := balancedProxies(8)
-	strategy := strategyStickySessions(testUrl, getKeyWithInUser(getKeyWithSrcAndDst))
+	strategy := newStickySessions(testUrl, getKeyWithInUser(getKeyWithSrcAndDst)).selectProxy
 
 	first := indexOf(t, proxies, strategy(proxies, request("job-1", "a.example.com"), false))
 	require.Equal(t, first,
 		indexOf(t, proxies, strategy(proxies, request("job-1", "b.example.org"), false)))
 
-	shared := strategyStickySessions(testUrl, getKeyWithSrcAndDst)
+	shared := newStickySessions(testUrl, getKeyWithSrcAndDst).selectProxy
 	require.Equal(t,
 		indexOf(t, proxies, shared(proxies, request("job-1", "a.example.com"), false)),
 		indexOf(t, proxies, shared(proxies, request("job-2", "a.example.com"), false)),
@@ -137,4 +145,68 @@ func TestLoadBalanceHashKeyRejectsUnusableConfigs(t *testing.T) {
 	_, err = NewLoadBalance(GroupCommonOption{Name: "lb"},
 		LoadBalanceOption{Strategy: "consistent-hashing", HashKey: "nonsense"}, nil, nil)
 	require.ErrorIs(t, err, errHashKey)
+}
+
+func TestRuleDiagnosticsPreserveStickySessions(t *testing.T) {
+	proxies := balancedProxies(2)
+	provider, err := AP.NewCompatibleProvider("sticky-test", proxies, AP.NewHealthCheck(proxies, "", 0, 0, true, nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = provider.Close() })
+	lb, err := NewLoadBalance(GroupCommonOption{Name: "sticky"}, LoadBalanceOption{Strategy: "sticky-sessions"}, nil, []P.ProxyProvider{provider})
+	require.NoError(t, err)
+	var evicted []uint64
+	lb.sticky.cache = lru.New[uint64, int](lru.WithSize[uint64, int](2), lru.WithEvict[uint64, int](func(key uint64, _ int) { evicted = append(evicted, key) }))
+	oldest := request("", "oldest.test")
+	newer := request("", "newer.test")
+	key := func(m *C.Metadata) uint64 { return utils.MapHash(lb.sticky.keyOf(m)) }
+	lb.sticky.cache.Set(key(oldest), 1)
+	lb.sticky.cache.Set(key(newer), 0)
+	require.Same(t, proxies[1], lb.UnwrapReadOnly(oldest))
+
+	oldRules, oldProviders := tunnel.Rules(), tunnel.RuleProviders()
+	oldProxies, oldProxyProviders := tunnel.Proxies(), tunnel.Providers()
+	t.Cleanup(func() {
+		tunnel.UpdateRules(oldRules, nil, oldProviders)
+		tunnel.UpdateProxies(oldProxies, oldProxyProviders)
+	})
+	rule, err := rules.ParseRule("MATCH", "", "sticky", nil, nil)
+	require.NoError(t, err)
+	tunnel.UpdateRules([]C.Rule{rule}, nil, nil)
+	tunnel.UpdateProxies(map[string]C.Proxy{"sticky": adapter.NewProxy(lb)}, nil)
+	for i := 0; i < 5; i++ {
+		metadata := request("", fmt.Sprintf("preview-%d.test", i))
+		result := tunnel.MatchRules(context.Background(), *metadata, nil, false)
+		require.True(t, result.Complete)
+		require.Equal(t, "sticky", result.Policy)
+		require.False(t, lb.sticky.cache.Exist(key(metadata)))
+	}
+	require.Empty(t, evicted)
+	// Normal touch=false calls must still create sessions, as they did before diagnostics.
+	live := request("", "live.test")
+	selected := lb.Unwrap(live, false)
+	require.Equal(t, []uint64{key(oldest)}, evicted)
+	require.Same(t, selected, lb.Unwrap(live, true))
+}
+
+type stickyTestProxy struct {
+	C.Proxy
+	alive bool
+}
+
+func (p *stickyTestProxy) AliveForTestUrl(string) bool { return p.alive }
+
+func TestStickyPreviewDoesNotReplaceFailedAssignment(t *testing.T) {
+	s := newStickySessions(testUrl, getKey)
+	proxies := []C.Proxy{&stickyTestProxy{}, &stickyTestProxy{}}
+	metadata := request("", "failed.test")
+	key := utils.MapHash(s.keyOf(metadata))
+	s.cache.Set(key, 1)
+	require.Same(t, proxies[0], s.selectProxy(proxies, metadata, true))
+	idx, ok := s.cache.Peek(key)
+	require.True(t, ok)
+	require.Equal(t, 1, idx)
+	require.Same(t, proxies[0], s.selectProxy(proxies, metadata, false))
+	idx, ok = s.cache.Peek(key)
+	require.True(t, ok)
+	require.Zero(t, idx)
 }
