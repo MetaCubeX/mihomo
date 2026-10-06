@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 // SOCKS address types as defined in RFC 1928 section 5.
@@ -301,6 +303,20 @@ func (m *Metadata) UDPAddr() *net.UDPAddr {
 		return nil
 	}
 	return net.UDPAddrFromAddrPort(m.AddrPort())
+}
+
+// UDPRemoteAddr preserves an unresolved domain for protocols with remote DNS.
+func (m *Metadata) UDPRemoteAddr() net.Addr {
+	if m.NetWork != UDP {
+		return nil
+	}
+	if !m.DstIP.IsValid() && m.Host != "" {
+		return M.ParseSocksaddrHostPort(m.Host, m.DstPort)
+	}
+	if addr := m.UDPAddr(); addr != nil {
+		return addr
+	}
+	return nil
 }
 
 func (m *Metadata) String() string {

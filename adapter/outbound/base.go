@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"runtime"
 	"sync"
 	"syscall"
@@ -27,19 +28,20 @@ type ProxyAdapter interface {
 }
 
 type Base struct {
-	name   string
-	addr   string
-	tp     C.AdapterType
-	pdName string
-	udp    bool
-	xudp   bool
-	tfo    bool
-	mpTcp  bool
-	iface  string
-	rmark  int
-	prefer C.DNSPrefer
-	dialer C.Dialer
-	id     uuid.UUID
+	name         string
+	addr         string
+	tp           C.AdapterType
+	pdName       string
+	udp          bool
+	udpRemoteDNS bool
+	xudp         bool
+	tfo          bool
+	mpTcp        bool
+	iface        string
+	rmark        int
+	prefer       C.DNSPrefer
+	dialer       C.Dialer
+	id           uuid.UUID
 }
 
 type BaseOption struct {
@@ -107,8 +109,14 @@ func (b *Base) SupportUDP() bool {
 	return b.udp
 }
 
+// SetUDPRemoteDNS applies the udp-remote-dns option.
+func (b *Base) SetUDPRemoteDNS(enabled bool) {
+	b.udpRemoteDNS = enabled
+}
+
 // ProxyInfo implements C.ProxyAdapter
 func (b *Base) ProxyInfo() (info C.ProxyInfo) {
+	info.UDPRemoteDNS = b.udpRemoteDNS
 	info.XUDP = b.xudp
 	info.TFO = b.tfo
 	info.MPTCP = b.mpTcp
@@ -175,6 +183,17 @@ func (b *Base) DialOptions() (opts []dialer.Option) {
 	return opts
 }
 
+// prepareUDP keeps the eligible domain for remote DNS; otherwise ResolveUDP
+// retains its original contract of resolving an unresolved target to an IP.
+func prepareUDP(ctx context.Context, metadata *C.Metadata, proxy ProxyAdapter) error {
+	firstDomain, scoped := C.UDPRemoteDNSDomainFromContext(ctx)
+	if proxy.ProxyInfo().UDPRemoteDNS && metadata.Host != "" && (!scoped || metadata.Host == firstDomain) {
+		metadata.DstIP = netip.Addr{}
+		return nil
+	}
+	return proxy.ResolveUDP(ctx, metadata)
+}
+
 func (b *Base) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
 	if !metadata.Resolved() {
 		ip, err := resolveIPWithResolver(ctx, metadata.Host, b.prefer, resolver.DefaultResolver)
@@ -191,12 +210,13 @@ func (b *Base) Close() error {
 }
 
 type BasicOption struct {
-	TFO         bool        `proxy:"tfo,omitempty"`
-	MPTCP       bool        `proxy:"mptcp,omitempty"`
-	Interface   string      `proxy:"interface-name,omitempty"`
-	RoutingMark int         `proxy:"routing-mark,omitempty"`
-	IPVersion   C.DNSPrefer `proxy:"ip-version,omitempty"`
-	DialerProxy string      `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
+	UDPRemoteDNS bool        `proxy:"udp-remote-dns,omitempty"`
+	TFO          bool        `proxy:"tfo,omitempty"`
+	MPTCP        bool        `proxy:"mptcp,omitempty"`
+	Interface    string      `proxy:"interface-name,omitempty"`
+	RoutingMark  int         `proxy:"routing-mark,omitempty"`
+	IPVersion    C.DNSPrefer `proxy:"ip-version,omitempty"`
+	DialerProxy  string      `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
 
 	//
 	// The following parameters are used internally, assign value by the structure decoder are disallowed
@@ -303,10 +323,16 @@ type packetConn struct {
 	connID      string
 	adapterAddr string
 	resolveUDP  func(ctx context.Context, metadata *C.Metadata) error
+	prepareUDP  func(ctx context.Context, metadata *C.Metadata) error
 }
 
 func (c *packetConn) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
 	return c.resolveUDP(ctx, metadata)
+}
+
+// PrepareUDP selects remote DNS or invokes the ordinary local resolver.
+func (c *packetConn) PrepareUDP(ctx context.Context, metadata *C.Metadata) error {
+	return c.prepareUDP(ctx, metadata)
 }
 
 func (c *packetConn) RemoteDestination() string {
@@ -361,7 +387,13 @@ func NewPacketConn(pc net.PacketConn, a ProxyAdapter) C.PacketConn {
 	default:
 		epc = N.NewDeadlineEnhancePacketConn(epc) // most conn from outbound can't handle readDeadline correctly
 	}
-	cpc := &packetConn{epc, nil, nil, a.Name(), utils.NewUUIDV4().String(), a.Addr(), a.ResolveUDP}
+	cpc := &packetConn{
+		EnhancePacketConn: epc, adapterName: a.Name(), connID: utils.NewUUIDV4().String(),
+		adapterAddr: a.Addr(), resolveUDP: a.ResolveUDP,
+		prepareUDP: func(ctx context.Context, metadata *C.Metadata) error {
+			return prepareUDP(ctx, metadata, a)
+		},
+	}
 	cpc.AppendToChains(a)
 	return cpc
 }

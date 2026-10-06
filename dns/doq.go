@@ -20,6 +20,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/metacubex/quic-go"
+	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
 	D "github.com/miekg/dns"
 )
@@ -316,7 +317,7 @@ func (doq *dnsOverQUIC) openStream(ctx context.Context, conn *quic.Conn) (*quic.
 func (doq *dnsOverQUIC) openConnection(ctx context.Context) (quicConn *quic.Conn, err error) {
 	// we're using bootstrapped address instead of what's passed to the function
 	// it does not create an actual connection, but it helps us determine
-	// what IP is actually reachable (when there're v4/v6 addresses).
+	// which address the dialer selected. Remote DNS proxies may keep a domain.
 	rawConn, err := doq.dialer.DialContext(ctx, "udp", doq.addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open a QUIC connection: %w", err)
@@ -331,7 +332,14 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (quicConn *quic.Conn
 	}
 
 	p, err := strconv.Atoi(port)
-	udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: p}
+	if err != nil {
+		return nil, err
+	}
+	destination := M.ParseSocksaddrHostPort(ip, uint16(p))
+	var udpAddr net.Addr = destination
+	if destination.IsIP() {
+		udpAddr = destination.UDPAddr()
+	}
 	packetConn, err := doq.dialer.ListenPacket(ctx, "udp", addr)
 	if err != nil {
 		return nil, err
@@ -362,7 +370,7 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (quicConn *quic.Conn
 	transport := quic.Transport{Conn: packetConn}
 	transport.SetCreatedConn(true) // auto close conn
 	transport.SetSingleUse(true)   // auto close transport
-	quicConn, err = transport.Dial(ctx, &udpAddr, tlsConfig, doq.getQUICConfig())
+	quicConn, err = transport.Dial(ctx, udpAddr, tlsConfig, doq.getQUICConfig())
 	if err != nil {
 		_ = packetConn.Close()
 		return nil, fmt.Errorf("opening quic connection to %s: %w", doq.addr, err)

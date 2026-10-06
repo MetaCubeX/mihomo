@@ -21,6 +21,7 @@ import (
 	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/http3"
+	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
 	D "github.com/miekg/dns"
 	"golang.org/x/exp/slices"
@@ -542,9 +543,10 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 	if err != nil {
 		return nil, err
 	}
-	udpAddr := net.UDPAddr{
-		IP:   net.ParseIP(ip),
-		Port: portInt,
+	destination := M.ParseSocksaddrHostPort(ip, uint16(portInt))
+	var udpAddr net.Addr = destination
+	if destination.IsIP() {
+		udpAddr = destination.UDPAddr()
 	}
 	packetConn, err := doh.dialer.ListenPacket(ctx, "udp", addr)
 	if err != nil {
@@ -560,7 +562,7 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 		// It's ok if net.SplitHostPort returns an error - it could be a hostname/IP address without a port.
 		tlsCfg.ServerName = doh.url.Host
 	}
-	quicConn, err := transport.DialEarly(ctx, &udpAddr, tlsCfg, cfg)
+	quicConn, err := transport.DialEarly(ctx, udpAddr, tlsCfg, cfg)
 	if err != nil {
 		_ = packetConn.Close()
 		return nil, err
@@ -577,7 +579,7 @@ func (doh *dnsOverHTTPS) probeH3(
 ) (addr string, err error) {
 	// We're using bootstrapped address instead of what's passed to the function
 	// it does not create an actual connection, but it helps us determine
-	// what IP is actually reachable (when there are v4/v6 addresses).
+	// which address the dialer selected. Remote DNS proxies may keep a domain.
 	rawConn, err := doh.dialer.DialContext(ctx, "udp", doh.url.Host)
 	if err != nil {
 		return "", fmt.Errorf("failed to dial: %w", err)

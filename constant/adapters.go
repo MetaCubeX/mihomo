@@ -105,6 +105,7 @@ type PacketConn interface {
 	N.EnhancePacketConn
 	Connection
 	ResolveUDP(ctx context.Context, metadata *Metadata) error
+	PrepareUDP(ctx context.Context, metadata *Metadata) error
 }
 
 type Dialer interface {
@@ -113,6 +114,7 @@ type Dialer interface {
 }
 
 type ProxyInfo struct {
+	UDPRemoteDNS bool
 	XUDP         bool
 	TFO          bool
 	MPTCP        bool
