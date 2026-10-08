@@ -19,6 +19,7 @@ type Fallback struct {
 	*GroupBase
 	disableUDP     bool
 	testUrl        string
+	testMethod     string
 	selected       string
 	expectedStatus string
 }
@@ -141,7 +142,7 @@ func (f *Fallback) Set(name string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
 		expectedStatus, _ := utils.NewUnsignedRanges[uint16](f.expectedStatus)
-		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus)
+		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, f.testMethod)
 	}
 
 	return nil
@@ -177,5 +178,6 @@ func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyF
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
+		testMethod:     option.HTTPMethod,
 	}, nil
 }

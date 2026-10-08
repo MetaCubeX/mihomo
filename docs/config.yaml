@@ -1768,6 +1768,7 @@ proxy-groups:
     # tolerance: 150
     # lazy: true
     # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
+    # http-method: HEAD # 健康检查使用的 HTTP 方法，默认 HEAD，设为 GET 可完整测试下载
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 
@@ -1863,6 +1864,7 @@ proxy-providers:
       # lazy: true
       url: https://cp.cloudflare.com/generate_204
       # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
+      # http-method: HEAD # 健康检查使用的 HTTP 方法，默认 HEAD，设为 GET 可完整测试下载
     override: # 覆写节点加载时的一些配置项
       skip-cert-verify: true
       name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI
