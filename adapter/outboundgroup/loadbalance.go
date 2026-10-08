@@ -28,6 +28,7 @@ type LoadBalance struct {
 	*GroupBase
 	disableUDP     bool
 	strategyFn     strategyFn
+	sticky         *stickySessions
 	testUrl        string
 	expectedStatus string
 }
@@ -217,43 +218,67 @@ func strategyConsistentHashing(url string, keyOf keyFn) strategyFn {
 	}
 }
 
-func strategyStickySessions(url string, keyOf keyFn) strategyFn {
-	ttl := time.Minute * 10
-	maxRetry := 5
-	lruCache := lru.New[uint64, int](
-		lru.WithAge[uint64, int](int64(ttl.Seconds())),
-		lru.WithSize[uint64, int](1000))
-	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
-		key := utils.MapHash(keyOf(metadata))
-		length := len(proxies)
-		idx, has := lruCache.Get(key)
-		if !has || idx >= length {
-			idx = int(jumpHash(key+uint64(time.Now().UnixNano()), int32(length)))
-		}
+type stickySessions struct {
+	url   string
+	keyOf keyFn
+	cache *lru.LruCache[uint64, int]
+}
 
-		nowIdx := idx
-		for i := 1; i < maxRetry; i++ {
-			proxy := proxies[nowIdx]
-			if proxy.AliveForTestUrl(url) {
-				if !has || nowIdx != idx {
-					lruCache.Set(key, nowIdx)
-				}
-
-				return proxy
-			} else {
-				nowIdx = int(jumpHash(key+uint64(time.Now().UnixNano()), int32(length)))
-			}
-		}
-
-		lruCache.Set(key, 0)
-		return proxies[0]
+func newStickySessions(url string, keyOf keyFn) *stickySessions {
+	return &stickySessions{
+		url:   url,
+		keyOf: keyOf,
+		cache: lru.New[uint64, int](
+			lru.WithAge[uint64, int](int64((10 * time.Minute).Seconds())),
+			lru.WithSize[uint64, int](1000)),
 	}
+}
+
+func (s *stickySessions) selectProxy(proxies []C.Proxy, metadata *C.Metadata, readOnly bool) C.Proxy {
+	key := utils.MapHash(s.keyOf(metadata))
+	length := len(proxies)
+	var idx int
+	var has bool
+	if readOnly {
+		idx, has = s.cache.Peek(key)
+	} else {
+		idx, has = s.cache.Get(key)
+	}
+	if !has || idx >= length {
+		idx = int(jumpHash(key+uint64(time.Now().UnixNano()), int32(length)))
+	}
+
+	nowIdx := idx
+	for i := 1; i < 5; i++ {
+		proxy := proxies[nowIdx]
+		if proxy.AliveForTestUrl(s.url) {
+			if !readOnly && (!has || nowIdx != idx) {
+				s.cache.Set(key, nowIdx)
+			}
+			return proxy
+		} else {
+			nowIdx = int(jumpHash(key+uint64(time.Now().UnixNano()), int32(length)))
+		}
+	}
+
+	if !readOnly {
+		s.cache.Set(key, 0)
+	}
+	return proxies[0]
 }
 
 // Unwrap implements C.ProxyAdapter
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	proxies := lb.GetProxies(touch)
 	return lb.strategyFn(proxies, metadata, touch)
+}
+
+// UnwrapReadOnly selects for diagnostics without creating or refreshing sticky sessions.
+func (lb *LoadBalance) UnwrapReadOnly(metadata *C.Metadata) C.Proxy {
+	if lb.sticky != nil {
+		return lb.sticky.selectProxy(lb.GetProxies(false), metadata, true)
+	}
+	return lb.Unwrap(metadata, false)
 }
 
 // MarshalJSON implements C.ProxyAdapter
@@ -287,6 +312,7 @@ func (lb *LoadBalance) Now() string {
 
 func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (lb *LoadBalance, err error) {
 	var strategyFn strategyFn
+	var sticky *stickySessions
 	withKey, err := hashKey(loadBalanceOption.HashKey)
 	if err != nil {
 		return nil, err
@@ -302,7 +328,10 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 		}
 		strategyFn = strategyRoundRobin(option.URL)
 	case "sticky-sessions":
-		strategyFn = strategyStickySessions(option.URL, withKey(getKeyWithSrcAndDst))
+		sticky = newStickySessions(option.URL, withKey(getKeyWithSrcAndDst))
+		strategyFn = func(proxies []C.Proxy, metadata *C.Metadata, _ bool) C.Proxy {
+			return sticky.selectProxy(proxies, metadata, false)
+		}
 	default:
 		return nil, fmt.Errorf("%w: %s", errStrategy, loadBalanceOption.Strategy)
 	}
@@ -321,6 +350,7 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 			Providers:      providers,
 		}),
 		strategyFn:     strategyFn,
+		sticky:         sticky,
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
