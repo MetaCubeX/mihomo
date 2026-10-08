@@ -11,7 +11,6 @@ import (
 
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/common/convert"
-	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/common/yaml"
 	"github.com/metacubex/mihomo/component/age"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
@@ -96,8 +95,8 @@ func (bp *baseProvider) HealthCheckURL() string {
 	return bp.healthCheck.url
 }
 
-func (bp *baseProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
-	bp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
+func (bp *baseProvider) RegisterHealthCheckTask(url string, option C.HealthCheckOption, filter string, interval uint) {
+	bp.healthCheck.registerHealthCheckTask(url, option, filter, interval)
 }
 
 func (bp *baseProvider) setProxies(proxies []C.Proxy) {
@@ -134,7 +133,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		VehicleType:      pp.VehicleType().String(),
 		Proxies:          pp.Proxies(),
 		TestUrl:          pp.healthCheck.url,
-		ExpectedStatus:   pp.healthCheck.expectedStatus.String(),
+		ExpectedStatus:   pp.healthCheck.option.ExpectedStatus.String(),
 		UpdatedAt:        pp.UpdatedAt(),
 		SubscriptionInfo: pp.subscriptionInfo,
 	})
@@ -243,7 +242,7 @@ func (ip *inlineProvider) MarshalJSON() ([]byte, error) {
 		VehicleType:    ip.VehicleType().String(),
 		Proxies:        ip.Proxies(),
 		TestUrl:        ip.healthCheck.url,
-		ExpectedStatus: ip.healthCheck.expectedStatus.String(),
+		ExpectedStatus: ip.healthCheck.option.ExpectedStatus.String(),
 		UpdatedAt:      ip.updateAt,
 	})
 }
@@ -305,7 +304,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 		VehicleType:    cp.VehicleType().String(),
 		Proxies:        cp.Proxies(),
 		TestUrl:        cp.healthCheck.url,
-		ExpectedStatus: cp.healthCheck.expectedStatus.String(),
+		ExpectedStatus: cp.healthCheck.option.ExpectedStatus.String(),
 	})
 }
 
