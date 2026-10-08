@@ -134,6 +134,12 @@ profile: # 存储 select 选择记录
 tun:
   enable: false
   stack: mips # gvisor/mixed/system
+  # 系统 DNS 配置方式
+  # - disabled，不设置系统 DNS
+  # - native，将 tun 地址设为系统 DNS
+  # - hijack，在 native 基础上额外拦截发往其他网卡的 53 端口流量（Windows 需 strict-route，Linux 需 auto-redirect）
+  # - 置空，和旧行为一致，Windows 和 Linux 在启用 auto-route 默认 hijack，否则 disabled；macOS 默认 disabled
+  # dns-mode: hijack 
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
   # auto-detect-interface: true # 自动识别出口网卡
@@ -2799,6 +2805,7 @@ listeners:
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     stack: mips # gvisor / mixed / system
+    # dns-mode: hijack # disabled / native / hijack，为空时采用旧行为
     dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
