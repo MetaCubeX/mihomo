@@ -135,6 +135,7 @@ func New(config LC.TrustTunnelServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 			ICMPHandler:           nil,
 			QUICCongestionControl: config.CongestionController,
 			QUICCwnd:              config.CWND,
+			Fallback:              config.Fallback,
 			QUICBBRProfile:        config.BBRProfile,
 		})
 		service.UpdateUsers(config.Users)

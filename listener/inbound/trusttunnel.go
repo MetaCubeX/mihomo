@@ -21,6 +21,7 @@ type TrustTunnelOption struct {
 	CongestionController string    `inbound:"congestion-controller,omitempty"`
 	CWND                 int       `inbound:"cwnd,omitempty"`
 	BBRProfile           string    `inbound:"bbr-profile,omitempty"`
+	Fallback             string    `inbound:"fallback,omitempty"`
 }
 
 func (o TrustTunnelOption) Equal(config C.InboundConfig) bool {
@@ -59,6 +60,7 @@ func NewTrustTunnel(options *TrustTunnelOption) (*TrustTunnel, error) {
 			CongestionController: options.CongestionController,
 			CWND:                 options.CWND,
 			BBRProfile:           options.BBRProfile,
+			Fallback:             options.Fallback,
 		},
 	}, nil
 }

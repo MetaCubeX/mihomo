@@ -11,6 +11,7 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/http/httputil"
 	"github.com/metacubex/quic-go/http3"
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/auth"
@@ -40,6 +41,9 @@ type ServiceOptions struct {
 	QUICCongestionControl string
 	QUICCwnd              int
 	QUICBBRProfile        string
+	// Fallback is an optional backend (host:port) that unauthenticated requests are
+	// served from, so a probe gets the backend's responses instead of a proxy's 407.
+	Fallback string
 }
 
 type Service struct {
@@ -56,10 +60,12 @@ type Service struct {
 	tcpListener           net.Listener
 	tlsListener           net.Listener
 	udpConn               net.PacketConn
+	fallbackProxy         *httputil.ReverseProxy
+	fallbackTransport     *http.Transport
 }
 
 func NewService(options ServiceOptions) *Service {
-	return &Service{
+	s := &Service{
 		ctx:                   options.Ctx,
 		logger:                options.Logger,
 		handler:               options.Handler,
@@ -68,6 +74,35 @@ func NewService(options ServiceOptions) *Service {
 		quicCwnd:              options.QUICCwnd,
 		quicBBRProfile:        options.QUICBBRProfile,
 	}
+	if options.Fallback != "" {
+		s.fallbackTransport = &http.Transport{
+			DialContext:           (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+			ResponseHeaderTimeout: 10 * time.Second,
+			IdleConnTimeout:       30 * time.Second,
+		}
+		target := options.Fallback
+		s.fallbackProxy = &httputil.ReverseProxy{
+			Transport:     s.fallbackTransport,
+			FlushInterval: -1, // flush each write so SSE and streaming are not buffered
+			// Rewrite (unlike Director) drops any Forwarded/X-Forwarded-* the client
+			// sent, so a prober cannot spoof the IP, scheme or host the backend sees.
+			Rewrite: func(r *httputil.ProxyRequest) {
+				r.Out.URL.Scheme = "http"
+				r.Out.URL.Host = target
+				// Keep the client's Host header: named virtual hosts keep working and
+				// the internal backend address is not leaked in redirects.
+				r.Out.Host = r.In.Host
+				r.SetXForwarded()
+			},
+			ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
+				if s.logger != nil {
+					s.logger.DebugContext(request.Context(), E.Cause(err, "fallback request from ", request.RemoteAddr))
+				}
+				writer.WriteHeader(http.StatusBadGateway)
+			},
+		}
+	}
+	return s
 }
 
 func (s *Service) Start(tcpListener net.Listener, udpConn net.PacketConn, tlsConfig *tls.Config) error {
@@ -92,7 +127,15 @@ func (s *Service) Start(tcpListener net.Listener, udpConn net.PacketConn, tlsCon
 		listener := tcpListener
 		s.tcpListener = tcpListener
 		if tlsConfig != nil {
-			listener = tls.NewListener(listener, tlsConfig)
+			tcpTLSConfig := tlsConfig
+			if s.fallbackProxy != nil && len(tlsConfig.NextProtos) == 0 {
+				// A real HTTPS site negotiates ALPN, so a browser or scanner offering
+				// h2 gets h2 instead of no protocol at all. TrustTunnel clients offer
+				// h2 and keep working.
+				tcpTLSConfig = tlsConfig.Clone()
+				tcpTLSConfig.NextProtos = []string{"h2", "http/1.1"}
+			}
+			listener = tls.NewListener(listener, tcpTLSConfig)
 			s.tlsListener = listener
 		}
 		go func() {
@@ -126,6 +169,9 @@ func (s *Service) Close() error {
 			shutdownErr = nil
 		}
 	}
+	if s.fallbackTransport != nil {
+		s.fallbackTransport.CloseIdleConnections()
+	}
 	closeErr := common.Close(
 		common.PtrOrNil(s.httpServer),
 		s.tlsListener,
@@ -140,6 +186,12 @@ func (s *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	authorization := request.Header.Get("Proxy-Authorization")
 	username, loaded := s.verify(authorization)
 	if !loaded {
+		if s.fallbackProxy != nil {
+			// Every method goes to the backend, CONNECT included, so a probe gets
+			// the backend's own answer rather than a proxy's 407 challenge.
+			s.fallbackProxy.ServeHTTP(writer, request)
+			return
+		}
 		writer.WriteHeader(http.StatusProxyAuthRequired)
 		s.badRequest(request.Context(), request, E.New("authorization failed"))
 		return
