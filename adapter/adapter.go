@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strings"
@@ -215,7 +216,13 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		_ = instance.Close()
 	}()
 
-	req, err := http.NewRequest(http.MethodHead, url, nil)
+	downloadSize := C.HealthCheckDownloadSize(ctx)
+	method := http.MethodHead
+	if downloadSize > 0 {
+		method = http.MethodGet
+	}
+
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return
 	}
@@ -248,15 +255,40 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 
 	defer client.CloseIdleConnections()
 
+	// An unread GET body would keep the connection out of the pool for the timed request.
+	if unifiedDelay && downloadSize > 0 {
+		warmUp := req.Clone(ctx)
+		warmUp.Method = http.MethodHead
+		if warmResp, warmErr := client.Do(warmUp); warmErr == nil {
+			_ = warmResp.Body.Close()
+		} else if strings.HasPrefix(url, "http://") {
+			log.Errorln("%s failed to warm up the connection to %s: %v", p.Name(), url, warmErr)
+			log.Warnln("It is recommended to use HTTPS for provider.health-check.url and group.url to ensure better reliability. Due to some proxy providers hijacking test addresses and not being compatible with repeated HEAD requests, using HTTP may result in failed tests.")
+		}
+		start = time.Now()
+	}
+
 	resp, err := client.Do(req)
 
 	if err != nil {
 		return
 	}
 
+	if downloadSize > 0 {
+		var n int64
+		n, err = io.Copy(io.Discard, io.LimitReader(resp.Body, int64(downloadSize)))
+		if err == nil && n < int64(downloadSize) {
+			log.Warnln("Health check of %s read %d of %d bytes from %s", p.Name(), n, downloadSize, url)
+		}
+	}
+
 	_ = resp.Body.Close()
 
-	if unifiedDelay {
+	if err != nil {
+		return
+	}
+
+	if unifiedDelay && downloadSize == 0 {
 		second := time.Now()
 		var ignoredErr error
 		var secondResp *http.Response
