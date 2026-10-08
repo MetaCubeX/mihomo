@@ -96,8 +96,7 @@ func (p *Pool) CloneFrom(o *Pool) {
 
 	o.store.CloneTo(p.store)
 
-	// the allocation state only matches the cloned entries if both pools
-	// cover the same range
+	// the allocation state only matches the cloned entries if both pools cover the same range
 	if o.first == p.first && o.last == p.last {
 		p.offset, p.cycle = o.offset, o.cycle
 	}
