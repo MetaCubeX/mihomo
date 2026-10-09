@@ -139,6 +139,9 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c
 		})
 	}
 
+	if err == nil {
+		c = lb.LimitConn(c)
+	}
 	return
 }
 
@@ -147,6 +150,7 @@ func (lb *LoadBalance) ListenPacketContext(ctx context.Context, metadata *C.Meta
 	defer func() {
 		if err == nil {
 			pc.AppendToChains(lb)
+			pc = lb.LimitPacketConn(pc)
 		}
 	}()
 
@@ -285,7 +289,7 @@ func (lb *LoadBalance) Now() string {
 	return ""
 }
 
-func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (lb *LoadBalance, err error) {
+func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOption, emptyFallback C.Proxy, providers []P.ProxyProvider, bandwidth uint64) (lb *LoadBalance, err error) {
 	var strategyFn strategyFn
 	withKey, err := hashKey(loadBalanceOption.HashKey)
 	if err != nil {
@@ -319,6 +323,7 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 			MaxFailedTimes: option.MaxFailedTimes,
 			EmptyFallback:  emptyFallback,
 			Providers:      providers,
+			Bandwidth:      bandwidth,
 		}),
 		strategyFn:     strategyFn,
 		disableUDP:     option.DisableUDP,

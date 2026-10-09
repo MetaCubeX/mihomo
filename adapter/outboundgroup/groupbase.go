@@ -11,6 +11,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/ratelimit"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
@@ -34,6 +35,7 @@ type GroupBase struct {
 	testTimeout       int
 	maxFailedTimes    int
 	emptyFallback     C.Proxy
+	limiter           *ratelimit.Limiter // shared group bandwidth limit, nil = unlimited
 
 	// for GetProxies
 	getProxiesMutex  sync.Mutex
@@ -53,6 +55,7 @@ type GroupBaseOption struct {
 	MaxFailedTimes int
 	EmptyFallback  C.Proxy
 	Providers      []P.ProxyProvider
+	Bandwidth      uint64 // bits per second, 0 = unlimited
 }
 
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
@@ -89,6 +92,7 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		testTimeout:       opt.TestTimeout,
 		maxFailedTimes:    opt.MaxFailedTimes,
 		emptyFallback:     opt.EmptyFallback,
+		limiter:           ratelimit.NewLimiter(opt.Bandwidth),
 	}
 
 	if gb.testTimeout == 0 {
@@ -107,6 +111,20 @@ func (gb *GroupBase) Hidden() bool {
 
 func (gb *GroupBase) Icon() string {
 	return gb.icon
+}
+
+func (gb *GroupBase) Bandwidth() uint64 {
+	return gb.limiter.Rate()
+}
+
+// LimitConn applies the group's shared bandwidth limiter to conn.
+func (gb *GroupBase) LimitConn(conn C.Conn) C.Conn {
+	return gb.limiter.WrapCConn(conn)
+}
+
+// LimitPacketConn applies the group's shared bandwidth limiter to a packet conn.
+func (gb *GroupBase) LimitPacketConn(pc C.PacketConn) C.PacketConn {
+	return gb.limiter.WrapPacketConn(pc)
 }
 
 func (gb *GroupBase) EmptyFallback() C.Proxy {
