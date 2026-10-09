@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/pool"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/socks5"
@@ -76,9 +77,12 @@ func NewUDP(addr, target, proxy string, lc C.InboundListenConfig, tunnel C.Tunne
 }
 
 func (l *PacketConn) handleUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, addr net.Addr, additions ...inbound.Addition) {
+	// Keep associations from different tunnel listeners separate for the same source address.
+	sessionKey := fmt.Sprintf("%s|%s", pc.LocalAddr().String(), addr.String())
 	cPacket := &packet{
 		pc:      pc,
 		rAddr:   addr,
+		keyAddr: N.NewCustomAddr(C.TUNNEL.String(), sessionKey, addr),
 		payload: buf,
 	}
 
