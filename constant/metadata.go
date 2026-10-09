@@ -191,6 +191,7 @@ type Metadata struct {
 	NetWork      NetWork    `json:"network"`
 	Type         Type       `json:"type"`
 	SrcIP        netip.Addr `json:"sourceIP"`
+	SrcMAC       string     `json:"sourceMAC,omitempty"` // canonical MAC of the original source; empty if unknown
 	DstIP        netip.Addr `json:"destinationIP"`
 	SrcGeoIP     []string   `json:"sourceGeoIP"`      // can be nil if never queried, empty slice if got no result
 	DstGeoIP     []string   `json:"destinationGeoIP"` // can be nil if never queried, empty slice if got no result

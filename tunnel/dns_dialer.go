@@ -63,7 +63,7 @@ func (d *DNSDialer) DialContext(ctx context.Context, network, addr string) (net.
 				}
 				metadata.DstIP = dstIP
 			}
-			proxyAdapter, rule, err = resolveMetadata(metadata)
+			proxyAdapter, rule, err = resolveMetadata(ctx, metadata)
 			if err != nil {
 				return nil, err
 			}
@@ -153,7 +153,7 @@ func (d *DNSDialer) ListenPacket(ctx context.Context, network, addr string) (net
 	var rule C.Rule
 	if proxyAdapter == nil {
 		if proxyName == DnsRespectRules {
-			proxyAdapter, rule, err = resolveMetadata(metadata)
+			proxyAdapter, rule, err = resolveMetadata(ctx, metadata)
 			if err != nil {
 				return nil, err
 			}

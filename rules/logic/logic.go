@@ -176,6 +176,15 @@ func (logic *Logic) RuleType() C.RuleType {
 	return logic.ruleType
 }
 
+func (logic *Logic) NeedsSourceMAC() bool {
+	for _, rule := range logic.rules {
+		if C.NeedsSourceMAC(rule) {
+			return true
+		}
+	}
+	return false
+}
+
 func matchSubRules(metadata *C.Metadata, name string, subRules map[string][]C.Rule, helper C.RuleMatchHelper) (bool, string) {
 	for _, rule := range subRules[name] {
 		if m, a := rule.Match(metadata, helper); m {
@@ -183,7 +192,7 @@ func matchSubRules(metadata *C.Metadata, name string, subRules map[string][]C.Ru
 				m, a = matchSubRules(metadata, rule.Adapter(), subRules, helper)
 			}
 			if m && (a == "PASS-RULE" || (helper.CheckPassRule != nil && helper.CheckPassRule(a))) {
-				continue 
+				continue
 			}
 			return m, a
 		}
