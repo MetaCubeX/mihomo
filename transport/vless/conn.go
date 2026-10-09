@@ -81,7 +81,7 @@ func (vc *Conn) sendRequest(p []byte) (err error) {
 	requestLen += 1  // addons length
 	requestLen += len(addonsBytes)
 	requestLen += 1 // command
-	if !vc.dst.Mux {
+	if !vc.dst.Mux && !vc.dst.Rvs {
 		requestLen += 2 // port
 		requestLen += 1 // addr type
 		requestLen += len(vc.dst.Addr)
@@ -98,7 +98,9 @@ func (vc *Conn) sendRequest(p []byte) (err error) {
 		buf.Error(buffer.Write(addonsBytes)),
 	)
 
-	if vc.dst.Mux {
+	if vc.dst.Rvs {
+		buf.Must(buffer.WriteByte(CommandRvs))
+	} else if vc.dst.Mux {
 		buf.Must(buffer.WriteByte(CommandMux))
 	} else {
 		if vc.dst.UDP {
