@@ -11,6 +11,10 @@ import (
 	"github.com/metacubex/mihomo/rules/common"
 )
 
+type ruleJsonSchema struct {
+	Paths []string `provider:"paths,omitempty"`
+}
+
 type ruleProviderSchema struct {
 	Type         string              `provider:"type"`
 	Behavior     string              `provider:"behavior"`
@@ -23,6 +27,7 @@ type ruleProviderSchema struct {
 	Payload      []string            `provider:"payload,omitempty"`
 	Header       map[string][]string `provider:"header,omitempty"`
 	PathInBundle string              `provider:"path-in-bundle,omitempty"`
+	Json         *ruleJsonSchema     `provider:"json,omitempty"`
 }
 
 func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRuleFunc, makeBundleFile func(pathInBundle string) resource.BundleFile) (P.RuleProvider, error) {
@@ -38,6 +43,17 @@ func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRu
 	format, err := P.ParseRuleFormat(schema.Format)
 	if err != nil {
 		return nil, err
+	}
+
+	var jsonPaths []string
+	if schema.Json != nil && len(schema.Json.Paths) > 0 {
+		if format != P.JsonRule {
+			return nil, fmt.Errorf("`json` is only supported with `format: json`")
+		}
+		jsonPaths = schema.Json.Paths
+	}
+	if format == P.JsonRule && len(jsonPaths) == 0 {
+		return nil, fmt.Errorf("`format: json` requires `json.paths`")
 	}
 
 	var vehicle P.Vehicle
@@ -65,5 +81,5 @@ func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRu
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 
-	return NewRuleSetProvider(name, behavior, format, interval, vehicle, schema.Payload, makeBundleFile(schema.PathInBundle), parse), nil
+	return NewRuleSetProvider(name, behavior, format, interval, vehicle, schema.Payload, makeBundleFile(schema.PathInBundle), parse, jsonPaths), nil
 }
