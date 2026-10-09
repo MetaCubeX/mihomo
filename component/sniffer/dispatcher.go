@@ -146,7 +146,10 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 
 		host, config, err := sd.sniffDomain(conn, metadata)
 		if err != nil {
-			if !forceSniffer {
+			// No buffered data means the client did not send an application
+			// payload during the initial sniff window. It says nothing about
+			// whether later data is sniffable, so do not suppress future attempts.
+			if !forceSniffer && conn.Buffered() > 0 {
 				sd.cacheSniffFailed(metadata)
 			}
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%d] to [%s:%d]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
