@@ -1,10 +1,109 @@
 package config
 
 import (
+	"net/netip"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestParseDirectAndProxyFallbackFilters(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  direct-nameserver: [tls://223.5.5.5]
+  direct-nameserver-fallback: [system://]
+  direct-nameserver-fallback-filter:
+    ipcidr: [127.0.0.0/8, "::1/128"]
+    domain: ["+.example.com"]
+  proxy-server-nameserver: [tls://223.5.5.5]
+  proxy-server-nameserver-fallback: [system://]
+  proxy-server-nameserver-fallback-filter:
+    ipcidr: [0.0.0.0/32]
+`))
+	require.NoError(t, err)
+	dnsCfg, err := parseDNS(rawCfg, nil)
+	require.NoError(t, err)
+	require.Len(t, dnsCfg.DirectFallbackIPFilter, 1)
+	assert.True(t, dnsCfg.DirectFallbackIPFilter[0].MatchIp(netip.MustParseAddr("127.0.0.1")))
+	assert.True(t, dnsCfg.DirectFallbackIPFilter[0].MatchIp(netip.MustParseAddr("::1")))
+	require.Len(t, dnsCfg.DirectFallbackDomainFilter, 1)
+	assert.True(t, dnsCfg.DirectFallbackDomainFilter[0].MatchDomain("a.example.com"))
+	require.Len(t, dnsCfg.ProxyServerFallbackIPFilter, 1)
+	assert.True(t, dnsCfg.ProxyServerFallbackIPFilter[0].MatchIp(netip.MustParseAddr("0.0.0.0")))
+	assert.False(t, dnsCfg.ProxyServerFallbackIPFilter[0].MatchIp(netip.MustParseAddr("127.0.0.1")))
+	assert.Equal(t, uint(300000), dnsCfg.NameServerFallbackRecoveryInterval)
+}
+
+func TestRejectFallbackFilterWithoutFallback(t *testing.T) {
+	for _, filter := range []string{
+		"direct-nameserver-fallback-filter:\n    domain: ['+.example.com']",
+		"proxy-server-nameserver-fallback-filter:\n    ipcidr: [127.0.0.0/8]",
+	} {
+		rawCfg, err := UnmarshalRawConfig([]byte("dns:\n  direct-nameserver: [system://]\n  proxy-server-nameserver: [system://]\n  " + filter))
+		require.NoError(t, err)
+		_, err = parseDNS(rawCfg, nil)
+		assert.ErrorContains(t, err, "without")
+	}
+}
+
+func TestParseDirectNameServerFallback(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  direct-nameserver:
+    - tls://223.5.5.5
+  direct-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	dnsCfg, err := parseDNS(rawCfg, nil)
+	require.NoError(t, err)
+	require.Len(t, dnsCfg.DirectNameServerFallback, 1)
+	assert.Equal(t, "system", dnsCfg.DirectNameServerFallback[0].Net)
+	assert.Equal(t, uint(300000), dnsCfg.NameServerFallbackRecoveryInterval)
+}
+
+func TestRejectDirectNameServerFallbackWithoutPrimary(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  direct-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	_, err = parseDNS(rawCfg, nil)
+	assert.ErrorContains(t, err, "disallow empty `direct-nameserver`")
+}
+
+func TestParseProxyServerNameServerFallback(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  proxy-server-nameserver:
+    - tls://223.5.5.5
+  proxy-server-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	dnsCfg, err := parseDNS(rawCfg, nil)
+	require.NoError(t, err)
+	require.Len(t, dnsCfg.ProxyServerNameserverFallback, 1)
+	assert.Equal(t, "system", dnsCfg.ProxyServerNameserverFallback[0].Net)
+	assert.Equal(t, uint(300000), dnsCfg.NameServerFallbackRecoveryInterval)
+}
+
+func TestRejectProxyServerNameServerFallbackWithoutPrimary(t *testing.T) {
+	rawCfg, err := UnmarshalRawConfig([]byte(`
+dns:
+  proxy-server-nameserver-fallback:
+    - system://
+`))
+	require.NoError(t, err)
+
+	_, err = parseDNS(rawCfg, nil)
+	assert.ErrorContains(t, err, "disallow empty `proxy-server-nameserver`")
+}
 
 func TestValidateDialerProxies(t *testing.T) {
 	testCases := []struct {
