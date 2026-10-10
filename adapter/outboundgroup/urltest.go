@@ -24,6 +24,7 @@ type URLTest struct {
 	testUrl        string
 	expectedStatus string
 	expectedBody   string
+	excludeBody    string
 	tolerance      uint16
 	disableUDP     bool
 	fastNode       C.Proxy
@@ -175,6 +176,7 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		"testUrl":        u.testUrl,
 		"expectedStatus": u.expectedStatus,
 		"expectedBody":   u.expectedBody,
+		"excludeBody":    u.excludeBody,
 		"fixed":          u.selected,
 		"hidden":         u.Hidden(),
 		"icon":           u.Icon(),
@@ -190,8 +192,8 @@ func (u *URLTest) Proxies() []C.Proxy {
 	return u.GetProxies(false)
 }
 
-func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], expectedBody string) (map[string]uint16, error) {
-	return u.GroupBase.URLTest(ctx, u.testUrl, expectedStatus, expectedBody)
+func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], expectedBody string, excludeBody string) (map[string]uint16, error) {
+	return u.GroupBase.URLTest(ctx, u.testUrl, expectedStatus, expectedBody, excludeBody)
 }
 
 func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (*URLTest, error) {
@@ -217,6 +219,7 @@ func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFall
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
 		expectedBody:   option.ExpectedBody,
+		excludeBody:    option.ExcludeBody,
 		tolerance:      urlTestOption.Tolerance,
 	}
 

@@ -168,7 +168,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], expectedBody string) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], expectedBody string, excludeBody string) (t uint16, err error) {
 	var satisfied bool
 
 	defer func() {
@@ -221,7 +221,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	}()
 
 	method := http.MethodHead
-	if expectedBody != "" {
+	if expectedBody != "" || excludeBody != "" {
 		// HEAD has no response body, use GET so that the expected body can be checked
 		method = http.MethodGet
 	}
@@ -265,7 +265,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		}
 		defer resp.Body.Close()
 		var body []byte
-		if expectedBody != "" {
+		if expectedBody != "" || excludeBody != "" {
 			body, err = io.ReadAll(io.LimitReader(resp.Body, urlTestMaxBodySize))
 			if err != nil {
 				return resp, nil, err
@@ -299,11 +299,24 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	}
 
 	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
-	if satisfied && expectedBody != "" && !bytes.Contains(body, []byte(expectedBody)) {
+	if satisfied && expectedBody != "" && !matchKeyword(body, expectedBody) {
+		satisfied = false
+	}
+	if satisfied && excludeBody != "" && matchKeyword(body, excludeBody) {
 		satisfied = false
 	}
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
+}
+
+// matchKeyword reports whether body contains any of the backtick-separated keywords.
+func matchKeyword(body []byte, keywords string) bool {
+	for _, keyword := range strings.Split(keywords, "`") {
+		if keyword = strings.TrimSpace(keyword); keyword != "" && bytes.Contains(body, []byte(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {

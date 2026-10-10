@@ -31,6 +31,7 @@ type LoadBalance struct {
 	testUrl        string
 	expectedStatus string
 	expectedBody   string
+	excludeBody    string
 }
 
 type strategyFn = func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy
@@ -269,6 +270,7 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 		"testUrl":        lb.testUrl,
 		"expectedStatus": lb.expectedStatus,
 		"expectedBody":   lb.expectedBody,
+		"excludeBody":    lb.excludeBody,
 		"hidden":         lb.Hidden(),
 		"icon":           lb.Icon(),
 		"emptyFallback":  lb.EmptyFallback().Name(),
@@ -327,5 +329,6 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
 		expectedBody:   option.ExpectedBody,
+		excludeBody:    option.ExcludeBody,
 	}, nil
 }

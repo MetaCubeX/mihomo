@@ -1768,7 +1768,8 @@ proxy-groups:
     # tolerance: 150
     # lazy: true
     # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
-    # expected-body: "ok" # 当健康检查返回内容不包含该关键字时，认为节点不可用（配置后将使用 GET 请求获取响应体）
+    # expected-body: "ok" # 当健康检查返回内容不包含该关键字(支持 ` 分隔多个关键字,任一命中即可)时，认为节点不可用
+    # exclude-body: "不支持" # 当健康检查返回内容包含该关键字(支持 ` 分隔多个关键字,任一命中即判死)时，认为节点不可用
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 
@@ -1864,7 +1865,8 @@ proxy-providers:
       # lazy: true
       url: https://cp.cloudflare.com/generate_204
       # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
-      # expected-body: "ok" # 当健康检查返回内容不包含该关键字时，认为节点不可用（配置后将使用 GET 请求获取响应体）
+      # expected-body: "ok" # 当健康检查返回内容不包含该关键字(支持 ` 分隔多个关键字,任一命中即可)时，认为节点不可用
+      # exclude-body: "不支持" # 当健康检查返回内容包含该关键字(支持 ` 分隔多个关键字,任一命中即判死)时，认为节点不可用
     override: # 覆写节点加载时的一些配置项
       skip-cert-verify: true
       name-cert-verify: example.com # 仅修改证书 DNSName 校验目标，不修改 SNI

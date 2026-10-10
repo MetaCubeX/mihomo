@@ -29,25 +29,31 @@ func TestProxyURLTestExpectedBody(t *testing.T) {
 
 	p := NewProxy(outbound.NewDirect())
 
-	test := func(url string, expectedBody string, wantAlive bool) {
+	test := func(url string, expectedBody string, excludeBody string, wantAlive bool) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_, err := p.URLTest(ctx, url, nil, expectedBody)
+		_, err := p.URLTest(ctx, url, nil, expectedBody, excludeBody)
 		if err != nil {
-			t.Fatalf("URLTest(%q, %q) error: %v", url, expectedBody, err)
+			t.Fatalf("URLTest(%q, %q, %q) error: %v", url, expectedBody, excludeBody, err)
 		}
 		if alive := p.AliveForTestUrl(url); alive != wantAlive {
-			t.Fatalf("URLTest(%q, %q) alive = %v, want %v", url, expectedBody, alive, wantAlive)
+			t.Fatalf("URLTest(%q, %q, %q) alive = %v, want %v", url, expectedBody, excludeBody, alive, wantAlive)
 		}
 	}
 
 	// no expected body: alive
-	test(srv.URL+"/ok", "", true)
+	test(srv.URL+"/ok", "", "", true)
 	// expected body contained in the response: alive
-	test(srv.URL+"/ok", "world", true)
+	test(srv.URL+"/ok", "world", "", true)
 	// expected body missing from the response: not alive
-	test(srv.URL+"/blocked", "hello world", false)
-	// alive again when checking for the text the page actually contains
-	test(srv.URL+"/blocked", "not supported", true)
+	test(srv.URL+"/blocked", "hello world", "", false)
+	// multiple expected keywords, any match keeps the node alive
+	test(srv.URL+"/ok", "hello`golang", "", true)
+	// exclude keyword hit: not alive even though status is fine
+	test(srv.URL+"/blocked", "", "not supported", false)
+	// exclude keyword absent: alive
+	test(srv.URL+"/blocked", "", "unavailable", true)
+	// exclude wins over expected: body contains both, must be marked dead
+	test(srv.URL+"/blocked", "region", "not supported", false)
 }
