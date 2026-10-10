@@ -39,6 +39,7 @@ type providerForApi struct {
 	Proxies          []C.Proxy         `json:"proxies"`
 	TestUrl          string            `json:"testUrl"`
 	ExpectedStatus   string            `json:"expectedStatus"`
+	ExpectedBody     string            `json:"expectedBody"`
 	UpdatedAt        time.Time         `json:"updatedAt,omitempty"`
 	SubscriptionInfo *SubscriptionInfo `json:"subscriptionInfo,omitempty"`
 }
@@ -96,8 +97,8 @@ func (bp *baseProvider) HealthCheckURL() string {
 	return bp.healthCheck.url
 }
 
-func (bp *baseProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
-	bp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
+func (bp *baseProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], expectedBody string, filter string, interval uint) {
+	bp.healthCheck.registerHealthCheckTask(url, expectedStatus, expectedBody, filter, interval)
 }
 
 func (bp *baseProvider) setProxies(proxies []C.Proxy) {
@@ -135,6 +136,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		Proxies:          pp.Proxies(),
 		TestUrl:          pp.healthCheck.url,
 		ExpectedStatus:   pp.healthCheck.expectedStatus.String(),
+		ExpectedBody:     pp.healthCheck.expectedBody,
 		UpdatedAt:        pp.UpdatedAt(),
 		SubscriptionInfo: pp.subscriptionInfo,
 	})
@@ -244,6 +246,7 @@ func (ip *inlineProvider) MarshalJSON() ([]byte, error) {
 		Proxies:        ip.Proxies(),
 		TestUrl:        ip.healthCheck.url,
 		ExpectedStatus: ip.healthCheck.expectedStatus.String(),
+		ExpectedBody:   ip.healthCheck.expectedBody,
 		UpdatedAt:      ip.updateAt,
 	})
 }
@@ -306,6 +309,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 		Proxies:        cp.Proxies(),
 		TestUrl:        cp.healthCheck.url,
 		ExpectedStatus: cp.healthCheck.expectedStatus.String(),
+		ExpectedBody:   cp.healthCheck.expectedBody,
 	})
 }
 
