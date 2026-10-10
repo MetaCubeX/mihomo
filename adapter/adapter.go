@@ -1,9 +1,11 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strings"
@@ -24,6 +26,9 @@ var UnifiedDelay = atomic.NewBool(false)
 
 const (
 	defaultHistoriesNum = 10
+	// urlTestMaxBodySize limits how many bytes of the response body are read
+	// when expectedBody is set, to bound memory usage.
+	urlTestMaxBodySize = 1024 * 1024
 )
 
 type internalProxyState struct {
@@ -163,7 +168,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], expectedBody string, excludeBody string) (t uint16, err error) {
 	var satisfied bool
 
 	defer func() {
@@ -215,7 +220,12 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		_ = instance.Close()
 	}()
 
-	req, err := http.NewRequest(http.MethodHead, url, nil)
+	method := http.MethodHead
+	if expectedBody != "" || excludeBody != "" {
+		// HEAD has no response body, use GET so that the expected body can be checked
+		method = http.MethodGet
+	}
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return
 	}
@@ -248,22 +258,37 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 
 	defer client.CloseIdleConnections()
 
-	resp, err := client.Do(req)
+	doRequest := func() (*http.Response, []byte, error) {
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, nil, err
+		}
+		defer resp.Body.Close()
+		var body []byte
+		if expectedBody != "" || excludeBody != "" {
+			body, err = io.ReadAll(io.LimitReader(resp.Body, urlTestMaxBodySize))
+			if err != nil {
+				return resp, nil, err
+			}
+		}
+		return resp, body, nil
+	}
+
+	resp, body, err := doRequest()
 
 	if err != nil {
 		return
 	}
 
-	_ = resp.Body.Close()
-
 	if unifiedDelay {
 		second := time.Now()
 		var ignoredErr error
 		var secondResp *http.Response
-		secondResp, ignoredErr = client.Do(req)
+		var secondBody []byte
+		secondResp, secondBody, ignoredErr = doRequest()
 		if ignoredErr == nil {
 			resp = secondResp
-			_ = resp.Body.Close()
+			body = secondBody
 			start = second
 		} else {
 			if strings.HasPrefix(url, "http://") {
@@ -274,8 +299,24 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	}
 
 	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
+	if satisfied && expectedBody != "" && !matchKeyword(body, expectedBody) {
+		satisfied = false
+	}
+	if satisfied && excludeBody != "" && matchKeyword(body, excludeBody) {
+		satisfied = false
+	}
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
+}
+
+// matchKeyword reports whether body contains any of the backtick-separated keywords.
+func matchKeyword(body []byte, keywords string) bool {
+	for _, keyword := range strings.Split(keywords, "`") {
+		if keyword = strings.TrimSpace(keyword); keyword != "" && bytes.Contains(body, []byte(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
