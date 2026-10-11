@@ -8,6 +8,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+	IN "github.com/metacubex/mihomo/listener/inbound"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -199,6 +200,160 @@ func TestBuildMatchsGroupSkipsReservedAndGroups(t *testing.T) {
 	}
 	assert.NotContains(t, names, "DIRECT")
 	assert.NotContains(t, names, "COMPATIBLE")
+}
+
+func TestBuildPortRuleSetInsertBeforeMatch(t *testing.T) {
+	global := []string{"DOMAIN-SUFFIX,a.com,DIRECT", "MATCH,GLOBAL"}
+	entry := RawMultipleProxy{EnableGlobalRule: true, Rules: []string{"DOMAIN-SUFFIX,acl4.ssr,GLOBAL"}}
+	name, merged := buildPortRuleSet(global, entry, "mp-0")
+	assert.Equal(t, "mp-0-rules", name)
+	assert.Equal(t, []string{
+		"DOMAIN-SUFFIX,a.com,DIRECT",
+		"DOMAIN-SUFFIX,acl4.ssr,GLOBAL",
+		"MATCH,GLOBAL",
+	}, merged)
+}
+
+func TestBuildPortRuleSetAppendWhenNoMatch(t *testing.T) {
+	global := []string{"DOMAIN-SUFFIX,a.com,DIRECT"}
+	entry := RawMultipleProxy{EnableGlobalRule: true, Rules: []string{"DOMAIN-SUFFIX,b.com,DIRECT"}}
+	_, merged := buildPortRuleSet(global, entry, "mp-0")
+	assert.Equal(t, []string{"DOMAIN-SUFFIX,a.com,DIRECT", "DOMAIN-SUFFIX,b.com,DIRECT"}, merged)
+}
+
+func TestBuildPortRuleSetNoIntent(t *testing.T) {
+	name, merged := buildPortRuleSet([]string{"MATCH,GLOBAL"}, RawMultipleProxy{}, "mp-0")
+	assert.Equal(t, "", name)
+	assert.Nil(t, merged)
+}
+
+func TestBuildPortRuleSetOwnRulesOnly(t *testing.T) {
+	entry := RawMultipleProxy{Rules: []string{"DOMAIN-SUFFIX,b.com,DIRECT"}}
+	name, merged := buildPortRuleSet([]string{"MATCH,GLOBAL"}, entry, "mp-0")
+	assert.Equal(t, "mp-0-rules", name)
+	assert.Equal(t, []string{"DOMAIN-SUFFIX,b.com,DIRECT"}, merged)
+}
+
+func TestParseMultipleProxyPortConflict(t *testing.T) {
+	cfg := &RawConfig{
+		MixedPort:     7890,
+		MultipleProxy: []RawMultipleProxy{{MixedPort: 7890}},
+	}
+	err := parseMultipleProxy(cfg, map[string]C.Proxy{}, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.Error(t, err)
+}
+
+func TestParseMultipleProxyWiresGroupRuleSetAndListener(t *testing.T) {
+	cfg := &RawConfig{
+		Rule: []string{"DOMAIN-SUFFIX,a.com,DIRECT", "MATCH,GLOBAL"},
+		MultipleProxy: []RawMultipleProxy{{
+			Name:             "mp-0",
+			MixedPort:        7900,
+			Mode:             "rule",
+			EnableGlobalRule: true,
+			Rules:            []string{"DOMAIN-SUFFIX,b.com,GLOBAL"},
+			Matchs:           []RawMatchsEntry{{Name: "*HK*"}},
+		}},
+	}
+	proxies := testProxiesMap("HK-01")
+	providers := map[string]P.ProxyProvider{}
+	ruleProviders := map[string]P.RuleProvider{}
+	subRules := map[string][]C.Rule{}
+	listeners := map[string]C.InboundListener{}
+
+	err := parseMultipleProxy(cfg, proxies, providers, ruleProviders, subRules, listeners)
+	assert.NoError(t, err)
+
+	// exit group registered for API/dashboard use
+	assert.Contains(t, proxies, "mp-0-group")
+	assert.Contains(t, providers, "mp-0-group")
+
+	// port scoped rule set: global base with the entry's rule before MATCH
+	assert.Len(t, subRules["mp-0-rules"], 3)
+
+	l, ok := listeners["mp-0"]
+	assert.True(t, ok)
+	option, ok := l.Config().(*IN.MixedOption)
+	assert.True(t, ok)
+	assert.Equal(t, "mp-0-rules", option.SpecialRules)
+	assert.Equal(t, "rule", option.SpecialMode)
+	assert.Equal(t, "mp-0-group", option.SpecialFallbackProxy)
+}
+
+func TestParseMultipleProxyErrors(t *testing.T) {
+	proxies := testProxiesMap("HK-01")
+
+	// proxy-group must already exist
+	err := parseMultipleProxy(&RawConfig{
+		MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900, ProxyGroup: "NOPE"}},
+	}, proxies, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.Error(t, err)
+
+	// a matchs entry is still validated when proxy-group wins
+	err = parseMultipleProxy(&RawConfig{
+		MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900, ProxyGroup: "DIRECT", Matchs: []RawMatchsEntry{{Name: "*NOPE*"}}}},
+	}, proxies, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.Error(t, err)
+
+	// generated group name must be free
+	proxies["mp-0-group"] = proxies["DIRECT"]
+	err = parseMultipleProxy(&RawConfig{
+		MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900, Matchs: []RawMatchsEntry{{Name: "*HK*"}}}},
+	}, proxies, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.Error(t, err)
+
+	// generated rule set name must be free
+	proxies = testProxiesMap("HK-01")
+	err = parseMultipleProxy(&RawConfig{
+		MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900, Rules: []string{"MATCH,GLOBAL"}}},
+	}, proxies, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{},
+		map[string][]C.Rule{"mp-0-rules": {}}, map[string]C.InboundListener{})
+	assert.Error(t, err)
+
+	// a listener name collision is rejected
+	err = parseMultipleProxy(&RawConfig{
+		MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900}},
+	}, proxies, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{},
+		map[string]C.InboundListener{"mp-0": nil})
+	assert.Error(t, err)
+
+	// two entries on the same port conflict
+	err = parseMultipleProxy(&RawConfig{
+		MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900}, {Name: "mp-1", MixedPort: 7900}},
+	}, proxies, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.Error(t, err)
+
+	// an invalid mode is rejected
+	err = parseMultipleProxy(&RawConfig{
+		MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900, Mode: "bogus"}},
+	}, proxies, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.Error(t, err)
+}
+
+// A reload reparses the whole config, so ParseRawConfig rebuilds the listener
+// map from scratch: an entry removed from multiple-proxy is simply absent from
+// the new map. That absence is what PatchInboundListeners(..., dropOld=true)
+// diffs against to close the stale listener. Kept at the map level on purpose:
+// no sockets are started.
+func TestParseMultipleProxyRemovedEntryDropsOnRebuild(t *testing.T) {
+	proxies := testProxiesMap("HK-01")
+	providers := map[string]P.ProxyProvider{}
+	ruleProviders := map[string]P.RuleProvider{}
+	subRules := map[string][]C.Rule{}
+
+	first := map[string]C.InboundListener{}
+	assert.NoError(t, parseMultipleProxy(
+		&RawConfig{MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900}}},
+		proxies, providers, ruleProviders, subRules, first))
+	assert.Contains(t, first, "mp-0")
+
+	// A separate fresh map models the rebuild; parseMultipleProxy stays additive
+	// and never deletes user listeners entries.
+	second := map[string]C.InboundListener{}
+	assert.NoError(t, parseMultipleProxy(
+		&RawConfig{MultipleProxy: []RawMultipleProxy{}},
+		proxies, providers, ruleProviders, subRules, second))
+	assert.NotContains(t, second, "mp-0")
 }
 
 func TestBuildMatchsGroupSkipsExistingGroup(t *testing.T) {

@@ -12,6 +12,8 @@ import (
 	"github.com/metacubex/mihomo/component/wildcard"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/listener"
+	RC "github.com/metacubex/mihomo/rules/common"
 	T "github.com/metacubex/mihomo/tunnel"
 
 	"golang.org/x/exp/slices"
@@ -258,4 +260,132 @@ func matchesAnyAlternative(pattern, name string) bool {
 		}
 	}
 	return false
+}
+
+// buildPortRuleSet merges a multiple-proxy entry's own rules into a port-scoped
+// rule set. It returns ("", nil) when the entry has no routing intent. Otherwise
+// the entry's rules are inserted before the last catch-all MATCH rule of the
+// base, or appended when the base has none. The base is the global rules when
+// enable-global-rule is set, and empty otherwise (entry rules only).
+func buildPortRuleSet(rawRules []string, entry RawMultipleProxy, id string) (name string, merged []string) {
+	if !entry.EnableGlobalRule && len(entry.Rules) == 0 {
+		return "", nil
+	}
+
+	var base []string
+	if entry.EnableGlobalRule {
+		base = rawRules
+	}
+
+	insertAt := len(base)
+	for i, line := range base {
+		if tp, _, _, _ := RC.ParseRulePayload(line, false); tp == "MATCH" {
+			insertAt = i
+		}
+	}
+
+	merged = make([]string, 0, len(base)+len(entry.Rules))
+	merged = append(merged, base[:insertAt]...)
+	merged = append(merged, entry.Rules...)
+	merged = append(merged, base[insertAt:]...)
+
+	return id + "-rules", merged
+}
+
+// buildListenerMapping renders a multiple-proxy entry as a listeners: mapping.
+// Optional keys are only emitted when set, so an entry without a rule set, mode
+// or exit group leaves the corresponding listener behaviour at its default.
+func buildListenerMapping(listenerName string, entry RawMultipleProxy, ltype string, port int, ruleSetName, exitGroup string) map[string]any {
+	mapping := map[string]any{
+		"type": ltype,
+		"name": listenerName,
+		"port": port,
+	}
+	if ruleSetName != "" {
+		mapping["rule"] = ruleSetName
+	}
+	if entry.Mode != "" {
+		mapping["mode"] = entry.Mode
+	}
+	if exitGroup != "" {
+		mapping["fallback-proxy"] = exitGroup
+	}
+	return mapping
+}
+
+// parseMultipleProxy turns every multiple-proxy entry into an inbound listener,
+// registering generated exit groups into proxies/providersMap and port-scoped
+// rule sets into subRules. The listeners map is the one returned by
+// parseListeners (the same object as Config.Listeners), so the existing
+// listener lifecycle and reload diff apply unchanged. This function is additive:
+// it never removes entries from listeners.
+func parseMultipleProxy(cfg *RawConfig, proxies map[string]C.Proxy, providersMap map[string]P.ProxyProvider, ruleProviders map[string]P.RuleProvider, subRules map[string][]C.Rule, listeners map[string]C.InboundListener) error {
+	used, err := collectUsedPorts(cfg)
+	if err != nil {
+		return err
+	}
+
+	for idx, entry := range cfg.MultipleProxy {
+		id := multipleProxyID(entry, idx)
+		listenerName := id
+
+		ltype, port, err := multipleProxyListenerType(entry)
+		if err != nil {
+			return err
+		}
+
+		if err = validateMultipleProxyMode(entry.Mode); err != nil {
+			return err
+		}
+
+		owner := "multiple-proxy " + id
+		if other, conflict := used[uint16(port)]; conflict {
+			return fmt.Errorf("%s: port %d conflicts with %s", owner, port, other)
+		}
+		used[uint16(port)] = owner
+
+		exitGroup := ""
+		if entry.ProxyGroup != "" {
+			if _, exist := proxies[entry.ProxyGroup]; !exist {
+				return fmt.Errorf("%s: proxy-group %q not found", multipleProxyEntryPrefix(entry), entry.ProxyGroup)
+			}
+			exitGroup = entry.ProxyGroup
+		}
+		if len(entry.Matchs) > 0 {
+			groupName := id + "-group"
+			if _, exist := proxies[groupName]; exist {
+				return fmt.Errorf("%s: generated group %q already exists", multipleProxyEntryPrefix(entry), groupName)
+			}
+			if _, err = buildMatchsGroup(groupName, entry.Matchs, proxies, providersMap); err != nil {
+				return err
+			}
+			if exitGroup == "" {
+				exitGroup = groupName
+			}
+		}
+
+		ruleName, merged := buildPortRuleSet(cfg.Rule, entry, id)
+		if ruleName != "" {
+			if _, exist := subRules[ruleName]; exist {
+				return fmt.Errorf("%s: generated rule set %q already exists", multipleProxyEntryPrefix(entry), ruleName)
+			}
+			compiled, err := parseRules(merged, proxies, ruleProviders, subRules, "multiple-proxy["+id+"]")
+			if err != nil {
+				return err
+			}
+			subRules[ruleName] = compiled
+		}
+
+		mapping := buildListenerMapping(listenerName, entry, ltype, port, ruleName, exitGroup)
+		l, err := listener.ParseListener(mapping)
+		if err != nil {
+			return fmt.Errorf("%s: %w", multipleProxyEntryPrefix(entry), err)
+		}
+		if _, exist := listeners[listenerName]; exist {
+			return fmt.Errorf("listener %s is the duplicate name", listenerName)
+		}
+		listeners[listenerName] = l
+	}
+
+	return nil
 }

@@ -720,6 +720,10 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.SubRules = subRules
 
+	if err = parseMultipleProxy(rawCfg, proxies, providers, ruleProviders, subRules, listeners); err != nil {
+		return nil, err
+	}
+
 	rules, err := parseRules(rawCfg.Rule, proxies, ruleProviders, subRules, "rules")
 	if err != nil {
 		return nil, err
