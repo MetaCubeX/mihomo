@@ -174,18 +174,28 @@ func isMatchableProxy(name string, p C.Proxy) bool {
 // separated alternatives. The resulting group is registered into proxies and
 // providersMap.
 func buildMatchsGroup(groupName string, entries []RawMatchsEntry, proxies map[string]C.Proxy, providersMap map[string]P.ProxyProvider) (C.Proxy, error) {
+	// The type is resolved per entry (omitted means "select") and every entry
+	// must agree, so a bare pattern can not silently inherit another entry's
+	// type. default-selected follows the same uniform rule.
 	groupType := ""
 	defaultSelected := ""
 	for _, entry := range entries {
-		if entry.Type != "" {
-			if groupType == "" {
-				groupType = entry.Type
-			} else if entry.Type != groupType {
-				return nil, fmt.Errorf("multiple-proxy: matchs for %q have inconsistent types: %s and %s", groupName, groupType, entry.Type)
-			}
+		effectiveType := entry.Type
+		if effectiveType == "" {
+			effectiveType = "select"
 		}
-		if defaultSelected == "" && entry.DefaultSelected != "" {
-			defaultSelected = entry.DefaultSelected
+		if groupType == "" {
+			groupType = effectiveType
+		} else if effectiveType != groupType {
+			return nil, fmt.Errorf("multiple-proxy: matchs for %q have inconsistent types: %s and %s", groupName, groupType, effectiveType)
+		}
+
+		if entry.DefaultSelected != "" {
+			if defaultSelected == "" {
+				defaultSelected = entry.DefaultSelected
+			} else if entry.DefaultSelected != defaultSelected {
+				return nil, fmt.Errorf("multiple-proxy: matchs for %q have inconsistent default-selected: %s and %s", groupName, defaultSelected, entry.DefaultSelected)
+			}
 		}
 	}
 	if groupType == "" {
@@ -193,6 +203,9 @@ func buildMatchsGroup(groupName string, entries []RawMatchsEntry, proxies map[st
 	}
 	if _, ok := multipleProxyGroupTypes[groupType]; !ok {
 		return nil, fmt.Errorf("multiple-proxy: matchs for %q use unsupported group type: %s", groupName, groupType)
+	}
+	if defaultSelected != "" && groupType != "select" {
+		return nil, fmt.Errorf("multiple-proxy: matchs for %q: default-selected is only supported on select groups, not %s", groupName, groupType)
 	}
 
 	matched := make([]string, 0, len(proxies))

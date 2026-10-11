@@ -142,6 +142,52 @@ func TestBuildMatchsGroupErrors(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestBuildMatchsGroupTypeResolution(t *testing.T) {
+	providers := map[string]P.ProxyProvider{}
+
+	// An omitted type is "select" per entry, so a bare pattern can not inherit
+	// another entry's type.
+	_, err := buildMatchsGroup("t0", []RawMatchsEntry{{Name: "*HK*"}, {Name: "*TW*", Type: "url-test"}}, testProxiesMap("HK-01", "TW-01"), providers)
+	assert.Error(t, err)
+
+	// Uniform non-select types are accepted.
+	g, err := buildMatchsGroup("t1", []RawMatchsEntry{{Name: "*HK*", Type: "url-test"}, {Name: "*TW*", Type: "url-test"}}, testProxiesMap("HK-01", "TW-01"), providers)
+	assert.NoError(t, err)
+	assert.Equal(t, C.URLTest, g.Type())
+
+	// An unsupported type is rejected.
+	_, err = buildMatchsGroup("t2", []RawMatchsEntry{{Name: "*HK*", Type: "relay"}}, testProxiesMap("HK-01"), providers)
+	assert.Error(t, err)
+}
+
+func TestBuildMatchsGroupDefaultSelectedRules(t *testing.T) {
+	providers := map[string]P.ProxyProvider{}
+
+	// default-selected is only supported on select groups.
+	_, err := buildMatchsGroup("d0", []RawMatchsEntry{{Name: "*HK*", Type: "url-test", DefaultSelected: "HK-01"}}, testProxiesMap("HK-01"), providers)
+	assert.Error(t, err)
+
+	// Conflicting default-selected across entries is rejected.
+	_, err = buildMatchsGroup("d1", []RawMatchsEntry{{Name: "*HK*", DefaultSelected: "HK-01"}, {Name: "*TW*", DefaultSelected: "TW-01"}}, testProxiesMap("HK-01", "TW-01"), providers)
+	assert.Error(t, err)
+
+	// A repeated identical default-selected is accepted.
+	g, err := buildMatchsGroup("d2", []RawMatchsEntry{{Name: "*HK*", DefaultSelected: "HK-01"}, {Name: "*TW*", DefaultSelected: "HK-01"}}, testProxiesMap("HK-01", "TW-01"), providers)
+	assert.NoError(t, err)
+	assert.Equal(t, "HK-01", g.Adapter().(*outboundgroup.Selector).Now())
+}
+
+func TestBuildMatchsGroupAlternativeSplit(t *testing.T) {
+	providers := map[string]P.ProxyProvider{}
+	g, err := buildMatchsGroup("a0", []RawMatchsEntry{{Name: "*HK*|*TW*"}}, testProxiesMap("HK-01", "TW-01", "US-01"), providers)
+	assert.NoError(t, err)
+	names := []string{}
+	for _, p := range g.Adapter().(*outboundgroup.Selector).Proxies() {
+		names = append(names, p.Name())
+	}
+	assert.ElementsMatch(t, []string{"HK-01", "TW-01"}, names)
+}
+
 func TestBuildMatchsGroupSkipsReservedAndGroups(t *testing.T) {
 	proxies := testProxiesMap("*") // note: literal name "*"
 	providers := map[string]P.ProxyProvider{}
