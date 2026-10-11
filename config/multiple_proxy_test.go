@@ -241,19 +241,37 @@ func TestParseMultipleProxyPortConflict(t *testing.T) {
 	}
 	err := parseMultipleProxy(cfg, map[string]C.Proxy{}, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
 	assert.Error(t, err)
+
+	// A listeners: port range must also be expanded and conflict-checked at the
+	// orchestration level, not only inside collectUsedPorts.
+	rangeCfg := &RawConfig{
+		Listeners:     []map[string]any{{"port": "8000-8002"}},
+		MultipleProxy: []RawMultipleProxy{{MixedPort: 8001}},
+	}
+	err = parseMultipleProxy(rangeCfg, map[string]C.Proxy{}, map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.Error(t, err)
 }
 
 func TestParseMultipleProxyWiresGroupRuleSetAndListener(t *testing.T) {
 	cfg := &RawConfig{
 		Rule: []string{"DOMAIN-SUFFIX,a.com,DIRECT", "MATCH,GLOBAL"},
-		MultipleProxy: []RawMultipleProxy{{
-			Name:             "mp-0",
-			MixedPort:        7900,
-			Mode:             "rule",
-			EnableGlobalRule: true,
-			Rules:            []string{"DOMAIN-SUFFIX,b.com,GLOBAL"},
-			Matchs:           []RawMatchsEntry{{Name: "*HK*"}},
-		}},
+		MultipleProxy: []RawMultipleProxy{
+			{
+				Name:             "mp-0",
+				MixedPort:        7900,
+				Mode:             "rule",
+				EnableGlobalRule: true,
+				Rules:            []string{"DOMAIN-SUFFIX,b.com,GLOBAL"},
+				Matchs:           []RawMatchsEntry{{Name: "*HK*"}},
+			},
+			{
+				// Uppercase is accepted by validation, so it must be normalized
+				// to the lowercase key the runtime T.ModeMapping lookup uses.
+				Name:      "mp-1",
+				MixedPort: 7901,
+				Mode:      "GLOBAL",
+			},
+		},
 	}
 	proxies := testProxiesMap("HK-01")
 	providers := map[string]P.ProxyProvider{}
@@ -278,6 +296,12 @@ func TestParseMultipleProxyWiresGroupRuleSetAndListener(t *testing.T) {
 	assert.Equal(t, "mp-0-rules", option.SpecialRules)
 	assert.Equal(t, "rule", option.SpecialMode)
 	assert.Equal(t, "mp-0-group", option.SpecialFallbackProxy)
+
+	l1, ok := listeners["mp-1"]
+	assert.True(t, ok)
+	option1, ok := l1.Config().(*IN.MixedOption)
+	assert.True(t, ok)
+	assert.Equal(t, "global", option1.SpecialMode)
 }
 
 func TestParseMultipleProxyErrors(t *testing.T) {
@@ -330,30 +354,28 @@ func TestParseMultipleProxyErrors(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// A reload reparses the whole config, so ParseRawConfig rebuilds the listener
-// map from scratch: an entry removed from multiple-proxy is simply absent from
-// the new map. That absence is what PatchInboundListeners(..., dropOld=true)
-// diffs against to close the stale listener. Kept at the map level on purpose:
-// no sockets are started.
-func TestParseMultipleProxyRemovedEntryDropsOnRebuild(t *testing.T) {
+// parseMultipleProxy is additive: it only ever adds listeners to the map it is
+// handed. A reload that drops an entry relies on ParseRawConfig rebuilding the
+// listener map from scratch, not on this function deleting anything — so a
+// second parse into the SAME map must leave the first entry's listener intact.
+// Kept at the map level on purpose: no sockets are started.
+func TestParseMultipleProxyNeverRemovesListeners(t *testing.T) {
 	proxies := testProxiesMap("HK-01")
 	providers := map[string]P.ProxyProvider{}
 	ruleProviders := map[string]P.RuleProvider{}
 	subRules := map[string][]C.Rule{}
 
-	first := map[string]C.InboundListener{}
+	listeners := map[string]C.InboundListener{}
 	assert.NoError(t, parseMultipleProxy(
 		&RawConfig{MultipleProxy: []RawMultipleProxy{{Name: "mp-0", MixedPort: 7900}}},
-		proxies, providers, ruleProviders, subRules, first))
-	assert.Contains(t, first, "mp-0")
+		proxies, providers, ruleProviders, subRules, listeners))
+	assert.Contains(t, listeners, "mp-0")
 
-	// A separate fresh map models the rebuild; parseMultipleProxy stays additive
-	// and never deletes user listeners entries.
-	second := map[string]C.InboundListener{}
+	// An empty multiple-proxy slice must not evict the existing listener.
 	assert.NoError(t, parseMultipleProxy(
 		&RawConfig{MultipleProxy: []RawMultipleProxy{}},
-		proxies, providers, ruleProviders, subRules, second))
-	assert.NotContains(t, second, "mp-0")
+		proxies, providers, ruleProviders, subRules, listeners))
+	assert.Contains(t, listeners, "mp-0")
 }
 
 func TestBuildMatchsGroupSkipsExistingGroup(t *testing.T) {

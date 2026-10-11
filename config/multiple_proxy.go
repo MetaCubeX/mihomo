@@ -305,7 +305,11 @@ func buildListenerMapping(listenerName string, entry RawMultipleProxy, ltype str
 		mapping["rule"] = ruleSetName
 	}
 	if entry.Mode != "" {
-		mapping["mode"] = entry.Mode
+		// validateMultipleProxyMode accepts mode case-insensitively and the
+		// runtime lookup (T.ModeMapping) is lowercase-keyed, so normalize here.
+		// Storing the raw value would make an uppercase mode silently fall back
+		// to the global mode.
+		mapping["mode"] = strings.ToLower(entry.Mode)
 	}
 	if exitGroup != "" {
 		mapping["fallback-proxy"] = exitGroup
