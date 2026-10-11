@@ -144,6 +144,8 @@ tun:
   auto-redirect: false # 自动配置 iptables 以重定向 TCP 连接。仅支持 Linux。带有 auto-redirect 的 auto-route 现在可以在路由器上按预期工作，无需干预。
   # strict-route: true # 将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问
   # disable-icmp-forwarding: true # 禁用 ICMP 转发，防止某些情况下的 ICMP 环回问题，ping 将不会显示真实的延迟
+  # 启用转发时，ICMP 按规则选择 Tailscale 进行真实 echo 探测，REJECT 会丢弃请求。
+  # 不支持 ICMP 的其他代理保留直连行为；可用 NETWORK,ICMP,DIRECT 显式选择直连。
   # congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; only effective on mips
   route-address-set: # 将指定规则集中的目标 IP CIDR 规则添加到防火墙, 不匹配的流量将绕过路由, 仅支持 Linux，且需要 nftables，`auto-route` 和 `auto-redirect` 已启用。
     - ruleset-1
@@ -1353,7 +1355,26 @@ proxies: # socks5
     # state-dir: ./tailscale # tsnet 状态目录，默认 tailscale
     # ephemeral: false # 是否作为 ephemeral node 登录，默认 false
     udp: true # 是否启用 UDP，默认 false
+    # port: 41641 # Tailscale 节点通信的 UDP 监听端口，默认 41641；设为 0 使用随机端口。防火墙需放行实际监听端口
+    # host-forward: # 可选；把节点自身 Tailscale IP 的入站连接转发到本机 loopback 同端口
+    #   enabled: true # 默认 false；启用后节点会主动启动，无需先发起出站连接
+    #   target: 127.0.0.1 # 默认 127.0.0.1；仅允许 loopback IP，也可设为 ::1
+    #   tcp: true # 默认 true
+    #   udp: true # 默认 true；独立于上面的出站 udp 选项
+    # 例如节点 IP 为 100.104.118.62，则访问 100.104.118.62:6767 会转发到 127.0.0.1:6767。
+    # 启用后，本机 loopback 上的服务也可通过 Tailnet 访问，仍受 Tailscale ACL/grants 控制。
+    # 服务看到的来源是本地转发连接；此模式与原生客户端的系统 TUN 模式不同。
+    # 本机转发直接连接 loopback，不使用 dialer-proxy、interface-name、routing-mark 或 ip-version。
     # accept-routes: true # 是否接受 Tailnet 中发布的 subnet routes
+    # advertise-routes: # 把本机可达网段发布到 Tailnet，其他节点经此节点访问这些地址
+    #   - 192.168.1.0/24
+    #   - fd12:3456:789a::/64
+    # 路由需要在 Tailscale/Headscale 控制台批准后，其他节点才会使用。设为 [] 会清除已发布的路由。
+    # 配置此字段（包括 []）后，节点会在运行时主动启动；仅检查配置（-t）不会启动节点。
+    # 同时发布 0.0.0.0/0 和 ::/0 表示作为 exit node，此时不能再配置 exit-node。
+    # 进入这些网段的 TCP/UDP 由 userspace 网络栈从本机转发出去，沿用 interface-name、routing-mark 和 dialer-proxy。
+    # TUN 的普通 ping 也可按规则经此节点探测；仅收到目标 ICMP 回复后回包，本节点地址在上线后本地回应。
+    # 此功能是 echo 代理，探测包由 Tailscale 生成；不支持 traceroute、MTU 探测或任意 ICMP 报文透传。
     # exit-node: 100.64.0.1 # 使用指定 exit node，可填写节点 IP；也支持 auto:any
     # exit-node-allow-lan-access: true # 使用 exit node 时是否允许访问本地 LAN
     # 当目标不在 Tailscale 路由内时，连接会直接报错，不会回退到直连；
