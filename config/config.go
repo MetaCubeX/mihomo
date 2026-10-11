@@ -455,6 +455,7 @@ type RawConfig struct {
 	Rule          []string                  `yaml:"rules" json:"rule"`
 	SubRules      map[string][]string       `yaml:"sub-rules" json:"sub-rules"`
 	Listeners     []map[string]any          `yaml:"listeners" json:"listeners"`
+	MultipleProxy []RawMultipleProxy        `yaml:"multiple-proxy" json:"multiple-proxy"`
 	Hosts         map[string]any            `yaml:"hosts" json:"hosts"`
 	DNS           RawDNS                    `yaml:"dns" json:"dns"`
 	NTP           RawNTP                    `yaml:"ntp" json:"ntp"`
@@ -468,6 +469,24 @@ type RawConfig struct {
 	TLS           RawTLS                    `yaml:"tls" json:"tls"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
+}
+
+type RawMatchsEntry struct {
+	Name            string `yaml:"name" json:"name"`
+	Type            string `yaml:"type" json:"type"`
+	DefaultSelected string `yaml:"default-selected" json:"default-selected"`
+}
+
+type RawMultipleProxy struct {
+	Name             string           `yaml:"name" json:"name"`
+	MixedPort        int              `yaml:"mixed-port" json:"mixed-port"`
+	Port             int              `yaml:"port" json:"port"`
+	SocksPort        int              `yaml:"socks-port" json:"socks-port"`
+	Mode             string           `yaml:"mode" json:"mode"`
+	EnableGlobalRule bool             `yaml:"enable-global-rule" json:"enable-global-rule"`
+	Rules            []string         `yaml:"rules" json:"rules"`
+	ProxyGroup       string           `yaml:"proxy-group" json:"proxy-group"`
+	Matchs           []RawMatchsEntry `yaml:"matchs" json:"matchs"`
 }
 
 // Parse config
