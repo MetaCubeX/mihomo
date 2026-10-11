@@ -80,7 +80,7 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, e
 
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = t.ResolveUDP(ctx, metadata); err != nil {
+	if err = prepareUDP(ctx, metadata, t); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +96,7 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_
 
 		// tuic uos use stream-oriented udp with a special address, so we need a net.UDPAddr
 
-		destination := M.SocksaddrFromNet(metadata.UDPAddr())
+		destination := M.SocksaddrFromNet(metadata.UDPRemoteAddr())
 		if t.option.UDPOverStreamVersion == uot.LegacyVersion {
 			return NewPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), t), nil
 		} else {
@@ -255,6 +255,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		tlsConfig:  tlsConfig,
 		echConfig:  echConfig,
 	}
+	t.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	t.dialer = option.NewDialer(t.DialOptions())
 
 	clientMaxOpenStreams := int64(option.MaxOpenStreams)

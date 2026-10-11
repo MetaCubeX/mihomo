@@ -236,7 +236,7 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = t.ResolveUDP(ctx, metadata); err != nil {
+	if err = prepareUDP(ctx, metadata, t); err != nil {
 		return nil, err
 	}
 
@@ -303,6 +303,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		option:      &option,
 		hexPassword: trojan.Key(option.Password),
 	}
+	t.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	t.dialer = option.NewDialer(t.DialOptions())
 
 	var err error

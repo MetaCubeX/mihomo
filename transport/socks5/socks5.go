@@ -10,6 +10,8 @@ import (
 	"strconv"
 
 	"github.com/metacubex/mihomo/component/auth"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 // Error represents a SOCKS error
@@ -82,6 +84,17 @@ func (a Addr) UDPAddr() *net.UDPAddr {
 		return &net.UDPAddr{IP: net.IP(ip[:]), Port: int(binary.BigEndian.Uint16(a[1+net.IPv6len : 1+net.IPv6len+2]))}
 	}
 	// Other Atyp
+	return nil
+}
+
+// UDPRemoteAddr preserves domain addresses without resolving them locally.
+func (a Addr) UDPRemoteAddr() net.Addr {
+	if len(a) > 0 && a[0] == AtypDomainName {
+		return M.ParseSocksaddr(a.String())
+	}
+	if addr := a.UDPAddr(); addr != nil {
+		return addr
+	}
 	return nil
 }
 

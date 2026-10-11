@@ -6,6 +6,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/structure"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error) {
@@ -13,6 +14,18 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 	proxyType, existType := mapping["type"].(string)
 	if !existType {
 		return nil, fmt.Errorf("missing type")
+	}
+	// Validate the common flag separately, including for protocols that do not
+	// decode BasicOption. Unsupported flags warn and leave remote DNS disabled.
+	remoteDNS := false
+	if value, exists := mapping["udp-remote-dns"]; exists {
+		var option struct {
+			Enabled bool `proxy:"udp-remote-dns"`
+		}
+		if err := decoder.Decode(map[string]any{"udp-remote-dns": value}, &option); err != nil {
+			return nil, err
+		}
+		remoteDNS = option.Enabled
 	}
 
 	opt := applyProxyOptions(options...)
@@ -229,6 +242,10 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 
 	if err != nil {
 		return nil, err
+	}
+
+	if remoteDNS && !proxy.ProxyInfo().UDPRemoteDNS {
+		log.Warnln("[%s] udp-remote-dns is not supported by %s; remote DNS remains disabled", proxy.Name(), proxyType)
 	}
 
 	if muxMapping, muxExist := mapping["smux"].(map[string]any); muxExist {

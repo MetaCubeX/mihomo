@@ -60,7 +60,7 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	if err := h.ResolveUDP(ctx, metadata); err != nil {
+	if err := prepareUDP(ctx, metadata, h); err != nil {
 		return nil, err
 	}
 	udpConn, err := h.client.DialUDP(h.genHdc(ctx))
@@ -258,6 +258,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		tlsConfig: tlsClientConfig,
 		echConfig: echConfig,
 	}
+	outbound.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 
 	return outbound, nil
@@ -281,7 +282,7 @@ func (c *hyPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		return
 	}
 	n = copy(p, b)
-	addr = M.ParseSocksaddr(addrStr).UDPAddr()
+	addr = M.ParseSocksaddr(addrStr)
 	return
 }
 
@@ -291,7 +292,7 @@ func (c *hyPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, e
 		return
 	}
 	data = b
-	addr = M.ParseSocksaddr(addrStr).UDPAddr()
+	addr = M.ParseSocksaddr(addrStr)
 	return
 }
 
