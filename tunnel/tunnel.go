@@ -398,14 +398,15 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		helper.FindProcess = nil
 	}
 
-	switch mode {
+	switch effectiveMode(metadata) {
 	case Direct:
 		proxy = proxies["DIRECT"]
 	case Global:
-		proxy = proxies["GLOBAL"]
+		proxy = fallbackProxy(metadata)
 	// Rule
 	default:
 		proxy, rule, err = match(metadata, helper)
+		proxy, rule, err = applyFallback(proxy, rule, err, metadata)
 	}
 	return
 }
@@ -642,13 +643,40 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 		} else {
 			log.Infoln("[%s] %s --> %s match %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), rule.RuleType().String(), remoteConn.Chains().String())
 		}
-	case mode == Global:
+	case effectiveMode(metadata) == Global:
 		log.Infoln("[%s] %s --> %s using GLOBAL", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress())
-	case mode == Direct:
+	case effectiveMode(metadata) == Direct:
 		log.Infoln("[%s] %s --> %s using DIRECT", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress())
 	default:
 		log.Infoln("[%s] %s --> %s doesn't match any rule using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
 	}
+}
+
+func effectiveMode(metadata *C.Metadata) TunnelMode {
+	if metadata.SpecialMode != "" {
+		if m, ok := ModeMapping[metadata.SpecialMode]; ok {
+			return m
+		}
+	}
+	return mode
+}
+
+func fallbackProxy(metadata *C.Metadata) C.Proxy {
+	if metadata.SpecialFallbackProxy != "" {
+		if p, ok := proxies[metadata.SpecialFallbackProxy]; ok {
+			return p
+		}
+	}
+	return proxies["GLOBAL"]
+}
+
+func applyFallback(proxy C.Proxy, rule C.Rule, err error, metadata *C.Metadata) (C.Proxy, C.Rule, error) {
+	if err == nil && rule == nil {
+		if fb := fallbackProxy(metadata); fb != nil {
+			proxy = fb
+		}
+	}
+	return proxy, rule, err
 }
 
 func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, error) {
