@@ -38,6 +38,18 @@ func WithSpecialProxy(specialProxy string) Addition {
 	}
 }
 
+func WithSpecialMode(specialMode string) Addition {
+	return func(metadata *C.Metadata) {
+		metadata.SpecialMode = specialMode
+	}
+}
+
+func WithSpecialFallbackProxy(specialFallbackProxy string) Addition {
+	return func(metadata *C.Metadata) {
+		metadata.SpecialFallbackProxy = specialFallbackProxy
+	}
+}
+
 func WithDstAddr(addr net.Addr) Addition {
 	return func(metadata *C.Metadata) {
 		_ = metadata.SetRemoteAddr(addr)
