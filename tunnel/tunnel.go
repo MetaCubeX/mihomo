@@ -671,7 +671,10 @@ func fallbackProxy(metadata *C.Metadata) C.Proxy {
 }
 
 func applyFallback(proxy C.Proxy, rule C.Rule, err error, metadata *C.Metadata) (C.Proxy, C.Rule, error) {
-	if err == nil && rule == nil {
+	// Only substitute when this port explicitly configured an exit. An empty
+	// SpecialFallbackProxy keeps the pre-existing DIRECT result from match's
+	// full-miss return (spec §2 出口优先级 / §3.5 compatibility).
+	if err == nil && rule == nil && metadata.SpecialFallbackProxy != "" {
 		if fb := fallbackProxy(metadata); fb != nil {
 			proxy = fb
 		}

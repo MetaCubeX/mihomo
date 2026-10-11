@@ -53,19 +53,28 @@ func TestApplyFallback(t *testing.T) {
 	oldProxies := proxies
 	defer func() { proxies = oldProxies }()
 	direct := newTestProxy("DIRECT")
-	proxies = map[string]C.Proxy{"DIRECT": direct, "GLOBAL": direct}
+	global := newTestProxy("GLOBAL")
+	proxies = map[string]C.Proxy{"DIRECT": direct, "GLOBAL": global}
 
-	md := &C.Metadata{SpecialFallbackProxy: "GLOBAL"}
 	realRule, parseErr := rulepkg.ParseRule("DOMAIN-SUFFIX", "x.com", "DIRECT", nil, nil)
 	assert.NoError(t, parseErr)
 	assert.NotNil(t, realRule)
-	// rule matched → untouched
+
+	// rule matched → untouched, even with an exit configured
+	md := &C.Metadata{SpecialFallbackProxy: "GLOBAL"}
 	p, r, err := applyFallback(direct, realRule, nil, md)
 	assert.Same(t, direct, p)
 	assert.NotNil(t, r)
 	assert.NoError(t, err)
-	// no rule matched (nil rule) → fallback applied
+
+	// no rule matched (nil rule) with an exit configured → fallback applied
 	p, r, err = applyFallback(direct, nil, nil, md)
+	assert.Same(t, global, p)
+	assert.Nil(t, r)
+	assert.NoError(t, err)
+
+	// no rule matched and no exit configured → keep match's DIRECT full-miss result
+	p, r, err = applyFallback(direct, nil, nil, &C.Metadata{})
 	assert.Same(t, direct, p)
 	assert.Nil(t, r)
 	assert.NoError(t, err)
