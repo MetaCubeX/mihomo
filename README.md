@@ -21,6 +21,7 @@
 ## Features
 
 - Local HTTP/HTTPS/SOCKS server with authentication support
+- Multiple independent inbound proxy ports, each with its own mode, rules and fallback exit group
 - VMess, VLESS, Shadowsocks, Trojan, Snell, TUIC, Hysteria protocol support
 - Built-in DNS server that aims to minimize DNS pollution attack impact, supports DoH/DoT upstream and fake IP.
 - Rules based off domains, GEOIP, IPCIDR or Process to forward packets to different nodes
