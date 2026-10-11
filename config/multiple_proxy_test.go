@@ -3,6 +3,12 @@ package config
 import (
 	"testing"
 
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	C "github.com/metacubex/mihomo/constant"
+	P "github.com/metacubex/mihomo/constant/provider"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -89,4 +95,84 @@ func TestCollectUsedPortsMissingAndBadPort(t *testing.T) {
 func TestMultipleProxyID(t *testing.T) {
 	assert.Equal(t, "named", multipleProxyID(RawMultipleProxy{Name: "named"}, 3))
 	assert.Equal(t, "multiple-proxy-3", multipleProxyID(RawMultipleProxy{}, 3))
+}
+
+func testProxiesMap(names ...string) map[string]C.Proxy {
+	m := map[string]C.Proxy{
+		"DIRECT":     adapter.NewProxy(outbound.NewDirect()),
+		"COMPATIBLE": adapter.NewProxy(outbound.NewCompatible()),
+		"GLOBAL":     adapter.NewProxy(outbound.NewDirect()), // stand-in group slot
+	}
+	for _, n := range names {
+		m[n] = adapter.NewProxy(outbound.NewDirectWithOption(outbound.DirectOption{Name: n}))
+	}
+	return m
+}
+
+func TestBuildMatchsGroupUnionAndDefault(t *testing.T) {
+	proxies := testProxiesMap("HK-01", "HK-02", "TW-01", "US-01")
+	providers := map[string]P.ProxyProvider{}
+	g, err := buildMatchsGroup("mp-0-group", []RawMatchsEntry{
+		{Name: "*HK*"},
+		{Name: "*TW*", DefaultSelected: "TW-01"},
+	}, proxies, providers)
+	assert.NoError(t, err)
+	assert.Equal(t, "mp-0-group", g.Name())
+	names := []string{}
+	for _, p := range g.Adapter().(*outboundgroup.Selector).Proxies() {
+		names = append(names, p.Name())
+	}
+	assert.ElementsMatch(t, []string{"HK-01", "HK-02", "TW-01"}, names)
+	assert.Contains(t, proxies, "mp-0-group")
+	assert.Contains(t, providers, "mp-0-group")
+}
+
+func TestBuildMatchsGroupErrors(t *testing.T) {
+	proxies := testProxiesMap("HK-01")
+	providers := map[string]P.ProxyProvider{}
+	// 0 matches
+	_, err := buildMatchsGroup("g0", []RawMatchsEntry{{Name: "*NOPE*"}}, proxies, providers)
+	assert.Error(t, err)
+	// inconsistent types
+	proxies2 := testProxiesMap("HK-01", "TW-01")
+	_, err = buildMatchsGroup("g1", []RawMatchsEntry{{Name: "*HK*", Type: "select"}, {Name: "*TW*", Type: "url-test"}}, proxies2, providers)
+	assert.Error(t, err)
+	// default-selected not in result
+	_, err = buildMatchsGroup("g2", []RawMatchsEntry{{Name: "*HK*", DefaultSelected: "US-01"}}, testProxiesMap("HK-01"), providers)
+	assert.Error(t, err)
+}
+
+func TestBuildMatchsGroupSkipsReservedAndGroups(t *testing.T) {
+	proxies := testProxiesMap("*") // note: literal name "*"
+	providers := map[string]P.ProxyProvider{}
+	g, err := buildMatchsGroup("g3", []RawMatchsEntry{{Name: "*"}}, proxies, providers)
+	assert.NoError(t, err)
+	names := []string{}
+	for _, p := range g.Adapter().(*outboundgroup.Selector).Proxies() {
+		names = append(names, p.Name())
+	}
+	assert.NotContains(t, names, "DIRECT")
+	assert.NotContains(t, names, "COMPATIBLE")
+}
+
+func TestBuildMatchsGroupSkipsExistingGroup(t *testing.T) {
+	proxies := testProxiesMap("HK-01")
+	selector, err := outboundgroup.NewSelector(
+		outboundgroup.GroupCommonOption{Name: "EXISTING-GROUP"},
+		outboundgroup.SelectorOption{},
+		proxies["COMPATIBLE"],
+		[]P.ProxyProvider{},
+	)
+	assert.NoError(t, err)
+	proxies["EXISTING-GROUP"] = adapter.NewProxy(selector)
+
+	providers := map[string]P.ProxyProvider{}
+	g, err := buildMatchsGroup("g4", []RawMatchsEntry{{Name: "*"}}, proxies, providers)
+	assert.NoError(t, err)
+	names := []string{}
+	for _, p := range g.Adapter().(*outboundgroup.Selector).Proxies() {
+		names = append(names, p.Name())
+	}
+	assert.NotContains(t, names, "EXISTING-GROUP")
+	assert.Contains(t, names, "HK-01")
 }

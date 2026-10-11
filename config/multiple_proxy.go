@@ -2,12 +2,40 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/wildcard"
+	C "github.com/metacubex/mihomo/constant"
+	P "github.com/metacubex/mihomo/constant/provider"
 	T "github.com/metacubex/mihomo/tunnel"
+
+	"golang.org/x/exp/slices"
 )
+
+// multipleProxyReservedNames are the built-in proxies that must never be
+// matched as nodes when synthesizing a matchs group.
+var multipleProxyReservedNames = map[string]struct{}{
+	"DIRECT":      {},
+	"REJECT":      {},
+	"REJECT-DROP": {},
+	"COMPATIBLE":  {},
+	"PASS":        {},
+	"PASS-RULE":   {},
+	"GLOBAL":      {},
+}
+
+// multipleProxyGroupTypes are the proxy group types a matchs entry may use.
+var multipleProxyGroupTypes = map[string]struct{}{
+	"select":       {},
+	"url-test":     {},
+	"fallback":     {},
+	"load-balance": {},
+}
 
 // multipleProxyEntryPrefix renders an identifying prefix for error messages.
 // The name is optional, so fall back to the entry's ports when it is absent.
@@ -126,4 +154,95 @@ func multipleProxyID(entry RawMultipleProxy, idx int) string {
 		return entry.Name
 	}
 	return fmt.Sprintf("multiple-proxy-%d", idx)
+}
+
+// isMatchableProxy reports whether a proxy may be used as a node of a
+// synthesized matchs group. Reserved built-in names and existing proxy groups
+// are never matchable.
+func isMatchableProxy(name string, p C.Proxy) bool {
+	if _, reserved := multipleProxyReservedNames[name]; reserved {
+		return false
+	}
+	if _, isGroup := p.Adapter().(outboundgroup.ProxyGroup); isGroup {
+		return false
+	}
+	return true
+}
+
+// buildMatchsGroup synthesizes a proxy group from the nodes matched by the
+// name patterns of a multiple-proxy entry. Each entry name may contain `|`
+// separated alternatives. The resulting group is registered into proxies and
+// providersMap.
+func buildMatchsGroup(groupName string, entries []RawMatchsEntry, proxies map[string]C.Proxy, providersMap map[string]P.ProxyProvider) (C.Proxy, error) {
+	groupType := ""
+	defaultSelected := ""
+	for _, entry := range entries {
+		if entry.Type != "" {
+			if groupType == "" {
+				groupType = entry.Type
+			} else if entry.Type != groupType {
+				return nil, fmt.Errorf("multiple-proxy: matchs for %q have inconsistent types: %s and %s", groupName, groupType, entry.Type)
+			}
+		}
+		if defaultSelected == "" && entry.DefaultSelected != "" {
+			defaultSelected = entry.DefaultSelected
+		}
+	}
+	if groupType == "" {
+		groupType = "select"
+	}
+	if _, ok := multipleProxyGroupTypes[groupType]; !ok {
+		return nil, fmt.Errorf("multiple-proxy: matchs for %q use unsupported group type: %s", groupName, groupType)
+	}
+
+	matched := make([]string, 0, len(proxies))
+	for name, p := range proxies {
+		if !isMatchableProxy(name, p) {
+			continue
+		}
+		for _, entry := range entries {
+			if matchesAnyAlternative(entry.Name, name) {
+				matched = append(matched, name)
+				break
+			}
+		}
+	}
+	sort.Strings(matched)
+
+	if len(matched) == 0 {
+		return nil, fmt.Errorf("multiple-proxy: matchs for %q matched 0 proxies", groupName)
+	}
+
+	if defaultSelected != "" && !slices.Contains(matched, defaultSelected) {
+		return nil, fmt.Errorf("multiple-proxy: matchs for %q default-selected %q is not in the matched proxies", groupName, defaultSelected)
+	}
+
+	mapping := map[string]any{
+		"name":    groupName,
+		"type":    groupType,
+		"proxies": matched,
+	}
+	if defaultSelected != "" {
+		mapping["default-selected"] = defaultSelected
+	}
+
+	group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("multiple-proxy: build group %q: %w", groupName, err)
+	}
+
+	p := adapter.NewProxy(group)
+	proxies[groupName] = p
+	return p, nil
+}
+
+// matchesAnyAlternative reports whether name matches any `|` separated
+// alternative of pattern.
+func matchesAnyAlternative(pattern, name string) bool {
+	for _, alt := range strings.Split(pattern, "|") {
+		if wildcard.Match(alt, name) {
+			return true
+		}
+	}
+	return false
 }
