@@ -80,10 +80,12 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	method := query.Get("http-method")
+
 	ctx, cancel := context.WithTimeout(r.Context(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	dm, err := group.URLTest(ctx, url, expectedStatus)
+	dm, err := group.URLTest(ctx, url, expectedStatus, method)
 	if err != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, newError(err.Error()))

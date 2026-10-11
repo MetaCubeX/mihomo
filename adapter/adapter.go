@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strings"
@@ -163,8 +164,13 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], method string) (t uint16, err error) {
 	var satisfied bool
+
+	method = strings.ToUpper(method)
+	if method == "" {
+		method = http.MethodHead
+	}
 
 	defer func() {
 		alive := err == nil
@@ -215,7 +221,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		_ = instance.Close()
 	}()
 
-	req, err := http.NewRequest(http.MethodHead, url, nil)
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return
 	}
@@ -254,7 +260,12 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		return
 	}
 
+	t = uint16(time.Since(start) / time.Millisecond)
+	_, err = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	if unifiedDelay {
 		second := time.Now()
@@ -263,18 +274,18 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		secondResp, ignoredErr = client.Do(req)
 		if ignoredErr == nil {
 			resp = secondResp
+			_, ignoredErr = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
-			start = second
-		} else {
-			if strings.HasPrefix(url, "http://") {
-				log.Errorln("%s failed to get the second response from %s: %v", p.Name(), url, ignoredErr)
-				log.Warnln("It is recommended to use HTTPS for provider.health-check.url and group.url to ensure better reliability. Due to some proxy providers hijacking test addresses and not being compatible with repeated HEAD requests, using HTTP may result in failed tests.")
-			}
+		}
+		if ignoredErr == nil {
+			t = uint16(time.Since(second) / time.Millisecond)
+		} else if strings.HasPrefix(url, "http://") {
+			log.Errorln("%s failed to get the second response from %s: %v", p.Name(), url, ignoredErr)
+			log.Warnln("It is recommended to use HTTPS for provider.health-check.url and group.url to ensure better reliability. Due to some proxy providers hijacking test addresses and not being compatible with repeated HEAD requests, using HTTP may result in failed tests.")
 		}
 	}
 
 	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
-	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }
 

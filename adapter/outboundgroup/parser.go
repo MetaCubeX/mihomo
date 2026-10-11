@@ -38,6 +38,7 @@ type GroupCommonOption struct {
 	ExcludeFilter       string   `group:"exclude-filter,omitempty"`
 	ExcludeType         string   `group:"exclude-type,omitempty"`
 	ExpectedStatus      string   `group:"expected-status,omitempty"`
+	HTTPMethod          string   `group:"http-method,omitempty"`
 	IncludeAll          bool     `group:"include-all,omitempty"`
 	IncludeAllProxies   bool     `group:"include-all-proxies,omitempty"`
 	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
@@ -147,7 +148,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 				groupOption.URL = C.DefaultTestURL
 			}
 		} else {
-			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
+			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.HTTPMethod, groupOption.Filter, uint(groupOption.Interval))
 		}
 		providers = append(providers, PDs...)
 	}
@@ -173,7 +174,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus, groupOption.HTTPMethod)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
@@ -248,12 +249,12 @@ func getProviders(mapping map[string]P.ProxyProvider, list []string) ([]P.ProxyP
 	return ps, nil
 }
 
-func addTestUrlToProviders(providers []P.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+func addTestUrlToProviders(providers []P.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], method string, filter string, interval uint) {
 	if len(providers) == 0 || len(url) == 0 {
 		return
 	}
 
 	for _, pd := range providers {
-		pd.RegisterHealthCheckTask(url, expectedStatus, filter, interval)
+		pd.RegisterHealthCheckTask(url, expectedStatus, method, filter, interval)
 	}
 }
