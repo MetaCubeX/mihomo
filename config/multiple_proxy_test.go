@@ -378,6 +378,29 @@ func TestParseMultipleProxyNeverRemovesListeners(t *testing.T) {
 	assert.Contains(t, listeners, "mp-0")
 }
 
+// parseMultipleProxy must treat the global rules as a read-only base: building a
+// port-scoped rule set copies global rules plus the entry's rules into a fresh
+// slice, so cfg.Rule itself is never mutated. A mutation here would leak the
+// entry's rules into the global rule set and every other port.
+func TestParseMultipleProxyDoesNotMutateGlobalRules(t *testing.T) {
+	cfg := &RawConfig{
+		Rule: []string{"DOMAIN-SUFFIX,a.com,DIRECT", "MATCH,GLOBAL"},
+		MultipleProxy: []RawMultipleProxy{
+			{
+				Name:             "mp-0",
+				MixedPort:        7900,
+				EnableGlobalRule: true,
+				Rules:            []string{"DOMAIN-SUFFIX,b.com,GLOBAL"},
+			},
+		},
+	}
+	before := append([]string(nil), cfg.Rule...)
+
+	err := parseMultipleProxy(cfg, testProxiesMap("HK-01"), map[string]P.ProxyProvider{}, map[string]P.RuleProvider{}, map[string][]C.Rule{}, map[string]C.InboundListener{})
+	assert.NoError(t, err)
+	assert.Equal(t, before, cfg.Rule)
+}
+
 func TestBuildMatchsGroupSkipsExistingGroup(t *testing.T) {
 	proxies := testProxiesMap("HK-01")
 	selector, err := outboundgroup.NewSelector(

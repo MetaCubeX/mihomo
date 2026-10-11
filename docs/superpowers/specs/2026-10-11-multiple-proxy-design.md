@@ -46,7 +46,7 @@ multiple-proxy:
 | `rules` | 否 | 仅本条目。插入到基底 catch-all `MATCH` 之前。格式与顶层 `rules` 相同 |
 | `proxy-group` | 否 | 引用 `proxy-groups` 中已存在的组名作为出口 |
 | `matchs` | 否 | 从 `proxies` 中按名字模式筛选节点，现场合成一个出口组 |
-| `matchs[].name` | 是 | 通配/正则模式，用于匹配节点名 |
+| `matchs[].name` | 是 | 通配模式（`*` 匹配任意字符，`?` 匹配单字符；**不支持正则**），用于匹配节点名 |
 | `matchs[].type` | 否 | 生成组的类型，默认 `select` |
 | `matchs[].default-selected` | 否 | 仅 `select`：生成组的初始选中节点名 |
 
@@ -91,7 +91,10 @@ multiple-proxy:
   （落到兜底）时，若该端口配置了 `proxy-group` / `matchs` 出口，则改用它，否则用
   `DIRECT`。
 - `mode: direct` → 全部直连。
-- 省略 `mode` → 继承全局 mode（此时无端口级兜底覆盖，行为与全局完全一致）。
+- 省略 `mode` → 继承全局 mode。此时规则集沿用全局 `rules`，无端口级规则覆盖；
+  但若该条目配置了 `proxy-group` / `matchs` 出口，则 `fallback-proxy` 仍会写入该
+  监听器，规则全不命中时改用该出口（见「出口优先级」），此点与「全局 mode 的
+  `GLOBAL` 兜底」不同。
 
 ### 边界与校验
 
@@ -166,7 +169,7 @@ SpecialFallbackProxy string `inbound:"fallback-proxy,omitempty"`
    - 有 `proxy-group` → 直接引用该名字。
    - 否则有 `matchs` → 用 `outboundgroup.NewSelector`（或对应类型构造器）新建组：
      - 组名：`multiple-proxy-<name>`（保证唯一，不与用户组重名；重名则报错）。
-     - 成员：`proxies` 中名字命中任一 `matchs[].name` 通配/正则的节点，多个模式取并集。
+     - 成员：`proxies` 中名字命中任一 `matchs[].name` 通配的节点，多个模式取并集。
      - `type` 决定构造器；`select` 时用 `SelectorOption{DefaultSelected: ...}`。
      - 注册进 `proxies` 与 `providers`，使其在 API/dashboard 可见、可切换。
    - 匹配到 0 个节点 → 报错。
@@ -214,12 +217,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
         proxy = fallbackProxy(metadata)   // SpecialFallbackProxy 有则用之，否则 GLOBAL
     default: // Rule
         proxy, rule, err = match(metadata, helper)
-        if err == nil && rule == nil {
-            // 规则全不命中，match 返回 DIRECT + nil rule
-            if fb := fallbackProxy(metadata); fb != nil {
-                proxy = fb
-            }
-        }
+        proxy, rule, err = applyFallback(proxy, rule, err, metadata)
     }
     return
 }
@@ -232,6 +230,16 @@ func effectiveMode(metadata *C.Metadata) TunnelMode {
     }
     return mode   // 全局
 }
+
+func applyFallback(proxy C.Proxy, rule C.Rule, err error, metadata *C.Metadata) (C.Proxy, C.Rule, error) {
+    // 仅当该端口显式配置了出口（proxy-group/matchs）时才换组。
+    if err == nil && rule == nil && metadata.SpecialFallbackProxy != "" {
+        if fb := fallbackProxy(metadata); fb != nil {
+            proxy = fb
+        }
+    }
+    return proxy, rule, err
+}
 ```
 
 `fallbackProxy` 查 `proxies[metadata.SpecialFallbackProxy]`，查不到则回落到
@@ -239,6 +247,11 @@ func effectiveMode(metadata *C.Metadata) TunnelMode {
 
 **关键信号**：`match()` 在规则全不命中时返回 `proxies["DIRECT"]` 且 `rule == nil`
 （`tunnel/tunnel.go:708`）。这个 `nil` rule 是「兜底」的可靠判据。
+
+**注意 `metadata.SpecialFallbackProxy != ""` 这个前置条件**：没有它，`fallbackProxy`
+在空 `SpecialFallbackProxy` 时会回落到 `proxies["GLOBAL"]`，把 `match` 的
+「全不命中 → `DIRECT`」结果错误地改写成 `GLOBAL`——这会破坏「未配置端口的 rule 模式
+兜底为 `DIRECT`」的既有语义（见「出口优先级」）。只有显式配置了出口的端口才换组。
 
 ### 3.5 兼容性
 
