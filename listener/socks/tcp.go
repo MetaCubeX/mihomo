@@ -174,7 +174,13 @@ func HandleSocks4(conn net.Conn, tunnel C.Tunnel, store auth.AuthStore, addition
 		return
 	}
 	additions = append(additions, inbound.WithInUser(user))
-	tunnel.HandleTCPConn(inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4, additions...))
+	lazy := newLazyConn(conn, func(err error) error {
+		if err != nil {
+			return socks4.WriteReply(conn, socks4.RequestRejected)
+		}
+		return socks4.WriteReply(conn, socks4.RequestGranted)
+	})
+	tunnel.HandleTCPConn(inbound.NewSocket(socks5.ParseAddr(addr), lazy, C.SOCKS4, additions...))
 }
 
 func HandleSocks5(conn net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) {
@@ -190,5 +196,11 @@ func HandleSocks5(conn net.Conn, tunnel C.Tunnel, store auth.AuthStore, addition
 		return
 	}
 	additions = append(additions, inbound.WithInUser(user))
-	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.SOCKS5, additions...))
+	lazy := newLazyConn(conn, func(err error) error {
+		if err != nil {
+			return socks5.WriteReply(conn, socks5.ReplyCodeForError(err), nil)
+		}
+		return socks5.WriteReply(conn, 0, socks5.ParseAddrToSocksAddr(conn.LocalAddr()))
+	})
+	tunnel.HandleTCPConn(inbound.NewSocket(target, lazy, C.SOCKS5, additions...))
 }

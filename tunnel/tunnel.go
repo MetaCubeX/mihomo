@@ -540,8 +540,12 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	// a lazy inbound (e.g. SOCKS CONNECT) replies to its client only once the dial result is reported,
+	// so it gets no client data before that, and reading from it would send a successful reply early
+	lazyInbound := N.NeedReportHandshake(conn)
+
 	peekMutex := sync.Mutex{}
-	if !conn.Peeked() {
+	if !conn.Peeked() && !lazyInbound {
 		peekMutex.Lock()
 		go func() {
 			defer peekMutex.Unlock()
@@ -592,6 +596,13 @@ func handleTCPConn(connCtx C.ConnContext) {
 					remoteConn = nil
 				}
 			}()
+			if lazyInbound {
+				// the client sends its first payload only after the reply
+				_ = N.ReportHandshakeSuccess(conn)
+				_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+				_, _ = conn.Peek(1)
+				_ = conn.SetReadDeadline(time.Time{})
+			}
 			peekMutex.Lock()
 			defer peekMutex.Unlock()
 			peekBytes, _ = conn.Peek(conn.Buffered())
@@ -608,7 +619,16 @@ func handleTCPConn(connCtx C.ConnContext) {
 		logMetadataErr(metadata, rule, proxy, err)
 	})
 	if err != nil {
+		if lazyInbound {
+			_ = N.ReportHandshakeFailure(conn, err)
+		}
 		return
+	}
+	if lazyInbound {
+		if err = N.ReportHandshakeSuccess(conn); err != nil {
+			_ = remoteConn.Close()
+			return
+		}
 	}
 	logMetadata(metadata, rule, remoteConn)
 

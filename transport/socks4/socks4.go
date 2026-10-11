@@ -67,7 +67,6 @@ func ServerHandshake(rw io.ReadWriter, authenticator auth.Authenticator) (addr s
 	var (
 		host   string
 		port   string
-		code   uint8
 		userID []byte
 	)
 	if userID, err = readUntilNull(rw); err != nil {
@@ -91,24 +90,25 @@ func ServerHandshake(rw io.ReadWriter, authenticator auth.Authenticator) (addr s
 	}
 
 	// SOCKS4 only support USERID auth.
-	if authenticator == nil || authenticator.Verify(user, "") {
-		code = RequestGranted
-	} else {
-		code = RequestIdentdMismatched
+	if authenticator != nil && !authenticator.Verify(user, "") {
 		err = ErrRequestIdentdMismatched
-	}
 
-	var reply [8]byte
-	reply[0] = 0x00 // reply code
-	reply[1] = code // result code
-	copy(reply[4:8], dstIP.AsSlice())
-	copy(reply[2:4], dstPort)
+		var reply [8]byte
+		reply[0] = 0x00                    // reply code
+		reply[1] = RequestIdentdMismatched // result code
+		copy(reply[4:8], dstIP.AsSlice())
+		copy(reply[2:4], dstPort)
 
-	_, wErr := rw.Write(reply[:])
-	if err == nil {
-		err = wErr
+		_, _ = rw.Write(reply[:])
 	}
+	// the reply to a granted request is left to the caller, see WriteReply
 	return
+}
+
+// WriteReply writes the reply to CmdConnect, DSTPORT and DSTIP are ignored by the client and left zero.
+func WriteReply(w io.Writer, code Code) error {
+	_, err := w.Write([]byte{0x00, code, 0, 0, 0, 0, 0, 0})
+	return err
 }
 
 func ClientHandshake(rw io.ReadWriter, addr string, command Command, userID string) (err error) {

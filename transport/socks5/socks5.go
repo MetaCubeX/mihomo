@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"syscall"
 
 	"github.com/metacubex/mihomo/component/auth"
 )
@@ -106,6 +107,8 @@ type User struct {
 }
 
 // ServerHandshake fast-tracks SOCKS initialization to get target address to connect on server side.
+// The reply to CmdConnect is left to the caller, which should send it with WriteReply once the result
+// of connecting to the target is known.
 func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, command Command, user string, err error) {
 	// Read RFC 1928 for request and reply structure and sizes.
 	buf := make([]byte, MaxAddrLen)
@@ -191,7 +194,9 @@ func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, 
 	}
 
 	switch command {
-	case CmdConnect, CmdUDPAssociate:
+	case CmdConnect:
+		// the reply is deferred to the caller, see WriteReply
+	case CmdUDPAssociate:
 		// Acquire server listened address info
 		localAddr := ParseAddrToSocksAddr(rw.LocalAddr())
 		if localAddr == nil {
@@ -207,6 +212,32 @@ func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, 
 	}
 
 	return
+}
+
+// WriteReply writes VER REP RSV ATYP BND.ADDR BND.PORT as defined in RFC 1928 section 6.
+// The unspecified IPv4 address is used when bindAddr is nil.
+func WriteReply(w io.Writer, rep byte, bindAddr Addr) error {
+	if bindAddr == nil {
+		bindAddr = Addr{AtypIPv4, 0, 0, 0, 0, 0, 0}
+	}
+	_, err := w.Write(bytes.Join([][]byte{{5, rep, 0}, bindAddr}, []byte{}))
+	return err
+}
+
+// ReplyCodeForError maps an error of connecting to the target to the REP field of the reply.
+func ReplyCodeForError(err error) byte {
+	switch {
+	case errors.Is(err, syscall.ENETUNREACH):
+		return byte(ErrNetworkUnreachable)
+	case errors.Is(err, syscall.EHOSTUNREACH):
+		return byte(ErrHostUnreachable)
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return byte(ErrConnectionRefused)
+	case errors.Is(err, syscall.EPERM):
+		return byte(ErrConnectionNotAllowed)
+	default:
+		return byte(ErrGeneralFailure)
+	}
 }
 
 // ClientHandshake fast-tracks SOCKS initialization to get target address to connect on client side.

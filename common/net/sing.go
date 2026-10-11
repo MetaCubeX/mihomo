@@ -36,6 +36,12 @@ type WithUpstream = common.WithUpstream
 var UnwrapReader = network.UnwrapReader
 var UnwrapWriter = network.UnwrapWriter
 
+type HandshakeSuccess = network.HandshakeSuccess
+type HandshakeFailure = network.HandshakeFailure
+
+var ReportHandshakeSuccess = network.ReportHandshakeSuccess
+var ReportHandshakeFailure = network.ReportHandshakeFailure
+
 func NewDeadlineConn(conn net.Conn) ExtendedConn {
 	if deadline.IsPipe(conn) || deadline.IsPipe(UnwrapReader(conn)) {
 		return NewExtendedConn(conn) // pipe always have correctly deadline implement
@@ -48,6 +54,19 @@ func NewDeadlineConn(conn net.Conn) ExtendedConn {
 
 func NeedHandshake(conn any) bool {
 	if earlyConn, isEarlyConn := common.Cast[network.EarlyConn](conn); isEarlyConn && earlyConn.NeedHandshake() {
+		return true
+	}
+	return false
+}
+
+// LazyConn is an inbound conn which responds to its client (e.g. the reply to a SOCKS CONNECT) only after
+// ReportHandshakeSuccess or ReportHandshakeFailure, so the client sends no data before that
+type LazyConn interface {
+	NeedReportHandshake() bool
+}
+
+func NeedReportHandshake(conn any) bool {
+	if lazyConn, isLazyConn := common.Cast[LazyConn](conn); isLazyConn && lazyConn.NeedReportHandshake() {
 		return true
 	}
 	return false
