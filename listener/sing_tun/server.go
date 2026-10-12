@@ -36,8 +36,10 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var InterfaceName = "Meta"
-var EnforceBindInterface = false
+var (
+	InterfaceName        = "Meta"
+	EnforceBindInterface = false
+)
 
 type Listener struct {
 	closed  bool
@@ -55,7 +57,8 @@ type Listener struct {
 	autoRedirect            tun.AutoRedirect
 	autoRedirectOutputMark  int32
 
-	cDialerInterfaceFinder dialer.InterfaceFinder
+	cDialerInterfaceFinder       dialer.InterfaceFinder
+	proxyEndpointRouteExcludeSet *netipx.IPSet
 
 	ruleUpdateCallbackCloser io.Closer
 	ruleUpdateMutex          sync.Mutex
@@ -157,7 +160,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	if options.FileDescriptor > 0 {
 		if tunnelName, err := getTunnelName(int32(options.FileDescriptor)); err == nil {
 			tunName = tunnelName // sing-tun must have the truth tun interface name even it from a fd
-			//forwarderBindInterface = true
+			// forwarderBindInterface = true
 			log.Debugln("[TUN] use tun name %s for fd %d", tunnelName, options.FileDescriptor)
 		} else {
 			log.Warnln("[TUN] get tun name failed for fd %d, fallback to use tun interface name %s", options.FileDescriptor, tunName)
@@ -189,6 +192,14 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	inet6RouteExcludeAddress := common.Filter(routeExcludeAddress, func(it netip.Prefix) bool {
 		return it.Addr().Is6()
 	})
+	var proxyEndpointRouteExcludeBuilder netipx.IPSetBuilder
+	for _, prefix := range routeExcludeAddress {
+		proxyEndpointRouteExcludeBuilder.AddPrefix(prefix)
+	}
+	proxyEndpointRouteExcludeSet, err := proxyEndpointRouteExcludeBuilder.IPSet()
+	if err != nil {
+		return nil, E.Cause(err, "build proxy endpoint route exclude set")
+	}
 	tunMTU := options.MTU
 	if tunMTU == 0 {
 		tunMTU = 9000
@@ -381,6 +392,11 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 				err = E.New("not allowed two tun listener using auto-detect-interface")
 				return
 			}
+			if !dialer.ProxyEndpointRouteExcludeSet.CompareAndSwap(nil, proxyEndpointRouteExcludeSet) {
+				err = E.New("not allowed two tun listener setting proxy endpoint route excludes")
+				return
+			}
+			l.proxyEndpointRouteExcludeSet = proxyEndpointRouteExcludeSet
 		}
 	}
 
@@ -602,6 +618,9 @@ func (l *Listener) OnReload() {
 	if l.cDialerInterfaceFinder != nil {
 		dialer.DefaultInterfaceFinder.CompareAndSwap(nil, l.cDialerInterfaceFinder)
 	}
+	if l.proxyEndpointRouteExcludeSet != nil {
+		dialer.ProxyEndpointRouteExcludeSet.CompareAndSwap(nil, l.proxyEndpointRouteExcludeSet)
+	}
 }
 
 type cDialerInterfaceFinder struct {
@@ -675,6 +694,9 @@ func (l *Listener) Close() error {
 	}
 	if l.cDialerInterfaceFinder != nil {
 		dialer.DefaultInterfaceFinder.CompareAndSwap(l.cDialerInterfaceFinder, nil)
+	}
+	if l.proxyEndpointRouteExcludeSet != nil {
+		dialer.ProxyEndpointRouteExcludeSet.CompareAndSwap(l.proxyEndpointRouteExcludeSet, nil)
 	}
 	return common.Close(
 		l.ruleUpdateCallbackCloser,

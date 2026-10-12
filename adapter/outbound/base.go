@@ -212,6 +212,7 @@ func (b *BasicOption) NewDialer(opts []dialer.Option) C.Dialer {
 		if b.DialerProxy != "" {
 			cDialer = proxydialer.NewByName(b.DialerProxy, b.NewTunnel())
 		} else {
+			opts = append(opts, dialer.WithProxyEndpointRouteExclude())
 			cDialer = dialer.NewDialer(opts...)
 		}
 	}

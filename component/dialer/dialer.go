@@ -25,9 +25,7 @@ const (
 	dualStackFallbackTimeout = 300 * time.Millisecond
 )
 
-var (
-	tcpConcurrent = atomic.NewBool(false)
-)
+var tcpConcurrent = atomic.NewBool(false)
 
 func SetTcpConcurrent(concurrent bool) {
 	tcpConcurrent.Store(concurrent)
@@ -161,12 +159,7 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 		socketHookToToDialer(dialer)
 	} else {
 		if opt.interfaceName == "" {
-			opt.interfaceName = DefaultInterface.Load()
-		}
-		if opt.interfaceName == "" {
-			if finder := DefaultInterfaceFinder.Load(); finder != nil {
-				opt.interfaceName = finder.FindInterfaceName(destination)
-			}
+			opt.interfaceName = opt.selectExitInterface(destination)
 		}
 		if opt.interfaceName != "" {
 			bind := bindIfaceToDialer
@@ -189,6 +182,30 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 
 	return dialer.DialContext(ctx, network, address)
+}
+
+func (opt *option) selectExitInterface(destination netip.Addr) string {
+	// 1. use an explicit interface.
+	// return opt.interfaceName
+	//
+	// 2. use the explicitly configured global interface.
+	r := DefaultInterface.Load()
+	if r != "" {
+		return r
+	}
+	// 3. excluded proxy endpoints use the system route instead of
+	// proceeding to automatic interface detection.
+	if opt.proxyEndpointRouteExclude {
+		excludeSet := ProxyEndpointRouteExcludeSet.Load()
+		if excludeSet != nil && excludeSet.Contains(destination) {
+			return ""
+		}
+	}
+	// 4. use Mihomo's automatic interface detection.
+	if finder := DefaultInterfaceFinder.Load(); finder != nil {
+		return finder.FindInterfaceName(destination)
+	}
+	return ""
 }
 
 func ICMPControl(destination netip.Addr) func(network, address string, conn syscall.RawConn) error {

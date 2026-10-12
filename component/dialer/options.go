@@ -7,13 +7,27 @@ import (
 
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/component/resolver"
+	"go4.org/netipx"
 )
 
 var (
+	// DefaultInterface is the explicitly configured global interface. It takes
+	// precedence over the proxy-endpoint route-exclusion and auto-detection
+	// fallbacks.
 	DefaultInterface   = atomic.NewTypedValue[string]("")
 	DefaultRoutingMark = atomic.NewInt32(0)
 
+	// DefaultInterfaceFinder is the final interface-selection fallback when no
+	// explicit interface is configured and the proxy endpoint is not excluded
+	// from TUN routes.
 	DefaultInterfaceFinder = atomic.NewTypedValue[InterfaceFinder](nil)
+
+	// ProxyEndpointRouteExcludeSet contains TUN route exclusions. It is only
+	// consulted by dialers explicitly marked with WithProxyEndpointRouteExclude.
+	// A matching endpoint falls back to the system route instead of automatic
+	// interface detection, but does not override an explicitly configured
+	// interface.
+	ProxyEndpointRouteExcludeSet = atomic.NewTypedValue[*netipx.IPSet](nil)
 )
 
 type InterfaceFinder interface {
@@ -31,16 +45,17 @@ func (f NetDialerFunc) DialContext(ctx context.Context, network, address string)
 }
 
 type option struct {
-	interfaceName string
-	fallbackBind  bool
-	addrReuse     bool
-	routingMark   int
-	network       int
-	prefer        int
-	tfo           bool
-	mpTcp         bool
-	resolver      resolver.Resolver
-	netDialer     NetDialer
+	interfaceName             string
+	fallbackBind              bool
+	addrReuse                 bool
+	routingMark               int
+	network                   int
+	prefer                    int
+	tfo                       bool
+	mpTcp                     bool
+	resolver                  resolver.Resolver
+	netDialer                 NetDialer
+	proxyEndpointRouteExclude bool
 }
 
 type Option func(opt *option)
@@ -112,6 +127,17 @@ func WithMPTCP(mpTcp bool) Option {
 func WithNetDialer(netDialer NetDialer) Option {
 	return func(opt *option) {
 		opt.netDialer = netDialer
+	}
+}
+
+// WithProxyEndpointRouteExclude makes this proxy-endpoint dialer fall back to
+// the system route table when its destination is excluded from active TUN
+// routes. It takes precedence over automatic interface detection, but not over
+// an explicitly configured interface. Ordinary direct and DNS dialers must not
+// use it.
+func WithProxyEndpointRouteExclude() Option {
+	return func(opt *option) {
+		opt.proxyEndpointRouteExclude = true
 	}
 }
 
