@@ -49,3 +49,32 @@ func TestHTTPObfsFragmentedResponse(t *testing.T) {
 		})
 	}
 }
+
+// A net.Conn may return the final bytes together with EOF.
+type eofResponseConn struct {
+	net.Conn
+	response []byte
+}
+
+func (c *eofResponseConn) Read(b []byte) (int, error) {
+	n := copy(b, c.response)
+	c.response = c.response[n:]
+	return n, io.EOF
+}
+
+func TestHTTPObfsResponseDataAndEOF(t *testing.T) {
+	conn := NewHTTPObfs(&eofResponseConn{response: []byte("HTTP/1.1 101 Switching Protocols\r\n\r\nabcd")}, "localhost", "80")
+	var payload [4]byte
+	// Force the payload remainder through HTTPObfs's pooled buffer.
+	for i := 0; i < len(payload); i += 2 {
+		if _, err := io.ReadFull(conn, payload[i:i+2]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if string(payload[:]) != "abcd" {
+		t.Fatalf("payload %q", payload)
+	}
+	if n, err := conn.Read(payload[:]); n != 0 || !errors.Is(err, io.EOF) {
+		t.Fatalf("final read: %d, %v", n, err)
+	}
+}
