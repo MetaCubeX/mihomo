@@ -16,6 +16,7 @@ import (
 	"github.com/metacubex/mihomo/component/proxydialer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/jls"
@@ -304,11 +305,11 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			if useEarly {
 				conn = v.client.DialEarlyXUDPPacketConn(c,
 					globalID,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					M.SocksaddrFromNet(metadata.UDPRemoteAddr()))
 			} else {
 				conn, err = v.client.DialXUDPPacketConn(c,
 					globalID,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					M.SocksaddrFromNet(metadata.UDPRemoteAddr()))
 			}
 		} else if v.option.PacketAddr {
 			if useEarly {
@@ -322,10 +323,10 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		} else {
 			if useEarly {
 				conn = v.client.DialEarlyPacketConn(c,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					M.SocksaddrFromNet(metadata.UDPRemoteAddr()))
 			} else {
 				conn, err = v.client.DialPacketConn(c,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					M.SocksaddrFromNet(metadata.UDPRemoteAddr()))
 			}
 		}
 	} else {
@@ -421,7 +422,7 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = v.ResolveUDP(ctx, metadata); err != nil {
+	if err = prepareUDP(ctx, metadata, v); err != nil {
 		return nil, err
 	}
 
@@ -439,9 +440,12 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	}
 
 	if pc, ok := c.(net.PacketConn); ok {
+		if v.option.UDPRemoteDNS && !v.option.XUDP {
+			return NewPacketConn(newFixedRemotePacketConn(pc, metadata.UDPRemoteAddr()), v), nil
+		}
 		return NewPacketConn(N.NewThreadSafePacketConn(pc), v), nil
 	}
-	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPRemoteAddr()}, v), nil
 }
 
 // ProxyInfo implements C.ProxyAdapter
@@ -496,6 +500,13 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	if option.XUDP {
 		option.PacketAddr = false
 	}
+	if option.UDPRemoteDNS && option.PacketAddr {
+		log.Warnln("[%s] udp-remote-dns is incompatible with packetaddr encoding; disabling remote DNS", option.Name)
+		option.UDPRemoteDNS = false
+	}
+	if option.XUDP && option.UDPRemoteDNS {
+		log.Warnln("[%s] xudp with udp-remote-dns may fail to restore domain or FakeIP reply addresses when the server reuses a UDP session after reconnecting", option.Name)
+	}
 
 	v := &Vmess{
 		Base: NewBase(BaseOption{
@@ -514,6 +525,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		client: client,
 		option: &option,
 	}
+	v.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	v.dialer = option.NewDialer(v.DialOptions())
 
 	v.echConfig, err = v.option.ECHOpts.Parse()
@@ -651,6 +663,33 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	}
 
 	return v, nil
+}
+
+// Legacy VMess/VLESS UDP binds one destination in its stream handshake.
+type fixedRemotePacketConn struct {
+	N.EnhancePacketConn
+	destination net.Addr
+}
+
+func newFixedRemotePacketConn(pc net.PacketConn, destination net.Addr) net.PacketConn {
+	return &fixedRemotePacketConn{N.NewEnhancePacketConn(pc), destination}
+}
+
+func (c *fixedRemotePacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	if addr == nil || c.destination == nil || addr.String() != c.destination.String() {
+		return 0, ErrUDPRemoteAddrMismatch
+	}
+	return c.EnhancePacketConn.WriteTo(b, addr)
+}
+
+func (c *fixedRemotePacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, _, err := c.EnhancePacketConn.ReadFrom(b)
+	return n, c.destination, err
+}
+
+func (c *fixedRemotePacketConn) WaitReadFrom() ([]byte, func(), net.Addr, error) {
+	data, put, _, err := c.EnhancePacketConn.WaitReadFrom()
+	return data, put, c.destination, err
 }
 
 type vmessPacketConn struct {

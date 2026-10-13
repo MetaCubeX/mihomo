@@ -81,7 +81,7 @@ func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata) 
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	if err := ssr.ResolveUDP(ctx, metadata); err != nil {
+	if err := prepareUDP(ctx, metadata, ssr); err != nil {
 		return nil, err
 	}
 	addr, err := resolveUDPAddr(ctx, "udp", ssr.addr, ssr.prefer)
@@ -175,6 +175,7 @@ func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 		obfs:     obfs,
 		protocol: protocol,
 	}
+	outbound.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	return outbound, nil
 }
@@ -208,7 +209,7 @@ func (spc *ssrPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 		return 0, nil, errors.New("parse addr error")
 	}
 
-	udpAddr := addr.UDPAddr()
+	udpAddr := addr.UDPRemoteAddr()
 	if udpAddr == nil {
 		return 0, nil, errors.New("parse addr error")
 	}
@@ -231,7 +232,7 @@ func (spc *ssrPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr
 		return nil, nil, nil, errors.New("parse addr error")
 	}
 
-	udpAddr := _addr.UDPAddr()
+	udpAddr := _addr.UDPRemoteAddr()
 	if udpAddr == nil {
 		if put != nil {
 			put()

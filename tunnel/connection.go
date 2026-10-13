@@ -21,6 +21,8 @@ type packetSender struct {
 	// destination NAT mapping
 	originToTarget map[string]netip.Addr
 	targetToOrigin map[netip.Addr]netip.Addr
+	firstDomain    string
+	domainRecorded bool
 	mappingMutex   sync.RWMutex
 }
 
@@ -42,6 +44,10 @@ func newPacketSender() C.PacketSender {
 func (s *packetSender) AddMapping(originMetadata *C.Metadata, metadata *C.Metadata) {
 	s.mappingMutex.Lock()
 	defer s.mappingMutex.Unlock()
+	if !s.domainRecorded {
+		s.firstDomain = metadata.Host
+		s.domainRecorded = true
+	}
 	originKey := originMetadata.String()
 	originAddr := originMetadata.DstIP
 	targetAddr := metadata.DstIP
@@ -62,11 +68,18 @@ func (s *packetSender) RestoreReadFrom(addr netip.Addr) netip.Addr {
 	return addr
 }
 
+func (s *packetSender) domainContext() context.Context {
+	s.mappingMutex.RLock()
+	domain := s.firstDomain
+	s.mappingMutex.RUnlock()
+	return C.WithUDPRemoteDNSDomain(s.ctx, domain)
+}
+
 func (s *packetSender) processPacket(pc C.PacketConn, packet C.PacketAdapter) {
 	defer packet.Drop()
 	metadata := packet.Metadata()
 
-	var addr *net.UDPAddr
+	var addr net.Addr
 
 	s.mappingMutex.RLock()
 	targetAddr := s.originToTarget[metadata.String()]
@@ -85,18 +98,18 @@ func (s *packetSender) processPacket(pc C.PacketConn, packet C.PacketAdapter) {
 		if metadata.Host != "" {
 			// TODO: ResolveUDP may take a long time to block the Process loop
 			//       but we want keep sequence sending so can't open a new goroutine
-			if err := pc.ResolveUDP(s.ctx, metadata); err != nil {
+			if err := pc.PrepareUDP(s.domainContext(), metadata); err != nil {
 				log.Warnln("[UDP] Resolve Ip error: %s", err)
 				return
 			}
 		}
 
-		if !metadata.DstIP.IsValid() {
+		if !metadata.Valid() {
 			log.Warnln("[UDP] Destination ip not valid: %#v", metadata)
 			return
 		}
 		s.AddMapping(originMetadata, metadata)
-		addr = metadata.UDPAddr()
+		addr = metadata.UDPRemoteAddr()
 	}
 	_ = handleUDPToRemote(packet, pc, addr)
 }
@@ -151,7 +164,7 @@ func (s *packetSender) Close() {
 
 func (s *packetSender) DoSniff(metadata *C.Metadata) error { return nil }
 
-func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, addr *net.UDPAddr) error {
+func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, addr net.Addr) error {
 	if addr == nil {
 		return errors.New("udp addr invalid")
 	}
@@ -180,24 +193,51 @@ func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSen
 			return
 		}
 
-		fromUDPAddr, isUDPAddr := from.(*net.UDPAddr)
-		if !isUDPAddr {
-			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
-			log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
-		} else if fromUDPAddr == nil {
-			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
-			log.Warnln("server return a nil *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", oAddrPort)
+		preserveDomain := false
+		// Preserve an explicit IP reply, including protocol address types
+		// such as sing's Socksaddr; remote DNS keeps the real remote source.
+		if from != nil {
+			if _, ok := from.(*net.UDPAddr); !ok {
+				metadata := C.Metadata{NetWork: C.UDP}
+				if metadata.SetRemoteAddr(from) == nil {
+					if metadata.DstIP.IsValid() {
+						from = metadata.UDPAddr()
+					} else if metadata.Host != "" && metadata.DstPort != 0 {
+						if oAddrPort.IsValid() {
+							// Restore the origin IP while keeping this reply's port.
+							from = net.UDPAddrFromAddrPort(netip.AddrPortFrom(oAddrPort.Addr(), metadata.DstPort))
+						} else {
+							// A domain-only inbound has no origin IP to restore.
+							// Its WriteBack can encode the server's domain directly.
+							preserveDomain = true
+						}
+					}
+				}
+			}
 		}
 
-		fromAddrPort := fromUDPAddr.AddrPort()
-		fromAddr := fromAddrPort.Addr().Unmap()
+		if !preserveDomain {
+			fromUDPAddr, isUDPAddr := from.(*net.UDPAddr)
+			if !isUDPAddr {
+				fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
+				log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
+			} else if fromUDPAddr == nil {
+				fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
+				log.Warnln("server return a nil *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", oAddrPort)
+			}
 
-		// restore DestinationNAT
-		fromAddr = sender.RestoreReadFrom(fromAddr).Unmap()
+			fromAddrPort := fromUDPAddr.AddrPort()
+			fromAddr := fromAddrPort.Addr().Unmap()
 
-		fromAddrPort = netip.AddrPortFrom(fromAddr, fromAddrPort.Port())
+			// restore DestinationNAT
+			fromAddr = sender.RestoreReadFrom(fromAddr).Unmap()
 
-		_, err = writeBack.WriteBack(data, net.UDPAddrFromAddrPort(fromAddrPort))
+			fromAddrPort = netip.AddrPortFrom(fromAddr, fromAddrPort.Port())
+
+			from = net.UDPAddrFromAddrPort(fromAddrPort)
+		}
+
+		_, err = writeBack.WriteBack(data, from)
 		if put != nil {
 			put()
 		}
