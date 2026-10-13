@@ -142,6 +142,11 @@ func (b *Base) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return nil
 }
 
+// Bandwidth implements C.ProxyAdapter. Standalone proxies have no bandwidth limit.
+func (b *Base) Bandwidth() uint64 {
+	return 0
+}
+
 // DialOptions return []dialer.Option from struct
 func (b *Base) DialOptions() (opts []dialer.Option) {
 	if b.iface != "" {

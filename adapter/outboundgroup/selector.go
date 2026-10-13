@@ -25,6 +25,7 @@ func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 	c, err := s.selectedProxy(true).DialContext(ctx, metadata)
 	if err == nil {
 		c.AppendToChains(s)
+		c = s.LimitConn(c)
 	}
 	return c, err
 }
@@ -34,6 +35,7 @@ func (s *Selector) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	pc, err := s.selectedProxy(true).ListenPacketContext(ctx, metadata)
 	if err == nil {
 		pc.AppendToChains(s)
+		pc = s.LimitPacketConn(pc)
 	}
 	return pc, err
 }
@@ -119,7 +121,7 @@ func (s *Selector) Proxies() []C.Proxy {
 	return s.GetProxies(false)
 }
 
-func NewSelector(option GroupCommonOption, selectorOption SelectorOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (*Selector, error) {
+func NewSelector(option GroupCommonOption, selectorOption SelectorOption, emptyFallback C.Proxy, providers []P.ProxyProvider, bandwidth uint64) (*Selector, error) {
 	return &Selector{
 		GroupBase: NewGroupBase(GroupBaseOption{
 			Name:           option.Name,
@@ -133,6 +135,7 @@ func NewSelector(option GroupCommonOption, selectorOption SelectorOption, emptyF
 			MaxFailedTimes: option.MaxFailedTimes,
 			EmptyFallback:  emptyFallback,
 			Providers:      providers,
+			Bandwidth:      bandwidth,
 		}),
 		selected:   selectorOption.DefaultSelected,
 		disableUDP: option.DisableUDP,
