@@ -325,7 +325,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 	}
 	var (
 		resolved             bool
-		attemptProcessLookup = metadata.Type != C.INNER
+		attemptProcessLookup = metadata.Type != C.INNER && metadata.NetWork != C.ICMP
 	)
 
 	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
