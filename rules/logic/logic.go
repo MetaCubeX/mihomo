@@ -177,13 +177,13 @@ func (logic *Logic) RuleType() C.RuleType {
 }
 
 func matchSubRules(metadata *C.Metadata, name string, subRules map[string][]C.Rule, helper C.RuleMatchHelper) (bool, string) {
-	for _, rule := range subRules[name] {
-		if m, a := rule.Match(metadata, helper); m {
-			if rule.RuleType() == C.SubRules {
-				m, a = matchSubRules(metadata, rule.Adapter(), subRules, helper)
+	for index, rule := range subRules[name] {
+		if m, a := helper.MatchRule(rule, metadata); m {
+			if a == "PASS-RULE" || (helper.CheckPassRule != nil && helper.CheckPassRule(a)) {
+				continue
 			}
-			if m && (a == "PASS-RULE" || (helper.CheckPassRule != nil && helper.CheckPassRule(a))) {
-				continue 
+			if helper.Diagnostics != nil && helper.Diagnostics.SubRuleMatched != nil {
+				helper.Diagnostics.SubRuleMatched(name, index, rule)
 			}
 			return m, a
 		}
@@ -194,25 +194,25 @@ func matchSubRules(metadata *C.Metadata, name string, subRules map[string][]C.Ru
 func (logic *Logic) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
 	switch logic.ruleType {
 	case C.SubRules:
-		if m, _ := logic.rules[0].Match(metadata, helper); m {
+		if m, _ := helper.MatchRule(logic.rules[0], metadata); m {
 			return matchSubRules(metadata, logic.adapter, logic.subRules, helper)
 		}
 		return false, ""
 	case C.NOT:
-		if m, _ := logic.rules[0].Match(metadata, helper); !m {
+		if m, _ := helper.MatchRule(logic.rules[0], metadata); !m {
 			return true, logic.adapter
 		}
 		return false, ""
 	case C.OR:
 		for _, rule := range logic.rules {
-			if m, _ := rule.Match(metadata, helper); m {
+			if m, _ := helper.MatchRule(rule, metadata); m {
 				return true, logic.adapter
 			}
 		}
 		return false, ""
 	case C.AND:
 		for _, rule := range logic.rules {
-			if m, _ := rule.Match(metadata, helper); !m {
+			if m, _ := helper.MatchRule(rule, metadata); !m {
 				return false, logic.adapter
 			}
 		}

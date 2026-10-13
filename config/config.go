@@ -1292,6 +1292,7 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 		}
 
 		nameserver := dns.NameServer{
+			Source:    servers[idx],
 			Net:       dnsNetType,
 			Addr:      addr,
 			ProxyName: proxyName,
@@ -1357,7 +1358,7 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], adapter
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "geosite:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
+					policy = append(policy, dns.Policy{Key: k, Domain: newKey, NameServers: nameservers})
 				}
 			} else if strings.HasPrefix(kLower, "rule-set:") {
 				subkeys := strings.Split(k, ":")
@@ -1365,27 +1366,27 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], adapter
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "rule-set:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
+					policy = append(policy, dns.Policy{Key: k, Domain: newKey, NameServers: nameservers})
 				}
 			} else {
 				subkeys := strings.Split(k, ",")
 				for _, subkey := range subkeys {
-					policy = append(policy, dns.Policy{Domain: subkey, NameServers: nameservers})
+					policy = append(policy, dns.Policy{Key: k, Domain: subkey, NameServers: nameservers})
 				}
 			}
 		} else {
 			if strings.HasPrefix(kLower, "geosite:") {
-				policy = append(policy, dns.Policy{Domain: "geosite:" + k[8:], NameServers: nameservers})
+				policy = append(policy, dns.Policy{Key: k, Domain: "geosite:" + k[8:], NameServers: nameservers})
 			} else if strings.HasPrefix(kLower, "rule-set:") {
-				policy = append(policy, dns.Policy{Domain: "rule-set:" + k[9:], NameServers: nameservers})
+				policy = append(policy, dns.Policy{Key: k, Domain: "rule-set:" + k[9:], NameServers: nameservers})
 			} else {
-				policy = append(policy, dns.Policy{Domain: k, NameServers: nameservers})
+				policy = append(policy, dns.Policy{Key: k, Domain: k, NameServers: nameservers})
 			}
 		}
 	}
 
 	for idx, p := range policy {
-		domain, nameservers := p.Domain, p.NameServers
+		domain := p.Domain
 
 		if strings.HasPrefix(domain, "rule-set:") {
 			domainSetName := domain[9:]
@@ -1393,14 +1394,14 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], adapter
 			if err != nil {
 				return nil, err
 			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
+			policy[idx].Matcher = matcher
 		} else if strings.HasPrefix(domain, "geosite:") {
 			country := domain[8:]
 			matcher, err := RC.NewGEOSITE(country, adapterName)
 			if err != nil {
 				return nil, err
 			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
+			policy[idx].Matcher = matcher
 		} else {
 			if _, err := trie.ValidAndSplitDomain(domain); err != nil {
 				return nil, fmt.Errorf("%s[%d]: %w", adapterName, idx, err)

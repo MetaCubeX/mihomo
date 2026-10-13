@@ -1791,6 +1791,8 @@ proxy-groups:
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
   # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
+  # /rules/match 对 sticky-sessions 只读：不创建或刷新会话，也不改变缓存淘汰顺序。
+  # 尚无会话时，诊断选择不会为后续真实连接预留出口。
   # hash-key: in-user # 可选,仅 consistent-hashing 和 sticky-sessions 支持;
   #                   # round-robin 不做哈希,配置它会报错而不是被忽略。
   #                   # 只改变「拿什么值去哈希」,不改变策略拿到哈希值之后如何选节点;
