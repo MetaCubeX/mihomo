@@ -1101,6 +1101,24 @@ proxies: # socks5
       #   client-fingerprint: chrome
 
 
+  # x365（仅支持 TCP）
+  - name: "x365"
+    type: x365
+    server: server
+    port: 443
+    uuid: uuid
+    # alpn: [h2] # 默认使用h2，如果开启http1.1模式需要设置alpn: [http/1.1]
+    servername: xxx.com # REALITY servername
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: xxx
+      short-id: xxx
+    xhttp-opts: # 字段同 vless 的 xhttp-opts，但 mode 只支持 stream-one（默认），因此不能使用 download-settings
+      path: "/"
+      host: xxx.com
+      # headers:
+      #   User-Agent: ... # 默认使用服务端要求的 X365 客户端 UA，一般无需修改
+
   # Trojan
   - name: "trojan"
     type: trojan
