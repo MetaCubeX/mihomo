@@ -1576,33 +1576,21 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, matcher.DnsFallbackFilter())
 		}
 		if len(cfg.FallbackFilter.IPCIDR) > 0 {
-			cidrSet := cidr.NewIpCidrSet()
-			for idx, ipcidr := range cfg.FallbackFilter.IPCIDR {
-				err = cidrSet.AddIpCidrForString(ipcidr)
-				if err != nil {
-					return nil, fmt.Errorf("DNS FallbackIP[%d] format error: %w", idx, err)
-				}
-			}
-			err = cidrSet.Merge()
+			matchers, err := parseIPCIDR(cfg.FallbackFilter.IPCIDR, nil, "dns.fallback-filter.ipcidr", ruleProviders)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("DNS FallbackIP format error: %w", err)
 			}
-			matcher := cidrSet // dns.fallback-filter.ipcidr
-			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, matcher)
+			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, matchers...)
 		}
 		if len(cfg.FallbackFilter.Domain) > 0 {
-			var domainSetBuilder trie.DomainSetBuilder
-			for idx, domain := range cfg.FallbackFilter.Domain {
-				err = domainSetBuilder.Insert(domain)
-				if err != nil {
-					return nil, fmt.Errorf("DNS FallbackDomain[%d] format error: %w", idx, err)
-				}
+			matchers, err := parseDomain(cfg.FallbackFilter.Domain, nil, "dns.fallback-filter.domain", ruleProviders)
+			if err != nil {
+				return nil, fmt.Errorf("DNS FallbackDomain format error: %w", err)
 			}
-			matcher := domainSetBuilder.Build() // dns.fallback-filter.domain
-			dnsCfg.FallbackDomainFilter = append(dnsCfg.FallbackDomainFilter, matcher)
+			dnsCfg.FallbackDomainFilter = append(dnsCfg.FallbackDomainFilter, matchers...)
 		}
 		if len(cfg.FallbackFilter.GeoSite) > 0 {
-			log.Warnln("replace fallback-filter.geosite with nameserver-policy, it will be removed in the future")
+			log.Warnln("replace fallback-filter.geosite with fallback-filter.domain using 'rule-set:xxx' (or nameserver-policy), it will be removed in the future")
 			for idx, geoSite := range cfg.FallbackFilter.GeoSite {
 				matcher, err := RC.NewGEOSITE(geoSite, "dns.fallback-filter.geosite")
 				if err != nil {
