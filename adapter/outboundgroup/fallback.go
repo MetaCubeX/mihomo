@@ -8,7 +8,6 @@ import (
 
 	"github.com/metacubex/mihomo/common/callback"
 	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 )
@@ -17,10 +16,11 @@ type FallbackOption struct{}
 
 type Fallback struct {
 	*GroupBase
-	disableUDP     bool
-	testUrl        string
-	selected       string
-	expectedStatus string
+	disableUDP        bool
+	testUrl           string
+	selected          string
+	expectedStatus    string
+	healthCheckOption C.HealthCheckOption
 }
 
 func (f *Fallback) Now() string {
@@ -140,8 +140,7 @@ func (f *Fallback) Set(name string) error {
 	if !p.AliveForTestUrl(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
-		expectedStatus, _ := utils.NewUnsignedRanges[uint16](f.expectedStatus)
-		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus)
+		_, _ = p.URLTest(ctx, f.testUrl, f.healthCheckOption.ExpectedStatus, f.healthCheckOption)
 	}
 
 	return nil
@@ -174,8 +173,9 @@ func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyF
 			EmptyFallback:  emptyFallback,
 			Providers:      providers,
 		}),
-		disableUDP:     option.DisableUDP,
-		testUrl:        option.URL,
-		expectedStatus: option.ExpectedStatus,
+		disableUDP:        option.DisableUDP,
+		testUrl:           option.URL,
+		expectedStatus:    option.ExpectedStatus,
+		healthCheckOption: option.HealthCheckOption(),
 	}, nil
 }
