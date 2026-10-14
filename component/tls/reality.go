@@ -48,18 +48,32 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 			VerifyConnection:       verifier.VerifyConnection,
 		}
 
-		uConn := utls.UClient(conn, uConfig, fingerprint)
+		// Xray-core >= v26.9.8 requires an X25519MLKEM768 key share in the
+		// ClientHello. uTLS only generates key share data inside ApplyPreset,
+		// which must run before the hello is built, so the connection is created
+		// with HelloCustom (its BuildHandshakeState does not re-apply the preset
+		// spec) and the MLKEM-augmented spec is applied in BuildAdded... below.
+		helloID := fingerprint
+		if realityConfig.SupportX25519MLKEM768 {
+			helloID = utls.HelloCustom
+		}
+		uConn := utls.UClient(conn, uConfig, helloID)
 		verifier.UConn = uConn
-		err := uConn.BuildHandshakeState()
+
+		var err error
+		if realityConfig.SupportX25519MLKEM768 {
+			// Classical fingerprints (e.g. HelloFirefox_120) do not include the
+			// required key share, so add it.
+			err = BuildAddedX25519MLKEM768HandshakeState(uConn, fingerprint)
+		} else {
+			// Old reality server: remove X25519MLKEM768 to avoid incompatibility.
+			err = uConn.BuildHandshakeState()
+			if err == nil {
+				err = BuildRemovedX25519MLKEM768HandshakeState(uConn)
+			}
+		}
 		if err != nil {
 			return nil, err
-		}
-
-		if !realityConfig.SupportX25519MLKEM768 { // for X25519MLKEM768 does not work properly with the old reality server
-			err = BuildRemovedX25519MLKEM768HandshakeState(uConn)
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		hello := uConn.HandshakeState.Hello
