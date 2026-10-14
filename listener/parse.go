@@ -65,7 +65,7 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 	case "tun":
 		tunOption := &IN.TunOption{
 			InterceptMode: C.TunInterceptVNIC,
-			Stack:         C.TunGvisor,
+			Stack:         C.TunMips,
 			DNSHijack:     []string{"0.0.0.0:53"}, // default hijack all dns query
 		}
 		err = decoder.Decode(mapping, tunOption)

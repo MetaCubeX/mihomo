@@ -45,7 +45,7 @@ func request(user, host string) *C.Metadata {
 
 // One unit of work walking several destinations is the case both address-derived
 // keys get wrong: the group is meant to hold that work on one egress, and the
-// default key moves it as soon as the host changes.
+// default key changes as soon as the host changes.
 func TestLoadBalanceHashKeyInUserSurvivesADestinationChange(t *testing.T) {
 	proxies := balancedProxies(8)
 	hosts := []string{"a.example.com", "b.example.org", "c.example.net", "d.example.io"}
@@ -58,26 +58,29 @@ func TestLoadBalanceHashKeyInUserSurvivesADestinationChange(t *testing.T) {
 			"hash-key: user must ignore the destination")
 	}
 
-	byDestination := strategyConsistentHashing(testUrl, getKey)
-	seen := map[int]bool{}
+	// Distinct destination keys are the deterministic contract of the fallback
+	// key. Distinct keys may still legally land in the same consistent-hash
+	// bucket, so asserting on selected proxy indexes would make this test flaky.
+	seenKeys := map[string]struct{}{}
 	for _, host := range hosts {
-		seen[indexOf(t, proxies, byDestination(proxies, request("job-1", host), false))] = true
+		seenKeys[getKey(request("job-1", host))] = struct{}{}
 	}
-	require.Greater(t, len(seen), 1,
-		"the default key is expected to move with the destination")
+	require.Len(t, seenKeys, len(hosts),
+		"the default key must change with the destination")
 }
 
-// Pinning must not become a single node: distinct users still spread.
-func TestLoadBalanceHashKeyInUserSpreadsUsers(t *testing.T) {
-	proxies := balancedProxies(8)
-	strategy := strategyConsistentHashing(testUrl, getKeyWithInUser(getKey))
+// Pinning must preserve distinct inbound identities. Consistent hashing may
+// legally put several distinct keys in one bucket, so this test checks the
+// identity key before hashing instead of asserting a random bucket spread.
+func TestLoadBalanceHashKeyInUserKeepsUsersDistinct(t *testing.T) {
+	keyed := getKeyWithInUser(getKey)
+	users := []string{"job-1", "job-2", "job-3", "job-4", "job-5", "job-6"}
 
-	seen := map[int]bool{}
-	for _, user := range []string{"job-1", "job-2", "job-3", "job-4", "job-5", "job-6"} {
-		selected := strategy(proxies, request(user, "a.example.com"), false)
-		seen[indexOf(t, proxies, selected)] = true
+	seenKeys := map[string]struct{}{}
+	for _, user := range users {
+		seenKeys[keyed(request(user, "a.example.com"))] = struct{}{}
 	}
-	require.Greater(t, len(seen), 1)
+	require.Len(t, seenKeys, len(users))
 }
 
 // Sticky sessions keys on source and destination; a client behind one source
