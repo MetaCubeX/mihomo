@@ -13,23 +13,24 @@ type TrojanUser struct {
 }
 
 type TrojanServer struct {
-	Enable          bool
-	Listen          string
-	Users           []TrojanUser
-	WsPath          string
-	GrpcServiceName string
-	Certificate     string
-	PrivateKey      string
-	ClientAuthType  string
-	ClientAuthCert  string
-	EchKey          string
-	AllowInsecure   bool
-	ShadowTLS       ShadowTLS      `yaml:"shadow-tls" json:"shadow-tls,omitempty"`
-	ResTLS          ResTLS         `yaml:"res-tls" json:"res-tls,omitempty"`
-	JLSConfig       JLSConfig      `yaml:"jls-config" json:"jls-config,omitempty"`
-	RealityConfig   reality.Config `yaml:"reality-config" json:"reality-config,omitempty"`
-	MuxOption       sing.MuxOption
-	TrojanSSOption  TrojanSSOption
+	Enable             bool
+	Listen             string
+	Users              []TrojanUser
+	WsPath             string
+	GrpcServiceName    string
+	Certificate        string
+	PrivateKey         string
+	ClientAuthType     string
+	ClientAuthCert     string
+	EchKey             string
+	AllowInsecure      bool
+	TrustedProxyHeader string
+	ShadowTLS          ShadowTLS      `yaml:"shadow-tls" json:"shadow-tls,omitempty"`
+	ResTLS             ResTLS         `yaml:"res-tls" json:"res-tls,omitempty"`
+	JLSConfig          JLSConfig      `yaml:"jls-config" json:"jls-config,omitempty"`
+	RealityConfig      reality.Config `yaml:"reality-config" json:"reality-config,omitempty"`
+	MuxOption          sing.MuxOption
+	TrojanSSOption     TrojanSSOption
 }
 
 // TrojanSSOption from https://github.com/p4gefau1t/trojan-go/blob/v0.10.6/tunnel/shadowsocks/config.go#L5
