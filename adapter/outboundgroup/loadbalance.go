@@ -28,6 +28,7 @@ type LoadBalance struct {
 	*GroupBase
 	disableUDP     bool
 	strategyFn     strategyFn
+	leastConn      *leastConnections // set only for strategy least-connections
 	testUrl        string
 	expectedStatus string
 }
@@ -118,14 +119,25 @@ func jumpHash(key uint64, buckets int32) int32 {
 	return int32(b)
 }
 
+// pick chooses the member for a new connection. The returned release must be
+// called once that connection is gone (or never came up); it is a no-op for
+// every strategy but least-connections.
+func (lb *LoadBalance) pick(metadata *C.Metadata) (C.Proxy, func()) {
+	if lb.leastConn != nil {
+		return lb.leastConn.pick(lb.GetProxies(true), lb.testUrl, true)
+	}
+	return lb.Unwrap(metadata, true), func() {}
+}
+
 // DialContext implements C.ProxyAdapter
 func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Conn, err error) {
-	proxy := lb.Unwrap(metadata, true)
+	proxy, release := lb.pick(metadata)
 	c, err = proxy.DialContext(ctx, metadata)
 
 	if err == nil {
 		c.AppendToChains(lb)
 	} else {
+		release()
 		lb.onDialFailed(proxy.Type(), err, lb.healthCheck)
 	}
 
@@ -139,6 +151,10 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c
 		})
 	}
 
+	if err == nil && lb.leastConn != nil {
+		c = callback.NewCloseCallbackConn(c, release)
+	}
+
 	return
 }
 
@@ -150,8 +166,16 @@ func (lb *LoadBalance) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		}
 	}()
 
-	proxy := lb.Unwrap(metadata, true)
-	return proxy.ListenPacketContext(ctx, metadata)
+	proxy, release := lb.pick(metadata)
+	pc, err = proxy.ListenPacketContext(ctx, metadata)
+	if err != nil {
+		release()
+		return
+	}
+	if lb.leastConn != nil {
+		pc = callback.NewCloseCallbackPacketConn(pc, release)
+	}
+	return
 }
 
 // SupportUDP implements C.ProxyAdapter
@@ -250,6 +274,76 @@ func strategyStickySessions(url string, keyOf keyFn) strategyFn {
 	}
 }
 
+// leastConnections hands each new connection to the alive member with the
+// fewest open connections per share. A member listed N times in the group
+// holds N shares, as it already gets N turns under round-robin; this is how a
+// faster link is given a larger part of the traffic. Unlike the hashing
+// strategies it spreads the connections of one destination too, which is what
+// a download split over parallel connections needs, at the cost of any
+// affinity: a destination that ties a session to the egress IP belongs in a
+// sticky group instead.
+//
+// A connection is counted from the moment its member is picked, not from when
+// the dial completes, so a burst of simultaneous requests spreads instead of
+// piling onto whichever member looked idlest.
+type leastConnections struct {
+	mu     sync.Mutex
+	active map[C.Proxy]int
+	next   int // rotates where the scan starts, so ties do not all go to the first member
+}
+
+func newLeastConnections() *leastConnections {
+	return &leastConnections{active: map[C.Proxy]int{}}
+}
+
+// pick returns the chosen member and, when acquire is set, counts a
+// connection on it; the returned release undoes that count and is safe to
+// call more than once.
+func (lc *leastConnections) pick(proxies []C.Proxy, url string, acquire bool) (C.Proxy, func()) {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+
+	shares := make(map[C.Proxy]int, len(proxies))
+	for _, proxy := range proxies {
+		shares[proxy]++
+	}
+
+	length := len(proxies)
+	var best C.Proxy
+	bestActive, bestShares := 0, 0
+	for i := 0; i < length; i++ {
+		proxy := proxies[(lc.next+i)%length]
+		if !proxy.AliveForTestUrl(url) {
+			continue
+		}
+		// (active+1)/shares < (bestActive+1)/bestShares, kept in integers.
+		active, n := lc.active[proxy], shares[proxy]
+		if best == nil || (active+1)*bestShares < (bestActive+1)*n {
+			best, bestActive, bestShares = proxy, active, n
+		}
+	}
+	if best == nil {
+		best = proxies[0]
+	}
+
+	if !acquire {
+		return best, func() {}
+	}
+
+	lc.next = (lc.next + 1) % length
+	lc.active[best]++
+	var once sync.Once
+	return best, func() {
+		once.Do(func() {
+			lc.mu.Lock()
+			defer lc.mu.Unlock()
+			if lc.active[best]--; lc.active[best] <= 0 {
+				delete(lc.active, best)
+			}
+		})
+	}
+}
+
 // Unwrap implements C.ProxyAdapter
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	proxies := lb.GetProxies(touch)
@@ -287,6 +381,7 @@ func (lb *LoadBalance) Now() string {
 
 func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (lb *LoadBalance, err error) {
 	var strategyFn strategyFn
+	var leastConn *leastConnections
 	withKey, err := hashKey(loadBalanceOption.HashKey)
 	if err != nil {
 		return nil, err
@@ -303,6 +398,18 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 		strategyFn = strategyRoundRobin(option.URL)
 	case "sticky-sessions":
 		strategyFn = strategyStickySessions(option.URL, withKey(getKeyWithSrcAndDst))
+	case "least-connections":
+		// Rejected for the same reason as round-robin: it hashes nothing.
+		if loadBalanceOption.HashKey != "" {
+			return nil, fmt.Errorf("%w: least-connections does not hash", errHashKey)
+		}
+		leastConn = newLeastConnections()
+		// Unwrap only reports the member a connection would get; dials count
+		// through lb.pick instead.
+		strategyFn = func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
+			proxy, _ := leastConn.pick(proxies, option.URL, false)
+			return proxy
+		}
 	default:
 		return nil, fmt.Errorf("%w: %s", errStrategy, loadBalanceOption.Strategy)
 	}
@@ -321,6 +428,7 @@ func NewLoadBalance(option GroupCommonOption, loadBalanceOption LoadBalanceOptio
 			Providers:      providers,
 		}),
 		strategyFn:     strategyFn,
+		leastConn:      leastConn,
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
