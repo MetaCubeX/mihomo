@@ -139,7 +139,7 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		grpcOpts["grpc-service-name"] = query.Get("serviceName")
 		proxy["grpc-opts"] = grpcOpts
 
-	case "xhttp":
+	case "xhttp", "splithttp":
 		proxy["network"] = "xhttp"
 		xhttpOpts := make(map[string]any)
 
