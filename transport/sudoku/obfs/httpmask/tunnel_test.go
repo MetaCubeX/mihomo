@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -137,6 +138,22 @@ func TestQueuedConnReadEOFDrainsBufferedPayload(t *testing.T) {
 	var one [1]byte
 	if n, err := conn.Read(one[:]); n != 0 || !errors.Is(err, io.EOF) {
 		t.Fatalf("read after final payload = (%d, %v), want EOF", n, err)
+	}
+}
+
+func TestUploadURLMatchesQueryEncoding(t *testing.T) {
+	for _, token := range []string{"T-k_9", "a+b/c=", "sp ace&x=y", "é"} {
+		pushURL := "https://h.test/root/api/v1/upload?token=" + url.QueryEscape(token)
+		u, err := url.Parse(pushURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q := u.Query()
+		q.Set(tunnelUploadSequenceQuery, "7")
+		u.RawQuery = q.Encode()
+		if got := uploadURL(pushURL, 7); got != u.String() {
+			t.Fatalf("token %q: uploadURL = %q, want %q", token, got, u.String())
+		}
 	}
 }
 

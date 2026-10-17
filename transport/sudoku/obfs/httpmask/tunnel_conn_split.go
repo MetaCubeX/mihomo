@@ -389,10 +389,7 @@ func (c *splitConn) pushLoop() {
 		if len(buf) == 0 {
 			return nil
 		}
-		requestURL, err := uploadURL(c.pushURL, c.uploadSeq.Add(1))
-		if err != nil {
-			return err
-		}
+		requestURL := uploadURL(c.pushURL, c.uploadSeq.Add(1))
 		attempts := 0
 		if err := retryPersistent(c.closed, c.closedErr, splitMinBackoff, splitMaxBackoff, func() error {
 			attempts++
