@@ -393,13 +393,19 @@ func (c *splitConn) pushLoop() {
 		if err != nil {
 			return err
 		}
-		payload := append([]byte(nil), buf...)
+		attempts := 0
 		if err := retryPersistent(c.closed, c.closedErr, splitMinBackoff, splitMaxBackoff, func() error {
-			return c.postUpload(requestURL, payload)
+			attempts++
+			return c.postUpload(requestURL, buf)
 		}); err != nil {
 			return err
 		}
-		buf = buf[:0]
+		if attempts == 1 {
+			buf = buf[:0]
+		} else {
+			// A failed attempt's transport goroutine may still be reading the old batch.
+			buf = nil
+		}
 		pendingRaw = 0
 		timer.Stop()
 		timerArmed = false
