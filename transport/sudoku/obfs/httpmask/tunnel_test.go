@@ -16,6 +16,7 @@ import (
 	"time"
 
 	mhttp "github.com/metacubex/http"
+	"github.com/metacubex/http/httputil"
 )
 
 type roundTripFunc func(*mhttp.Request) (*mhttp.Response, error)
@@ -268,6 +269,31 @@ func TestTunnelServerPullTakeoverSerializesReaders(t *testing.T) {
 	}
 }
 
+func TestPullFrameMatchesChunkedWriter(t *testing.T) {
+	payload := bytes.Repeat([]byte("sudoku"), 1000)
+	for _, n := range []int{1, 2, 3, 255, 4096, len(payload)} {
+		p := payload[:n]
+
+		var want bytes.Buffer
+		cw := httputil.NewChunkedWriter(&want)
+		_, _ = cw.Write(p)
+		if got := streamCodec.appendPullFrame(nil, p); !bytes.Equal(got, want.Bytes()) {
+			t.Fatalf("stream frame for %d bytes = %q, want %q", n, got, want.Bytes())
+		}
+
+		want.Reset()
+		_, _ = cw.Write([]byte(base64.StdEncoding.EncodeToString(p)))
+		_, _ = cw.Write([]byte("\n"))
+		got := pollCodec.appendPullFrame(make([]byte, 0, pollCodec.pullFrameSize(n)), p)
+		if !bytes.Equal(got, want.Bytes()) {
+			t.Fatalf("poll frame for %d bytes = %q, want %q", n, got, want.Bytes())
+		}
+		if len(got) > pollCodec.pullFrameSize(n) {
+			t.Fatalf("poll frame for %d bytes is %d, over its size bound %d", n, len(got), pollCodec.pullFrameSize(n))
+		}
+	}
+}
+
 func TestTunnelServerReapsIdleSession(t *testing.T) {
 	const token = "idle-session"
 
@@ -333,19 +359,19 @@ func startTestTunnelServer(t testing.TB, server *TunnelServer) (string, func(), 
 func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 	tests := []struct {
 		name     string
-		pull     func(*TunnelServer, net.Conn, string) (HandleResult, net.Conn, error)
+		codec    sessionCodec
 		push     func(*TunnelServer, net.Conn, string, uint64, io.Reader) (HandleResult, net.Conn, error)
 		pushBody string
 	}{
 		{
 			name:     "stream",
-			pull:     (*TunnelServer).streamPull,
+			codec:    streamCodec,
 			push:     (*TunnelServer).streamPush,
 			pushBody: "tail",
 		},
 		{
 			name:     "poll",
-			pull:     (*TunnelServer).pollPull,
+			codec:    pollCodec,
 			push:     (*TunnelServer).pollPush,
 			pushBody: base64.StdEncoding.EncodeToString([]byte("tail")) + "\n",
 		},
@@ -369,7 +395,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 					appDone <- err
 					return
 				}
-				if err := appConn.(interface{ CloseWrite() error }).CloseWrite(); err != nil {
+				if err := appConn.CloseWrite(); err != nil {
 					appDone <- err
 					return
 				}
@@ -383,7 +409,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 			clientConn, serverConn := net.Pipe()
 			done := make(chan error, 1)
 			go func() {
-				_, _, err := tt.pull(server, serverConn, token)
+				_, _, err := server.pull(serverConn, token, tt.codec)
 				done <- err
 			}()
 

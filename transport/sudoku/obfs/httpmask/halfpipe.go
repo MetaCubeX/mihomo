@@ -100,7 +100,7 @@ type halfPipeConn struct {
 	writeDeadline pipeDeadline
 }
 
-func newHalfPipe() (net.Conn, net.Conn) {
+func newHalfPipe() (*halfPipeConn, *halfPipeConn) {
 	cb1 := make(chan []byte)
 	cb2 := make(chan []byte)
 	cn1 := make(chan int)
@@ -167,6 +167,14 @@ func (c *halfPipeConn) Read(p []byte) (int, error) {
 	case <-c.readDeadline.wait():
 		return 0, os.ErrDeadlineExceeded
 	}
+}
+
+// awaitReadable blocks until the peer is writing (or the pipe ends or the read deadline fires) without taking any
+// bytes: a zero-length Read consumes a writer turn with n=0 and the writer re-offers the rest. It lets an idle
+// reader wait without holding a buffer.
+func (c *halfPipeConn) awaitReadable() error {
+	_, err := c.Read(nil)
+	return err
 }
 
 func (c *halfPipeConn) Write(p []byte) (int, error) {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/metacubex/http"
 	"github.com/metacubex/http/httputil"
+	"github.com/metacubex/mihomo/common/pool"
 	"io"
 	"net"
 	"net/url"
@@ -62,18 +63,18 @@ const (
 )
 
 type tunnelSession struct {
-	conn           net.Conn
+	conn           *halfPipeConn
 	lastActive     time.Time   // guarded by TunnelServer.mu
 	uplinkClosed   bool        // guarded by TunnelServer.mu
 	downlinkClosed bool        // guarded by TunnelServer.mu
 	reaper         *time.Timer // set under TunnelServer.mu before the session is visible
 
-	uploadMu        sync.Mutex
-	nextUploadSeq   uint64
+	uploadMu      sync.Mutex
+	nextUploadSeq uint64
+	// Lock order: pullMu before TunnelServer.mu.
 	pullMu          sync.Mutex
 	pull            *sessionPullLease
-	downlinkMu      sync.Mutex
-	pendingDownlink []byte
+	pendingDownlink []byte // owned by the current pull lease holder
 }
 
 type sessionPullLease struct {
@@ -503,7 +504,7 @@ func (s *TunnelServer) handleStream(rawConn net.Conn, req *httpRequestHeader, he
 			if s.passThroughOnReject && !s.sessionHas(token) {
 				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
 			}
-			return s.streamPull(rawConn, token)
+			return s.pull(rawConn, token, streamCodec)
 		}
 		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
 
@@ -670,7 +671,7 @@ func (s *TunnelServer) handlePoll(rawConn net.Conn, req *httpRequestHeader, head
 			if s.passThroughOnReject && !s.sessionHas(token) {
 				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
 			}
-			return s.pollPull(rawConn, token)
+			return s.pull(rawConn, token, pollCodec)
 		}
 		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
 	case http.MethodPost:
@@ -765,7 +766,7 @@ func newSessionToken() (string, error) {
 }
 
 // sessionAdd registers a session for conn and arms its idle reaper.
-func (s *TunnelServer) sessionAdd(token string, conn net.Conn) *tunnelSession {
+func (s *TunnelServer) sessionAdd(token string, conn *halfPipeConn) *tunnelSession {
 	sess := &tunnelSession{conn: conn, lastActive: time.Now(), nextUploadSeq: 1}
 	s.mu.Lock()
 	s.sessions[token] = sess
@@ -1051,34 +1052,13 @@ func (s *TunnelServer) streamPush(rawConn net.Conn, token string, sequence uint6
 	return HandleDone, nil, nil
 }
 
-func (s *TunnelServer) streamPull(rawConn net.Conn, token string) (HandleResult, net.Conn, error) {
-	return s.sessionPull(rawConn, token, false, func(w io.Writer, p []byte) error {
-		return writeFull(w, p)
-	})
-}
-
-func (s *TunnelServer) pollPull(rawConn net.Conn, token string) (HandleResult, net.Conn, error) {
-	enc := make([]byte, base64.StdEncoding.EncodedLen(32*1024))
-	return s.sessionPull(rawConn, token, true, func(w io.Writer, p []byte) error {
-		if cap(enc) < base64.StdEncoding.EncodedLen(len(p)) {
-			enc = make([]byte, base64.StdEncoding.EncodedLen(len(p)))
-		}
-		line := enc[:base64.StdEncoding.EncodedLen(len(p))]
-		base64.StdEncoding.Encode(line, p)
-		if err := writeFull(w, line); err != nil {
-			return err
-		}
-		return writeFull(w, []byte{'\n'})
-	})
-}
-
 func (s *TunnelServer) beginSessionPull(token string, sess *tunnelSession, rawConn net.Conn) (*sessionPullLease, bool) {
 	for {
+		sess.pullMu.Lock()
 		if !s.sessionTouch(token, sess) {
+			sess.pullMu.Unlock()
 			return nil, false
 		}
-
-		sess.pullMu.Lock()
 		previous := sess.pull
 		if previous == nil {
 			lease := newSessionPullLease(rawConn)
@@ -1108,36 +1088,9 @@ func (s *TunnelServer) endSessionPull(token string, sess *tunnelSession, lease *
 	close(lease.done)
 }
 
-func (s *TunnelServer) pendingDownlink(sess *tunnelSession) []byte {
-	sess.downlinkMu.Lock()
-	pending := sess.pendingDownlink
-	sess.downlinkMu.Unlock()
-	return pending
-}
-
-func (s *TunnelServer) storeDownlink(sess *tunnelSession, payload []byte) {
-	sess.downlinkMu.Lock()
-	if len(sess.pendingDownlink) == 0 {
-		sess.pendingDownlink = append(sess.pendingDownlink[:0], payload...)
-	}
-	sess.downlinkMu.Unlock()
-}
-
-func (s *TunnelServer) acknowledgeDownlink(sess *tunnelSession, n int) {
-	if n <= 0 {
-		return
-	}
-	sess.downlinkMu.Lock()
-	if n >= len(sess.pendingDownlink) {
-		sess.pendingDownlink = nil
-	} else {
-		copy(sess.pendingDownlink, sess.pendingDownlink[n:])
-		sess.pendingDownlink = sess.pendingDownlink[:len(sess.pendingDownlink)-n]
-	}
-	sess.downlinkMu.Unlock()
-}
-
-func (s *TunnelServer) sessionPull(rawConn net.Conn, token string, keepalive bool, writePayload func(io.Writer, []byte) error) (HandleResult, net.Conn, error) {
+// pull answers GET <root>/stream with a chunked downlink until the session has
+// nothing more to say, the response breaks or another pull takes over.
+func (s *TunnelServer) pull(rawConn net.Conn, token string, codec sessionCodec) (HandleResult, net.Conn, error) {
 	sess, ok := s.sessionGet(token)
 	if !ok {
 		_ = writeSimpleHTTPResponse(rawConn, http.StatusForbidden, "forbidden")
@@ -1158,20 +1111,15 @@ func (s *TunnelServer) sessionPull(rawConn net.Conn, token string, keepalive boo
 		return HandleDone, nil, err
 	}
 
-	bw := bufio.NewWriterSize(rawConn, 32*1024)
-	cw := httputil.NewChunkedWriter(bw)
-	streamEOF := false
+	// nil once a frame failed to go out whole: the body is already broken, so no terminator.
+	end := pullEnd
 	defer func() {
-		_ = cw.Close()
-		if streamEOF {
-			_, _ = fmt.Fprintf(bw, "%s: 1\r\n", tunnelStreamEOFHeader)
+		if end != nil {
+			_, _ = rawConn.Write(end)
 		}
-		_, _ = bw.WriteString("\r\n")
-		_ = bw.Flush()
 		_ = rawConn.Close()
 	}()
 
-	buf := make([]byte, 32*1024)
 	for {
 		select {
 		case <-lease.cancel:
@@ -1179,58 +1127,118 @@ func (s *TunnelServer) sessionPull(rawConn net.Conn, token string, keepalive boo
 		default:
 		}
 
-		payload := s.pendingDownlink(sess)
-		var n int
-		var err error
+		// An idle pull waits for the tunnel without holding a buffer; one is taken only once bytes arrive.
+		payload := sess.pendingDownlink
+		var read []byte
+		var readErr error
 		if len(payload) == 0 {
 			_ = sess.conn.SetReadDeadline(time.Now().Add(s.pullReadTimeout))
-			n, err = sess.conn.Read(buf)
-			if n > 0 {
-				s.storeDownlink(sess, buf[:n])
-				payload = s.pendingDownlink(sess)
+			if readErr = sess.conn.awaitReadable(); readErr == nil {
+				read = pool.Get(downlinkReadBytes)
+				var n int
+				n, readErr = sess.conn.Read(read)
+				payload = read[:n]
 			}
 		}
 		if len(payload) > 0 {
 			if !s.sessionTouch(token, sess) {
+				_ = pool.Put(read)
 				return HandleDone, nil, nil
 			}
+			frame := codec.appendPullFrame(pool.Get(codec.pullFrameSize(len(payload)))[:0], payload)
 			_ = rawConn.SetWriteDeadline(time.Now().Add(s.pullReadTimeout))
-			if writeErr := writePayload(cw, payload); writeErr != nil {
+			err := writeFull(rawConn, frame)
+			_ = pool.Put(frame)
+			if err != nil {
 				// The HTTP response may be reset by a CDN while the backing
 				// tunnel is still healthy. The client will establish a fresh
 				// pull request, so never destroy the session for this request's
-				// downstream socket failure.
-				return HandleDone, nil, nil
-			}
-			if flushErr := bw.Flush(); flushErr != nil {
+				// downstream socket failure; its next pull resends the payload.
+				sess.pendingDownlink = append(sess.pendingDownlink[:0], payload...)
+				_ = pool.Put(read)
+				end = nil
 				return HandleDone, nil, nil
 			}
 			_ = rawConn.SetWriteDeadline(time.Time{})
-			s.acknowledgeDownlink(sess, len(payload))
+			sess.pendingDownlink = nil
 		}
-		if err == nil {
+		_ = pool.Put(read)
+		if readErr == nil {
 			continue
 		}
 
-		if errors.Is(err, os.ErrDeadlineExceeded) {
+		switch {
+		case errors.Is(readErr, os.ErrDeadlineExceeded):
 			select {
 			case <-lease.cancel:
-				return HandleDone, nil, nil
 			default:
+				if codec.poll {
+					end = pollKeepaliveEnd
+					s.sessionTouch(token, sess)
+				}
 			}
-			if keepalive {
-				_, _ = cw.Write([]byte("\n"))
-				_ = bw.Flush()
-				s.sessionTouch(token, sess)
-			}
-			return HandleDone, nil, nil
-		}
-		if errors.Is(err, io.EOF) {
-			streamEOF = true
+		case errors.Is(readErr, io.EOF):
+			end = pullEndAfterEOF
 			s.sessionHalfClose(token, sessionDownlink)
-			return HandleDone, nil, nil
+		default:
+			s.sessionClose(token)
 		}
-		s.sessionClose(token)
 		return HandleDone, nil, nil
 	}
+}
+
+// sessionCodec is how a mode carries tunnel bytes: raw octets for stream, one
+// base64 line per payload for poll.
+type sessionCodec struct {
+	poll bool
+}
+
+var (
+	streamCodec = sessionCodec{}
+	pollCodec   = sessionCodec{poll: true}
+)
+
+const (
+	downlinkReadBytes = 32 * 1024
+
+	// pollNewlineChunk is the one-byte chunk that ends every poll line and doubles as the idle keepalive.
+	pollNewlineChunk = "1\r\n\n\r\n"
+)
+
+// Bodies end with the zero chunk; EOF is reported as a trailer, which is why the response header announces one.
+var (
+	pullEnd          = []byte("0\r\n\r\n")
+	pullEndAfterEOF  = []byte("0\r\n" + tunnelStreamEOFHeader + ": 1\r\n\r\n")
+	pollKeepaliveEnd = []byte(pollNewlineChunk + "0\r\n\r\n")
+)
+
+// pullFrameSize bounds the chunked-body bytes that carry an n-byte downlink payload.
+func (c sessionCodec) pullFrameSize(n int) int {
+	if c.poll {
+		return 8 + base64.StdEncoding.EncodedLen(n) + len(pollNewlineChunk)
+	}
+	return 8 + n
+}
+
+// appendPullFrame appends the chunked-body bytes that carry one downlink payload: a single chunk of raw octets for
+// stream, a base64 line chunk followed by a newline chunk for poll.
+func (c sessionCodec) appendPullFrame(dst, payload []byte) []byte {
+	if !c.poll {
+		return appendChunk(dst, payload)
+	}
+	encLen := base64.StdEncoding.EncodedLen(len(payload))
+	dst = strconv.AppendInt(dst, int64(encLen), 16)
+	dst = append(dst, '\r', '\n')
+	start := len(dst)
+	dst = dst[:start+encLen]
+	base64.StdEncoding.Encode(dst[start:], payload)
+	dst = append(dst, '\r', '\n')
+	return append(dst, pollNewlineChunk...)
+}
+
+func appendChunk(dst, data []byte) []byte {
+	dst = strconv.AppendInt(dst, int64(len(data)), 16)
+	dst = append(dst, '\r', '\n')
+	dst = append(dst, data...)
+	return append(dst, '\r', '\n')
 }
