@@ -56,15 +56,17 @@ type TunnelServer struct {
 	sessions map[string]*tunnelSession
 }
 
-const tunnelHeaderReadTimeout = 15 * time.Second
+const (
+	tunnelHeaderReadTimeout = 15 * time.Second
+	minReapInterval         = 50 * time.Millisecond
+)
 
 type tunnelSession struct {
 	conn           net.Conn
-	lastActive     time.Time
-	uplinkClosed   bool
-	downlinkClosed bool
-	closed         chan struct{}
-	closeOnce      sync.Once
+	lastActive     time.Time   // guarded by TunnelServer.mu
+	uplinkClosed   bool        // guarded by TunnelServer.mu
+	downlinkClosed bool        // guarded by TunnelServer.mu
+	reaper         *time.Timer // set under TunnelServer.mu before the session is visible
 
 	uploadMu        sync.Mutex
 	nextUploadSeq   uint64
@@ -743,11 +745,7 @@ func (s *TunnelServer) sessionAuthorize(rawConn net.Conn, headerBytes, buffered,
 		}
 	}
 
-	s.mu.Lock()
-	s.sessions[token] = &tunnelSession{conn: c2, closed: make(chan struct{}), lastActive: time.Now(), nextUploadSeq: 1}
-	s.mu.Unlock()
-
-	go s.reapLater(token)
+	s.sessionAdd(token, c2)
 
 	if err := writeTokenHTTPResponse(rawConn, token, responsePayload); err != nil {
 		s.sessionClose(token)
@@ -766,71 +764,77 @@ func newSessionToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }
 
-func (s *TunnelServer) reapLater(token string) {
-	ttl := s.sessionTTL
-	if ttl <= 0 {
+// sessionAdd registers a session for conn and arms its idle reaper.
+func (s *TunnelServer) sessionAdd(token string, conn net.Conn) *tunnelSession {
+	sess := &tunnelSession{conn: conn, lastActive: time.Now(), nextUploadSeq: 1}
+	s.mu.Lock()
+	s.sessions[token] = sess
+	sess.reaper = time.AfterFunc(s.sessionTTL, func() { s.reap(token, sess) })
+	s.mu.Unlock()
+	return sess
+}
+
+// shutdown disarms the reaper, stops the active pull and closes the tunnel pipe.
+func (sess *tunnelSession) shutdown() {
+	sess.reaper.Stop()
+	sess.pullMu.Lock()
+	lease := sess.pull
+	sess.pullMu.Unlock()
+	lease.stop()
+	_ = sess.conn.Close()
+}
+
+// reap runs when the reaper fires and re-arms it unless sess is gone.
+func (s *TunnelServer) reap(token string, sess *tunnelSession) {
+	next, done := s.reapIfIdle(token, sess)
+	if done {
 		return
 	}
-
-	timer := time.NewTimer(ttl)
-	defer timer.Stop()
-
-	for {
-		s.mu.Lock()
-		sess, ok := s.sessions[token]
-		s.mu.Unlock()
-		if !ok {
-			return
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sessions[token] == sess {
+		// Best-effort cleanup does not need a tight loop under constant activity.
+		if next < minReapInterval {
+			next = minReapInterval
 		}
-
-		select {
-		case <-timer.C:
-		case <-sess.closed:
-			return
-		}
-
-		s.mu.Lock()
-		sess, ok = s.sessions[token]
-		if !ok {
-			s.mu.Unlock()
-			return
-		}
-		idle := time.Since(sess.lastActive)
-		s.mu.Unlock()
-
-		// Pull ownership has its own lock. Do not take it while holding s.mu:
-		// pull takeover validates the session while holding pullMu.
-		sess.pullMu.Lock()
-		active := sess.pull != nil
-		sess.pullMu.Unlock()
-
-		s.mu.Lock()
-		if s.sessions[token] != sess {
-			s.mu.Unlock()
-			return
-		}
-		if idle >= ttl && !active {
-			delete(s.sessions, token)
-			s.mu.Unlock()
-			sess.pullMu.Lock()
-			lease := sess.pull
-			sess.pullMu.Unlock()
-			lease.stop()
-			_ = sess.conn.Close()
-			return
-		}
-		next := ttl - idle
-		if active && next < ttl {
-			next = ttl
-		}
-		s.mu.Unlock()
-
-		// Avoid a tight loop under high-frequency activity; we only need best-effort cleanup.
-		if next < 50*time.Millisecond {
-			next = 50 * time.Millisecond
-		}
-		timer.Reset(next)
+		sess.reaper.Reset(next)
 	}
+}
+
+// reapIfIdle closes sess once it has been idle for the TTL with no active pull,
+// otherwise it returns how long to wait before checking again.
+func (s *TunnelServer) reapIfIdle(token string, sess *tunnelSession) (next time.Duration, done bool) {
+	s.mu.Lock()
+	if s.sessions[token] != sess {
+		s.mu.Unlock()
+		return 0, true
+	}
+	idle := time.Since(sess.lastActive)
+	s.mu.Unlock()
+
+	// Pull ownership has its own lock. Do not take it while holding s.mu:
+	// pull takeover validates the session while holding pullMu.
+	sess.pullMu.Lock()
+	pulling := sess.pull != nil
+	sess.pullMu.Unlock()
+
+	s.mu.Lock()
+	if s.sessions[token] != sess {
+		s.mu.Unlock()
+		return 0, true
+	}
+	if idle >= s.sessionTTL && !pulling {
+		delete(s.sessions, token)
+		s.mu.Unlock()
+		sess.shutdown()
+		return 0, true
+	}
+	next = s.sessionTTL - idle
+	if pulling && next < s.sessionTTL {
+		next = s.sessionTTL
+	}
+	s.mu.Unlock()
+	return next, false
 }
 
 func (s *TunnelServer) sessionHas(token string) bool {
@@ -870,14 +874,7 @@ func (s *TunnelServer) sessionClose(token string) {
 	}
 	s.mu.Unlock()
 	if ok {
-		if sess.closed != nil {
-			sess.closeOnce.Do(func() { close(sess.closed) })
-		}
-		sess.pullMu.Lock()
-		lease := sess.pull
-		sess.pullMu.Unlock()
-		lease.stop()
-		_ = sess.conn.Close()
+		sess.shutdown()
 	}
 }
 
@@ -886,10 +883,7 @@ func (s *TunnelServer) sessionCloseWrite(token string) {
 }
 
 func (s *TunnelServer) sessionHalfClose(token string, direction sessionDirection) {
-	var (
-		conn       net.Conn
-		closeWrite bool
-	)
+	var closeWrite, removed bool
 
 	s.mu.Lock()
 	sess, ok := s.sessions[token]
@@ -909,24 +903,19 @@ func (s *TunnelServer) sessionHalfClose(token string, direction sessionDirection
 	}
 	if sess.uplinkClosed && sess.downlinkClosed {
 		delete(s.sessions, token)
-		if sess.closed != nil {
-			sess.closeOnce.Do(func() { close(sess.closed) })
-		}
+		removed = true
 	}
-	conn = sess.conn
 	s.mu.Unlock()
 
 	if closeWrite {
-		_ = tryCloseWrite(conn)
+		_ = tryCloseWrite(sess.conn)
 	}
 	// When both directions are complete the session has been removed. Closing
 	// the backing connection is safe after the optional half-close above and
 	// prevents a leaked pipe from surviving its token.
-	s.mu.Lock()
-	_, stillPresent := s.sessions[token]
-	s.mu.Unlock()
-	if !stillPresent {
-		_ = conn.Close()
+	if removed {
+		sess.reaper.Stop()
+		_ = sess.conn.Close()
 	}
 }
 

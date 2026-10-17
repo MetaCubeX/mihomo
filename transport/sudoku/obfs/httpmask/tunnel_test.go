@@ -229,8 +229,7 @@ func TestTunnelServerPullTakeoverSerializesReaders(t *testing.T) {
 	defer sessionConn.Close()
 
 	server := NewTunnelServer(TunnelServerOptions{})
-	sess := &tunnelSession{conn: sessionConn, closed: make(chan struct{})}
-	server.sessions[token] = sess
+	sess := server.sessionAdd(token, sessionConn)
 
 	firstClient, firstServer := net.Pipe()
 	defer firstClient.Close()
@@ -266,6 +265,32 @@ func TestTunnelServerPullTakeoverSerializesReaders(t *testing.T) {
 		server.endSessionPull(token, sess, second)
 	case <-time.After(time.Second):
 		t.Fatal("second pull remained blocked after first lease ended")
+	}
+}
+
+func TestTunnelServerReapsIdleSession(t *testing.T) {
+	const token = "idle-session"
+
+	appConn, sessionConn := newHalfPipe()
+	defer appConn.Close()
+	defer sessionConn.Close()
+
+	server := NewTunnelServer(TunnelServerOptions{SessionTTL: 20 * time.Millisecond})
+	server.sessionAdd(token, sessionConn)
+
+	// The tunnel read ends once the reaper closes the session pipe.
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := appConn.Read(make([]byte, 1))
+		readDone <- err
+	}()
+	select {
+	case <-readDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("idle session was not reaped")
+	}
+	if server.sessionHas(token) {
+		t.Fatal("reaped session is still registered")
 	}
 }
 
@@ -332,7 +357,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 
 			appConn, sessionConn := newHalfPipe()
 			server := NewTunnelServer(TunnelServerOptions{PullReadTimeout: 20 * time.Millisecond})
-			server.sessions[token] = &tunnelSession{conn: sessionConn, nextUploadSeq: 1}
+			server.sessionAdd(token, sessionConn)
 			t.Cleanup(func() {
 				_ = appConn.Close()
 				server.sessionClose(token)
