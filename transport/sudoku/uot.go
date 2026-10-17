@@ -1,7 +1,6 @@
 package sudoku
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -143,7 +142,7 @@ func readDatagramHeaderAndAddress(r io.Reader) (string, int, error) {
 		return "", 0, err
 	}
 
-	addr, err := DecodeAddress(bytes.NewReader(addrBuf))
+	addr, err := DecodeAddress(addrBuf)
 	if err != nil {
 		return "", 0, fmt.Errorf("decode address: %w", err)
 	}
