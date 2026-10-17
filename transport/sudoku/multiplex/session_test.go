@@ -351,3 +351,32 @@ func TestSessionMixedFrameSizesKeepStreamOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionAnswersPingWithPong(t *testing.T) {
+	sessionConn, peerConn := net.Pipe()
+	session, err := NewServerSession(sessionConn)
+	if err != nil {
+		t.Fatalf("new server session: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = session.Close()
+		_ = peerConn.Close()
+	})
+	_ = peerConn.SetDeadline(time.Now().Add(2 * time.Second))
+
+	var ping [headerSize]byte
+	ping[0] = framePing
+	if _, err := peerConn.Write(ping[:]); err != nil {
+		t.Fatalf("write ping: %v", err)
+	}
+	var pong [headerSize]byte
+	if _, err := io.ReadFull(peerConn, pong[:]); err != nil {
+		t.Fatalf("read pong: %v", err)
+	}
+	if pong[0] != framePong || binary.BigEndian.Uint32(pong[1:5]) != 0 || binary.BigEndian.Uint32(pong[5:9]) != 0 {
+		t.Fatalf("reply = %v, want an empty PONG on stream 0", pong)
+	}
+	if session.IsClosed() {
+		t.Fatal("session closed by ping")
+	}
+}

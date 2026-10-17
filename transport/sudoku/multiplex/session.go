@@ -19,6 +19,8 @@ const (
 	frameData  byte = 0x02
 	frameClose byte = 0x03
 	frameReset byte = 0x04
+	framePing  byte = 0x05
+	framePong  byte = 0x06
 )
 
 const (
@@ -66,6 +68,7 @@ type Session struct {
 	// wroteSinceTick is set by sendFrame and consumed by the idle keepalive tick.
 	wroteSinceTick atomic.Bool
 	keepaliveOnce  sync.Once
+	pongPending    atomic.Bool
 }
 
 func NewClientSession(conn net.Conn) (*Session, error) {
@@ -321,6 +324,18 @@ func (s *Session) sendDirect(frameType byte, streamID uint32, payload []byte) er
 	return nil
 }
 
+// requestPong answers a ping off the read loop, which must not block on a write. Pings that
+// arrive while a pong is still waiting to be sent share it.
+func (s *Session) requestPong() {
+	if s.pongPending.Swap(true) {
+		return
+	}
+	go func() {
+		s.pongPending.Store(false)
+		_ = s.sendFrame(framePong, 0, nil)
+	}()
+}
+
 func (s *Session) startKeepalive(interval time.Duration) {
 	if s == nil || interval <= 0 {
 		return
@@ -417,6 +432,19 @@ func (s *Session) readLoop() {
 			}
 		}
 		switch frameType {
+		case framePing:
+			if streamID != 0 || len(payload) != 0 {
+				s.closeWithError(errors.New("invalid mux ping frame"))
+				return
+			}
+			s.requestPong()
+
+		case framePong:
+			if streamID != 0 || len(payload) != 0 {
+				s.closeWithError(errors.New("invalid mux pong frame"))
+				return
+			}
+
 		case frameOpen:
 			if s.acceptCh == nil {
 				s.sendReset(streamID, "unexpected open")
