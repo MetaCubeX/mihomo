@@ -36,6 +36,7 @@ type Proxy struct {
 	alive   atomic.Bool
 	history *queue.Queue[C.DelayHistory]
 	extra   xsync.Map[string, *internalProxyState]
+	speeds  xsync.Map[string, C.SpeedHistory]
 }
 
 // Adapter implements C.Proxy
@@ -143,6 +144,9 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	_ = json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
 	mapping["extra"] = p.ExtraDelayHistories()
+	if speeds := p.SpeedHistories(); len(speeds) > 0 {
+		mapping["speed"] = speeds
+	}
 	mapping["alive"] = p.alive.Load()
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()

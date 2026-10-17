@@ -29,6 +29,7 @@ func proxyRouter() http.Handler {
 		r.Use(parseProxyName, findProxyByName)
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
+		r.Get("/speed", getProxySpeed)
 		r.Put("/", updateProxy)
 		r.Delete("/", unfixedProxy)
 	})
@@ -144,6 +145,58 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	render.JSON(w, r, render.M{
 		"delay": delay,
+	})
+}
+
+// getProxySpeed runs a download speed test through the proxy.
+// Query: url (required), duration in ms (default 3000), max-bytes (default 10 MiB),
+// timeout in ms for queueing, dialing and the whole test (default duration + 10000).
+func getProxySpeed(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	url := query.Get("url")
+	duration, maxBytes, timeout := int64(3000), int64(10*1024*1024), int64(0)
+	var err error
+	if v := query.Get("duration"); v != "" {
+		duration, err = strconv.ParseInt(v, 10, 64)
+	}
+	if v := query.Get("max-bytes"); err == nil && v != "" {
+		maxBytes, err = strconv.ParseInt(v, 10, 64)
+	}
+	if v := query.Get("timeout"); err == nil && v != "" {
+		timeout, err = strconv.ParseInt(v, 10, 64)
+	}
+	if err != nil || url == "" || duration <= 0 || maxBytes <= 0 || timeout < 0 {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+	if timeout == 0 {
+		timeout = duration + 10000
+	}
+
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
+	defer cancel()
+
+	speed, err := proxy.SpeedTest(ctx, url, maxBytes, time.Millisecond*time.Duration(duration))
+	if speed == 0 && ctx.Err() != nil {
+		render.Status(r, http.StatusGatewayTimeout)
+		render.JSON(w, r, ErrRequestTimeout)
+		return
+	}
+	if speed == 0 {
+		render.Status(r, http.StatusServiceUnavailable)
+		if err != nil {
+			render.JSON(w, r, newError(err.Error()))
+		} else {
+			render.JSON(w, r, newError("An error occurred in the speed test"))
+		}
+		return
+	}
+
+	render.JSON(w, r, render.M{
+		"speed": speed,
 	})
 }
 

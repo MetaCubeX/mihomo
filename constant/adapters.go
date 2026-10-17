@@ -161,6 +161,12 @@ type ProxyState struct {
 	History []DelayHistory `json:"history"`
 }
 
+// SpeedHistory is the result of a download speed test
+type SpeedHistory struct {
+	Time  time.Time `json:"time"`
+	Speed uint64    `json:"speed"` // bytes per second, 0 means the test failed
+}
+
 type DelayHistoryStoreType int
 
 type Proxy interface {
@@ -171,6 +177,8 @@ type Proxy interface {
 	ExtraDelayHistories() map[string]ProxyState
 	LastDelayForTestUrl(url string) uint16
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
+	LastSpeedForTestUrl(url string) (SpeedHistory, bool)
+	SpeedTest(ctx context.Context, url string, maxBytes int64, duration time.Duration) (uint64, error)
 }
 
 // AdapterType is enum of adapter type
