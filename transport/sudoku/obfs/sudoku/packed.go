@@ -1,28 +1,19 @@
 package sudoku
 
 import (
-	"bufio"
 	"io"
 	"net"
 	"sync"
 )
 
-const (
-	packedProtectedPrefixBytes = 14
-	packedIOBufferSize         = 32 * 1024
-	packedDecodeBufferSize     = 32 * 1024
-)
+const packedProtectedPrefixBytes = 14
 
 // PackedConn encodes traffic with the packed Sudoku layout while preserving
 // the same padding model as the regular connection.
 type PackedConn struct {
 	net.Conn
 	table  *Table
-	reader *bufio.Reader
-
-	// Read-side buffers.
-	rawBuf      []byte
-	pendingData pendingBuffer
+	reader *wireReader
 
 	// Write-side state.
 	writeMu  sync.Mutex
@@ -67,10 +58,6 @@ func NewPackedConn(c net.Conn, table *Table, pMin, pMax int) *PackedConn {
 	pc := &PackedConn{
 		Conn:             c,
 		table:            table,
-		reader:           bufio.NewReaderSize(c, packedIOBufferSize),
-		rawBuf:           make([]byte, packedDecodeBufferSize),
-		pendingData:      newPendingBuffer(4096),
-		writeBuf:         make([]byte, 0, 4096),
 		rng:              localRng,
 		paddingThreshold: pickPaddingThreshold(localRng, pMin, pMax),
 	}
@@ -198,23 +185,15 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 	pc.writeMu.Lock()
 	defer pc.writeMu.Unlock()
 
-	needed := len(p)*3/2 + 32
-	if pc.paddingThreshold == 0 {
-		needed = ((len(p)+2)/3)*4 + 32
-	}
-	if cap(pc.writeBuf) < needed {
-		pc.writeBuf = make([]byte, 0, needed)
-	}
-	out := pc.writeBuf[:0]
+	// Bound storage independently of the caller's Write size, including padding.
+	out := growWriteBuf(pc.writeBuf, minInt(minInt(len(p), maxEncodedWriteSize)*3+64, maxEncodedWriteSize))
+	defer func() { pc.writeBuf = releaseWriteBuf(out) }()
 	layout := pc.table.layout
 	rng := pc.rng
 	paddingThreshold := pc.paddingThreshold
 	padPool := pc.padPool
 
-	var prefixN int
-	out, prefixN = pc.writeProtectedPrefix(out, p)
-
-	i := prefixN
+	out, i := pc.writeProtectedPrefix(out, p)
 	n := len(p)
 
 	// Align to a complete group boundary.
@@ -224,10 +203,28 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 	}
 
 	end := i + (n-i)/3*3
-	out = appendPackedBlocks(out, p[i:end], layout, rng, paddingThreshold, padPool)
+	blockSize := 4
+	if paddingThreshold != 0 {
+		blockSize = 8
+	}
+	written := 0
+	for i < end {
+		// Reserve room for the final two bytes, residual marker and trailing pad.
+		count := minInt((cap(out)-len(out)-8)/blockSize*3, end-i)
+		if count == 0 {
+			if _, err := pc.Conn.Write(out); err != nil {
+				return written, err
+			}
+			written = i
+			out = out[:0]
+			continue
+		}
+		out = appendPackedBlocks(out, p[i:i+count], layout, rng, paddingThreshold, padPool)
+		i += count
+	}
 
 	// The remaining one or two bytes stay in the accumulator.
-	for i = end; i < n; i++ {
+	for ; i < n; i++ {
 		out = pc.appendByte(out, p[i])
 	}
 
@@ -241,14 +238,9 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 
 	out = maybeAppendPackedPadding(out, rng, paddingThreshold, padPool)
 
-	if len(out) > 0 {
-		pc.writeBuf = out[:0]
-		if _, err := pc.Conn.Write(out); err != nil {
-			return len(p), err
-		}
-		return len(p), nil
+	if _, err := pc.Conn.Write(out); err != nil {
+		return written, err
 	}
-	pc.writeBuf = out[:0]
 	return len(p), nil
 }
 
@@ -284,80 +276,27 @@ func (pc *PackedConn) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if pc == nil || pc.Conn == nil || pc.reader == nil || len(pc.rawBuf) == 0 || pc.table == nil || pc.table.layout == nil {
+	if pc == nil || pc.Conn == nil || pc.table == nil || pc.table.layout == nil {
 		return 0, io.ErrClosedPipe
 	}
-	if n, ok := drainPending(p, &pc.pendingData); ok {
-		return n, nil
+	if pc.reader == nil {
+		// Write-only codecs never pay for a read buffer.
+		pc.reader = &wireReader{src: pc.Conn}
 	}
 
 	outN := 0
 	for {
-		nr, rErr := readRawLimited(pc.Conn, pc.reader, pc.rawBuf[:packedReadSize(len(p)-outN, len(pc.rawBuf))])
-		if nr > 0 {
-			rBuf := pc.readBitBuf
-			rBits := pc.readBits
-			padMarker := pc.padMarker
-			layout := pc.table.layout
-
-			chunk := pc.rawBuf[:nr]
-			for i := 0; i < len(chunk); {
-				if rBits == 0 && outN+3 <= len(p) && i+3 < len(chunk) {
-					g1 := layout.decodeGroup[chunk[i]]
-					g2 := layout.decodeGroup[chunk[i+1]]
-					g3 := layout.decodeGroup[chunk[i+2]]
-					g4 := layout.decodeGroup[chunk[i+3]]
-					// The invalid sentinel combines validation and decoding in one lookup.
-					if (g1 | g2 | g3 | g4) < 64 {
-						p[outN] = (g1 << 2) | (g2 >> 4)
-						p[outN+1] = (g2 << 4) | (g3 >> 2)
-						p[outN+2] = (g3 << 6) | g4
-						outN += 3
-						i += 4
-						continue
-					}
-				}
-
-				b := chunk[i]
-				i++
-				group := layout.decodeGroup[b]
-				if group >= 64 {
-					if b == padMarker {
-						rBuf = 0
-						rBits = 0
-					}
-					continue
-				}
-
-				rBuf = (rBuf << 6) | uint64(group)
-				rBits += 6
-
-				if rBits >= 8 {
-					rBits -= 8
-					val := byte(rBuf >> rBits)
-					outN = appendDecodedByte(p, outN, &pc.pendingData, val)
-					if rBits == 0 {
-						rBuf = 0
-					} else {
-						rBuf &= (uint64(1) << rBits) - 1
-					}
-				}
-			}
-
-			pc.readBitBuf = rBuf
-			pc.readBits = rBits
+		chunk, rErr := pc.reader.peek()
+		if len(chunk) > 0 {
+			var consumed int
+			outN, consumed, rErr = pc.decode(p, chunk)
+			pc.reader.discard(consumed)
 		}
 
 		if rErr != nil {
 			if rErr == io.EOF {
 				pc.readBitBuf = 0
 				pc.readBits = 0
-			}
-			if outN > 0 {
-				return outN, nil
-			}
-			if n, ok := drainPending(p, &pc.pendingData); ok {
-				return n, nil
 			}
 			return 0, rErr
 		}
@@ -368,17 +307,59 @@ func (pc *PackedConn) Read(p []byte) (int, error) {
 	}
 }
 
-func (pc *PackedConn) getPaddingByte() byte {
-	return pc.padPool[pc.rng.Intn(len(pc.padPool))]
+// decode writes only as much plaintext as fits in p; the wire bytes it
+// consumed can then be dropped and the rest stay in the reader.
+func (pc *PackedConn) decode(p, chunk []byte) (outN, consumed int, err error) {
+	rBuf := pc.readBitBuf
+	rBits := pc.readBits
+	padMarker := pc.padMarker
+	layout := pc.table.layout
+
+	for consumed < len(chunk) && outN < len(p) {
+		i := consumed
+		if rBits == 0 && outN+3 <= len(p) && i+3 < len(chunk) {
+			g1 := layout.decodeGroup[chunk[i]]
+			g2 := layout.decodeGroup[chunk[i+1]]
+			g3 := layout.decodeGroup[chunk[i+2]]
+			g4 := layout.decodeGroup[chunk[i+3]]
+			// The invalid sentinel combines validation and decoding in one lookup.
+			if (g1 | g2 | g3 | g4) < 64 {
+				p[outN] = (g1 << 2) | (g2 >> 4)
+				p[outN+1] = (g2 << 4) | (g3 >> 2)
+				p[outN+2] = (g3 << 6) | g4
+				outN += 3
+				consumed += 4
+				continue
+			}
+		}
+
+		b := chunk[i]
+		consumed++
+		group := layout.decodeGroup[b]
+		if group >= 64 {
+			if b == padMarker {
+				rBuf = 0
+				rBits = 0
+			}
+			continue
+		}
+
+		rBuf = (rBuf << 6) | uint64(group)
+		rBits += 6
+
+		if rBits >= 8 {
+			rBits -= 8
+			p[outN] = byte(rBuf >> rBits)
+			outN++
+			rBuf &= (uint64(1) << rBits) - 1
+		}
+	}
+
+	pc.readBitBuf = rBuf
+	pc.readBits = rBits
+	return outN, consumed, nil
 }
 
-func packedReadSize(decodedRemaining, maxRaw int) int {
-	if maxRaw <= minDecodeReadSize || decodedRemaining <= 0 {
-		return maxRaw
-	}
-	if decodedRemaining > (maxRaw-minDecodeReadSize)/2 {
-		return maxRaw
-	}
-
-	return decodedRemaining*2 + minDecodeReadSize
+func (pc *PackedConn) getPaddingByte() byte {
+	return pc.padPool[pc.rng.Intn(len(pc.padPool))]
 }

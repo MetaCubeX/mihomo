@@ -116,19 +116,3 @@ func appendSudokuPayload(dst []byte, table *Table, rng *sudokuRand, threshold ui
 	rng.state = state
 	return out[:n]
 }
-
-// encodeSudokuPayload encodes p into dst[:0], followed by the one padding slot
-// that closes a Write.
-func encodeSudokuPayload(dst []byte, table *Table, rng *sudokuRand, threshold uint64, p []byte) []byte {
-	if len(p) == 0 {
-		return dst[:0]
-	}
-	out := appendSudokuPayload(dst[:0], table, rng, threshold, p)
-	if threshold != 0 {
-		draw := rng.Uint64()
-		if draw&math.MaxUint32 < threshold {
-			out = append(out, table.PaddingPool[(draw>>32)*uint64(len(table.PaddingPool))>>32])
-		}
-	}
-	return out
-}
