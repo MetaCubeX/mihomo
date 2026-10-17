@@ -13,33 +13,6 @@ const IOBufferSize = 32 * 1024
 
 const minDecodeReadSize = 64
 
-var perm4 = [24][4]byte{
-	{0, 1, 2, 3},
-	{0, 1, 3, 2},
-	{0, 2, 1, 3},
-	{0, 2, 3, 1},
-	{0, 3, 1, 2},
-	{0, 3, 2, 1},
-	{1, 0, 2, 3},
-	{1, 0, 3, 2},
-	{1, 2, 0, 3},
-	{1, 2, 3, 0},
-	{1, 3, 0, 2},
-	{1, 3, 2, 0},
-	{2, 0, 1, 3},
-	{2, 0, 3, 1},
-	{2, 1, 0, 3},
-	{2, 1, 3, 0},
-	{2, 3, 0, 1},
-	{2, 3, 1, 0},
-	{3, 0, 1, 2},
-	{3, 0, 2, 1},
-	{3, 1, 0, 2},
-	{3, 1, 2, 0},
-	{3, 2, 0, 1},
-	{3, 2, 1, 0},
-}
-
 type Conn struct {
 	net.Conn
 	table      *Table
@@ -50,7 +23,7 @@ type Conn struct {
 
 	rawBuf      []byte
 	pendingData pendingBuffer
-	hintBuf     [4]byte
+	hintBuf     [4]uint8 // hint indexes of a group still being read
 	hintCount   int
 	writeMu     sync.Mutex
 	writeBuf    []byte
@@ -179,36 +152,35 @@ func (sc *Conn) Read(p []byte) (n int, err error) {
 			}
 
 			table := sc.table
-			layout := table.layout
+			hintIdx := &table.layout.hintIdx
 			for i := 0; i < len(chunk); {
-				if sc.hintCount == 0 && outN < len(p) && i+3 < len(chunk) &&
-					layout.hintTable[chunk[i]] &&
-					layout.hintTable[chunk[i+1]] &&
-					layout.hintTable[chunk[i+2]] &&
-					layout.hintTable[chunk[i+3]] {
-					val, ok := table.DecodeMap[packHintBytes(chunk[i], chunk[i+1], chunk[i+2], chunk[i+3])]
-					if !ok {
-						return 0, ErrInvalidSudokuMapMiss
+				if sc.hintCount == 0 && outN < len(p) && i+3 < len(chunk) {
+					h0, h1, h2, h3 := hintIdx[chunk[i]], hintIdx[chunk[i+1]], hintIdx[chunk[i+2]], hintIdx[chunk[i+3]]
+					if (h0|h1|h2|h3)&notHint == 0 {
+						val, ok := table.decodeHints(h0, h1, h2, h3)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						p[outN] = val
+						outN++
+						i += 4
+						continue
 					}
-					p[outN] = val
-					outN++
-					i += 4
-					continue
 				}
 
-				b := chunk[i]
+				idx := hintIdx[chunk[i]]
 				i++
-				if !layout.hintTable[b] {
+				if idx&notHint != 0 {
 					continue
 				}
 
-				sc.hintBuf[sc.hintCount] = b
+				sc.hintBuf[sc.hintCount] = idx
 				sc.hintCount++
 				if sc.hintCount != len(sc.hintBuf) {
 					continue
 				}
 
-				val, ok := table.DecodeMap[packHintBytes(sc.hintBuf[0], sc.hintBuf[1], sc.hintBuf[2], sc.hintBuf[3])]
+				val, ok := table.decodeHints(sc.hintBuf[0], sc.hintBuf[1], sc.hintBuf[2], sc.hintBuf[3])
 				if !ok {
 					return 0, ErrInvalidSudokuMapMiss
 				}

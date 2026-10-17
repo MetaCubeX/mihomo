@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"math/bits"
 	"math/rand"
 	"strings"
 )
@@ -14,12 +15,16 @@ var (
 
 type Table struct {
 	EncodeTable [256][][4]byte
-	DecodeMap   map[uint32]byte
 	PaddingPool []byte
 	IsASCII     bool // 标记当前模式
 	layout      *byteLayout
 	opposite    *Table
 	hint        uint32
+
+	// hintSets[pos<<2|val] holds bit k when the k-th shuffled grid has val at
+	// pos. Four hints identify a plaintext byte exactly when their sets share a
+	// single grid, and that grid's rank is the byte.
+	hintSets [128][5]uint64
 }
 
 // NewTable initializes the obfuscation tables with built-in layouts.
@@ -73,9 +78,8 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 	}
 
 	t := &Table{
-		DecodeMap: make(map[uint32]byte),
-		IsASCII:   layout.name == "ascii",
-		layout:    layout,
+		IsASCII: layout.name == "ascii",
+		layout:  layout,
 	}
 	t.PaddingPool = append(t.PaddingPool, layout.paddingPool...)
 
@@ -110,50 +114,31 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 	}
 	combine(0, 4, []int{})
 
+	for k, g := range shuffledGrids {
+		for pos, val := range g {
+			t.hintSets[pos<<2|int(val-1)][k>>6] |= 1 << (k & 63)
+		}
+	}
+
 	// 构建映射表
 	for byteVal := 0; byteVal < 256; byteVal++ {
 		targetGrid := shuffledGrids[byteVal]
 		for _, positions := range combinations {
-			var currentHints [4]byte
-
-			// 1. 计算抽象提示 (Abstract Hints)
-			// 我们先计算出 val 和 pos，后面再根据模式编码成 byte
-			var rawParts [4]struct{ val, pos byte }
-
+			var hints [4]uint8
 			for i, pos := range positions {
-				val := targetGrid[pos] // 1..4
-				rawParts[i] = struct{ val, pos byte }{val, uint8(pos)}
+				hints[i] = uint8(pos)<<2 | (targetGrid[pos] - 1)
 			}
 
-			// 检查唯一性 (数独逻辑)
-			matchCount := 0
-			for _, g := range allGrids {
-				match := true
-				for _, p := range rawParts {
-					if g[p.pos] != p.val {
-						match = false
-						break
-					}
-				}
-				if match {
-					matchCount++
-					if matchCount > 1 {
-						break
-					}
-				}
+			// 唯一确定才可作为 puzzle
+			if _, ok := t.decodeHints(hints[0], hints[1], hints[2], hints[3]); !ok {
+				continue
 			}
 
-			if matchCount == 1 {
-				// 唯一确定，生成最终编码字节
-				for i, p := range rawParts {
-					currentHints[i] = t.layout.hintByte(p.val-1, p.pos)
-				}
-
-				t.EncodeTable[byteVal] = append(t.EncodeTable[byteVal], currentHints)
-				// 生成解码键 (需要对 Hints 进行排序以忽略传输顺序)
-				key := packHintsToKey(currentHints)
-				t.DecodeMap[key] = byte(byteVal)
+			var currentHints [4]byte
+			for i, pos := range positions {
+				currentHints[i] = t.layout.hintByte(targetGrid[pos]-1, uint8(pos))
 			}
+			t.EncodeTable[byteVal] = append(t.EncodeTable[byteVal], currentHints)
 		}
 	}
 	return t, nil
@@ -191,28 +176,35 @@ func tableHintFingerprint(key string, mode string, uplinkPattern string, downlin
 	return binary.BigEndian.Uint32(sum[:4])
 }
 
-func packHintsToKey(hints [4]byte) uint32 {
-	return packHintBytes(hints[0], hints[1], hints[2], hints[3])
-}
+// decodeHints returns the plaintext byte whose puzzle is exactly these four
+// hint indexes (pos<<2|val, or poisonHint).
+func (t *Table) decodeHints(a, b, c, d uint8) (byte, bool) {
+	sa, sb, sc, sd := &t.hintSets[a&127], &t.hintSets[b&127], &t.hintSets[c&127], &t.hintSets[d&127]
+	r0 := sa[0] & sb[0] & sc[0] & sd[0]
+	r1 := sa[1] & sb[1] & sc[1] & sd[1]
+	r2 := sa[2] & sb[2] & sc[2] & sd[2]
+	r3 := sa[3] & sb[3] & sc[3] & sd[3]
+	r4 := sa[4] & sb[4] & sc[4] & sd[4]
 
-func packHintBytes(h0, h1, h2, h3 byte) uint32 {
-	// Sorting network for 4 elements (Bubble sort unrolled)
-	// Swap if a > b
-	if h0 > h1 {
-		h0, h1 = h1, h0
+	// Exactly one shared grid, and it must be one of the 256 that carry a byte.
+	multi := r0&(r0-1) | r1&(r1-1) | r2&(r2-1) | r3&(r3-1) | r4
+	var nonEmpty uint64
+	word := 0
+	if r1 != 0 {
+		nonEmpty++
+		word = 64
 	}
-	if h2 > h3 {
-		h2, h3 = h3, h2
+	if r2 != 0 {
+		nonEmpty++
+		word = 128
 	}
-	if h0 > h2 {
-		h0, h2 = h2, h0
+	if r3 != 0 {
+		nonEmpty++
+		word = 192
 	}
-	if h1 > h3 {
-		h1, h3 = h3, h1
+	if r0 != 0 {
+		nonEmpty++
 	}
-	if h1 > h2 {
-		h1, h2 = h2, h1
-	}
-
-	return uint32(h0)<<24 | uint32(h1)<<16 | uint32(h2)<<8 | uint32(h3)
+	rank := word + bits.TrailingZeros64(r0|r1|r2|r3)
+	return byte(rank), multi|(nonEmpty^1) == 0
 }
