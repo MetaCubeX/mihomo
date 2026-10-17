@@ -3,12 +3,12 @@ package httpmask
 import (
 	"context"
 	"fmt"
-	mrand "math/rand"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/randv2"
 )
 
 type TunnelMode string
@@ -179,21 +179,39 @@ var (
 	dialPollFn   = dialPoll
 )
 
-func applyTunnelHeaders(h http.Header, host string, mode TunnelMode) {
-	if h == nil {
-		return
+// Header values are prebuilt and shared by every request: the transport only reads them, and a fresh []string per
+// header would be most of what applying the profile costs.
+var (
+	userAgentValues      = singleValues(userAgents)
+	acceptValues         = singleValues(accepts)
+	acceptLanguageValues = singleValues(acceptLanguages)
+	noCacheValue         = []string{"no-cache"}
+	keepAliveValue       = []string{"keep-alive"}
+	tunnelModeValues     = map[TunnelMode][]string{
+		TunnelModeStream: {string(TunnelModeStream)},
+		TunnelModePoll:   {string(TunnelModePoll)},
 	}
-	r := rngPool.Get().(*mrand.Rand)
-	ua := userAgents[r.Intn(len(userAgents))]
-	accept := accepts[r.Intn(len(accepts))]
-	lang := acceptLanguages[r.Intn(len(acceptLanguages))]
-	rngPool.Put(r)
-	h.Set("User-Agent", ua)
-	h.Set("Accept", accept)
-	h.Set("Accept-Language", lang)
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Pragma", "no-cache")
-	h.Set("Connection", "keep-alive")
-	h.Set("Host", host)
-	h.Set("X-Sudoku-Tunnel", string(mode))
+)
+
+func singleValues(vs []string) [][]string {
+	out := make([][]string, len(vs))
+	for i, v := range vs {
+		out[i] = []string{v}
+	}
+	return out
+}
+
+func applyTunnelHeaders(h http.Header, host string, mode TunnelMode) {
+	h["User-Agent"] = userAgentValues[randv2.IntN(len(userAgentValues))]
+	h["Accept"] = acceptValues[randv2.IntN(len(acceptValues))]
+	h["Accept-Language"] = acceptLanguageValues[randv2.IntN(len(acceptLanguageValues))]
+	h["Cache-Control"] = noCacheValue
+	h["Pragma"] = noCacheValue
+	h["Connection"] = keepAliveValue
+	h["Host"] = []string{host}
+	modeValue, ok := tunnelModeValues[mode]
+	if !ok {
+		modeValue = []string{string(mode)}
+	}
+	h["X-Sudoku-Tunnel"] = modeValue
 }
