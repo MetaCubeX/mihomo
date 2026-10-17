@@ -5,6 +5,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 // queuedConn provides a net.Conn-like interface backed by internal channels.
@@ -27,11 +29,12 @@ type queuedConn struct {
 	readEOFOnce   sync.Once
 	readMu        sync.Mutex
 
-	mu         sync.Mutex
-	readBuf    []byte
-	closeErr   error
-	localAddr  net.Addr
-	remoteAddr net.Addr
+	mu          sync.Mutex
+	readBuf     []byte // unread tail of readPayload
+	readPayload []byte
+	closeErr    error
+	localAddr   net.Addr
+	remoteAddr  net.Addr
 }
 
 const queuedConnPayloadQueueDepth = 64
@@ -138,16 +141,19 @@ func (c *queuedConn) Read(b []byte) (n int, err error) {
 
 	if len(c.readBuf) == 0 {
 		select {
-		case c.readBuf = <-c.rxc:
+		case p := <-c.rxc:
+			c.startPayload(p)
 		default:
 		}
 	}
 	if len(c.readBuf) == 0 {
 		select {
-		case c.readBuf = <-c.rxc:
+		case p := <-c.rxc:
+			c.startPayload(p)
 		case <-c.readEOF:
 			select {
-			case c.readBuf = <-c.rxc:
+			case p := <-c.rxc:
+				c.startPayload(p)
 			default:
 				return 0, io.EOF
 			}
@@ -157,7 +163,26 @@ func (c *queuedConn) Read(b []byte) (n int, err error) {
 	}
 	n = copy(b, c.readBuf)
 	c.readBuf = c.readBuf[n:]
+	if len(c.readBuf) == 0 {
+		recyclePayload(c.readPayload)
+		c.readPayload = nil
+	}
 	return n, nil
+}
+
+// startPayload makes p the payload being read, recycling the previous one.
+func (c *queuedConn) startPayload(p []byte) {
+	recyclePayload(c.readPayload)
+	c.readPayload = p
+	c.readBuf = p
+}
+
+// recyclePayload returns a fully read payload to the pool when it is a whole pull chunk; the receiving conn is the
+// only reference to it by then.
+func recyclePayload(p []byte) {
+	if cap(p) == streamPullChunkBytes {
+		_ = pool.Put(p)
+	}
 }
 
 func (c *queuedConn) Write(b []byte) (n int, err error) {

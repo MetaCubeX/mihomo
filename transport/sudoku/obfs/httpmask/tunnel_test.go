@@ -157,6 +157,28 @@ func TestUploadURLMatchesQueryEncoding(t *testing.T) {
 	}
 }
 
+func TestQueuedConnRecyclesDrainedPooledPayload(t *testing.T) {
+	conn := &queuedConn{
+		rxc:    make(chan []byte, 1),
+		closed: make(chan struct{}),
+	}
+	conn.rxc <- pool.Get(streamPullChunkBytes)[:100]
+
+	var buf [60]byte
+	if _, err := conn.Read(buf[:]); err != nil {
+		t.Fatal(err)
+	}
+	if conn.readPayload == nil {
+		t.Fatal("payload released with 40 bytes still unread")
+	}
+	if n, err := conn.Read(buf[:]); n != 40 || err != nil {
+		t.Fatalf("second read = (%d, %v), want 40 bytes", n, err)
+	}
+	if conn.readPayload != nil {
+		t.Fatal("drained payload still held by the conn")
+	}
+}
+
 func TestSendSessionControlRetriesTransportEOF(t *testing.T) {
 	var calls atomic.Int32
 	client := &mhttp.Client{Transport: roundTripFunc(func(req *mhttp.Request) (*mhttp.Response, error) {

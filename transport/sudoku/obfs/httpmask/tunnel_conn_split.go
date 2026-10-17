@@ -23,9 +23,12 @@ const (
 	splitMinBackoff     = 10 * time.Millisecond
 	splitMaxBackoff     = 250 * time.Millisecond
 
-	streamMaxBatchBytes   = 256 * 1024
-	streamPullChunkBytes  = 32 * 1024
-	streamPullIdleBackoff = 25 * time.Millisecond
+	streamMaxBatchBytes  = 256 * 1024
+	streamPullChunkBytes = 32 * 1024
+	// A chunk at least this full is queued as the pooled buffer it was read into; smaller ones are copied out so a
+	// full queue of tiny payloads does not pin 32KiB each.
+	streamPullHandoverMinBytes = streamPullChunkBytes / 2
+	streamPullIdleBackoff      = 25 * time.Millisecond
 
 	pollMaxBatchBytes = 64 * 1024
 	pollMaxLineBytes  = 16 * 1024
@@ -82,7 +85,15 @@ func readStreamPull(body io.Reader, deliver func([]byte) bool) (readAny bool, er
 		n, rerr := body.Read(buf)
 		if n > 0 {
 			readAny = true
-			if !deliver(append([]byte(nil), buf[:n]...)) {
+			var payload []byte
+			if n >= streamPullHandoverMinBytes {
+				// Mostly full: the reader takes the buffer itself, which saves a copy; queuedConn returns it to the pool.
+				payload = buf[:n]
+				buf = pool.Get(streamPullChunkBytes)
+			} else {
+				payload = append([]byte(nil), buf[:n]...)
+			}
+			if !deliver(payload) {
 				return readAny, errSplitClosed
 			}
 		}
