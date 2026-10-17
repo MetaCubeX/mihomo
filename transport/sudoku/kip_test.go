@@ -1,6 +1,7 @@
 package sudoku
 
 import (
+	"bytes"
 	"testing"
 
 	sudokuobfs "github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
@@ -60,5 +61,19 @@ func TestResolveClientHelloTableRejectsEntropyMismatch(t *testing.T) {
 		HasTableHint: true,
 	}); err == nil {
 		t.Fatalf("expected entropy-table mismatch to fail")
+	}
+}
+
+func TestWriteKIPMessageIsOneWrite(t *testing.T) {
+	var w countingWriter
+	if err := WriteKIPMessage(&w, KIPTypeOpenTCP, []byte{1, 2, 3}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if w.writes != 1 {
+		t.Fatalf("KIP message took %d writes, want 1", w.writes)
+	}
+	msg, err := ReadKIPMessage(bytes.NewReader(w.Bytes()))
+	if err != nil || msg.Type != KIPTypeOpenTCP || !bytes.Equal(msg.Payload, []byte{1, 2, 3}) {
+		t.Fatalf("round trip: %+v, %v", msg, err)
 	}
 }

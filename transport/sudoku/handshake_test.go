@@ -2,6 +2,8 @@ package sudoku
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -226,7 +228,7 @@ func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 		return
 	}
 
-	addr, data, err := ReadDatagram(cConn)
+	addr, data, err := readTestDatagram(cConn)
 	if err != nil {
 		errCh <- fmt.Errorf("client read datagram: %w", err)
 		return
@@ -268,5 +270,86 @@ func TestCustomTableHandshake(t *testing.T) {
 		if err != nil {
 			t.Fatalf("custom table handshake failed: %v", err)
 		}
+	}
+}
+
+func readTestDatagram(r io.Reader) (string, []byte, error) {
+	addr, payload, err := NewUoTReader(r).ReadDatagram()
+	if err != nil {
+		return "", nil, err
+	}
+	return addr.String(), payload, nil
+}
+
+type countingWriter struct {
+	writes int
+	bytes.Buffer
+}
+
+func (w *countingWriter) Write(p []byte) (int, error) {
+	w.writes++
+	return w.Buffer.Write(p)
+}
+
+func TestUoTDatagramIsOneWrite(t *testing.T) {
+	for _, target := range []string{"8.8.8.8:53", "[2001:db8::1]:443", "example.com:80"} {
+		var w countingWriter
+		payload := bytes.Repeat([]byte{0x5a}, 1200)
+		if err := WriteDatagram(&w, target, payload); err != nil {
+			t.Fatalf("%s: write datagram: %v", target, err)
+		}
+		if w.writes != 1 {
+			t.Fatalf("%s: datagram took %d writes, want 1", target, w.writes)
+		}
+		addr, got, err := readTestDatagram(&w.Buffer)
+		if err != nil || addr != target || !bytes.Equal(got, payload) {
+			t.Fatalf("%s: round trip got %q %d bytes, %v", target, addr, len(got), err)
+		}
+	}
+
+	var w countingWriter
+	if err := WriteDatagram(&w, "8.8.8.8:53", make([]byte, 65535)); err != nil {
+		t.Fatalf("largest payload: %v", err)
+	}
+	if err := WriteDatagram(&w, "8.8.8.8:53", make([]byte, 65536)); err == nil {
+		t.Fatal("payload over 65535 bytes must be rejected")
+	}
+}
+
+func TestUoTPacketConnReadFrom(t *testing.T) {
+	frame := func(addr string, padding int, payload string) []byte {
+		enc, err := EncodeAddress(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b := binary.BigEndian.AppendUint16(nil, uint16(len(enc)+padding))
+		b = binary.BigEndian.AppendUint16(b, uint16(len(payload)))
+		b = append(b, enc...)
+		b = append(b, make([]byte, padding)...)
+		return append(b, payload...)
+	}
+
+	var stream []byte
+	stream = append(stream, frame("example.com:53", 0, "dns")...)         // domain peers are dropped
+	stream = append(stream, frame("8.8.8.8:53", 0, "too long for p")...)  // consumed, reported as short
+	stream = append(stream, frame("[::ffff:1.2.3.4]:5353", 300, "ok")...) // padded address, mapped IPv6
+	client, server := net.Pipe()
+	defer client.Close()
+	go func() {
+		_, _ = server.Write(stream)
+		_ = server.Close()
+	}()
+
+	pc := NewUoTPacketConn(client)
+	p := make([]byte, 8)
+	if _, _, err := pc.ReadFrom(p); !errors.Is(err, io.ErrShortBuffer) {
+		t.Fatalf("oversized datagram: err = %v, want io.ErrShortBuffer", err)
+	}
+	n, from, err := pc.ReadFrom(p)
+	if err != nil || string(p[:n]) != "ok" {
+		t.Fatalf("read after short buffer: %q, %v", p[:n], err)
+	}
+	if udp := from.(*net.UDPAddr); udp.String() != "1.2.3.4:5353" || len(udp.IP) != net.IPv4len {
+		t.Fatalf("peer = %v (%d-byte IP), want 1.2.3.4:5353 as IPv4", from, len(udp.IP))
 	}
 }
