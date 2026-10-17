@@ -17,6 +17,7 @@ import (
 
 	mhttp "github.com/metacubex/http"
 	"github.com/metacubex/http/httputil"
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 type roundTripFunc func(*mhttp.Request) (*mhttp.Response, error)
@@ -294,6 +295,34 @@ func TestPullFrameMatchesChunkedWriter(t *testing.T) {
 	}
 }
 
+func TestReadUploadGrowsPastPresize(t *testing.T) {
+	want := bytes.Repeat([]byte("0123456789abcdef"), 20000) // 320 KB: more than the pooled classes and the presize
+	for _, length := range []int64{-1, 0, 100, int64(len(want))} {
+		got, err := readUpload(bytes.NewReader(want), length, maxUploadBytes+1)
+		if err != nil || !bytes.Equal(got, want) {
+			t.Fatalf("declared length %d: read %d bytes, err %v, want %d bytes", length, len(got), err, len(want))
+		}
+		_ = pool.Put(got)
+	}
+	got, err := readUpload(bytes.NewReader(want), -1, 1000)
+	if err != nil || len(got) != 1000 {
+		t.Fatalf("limit: read %d bytes, err %v, want 1000", len(got), err)
+	}
+	_ = pool.Put(got)
+}
+
+func TestDecodeUploadLines(t *testing.T) {
+	enc := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	got, err := decodeUploadLines([]byte(enc("hello") + "\n\n  \r\n" + enc("w") + "\r\n" + enc("orld")))
+	if err != nil || string(got) != "helloworld" {
+		t.Fatalf("decode = %q, %v", got, err)
+	}
+	_ = pool.Put(got)
+	if _, err := decodeUploadLines([]byte(enc("ok") + "\n!!!!\n")); err == nil {
+		t.Fatal("invalid base64 line was accepted")
+	}
+}
+
 func TestTunnelServerReapsIdleSession(t *testing.T) {
 	const token = "idle-session"
 
@@ -360,7 +389,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 	tests := []struct {
 		name     string
 		codec    sessionCodec
-		push     func(*TunnelServer, net.Conn, string, uint64, io.Reader) (HandleResult, net.Conn, error)
+		push     func(*TunnelServer, net.Conn, string, uint64, io.Reader, int64) (HandleResult, net.Conn, error)
 		pushBody string
 	}{
 		{
@@ -436,7 +465,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 			clientConn, serverConn = net.Pipe()
 			done = make(chan error, 1)
 			go func() {
-				_, _, err := tt.push(server, serverConn, token, 1, strings.NewReader(tt.pushBody))
+				_, _, err := tt.push(server, serverConn, token, 1, strings.NewReader(tt.pushBody), -1)
 				done <- err
 			}()
 			resp, err = http.ReadResponse(bufio.NewReader(clientConn), &http.Request{Method: http.MethodPost})
