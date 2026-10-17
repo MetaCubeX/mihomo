@@ -323,6 +323,37 @@ func TestDecodeUploadLines(t *testing.T) {
 	}
 }
 
+func TestReadHTTPRequestKeepsReplayAndBody(t *testing.T) {
+	raw := "POST /api/v1/upload?token=t HTTP/1.1\r\nHost: x\r\nX-SUDOKU-Tunnel:  poll \r\n" +
+		"Content-Length: 5\r\ncontent-length: 9\r\nConnection: keep-alive, Upgrade\r\nUpgrade: WebSocket\r\n\r\nhello"
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	go func() { _, _ = client.Write([]byte(raw)) }()
+
+	br := bufio.NewReader(server)
+	req, _, err := readHTTPRequest(server, br, []byte(raw[:4]))
+	if err != nil {
+		t.Fatalf("readHTTPRequest: %v", err)
+	}
+	if req.method != "POST" || req.target != "/api/v1/upload?token=t" || req.tunnel != "poll" || req.contentLength != "5" {
+		t.Fatalf("parsed request = %+v", req)
+	}
+	if !req.isWebSocketUpgrade() {
+		t.Fatal("upgrade headers were not recognised")
+	}
+	if got := req.replayPrefix(); !bytes.HasPrefix([]byte(raw), got) || !bytes.HasPrefix(got, []byte(raw[:len(raw)-5])) {
+		t.Fatalf("replay prefix = %q", got)
+	}
+	body, length, err := req.body()
+	if err != nil || length != 5 {
+		t.Fatalf("body: length %d, err %v", length, err)
+	}
+	if got, err := io.ReadAll(body); err != nil || string(got) != "hello" {
+		t.Fatalf("body = %q, %v", got, err)
+	}
+}
+
 func TestTunnelServerReapsIdleSession(t *testing.T) {
 	const token = "idle-session"
 

@@ -184,55 +184,46 @@ func (s *TunnelServer) HandleConn(rawConn net.Conn) (HandleResult, net.Conn, err
 		return HandlePassThrough, pc, nil
 	}
 
-	req, headerBytes, buffered, err := readHTTPHeader(br)
+	req, unparsed, err := readHTTPRequest(rawConn, br, first[:])
 	_ = rawConn.SetReadDeadline(time.Time{})
 	if err != nil {
 		// Not a valid HTTP request; hand it back to the legacy path with replay.
-		return passThrough(buildInvalidHTTPReplayPrefix(first[:], headerBytes, buffered))
+		return passThrough(unparsed)
 	}
 
-	replayPrefix := buildHTTPReplayPrefix(headerBytes, buffered)
-
-	tunnelHeader := TunnelMode(strings.ToLower(strings.TrimSpace(req.headers["x-sudoku-tunnel"])))
-	if looksLikeWebSocketUpgrade(req.headers) {
+	tunnelHeader := TunnelMode(strings.ToLower(strings.TrimSpace(req.tunnel)))
+	if req.isWebSocketUpgrade() {
 		tunnelHeader = TunnelModeWS
 	}
 	if tunnelHeader == "" {
 		// The explicit mode header is part of the stream/poll protocol. A request
 		// without it belongs to the normal HTTP fallback path.
-		return passThrough(replayPrefix)
+		return passThrough(req.replayPrefix())
 	}
 
 	if s.mode == TunnelModeLegacy {
-		return rejectOr404(replayPrefix)
+		return rejectOr404(req.replayPrefix())
 	}
 
 	switch tunnelHeader {
 	case TunnelModeStream:
 		if s.mode != TunnelModeStream && s.mode != TunnelModeAuto {
-			return rejectOr404(replayPrefix)
+			return rejectOr404(req.replayPrefix())
 		}
-		return s.handleStream(rawConn, req, headerBytes, buffered)
+		return s.handleStream(req)
 	case TunnelModePoll:
 		if s.mode != TunnelModePoll && s.mode != TunnelModeAuto {
-			return rejectOr404(replayPrefix)
+			return rejectOr404(req.replayPrefix())
 		}
-		return s.handlePoll(rawConn, req, headerBytes, buffered)
+		return s.handlePoll(req)
 	case TunnelModeWS:
 		if s.mode != TunnelModeWS && s.mode != TunnelModeAuto {
-			return rejectOr404(replayPrefix)
+			return rejectOr404(req.replayPrefix())
 		}
-		return s.handleWS(rawConn, req, headerBytes, buffered)
+		return s.handleWS(req)
 	default:
-		return rejectOr404(replayPrefix)
+		return rejectOr404(req.replayPrefix())
 	}
-}
-
-func buildHTTPReplayPrefix(headerBytes, buffered []byte) []byte {
-	out := make([]byte, 0, len(headerBytes)+len(buffered))
-	out = append(out, headerBytes...)
-	out = append(out, buffered...)
-	return out
 }
 
 func buildInvalidHTTPReplayPrefix(first, headerBytes, buffered []byte) []byte {
@@ -247,71 +238,165 @@ func buildInvalidHTTPReplayPrefix(first, headerBytes, buffered []byte) []byte {
 	return out
 }
 
-type httpRequestHeader struct {
-	method  string
-	target  string // path + query
-	proto   string
-	headers map[string]string // lower-case keys
+const maxHTTPHeaderBytes = 32 * 1024
+
+// headerBytesSizeHint covers a typical tunnel request header in one allocation.
+const headerBytesSizeHint = 512
+
+// tunnelRequest is a parsed HTTP request. br still holds the bytes read past the header, so the body is served
+// from it directly and a rejected request can be replayed byte for byte.
+type tunnelRequest struct {
+	conn        net.Conn
+	br          *bufio.Reader
+	headerBytes []byte
+
+	method string
+	target string // path + query
+	proto  string
+	// Header values are the first occurrence, space-trimmed; only the fields the tunnel routes on are kept.
+	tunnel           string
+	upgrade          string
+	connection       string
+	authorization    string
+	transferEncoding string
+	contentLength    string
+	seenFields       uint8
 }
 
-func readHTTPHeader(r *bufio.Reader) (*httpRequestHeader, []byte, []byte, error) {
-	const maxHeaderBytes = 32 * 1024
+// field returns the slot for a lower-case header name the tunnel cares about, plus its "seen" bit.
+func (r *tunnelRequest) field(name []byte) (*string, uint8) {
+	switch string(name) {
+	case "x-sudoku-tunnel":
+		return &r.tunnel, 1 << 0
+	case "upgrade":
+		return &r.upgrade, 1 << 1
+	case "connection":
+		return &r.connection, 1 << 2
+	case "authorization":
+		return &r.authorization, 1 << 3
+	case "transfer-encoding":
+		return &r.transferEncoding, 1 << 4
+	case "content-length":
+		return &r.contentLength, 1 << 5
+	}
+	return nil, 0
+}
 
-	var consumed bytes.Buffer
+func (r *tunnelRequest) setField(key, value []byte) {
+	// Tunnel header names are short ASCII, so lower-casing on the stack avoids an allocation per header line.
+	var stack [48]byte
+	lower := append(stack[:0], key...)
+	for i, c := range lower {
+		if c >= 0x80 {
+			lower = []byte(strings.ToLower(string(key)))
+			break
+		}
+		if 'A' <= c && c <= 'Z' {
+			lower[i] = c + 'a' - 'A'
+		}
+	}
+	slot, bit := r.field(lower)
+	if slot == nil || r.seenFields&bit != 0 {
+		return
+	}
+	r.seenFields |= bit
+	*slot = strings.TrimSpace(string(value))
+}
+
+func (r *tunnelRequest) isWebSocketUpgrade() bool {
+	if !strings.EqualFold(r.upgrade, "websocket") {
+		return false
+	}
+	for _, part := range strings.Split(r.connection, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
+			return true
+		}
+	}
+	return false
+}
+
+// buffered returns the bytes already read past the header. They are only valid until the body is read.
+func (r *tunnelRequest) buffered() []byte {
+	b, _ := r.br.Peek(r.br.Buffered())
+	return b
+}
+
+// replayPrefix returns the request exactly as received so far. Call it only before the body is consumed.
+func (r *tunnelRequest) replayPrefix() []byte {
+	buffered := r.buffered()
+	out := make([]byte, 0, len(r.headerBytes)+len(buffered))
+	out = append(out, r.headerBytes...)
+	return append(out, buffered...)
+}
+
+// body returns a reader over the request body, which follows the header in br, and its declared length (-1 when
+// unknown).
+func (r *tunnelRequest) body() (io.Reader, int64, error) {
+	if strings.Contains(strings.ToLower(r.transferEncoding), "chunked") {
+		return httputil.NewChunkedReader(r.br), -1, nil
+	}
+	if r.contentLength != "" {
+		n, err := strconv.ParseInt(r.contentLength, 10, 64)
+		if err != nil || n < 0 {
+			return nil, 0, fmt.Errorf("invalid content-length")
+		}
+		return io.LimitReader(r.br, n), n, nil
+	}
+	return r.br, -1, nil
+}
+
+// readHTTPRequest parses a request header from br (which already holds first, the sniffed leading bytes). On
+// failure the second result is everything read so far, ready to be replayed to the next protocol handler.
+func readHTTPRequest(conn net.Conn, br *bufio.Reader, first []byte) (*tunnelRequest, []byte, error) {
+	consumed := make([]byte, 0, headerBytesSizeHint)
+	fail := func(err error) (*tunnelRequest, []byte, error) {
+		return nil, buildInvalidHTTPReplayPrefix(first, consumed, readAllBuffered(br)), err
+	}
 	readLine := func() ([]byte, error) {
-		line, err := r.ReadSlice('\n')
+		line, err := br.ReadSlice('\n')
 		if len(line) > 0 {
-			if consumed.Len()+len(line) > maxHeaderBytes {
+			if len(consumed)+len(line) > maxHTTPHeaderBytes {
 				return line, fmt.Errorf("http header too large")
 			}
-			consumed.Write(line)
+			consumed = append(consumed, line...)
 		}
 		return line, err
 	}
 
-	// Request line
 	line, err := readLine()
 	if err != nil {
-		return nil, consumed.Bytes(), readAllBuffered(r), err
+		return fail(err)
 	}
-	lineStr := strings.TrimRight(string(line), "\r\n")
-	parts := strings.SplitN(lineStr, " ", 3)
-	if len(parts) != 3 {
-		return nil, consumed.Bytes(), readAllBuffered(r), fmt.Errorf("invalid request line")
+	requestLine := strings.TrimRight(string(line), "\r\n")
+	method, rest, ok := strings.Cut(requestLine, " ")
+	if !ok {
+		return fail(fmt.Errorf("invalid request line"))
 	}
-	req := &httpRequestHeader{
-		method:  parts[0],
-		target:  parts[1],
-		proto:   parts[2],
-		headers: make(map[string]string),
+	target, proto, ok := strings.Cut(rest, " ")
+	if !ok {
+		return fail(fmt.Errorf("invalid request line"))
 	}
+	req := &tunnelRequest{conn: conn, br: br, method: method, target: target, proto: proto}
 
-	// Headers
 	for {
 		line, err = readLine()
 		if err != nil {
-			return nil, consumed.Bytes(), readAllBuffered(r), err
+			return fail(err)
 		}
-		trimmed := strings.TrimRight(string(line), "\r\n")
-		if trimmed == "" {
+		line = bytes.TrimRight(line, "\r\n")
+		if len(line) == 0 {
 			break
 		}
-		k, v, ok := strings.Cut(trimmed, ":")
+		key, value, ok := bytes.Cut(line, []byte{':'})
 		if !ok {
 			continue
 		}
-		k = strings.ToLower(strings.TrimSpace(k))
-		v = strings.TrimSpace(v)
-		if k == "" {
-			continue
-		}
-		// Keep the first value; we only care about a small set.
-		if _, exists := req.headers[k]; !exists {
-			req.headers[k] = v
+		if key = bytes.TrimSpace(key); len(key) > 0 {
+			req.setField(key, value)
 		}
 	}
-
-	return req, consumed.Bytes(), readAllBuffered(r), nil
+	req.headerBytes = consumed
+	return req, nil, nil
 }
 
 func readAllBuffered(r *bufio.Reader) []byte {
@@ -462,28 +547,28 @@ func (c *bodyConn) Close() error {
 	return firstErr
 }
 
-func (s *TunnelServer) rejectOrReply(rawConn net.Conn, headerBytes, buffered []byte, code int, body string) (HandleResult, net.Conn, error) {
+// rejectOrRespond answers a rejected request with the given status, or replays it for pass-through fallback.
+// It must run before the request body is consumed.
+func (s *TunnelServer) rejectOrRespond(req *tunnelRequest, code int, body string) (HandleResult, net.Conn, error) {
 	if s.passThroughOnReject {
-		prefix := make([]byte, 0, len(headerBytes)+len(buffered))
-		prefix = append(prefix, headerBytes...)
-		prefix = append(prefix, buffered...)
-		return HandlePassThrough, newRejectedPreBufferedConn(rawConn, prefix), nil
+		return HandlePassThrough, newRejectedPreBufferedConn(req.conn, req.replayPrefix()), nil
 	}
-	_ = writeSimpleHTTPResponse(rawConn, code, body)
-	_ = rawConn.Close()
+	_ = writeSimpleHTTPResponse(req.conn, code, body)
+	_ = req.conn.Close()
 	return HandleDone, nil, nil
 }
 
-func (s *TunnelServer) handleStream(rawConn net.Conn, req *httpRequestHeader, headerBytes []byte, buffered []byte) (HandleResult, net.Conn, error) {
+func (s *TunnelServer) handleStream(req *tunnelRequest) (HandleResult, net.Conn, error) {
+	rawConn := req.conn
 	u, err := url.ParseRequestURI(req.target)
 	if err != nil {
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+		return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 	}
 
 	// Only accept plausible paths to reduce accidental exposure.
 	path, ok := stripPathRoot(s.pathRoot, u.Path)
 	if !ok || !s.isAllowedBasePath(path) {
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
+		return s.rejectOrRespond(req, http.StatusNotFound, "not found")
 	}
 	token := u.Query().Get("token")
 	closeFlag := u.Query().Get("close") == "1"
@@ -495,18 +580,18 @@ func (s *TunnelServer) handleStream(rawConn net.Conn, req *httpRequestHeader, he
 		if token == "" && path == "/session" {
 			earlyPayload, err := parseEarlyDataQuery(u)
 			if err != nil {
-				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+				return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 			}
-			return s.sessionAuthorize(rawConn, headerBytes, buffered, earlyPayload)
+			return s.sessionAuthorize(req, earlyPayload)
 		}
 		// Stream Split Session: GET /stream?token=... => downlink poll.
 		if token != "" && path == "/stream" {
 			if s.passThroughOnReject && !s.sessionHas(token) {
-				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
+				return s.rejectOrRespond(req, http.StatusNotFound, "not found")
 			}
 			return s.pull(rawConn, token, streamCodec)
 		}
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+		return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 
 	case http.MethodPost:
 		// Stream Split Session: POST /api/v1/upload?token=... => uplink push.
@@ -524,9 +609,9 @@ func (s *TunnelServer) handleStream(rawConn net.Conn, req *httpRequestHeader, he
 				return HandleDone, nil, nil
 			}
 			if s.passThroughOnReject && !s.sessionHas(token) {
-				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
+				return s.rejectOrRespond(req, http.StatusNotFound, "not found")
 			}
-			bodyReader, length, err := newRequestBodyReader(newPreBufferedConn(rawConn, buffered), req.headers)
+			bodyReader, length, err := req.body()
 			if err != nil {
 				_ = writeSimpleHTTPResponse(rawConn, http.StatusBadRequest, "bad request")
 				_ = rawConn.Close()
@@ -534,7 +619,7 @@ func (s *TunnelServer) handleStream(rawConn net.Conn, req *httpRequestHeader, he
 			}
 			sequence, err := parseUploadSequence(u)
 			if err != nil {
-				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+				return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 			}
 			return s.streamPush(rawConn, token, sequence, bodyReader, length)
 		}
@@ -545,7 +630,7 @@ func (s *TunnelServer) handleStream(rawConn net.Conn, req *httpRequestHeader, he
 			return HandleDone, nil, err
 		}
 
-		bodyReader, _, err := newRequestBodyReader(newPreBufferedConn(rawConn, buffered), req.headers)
+		bodyReader, _, err := req.body()
 		if err != nil {
 			_ = rawConn.Close()
 			return HandleDone, nil, err
@@ -563,7 +648,7 @@ func (s *TunnelServer) handleStream(rawConn net.Conn, req *httpRequestHeader, he
 		return HandleStartTunnel, stream, nil
 
 	default:
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+		return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 	}
 }
 
@@ -574,24 +659,6 @@ func (s *TunnelServer) isAllowedBasePath(path string) bool {
 		}
 	}
 	return false
-}
-
-// newRequestBodyReader returns a reader over the request body and its declared length (-1 when unknown).
-func newRequestBodyReader(conn net.Conn, headers map[string]string) (io.Reader, int64, error) {
-	br := bufio.NewReaderSize(conn, 32*1024)
-
-	te := strings.ToLower(headers["transfer-encoding"])
-	if strings.Contains(te, "chunked") {
-		return httputil.NewChunkedReader(br), -1, nil
-	}
-	if clStr := headers["content-length"]; clStr != "" {
-		n, err := strconv.ParseInt(strings.TrimSpace(clStr), 10, 64)
-		if err != nil || n < 0 {
-			return nil, 0, fmt.Errorf("invalid content-length")
-		}
-		return io.LimitReader(br, n), n, nil
-	}
-	return br, -1, nil
 }
 
 func writeTunnelResponseHeader(w io.Writer) error {
@@ -646,15 +713,16 @@ func writeTokenHTTPResponse(w io.Writer, token string, earlyPayload []byte) erro
 	return err
 }
 
-func (s *TunnelServer) handlePoll(rawConn net.Conn, req *httpRequestHeader, headerBytes []byte, buffered []byte) (HandleResult, net.Conn, error) {
+func (s *TunnelServer) handlePoll(req *tunnelRequest) (HandleResult, net.Conn, error) {
+	rawConn := req.conn
 	u, err := url.ParseRequestURI(req.target)
 	if err != nil {
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+		return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 	}
 
 	path, ok := stripPathRoot(s.pathRoot, u.Path)
 	if !ok || !s.isAllowedBasePath(path) {
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
+		return s.rejectOrRespond(req, http.StatusNotFound, "not found")
 	}
 	token := u.Query().Get("token")
 	closeFlag := u.Query().Get("close") == "1"
@@ -664,23 +732,23 @@ func (s *TunnelServer) handlePoll(rawConn net.Conn, req *httpRequestHeader, head
 		if token == "" && path == "/session" {
 			earlyPayload, err := parseEarlyDataQuery(u)
 			if err != nil {
-				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+				return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 			}
-			return s.sessionAuthorize(rawConn, headerBytes, buffered, earlyPayload)
+			return s.sessionAuthorize(req, earlyPayload)
 		}
 		if path == "/stream" {
 			if s.passThroughOnReject && !s.sessionHas(token) {
-				return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
+				return s.rejectOrRespond(req, http.StatusNotFound, "not found")
 			}
 			return s.pull(rawConn, token, pollCodec)
 		}
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+		return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 	case http.MethodPost:
 		if path != "/api/v1/upload" {
-			return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+			return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 		}
 		if token == "" {
-			return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "missing token")
+			return s.rejectOrRespond(req, http.StatusBadRequest, "missing token")
 		}
 		if closeFlag {
 			s.sessionClose(token)
@@ -695,23 +763,24 @@ func (s *TunnelServer) handlePoll(rawConn net.Conn, req *httpRequestHeader, head
 			return HandleDone, nil, nil
 		}
 		if s.passThroughOnReject && !s.sessionHas(token) {
-			return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
+			return s.rejectOrRespond(req, http.StatusNotFound, "not found")
 		}
-		bodyReader, length, err := newRequestBodyReader(newPreBufferedConn(rawConn, buffered), req.headers)
+		bodyReader, length, err := req.body()
 		if err != nil {
-			return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+			return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 		}
 		sequence, err := parseUploadSequence(u)
 		if err != nil {
-			return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+			return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 		}
 		return s.pollPush(rawConn, token, sequence, bodyReader, length)
 	default:
-		return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusBadRequest, "bad request")
+		return s.rejectOrRespond(req, http.StatusBadRequest, "bad request")
 	}
 }
 
-func (s *TunnelServer) sessionAuthorize(rawConn net.Conn, headerBytes, buffered, earlyPayload []byte) (HandleResult, net.Conn, error) {
+func (s *TunnelServer) sessionAuthorize(req *tunnelRequest, earlyPayload []byte) (HandleResult, net.Conn, error) {
+	rawConn := req.conn
 	token, err := newSessionToken()
 	if err != nil {
 		_ = writeSimpleHTTPResponse(rawConn, http.StatusInternalServerError, "internal error")
@@ -728,7 +797,7 @@ func (s *TunnelServer) sessionAuthorize(rawConn net.Conn, headerBytes, buffered,
 		if err != nil {
 			_ = c1.Close()
 			_ = c2.Close()
-			return s.rejectOrReply(rawConn, headerBytes, buffered, http.StatusNotFound, "not found")
+			return s.rejectOrRespond(req, http.StatusNotFound, "not found")
 		}
 		responsePayload = prepared.ResponsePayload
 		userHash = prepared.UserHash
