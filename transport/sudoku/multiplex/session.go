@@ -515,7 +515,7 @@ type stream struct {
 	writeMu sync.Mutex
 
 	mu                sync.Mutex
-	cond              *sync.Cond
+	cond              sync.Cond // cond.L is &mu.
 	closed            bool
 	localReadClosed   bool
 	localWriteClosed  bool
@@ -525,19 +525,15 @@ type stream struct {
 	queue             [][]byte
 	// queuedBytes includes unread bytes in readBuf and queue.
 	queuedBytes int
-
-	localAddr  net.Addr
-	remoteAddr net.Addr
 }
 
+// streamAddr is the placeholder address every stream reports; streams have no network
+// address of their own, and sharing one value saves two allocations per stream.
+var streamAddr net.Addr = &net.TCPAddr{}
+
 func newStream(session *Session, id uint32) *stream {
-	st := &stream{
-		session:    session,
-		id:         id,
-		localAddr:  &net.TCPAddr{},
-		remoteAddr: &net.TCPAddr{},
-	}
-	st.cond = sync.NewCond(&st.mu)
+	st := &stream{session: session, id: id}
+	st.cond.L = &st.mu
 	return st
 }
 
@@ -741,8 +737,8 @@ func (c *stream) CloseRead() error {
 	return nil
 }
 
-func (c *stream) LocalAddr() net.Addr  { return c.localAddr }
-func (c *stream) RemoteAddr() net.Addr { return c.remoteAddr }
+func (c *stream) LocalAddr() net.Addr  { return streamAddr }
+func (c *stream) RemoteAddr() net.Addr { return streamAddr }
 
 func (c *stream) SetDeadline(t time.Time) error {
 	_ = c.SetReadDeadline(t)
