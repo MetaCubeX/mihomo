@@ -420,19 +420,16 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 	tests := []struct {
 		name     string
 		codec    sessionCodec
-		push     func(*TunnelServer, net.Conn, string, uint64, io.Reader, int64) (HandleResult, net.Conn, error)
 		pushBody string
 	}{
 		{
 			name:     "stream",
 			codec:    streamCodec,
-			push:     (*TunnelServer).streamPush,
 			pushBody: "tail",
 		},
 		{
 			name:     "poll",
 			codec:    pollCodec,
-			push:     (*TunnelServer).pollPush,
 			pushBody: base64.StdEncoding.EncodeToString([]byte("tail")) + "\n",
 		},
 	}
@@ -496,7 +493,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 			clientConn, serverConn = net.Pipe()
 			done = make(chan error, 1)
 			go func() {
-				_, _, err := tt.push(server, serverConn, token, 1, strings.NewReader(tt.pushBody), -1)
+				_, _, err := server.push(serverConn, token, 1, strings.NewReader(tt.pushBody), -1, tt.codec)
 				done <- err
 			}()
 			resp, err = http.ReadResponse(bufio.NewReader(clientConn), &http.Request{Method: http.MethodPost})

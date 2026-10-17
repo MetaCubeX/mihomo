@@ -124,11 +124,8 @@ func setEarlyDataQuery(rawURL string, payload []byte) (string, error) {
 	return u.String(), nil
 }
 
-func parseEarlyDataQuery(u *url.URL) ([]byte, error) {
-	if u == nil {
-		return nil, nil
-	}
-	val := strings.TrimSpace(u.Query().Get(tunnelEarlyDataQueryKey))
+func parseEarlyDataQuery(query url.Values) ([]byte, error) {
+	val := strings.TrimSpace(query.Get(tunnelEarlyDataQueryKey))
 	if val == "" {
 		return nil, nil
 	}

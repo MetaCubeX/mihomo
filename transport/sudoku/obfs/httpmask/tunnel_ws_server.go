@@ -41,7 +41,7 @@ func (s *TunnelServer) handleWS(req *tunnelRequest) (HandleResult, net.Conn, err
 		return rejectOrReply(http.StatusNotFound, "not found")
 	}
 
-	earlyPayload, err := parseEarlyDataQuery(u)
+	earlyPayload, err := parseEarlyDataQuery(u.Query())
 	if err != nil {
 		return rejectOrReply(http.StatusBadRequest, "bad request")
 	}
