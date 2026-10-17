@@ -146,7 +146,8 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 				_ = stream.Close()
 				continue
 			}
-			go l.handler.HandleSocket(targetAddr, stream, additions...)
+			// mux streams ignore deadlines, so the 200ms sniff peek of a server-speaks-first target would never end
+			go l.handler.HandleSocket(targetAddr, N.NewDeadlineConn(stream), additions...)
 		}
 	default:
 		targetAddr := socks5.ParseAddr(session.Target)
