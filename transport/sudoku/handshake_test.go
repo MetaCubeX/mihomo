@@ -68,6 +68,38 @@ func TestPackedConnRoundTrip_WithPadding(t *testing.T) {
 	}
 }
 
+// newSocketPair returns two connected loopback conns. The packed tests use it instead of net.Pipe: a pipe
+// has no buffer, so a Write returns only once the peer has read every byte, including the padding byte that
+// may close it. A decoder that already has the whole message never reads that byte, and a server that
+// answers at that point leaves both ends blocked in Write.
+func newSocketPair() (server, client net.Conn, err error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer ln.Close()
+
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			c = nil
+		}
+		accepted <- c
+	}()
+
+	client, err = net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		return nil, nil, err
+	}
+	server = <-accepted
+	if server == nil {
+		_ = client.Close()
+		return nil, nil, errors.New("accept loopback conn failed")
+	}
+	return server, client, nil
+}
+
 func newPackedConfig(table *sudokuobfs.Table) *ProtocolConfig {
 	cfg := DefaultConfig()
 	cfg.Key = "sudoku-test-key"
@@ -120,12 +152,17 @@ func TestPackedDownlinkSoak(t *testing.T) {
 }
 
 func runPackedTCPSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
-	serverConn, clientConn := net.Pipe()
+	serverConn, clientConn, err := newSocketPair()
+	if err != nil {
+		errCh <- err
+		return
+	}
 	target := fmt.Sprintf("1.1.1.%d:80", (id%200)+1)
 	payload := []byte{0x42, byte(id)}
 
 	serverErr := make(chan error, 1)
 	go func() {
+		defer serverConn.Close()
 		c, meta, err := ServerHandshake(serverConn, cfg)
 		if err != nil {
 			serverErr <- fmt.Errorf("server handshake tcp: %w", err)
@@ -185,12 +222,17 @@ func runPackedTCPSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 }
 
 func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
-	serverConn, clientConn := net.Pipe()
+	serverConn, clientConn, err := newSocketPair()
+	if err != nil {
+		errCh <- err
+		return
+	}
 	target := "8.8.8.8:53"
 	payload := []byte{0xaa, byte(id)}
 
 	serverErr := make(chan error, 1)
 	go func() {
+		defer serverConn.Close()
 		c, meta, err := ServerHandshake(serverConn, cfg)
 		if err != nil {
 			serverErr <- fmt.Errorf("server handshake uot: %w", err)
