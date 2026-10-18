@@ -37,6 +37,11 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed, parseErr = RC.NewIPASN(payload, target, isSrc, noResolve)
 	case "SRC-IP-ASN":
 		parsed, parseErr = RC.NewIPASN(payload, target, true, true)
+	case "IP-ASN-ORG":
+		isSrc, noResolve := RC.ParseParams(params)
+		parsed, parseErr = RC.NewIPASNOrg(payload, target, isSrc, noResolve)
+	case "SRC-IP-ASN-ORG":
+		parsed, parseErr = RC.NewIPASNOrg(payload, target, true, true)
 	case "IP-CIDR", "IP-CIDR6":
 		isSrc, noResolve := RC.ParseParams(params)
 		parsed, parseErr = RC.NewIPCIDR(payload, target, RC.WithIPCIDRSourceIP(isSrc), RC.WithIPCIDRNoResolve(noResolve))
