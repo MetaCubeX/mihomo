@@ -218,5 +218,8 @@ func closeAllLocalCoon(lAddr string) {
 }
 
 func handleSocket(inbound, outbound net.Conn) {
-	N.Relay(inbound, outbound)
+	// A client may finish its upload before a slow response arrives. Once the
+	// upstream finishes sending, allow a shorter idle grace for clients that
+	// retain their socket after EOF (otherwise relays can accumulate forever).
+	N.RelayWithHalfCloseTimeout(inbound, outbound, 5*time.Minute, 30*time.Second)
 }
