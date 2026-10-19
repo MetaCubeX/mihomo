@@ -47,26 +47,34 @@ import (
 // General config
 type General struct {
 	Inbound
-	Mode              T.TunnelMode            `json:"mode"`
-	UnifiedDelay      bool                    `json:"unified-delay"`
-	LogLevel          log.LogLevel            `json:"log-level"`
-	IPv6              bool                    `json:"ipv6"`
-	Interface         string                  `json:"interface-name"`
-	RoutingMark       int                     `json:"routing-mark"`
-	GeoXUrl           GeoXUrl                 `json:"geox-url"`
-	GeoAutoUpdate     bool                    `json:"geo-auto-update"`
-	GeoUpdateInterval int                     `json:"geo-update-interval"`
-	GeodataMode       bool                    `json:"geodata-mode"`
-	GeodataLoader     string                  `json:"geodata-loader"`
-	GeositeMatcher    string                  `json:"geosite-matcher"`
-	TCPConcurrent     bool                    `json:"tcp-concurrent"`
-	FindProcessMode   process.FindProcessMode `json:"find-process-mode"`
-	Sniffing          bool                    `json:"sniffing"`
-	GlobalUA          string                  `json:"global-ua"`
-	ETagSupport       bool                    `json:"etag-support"`
-	KeepAliveIdle     int                     `json:"keep-alive-idle"`
-	KeepAliveInterval int                     `json:"keep-alive-interval"`
-	DisableKeepAlive  bool                    `json:"disable-keep-alive"`
+	Mode                T.TunnelMode            `json:"mode"`
+	UnifiedDelay        bool                    `json:"unified-delay"`
+	LogLevel            log.LogLevel            `json:"log-level"`
+	IPv6                bool                    `json:"ipv6"`
+	Interface           string                  `json:"interface-name"`
+	RoutingMark         int                     `json:"routing-mark"`
+	GeoXUrl             GeoXUrl                 `json:"geox-url"`
+	GeoAutoUpdate       bool                    `json:"geo-auto-update"`
+	GeoUpdateInterval   int                     `json:"geo-update-interval"`
+	GeodataMode         bool                    `json:"geodata-mode"`
+	GeodataLoader       string                  `json:"geodata-loader"`
+	GeositeMatcher      string                  `json:"geosite-matcher"`
+	TCPConcurrent       bool                    `json:"tcp-concurrent"`
+	TCPHalfCloseTimeout TCPHalfCloseTimeout     `json:"tcp-half-close-timeout"`
+	FindProcessMode     process.FindProcessMode `json:"find-process-mode"`
+	Sniffing            bool                    `json:"sniffing"`
+	GlobalUA            string                  `json:"global-ua"`
+	ETagSupport         bool                    `json:"etag-support"`
+	KeepAliveIdle       int                     `json:"keep-alive-idle"`
+	KeepAliveInterval   int                     `json:"keep-alive-interval"`
+	DisableKeepAlive    bool                    `json:"disable-keep-alive"`
+}
+
+// TCPHalfCloseTimeout contains idle allowances in seconds after EOF from each peer.
+// Zero disables cleanup for that direction, preserving the original relay behavior.
+type TCPHalfCloseTimeout struct {
+	Client int `yaml:"client" json:"client"`
+	Server int `yaml:"server" json:"server"`
 }
 
 // Inbound config
@@ -281,7 +289,7 @@ type RawTun struct {
 	MTU        uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        bool   `yaml:"gso" json:"gso,omitempty"`
 	GSOMaxSize uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
-	//Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
+	// Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
 	Inet6Address                          []netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
 	IPRoute2TableIndex                    int            `yaml:"iproute2-table-index" json:"iproute2-table-index,omitempty"`
 	IPRoute2RuleIndex                     int            `yaml:"iproute2-rule-index" json:"iproute2-rule-index,omitempty"`
@@ -440,6 +448,7 @@ type RawConfig struct {
 	GeodataLoader                 string                  `yaml:"geodata-loader" json:"geodata-loader"`
 	GeositeMatcher                string                  `yaml:"geosite-matcher" json:"geosite-matcher"`
 	TCPConcurrent                 bool                    `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	TCPHalfCloseTimeout           TCPHalfCloseTimeout     `yaml:"tcp-half-close-timeout" json:"tcp-half-close-timeout"`
 	FindProcessMode               process.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint       string                  `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
 	GlobalUA                      string                  `yaml:"global-ua" json:"global-ua"`
@@ -623,7 +632,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
-	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
+	log.Infoln("Start initial configuration in progress") // Segment finished in xxm
 	startTime := time.Now()
 
 	general, err := parseGeneral(rawCfg)
@@ -749,7 +758,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
-	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
+	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) // Segment finished in xxm
 
 	return config, nil
 }
@@ -758,6 +767,12 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 func temporaryUpdateGeneral(general *General) func()
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
+	const maxTimeoutSeconds = int64((1<<63 - 1) / time.Second)
+	for _, value := range []int{cfg.TCPHalfCloseTimeout.Client, cfg.TCPHalfCloseTimeout.Server} {
+		if value < 0 || int64(value) > maxTimeoutSeconds {
+			return nil, errors.New("tcp-half-close-timeout values must be non-negative seconds within time.Duration range")
+		}
+	}
 	if cfg.GlobalClientFingerprint != "" {
 		log.Errorln("The `global-client-fingerprint` configuration is removed, please set `client-fingerprint` directly on the proxy instead")
 	}
@@ -790,18 +805,19 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ASN:     cfg.GeoXUrl.ASN,
 			GeoSite: cfg.GeoXUrl.GeoSite,
 		},
-		GeoAutoUpdate:     cfg.GeoAutoUpdate,
-		GeoUpdateInterval: cfg.GeoUpdateInterval,
-		GeodataMode:       cfg.GeodataMode,
-		GeodataLoader:     cfg.GeodataLoader,
-		GeositeMatcher:    cfg.GeositeMatcher,
-		TCPConcurrent:     cfg.TCPConcurrent,
-		FindProcessMode:   cfg.FindProcessMode,
-		GlobalUA:          cfg.GlobalUA,
-		ETagSupport:       cfg.ETagSupport,
-		KeepAliveIdle:     cfg.KeepAliveIdle,
-		KeepAliveInterval: cfg.KeepAliveInterval,
-		DisableKeepAlive:  cfg.DisableKeepAlive,
+		GeoAutoUpdate:       cfg.GeoAutoUpdate,
+		GeoUpdateInterval:   cfg.GeoUpdateInterval,
+		GeodataMode:         cfg.GeodataMode,
+		GeodataLoader:       cfg.GeodataLoader,
+		GeositeMatcher:      cfg.GeositeMatcher,
+		TCPConcurrent:       cfg.TCPConcurrent,
+		TCPHalfCloseTimeout: cfg.TCPHalfCloseTimeout,
+		FindProcessMode:     cfg.FindProcessMode,
+		GlobalUA:            cfg.GlobalUA,
+		ETagSupport:         cfg.ETagSupport,
+		KeepAliveIdle:       cfg.KeepAliveIdle,
+		KeepAliveInterval:   cfg.KeepAliveInterval,
+		DisableKeepAlive:    cfg.DisableKeepAlive,
 	}, nil
 }
 
