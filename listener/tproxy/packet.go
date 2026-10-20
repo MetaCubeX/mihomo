@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/common/pool"
@@ -32,6 +33,10 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		return
 	}
 	n, err = tc.Write(b)
+	if err == nil {
+		// the flow is still alive, keep the reader from timing out
+		_ = tc.SetReadDeadline(time.Now().Add(localConnIdleTimeout))
+	}
 	return
 }
 
@@ -96,22 +101,33 @@ func listenLocalConn(rAddr, lAddr netip.AddrPort, tunnel C.Tunnel, additions ...
 	if err != nil {
 		return nil, err
 	}
-	go func() {
-		log.Debugln("TProxy listenLocalConn rAddr=%s lAddr=%s", rAddr, lAddr)
-		for {
-			buf := pool.Get(pool.UDPBufferSize)
-			br, err := lc.Read(buf)
-			if err != nil {
-				if errors.Is(err, net.ErrClosed) {
-					log.Debugln("TProxy local conn listener exit.. rAddr=%s lAddr=%s", rAddr, lAddr)
-					pool.Put(buf)
-					return
-				}
-			}
-			// since following localPackets are pass through this socket which listen rAddr
-			// I choose current listener as packet's packet conn
-			handlePacketConn(lc, tunnel, buf[:br], lAddr, rAddr, additions...)
-		}
-	}()
+	go serveLocalConn(lc, rAddr, lAddr, tunnel, localConnIdleTimeout, additions...)
 	return lc, nil
+}
+
+// localConnIdleTimeout is how long a local conn may stay silent before it is released.
+var localConnIdleTimeout = C.DefaultUDPTimeout
+
+// serveLocalConn reads from lc and hands each packet to the tunnel.
+// It returns once lc fails to read; unless lc was already closed, that means it
+// stayed idle for `idle`, so lc and its nat entry are released too.
+func serveLocalConn(lc *net.UDPConn, rAddr, lAddr netip.AddrPort, tunnel C.Tunnel, idle time.Duration, additions ...inbound.Addition) {
+	log.Debugln("TProxy listenLocalConn rAddr=%s lAddr=%s", rAddr, lAddr)
+	for {
+		_ = lc.SetReadDeadline(time.Now().Add(idle))
+		buf := pool.Get(pool.UDPBufferSize)
+		br, err := lc.Read(buf)
+		if err != nil {
+			pool.Put(buf)
+			if !errors.Is(err, net.ErrClosed) {
+				tunnel.NatTable().DeleteForLocalConn(lAddr.String(), rAddr.String())
+				_ = lc.Close()
+			}
+			log.Debugln("TProxy local conn listener exit.. rAddr=%s lAddr=%s", rAddr, lAddr)
+			return
+		}
+		// since following localPackets are pass through this socket which listen rAddr
+		// I choose current listener as packet's packet conn
+		handlePacketConn(lc, tunnel, buf[:br], lAddr, rAddr, additions...)
+	}
 }
