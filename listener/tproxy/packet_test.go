@@ -74,7 +74,7 @@ func TestWriteBackKeepsLocalConnAlive(t *testing.T) {
 	defer lc.Close()
 
 	old := localConnIdleTimeout
-	localConnIdleTimeout = 300 * time.Millisecond
+	localConnIdleTimeout = 1 * time.Second
 	defer func() { localConnIdleTimeout = old }()
 
 	rAddr := netip.MustParseAddrPort("203.0.113.1:53")
@@ -93,7 +93,7 @@ func TestWriteBackKeepsLocalConnAlive(t *testing.T) {
 	// replies keep going out for longer than the idle timeout while nothing is read
 	pkt := &packet{lAddr: lAddr, tunnel: tunnel}
 	for i := 0; i < 8; i++ {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 		if _, err := pkt.WriteBack([]byte("x"), net.UDPAddrFromAddrPort(rAddr)); err != nil {
 			t.Fatalf("write %d: %v", i, err)
 		}
@@ -107,5 +107,42 @@ func TestWriteBackKeepsLocalConnAlive(t *testing.T) {
 	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Fatal("reader goroutine still running after the replies stopped")
+	}
+}
+
+func TestServeLocalConnIdleExitKeepsNewerConn(t *testing.T) {
+	newConn := func() *net.UDPConn {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = c.Close() })
+		return c
+	}
+	stale, newer := newConn(), newConn()
+
+	rAddr := netip.MustParseAddrPort("203.0.113.1:53")
+	lAddr := netip.MustParseAddrPort("192.0.2.1:40000")
+	table := nat.New()
+	table.GetOrCreate(lAddr.String(), func() C.PacketSender { return nil })
+	// the nat table already holds a newer conn for this key
+	table.AddForLocalConn(lAddr.String(), rAddr.String(), newer)
+	tunnel := &fakeTunnel{nat: table, packets: make(chan []byte, 8)}
+
+	done := make(chan struct{})
+	go func() {
+		serveLocalConn(stale, rAddr, lAddr, tunnel, 100*time.Millisecond)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stale reader still running after the idle timeout")
+	}
+	if got := table.GetForLocalConn(lAddr.String(), rAddr.String()); got != newer {
+		t.Fatal("stale reader removed the newer conn from the nat table")
+	}
+	if _, err := newer.WriteToUDP([]byte("x"), newer.LocalAddr().(*net.UDPAddr)); err != nil {
+		t.Fatalf("newer conn was closed by the stale reader: %v", err)
 	}
 }

@@ -33,6 +33,15 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		return
 	}
 	n, err = tc.Write(b)
+	if errors.Is(err, net.ErrClosed) {
+		// the reader released tc (idle timeout) between our lookup and the write;
+		// failing here would make the tunnel tear down the whole flow, so use a fresh conn
+		tc, err = createOrGetLocalConn(rAddr, c.lAddr, c.tunnel, c.additions...)
+		if err != nil {
+			return
+		}
+		n, err = tc.Write(b)
+	}
 	if err == nil {
 		// the flow is still alive, keep the reader from timing out
 		_ = tc.SetReadDeadline(time.Now().Add(localConnIdleTimeout))
@@ -106,7 +115,8 @@ func listenLocalConn(rAddr, lAddr netip.AddrPort, tunnel C.Tunnel, additions ...
 }
 
 // localConnIdleTimeout is how long a local conn may stay silent before it is released.
-var localConnIdleTimeout = C.DefaultUDPTimeout
+// It matches the tunnel's UDP NAT idle timeout (tunnel.udpTimeout).
+var localConnIdleTimeout = 60 * time.Second
 
 // serveLocalConn reads from lc and hands each packet to the tunnel.
 // It returns once lc fails to read; unless lc was already closed, that means it
@@ -120,10 +130,15 @@ func serveLocalConn(lc *net.UDPConn, rAddr, lAddr netip.AddrPort, tunnel C.Tunne
 		if err != nil {
 			pool.Put(buf)
 			if !errors.Is(err, net.ErrClosed) {
-				tunnel.NatTable().DeleteForLocalConn(lAddr.String(), rAddr.String())
+				// idle timeout or a socket error (e.g. ICMP refused); the next reply recreates the conn.
+				// Only remove the nat entry if it still holds lc, a newer conn must stay.
+				natTable := tunnel.NatTable()
+				if natTable.GetForLocalConn(lAddr.String(), rAddr.String()) == lc {
+					natTable.DeleteForLocalConn(lAddr.String(), rAddr.String())
+				}
 				_ = lc.Close()
 			}
-			log.Debugln("TProxy local conn listener exit.. rAddr=%s lAddr=%s", rAddr, lAddr)
+			log.Debugln("TProxy local conn listener exit.. rAddr=%s lAddr=%s err=%v", rAddr, lAddr, err)
 			return
 		}
 		// since following localPackets are pass through this socket which listen rAddr
