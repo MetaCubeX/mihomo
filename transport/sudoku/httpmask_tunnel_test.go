@@ -207,7 +207,7 @@ func TestHTTPMaskTunnel_Poll_UoTRoundTrip(t *testing.T) {
 		if s.Type != SessionTypeUoT {
 			return fmt.Errorf("unexpected session type: %v", s.Type)
 		}
-		gotAddr, gotPayload, err := ReadDatagram(s.Conn)
+		gotAddr, gotPayload, err := readTestDatagram(s.Conn)
 		if err != nil {
 			return fmt.Errorf("server read datagram: %w", err)
 		}
@@ -250,7 +250,7 @@ func TestHTTPMaskTunnel_Poll_UoTRoundTrip(t *testing.T) {
 	if err := WriteDatagram(cConn, target, payload); err != nil {
 		t.Fatalf("write datagram: %v", err)
 	}
-	gotAddr, gotPayload, err := ReadDatagram(cConn)
+	gotAddr, gotPayload, err := readTestDatagram(cConn)
 	if err != nil {
 		t.Fatalf("read datagram: %v", err)
 	}

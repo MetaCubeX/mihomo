@@ -3,13 +3,14 @@ package sudoku
 import (
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"math/bits"
 	"time"
 )
 
+// sudokuRand is a wyrand generator. Its state advances by a constant, so draws
+// do not depend on each other's results and the encoder can overlap them.
 type sudokuRand struct {
-	state      uint64
-	cached     uint32
-	haveCached bool
+	state uint64
 }
 
 func newSeededRand() *sudokuRand {
@@ -22,38 +23,25 @@ func newSeededRand() *sudokuRand {
 }
 
 func newSudokuRand(seed int64) *sudokuRand {
-	state := uint64(seed)
-	if state == 0 {
-		state = 0x9e3779b97f4a7c15
-	}
-	return &sudokuRand{state: state}
+	return &sudokuRand{state: uint64(seed)}
+}
+
+// wyNext is the generator step as a pure function so hot loops can keep the
+// state in a register.
+func wyNext(state uint64) (next, out uint64) {
+	state += 0xa0761d6478bd642f
+	hi, lo := bits.Mul64(state, state^0xe7037ed1a0b428db)
+	return state, hi ^ lo
 }
 
 func (r *sudokuRand) Uint64() uint64 {
-	if r == nil {
-		return 0
-	}
-	r.haveCached = false
-	x := r.state
-	x ^= x >> 12
-	x ^= x << 25
-	x ^= x >> 27
-	r.state = x
-	return x * 0x2545f4914f6cdd1d
+	var out uint64
+	r.state, out = wyNext(r.state)
+	return out
 }
 
 func (r *sudokuRand) Uint32() uint32 {
-	if r == nil {
-		return 0
-	}
-	if r.haveCached {
-		r.haveCached = false
-		return r.cached
-	}
-	v := r.Uint64()
-	r.cached = uint32(v)
-	r.haveCached = true
-	return uint32(v >> 32)
+	return uint32(r.Uint64() >> 32)
 }
 
 func (r *sudokuRand) Intn(n int) int {

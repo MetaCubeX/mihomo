@@ -6,50 +6,25 @@ import (
 	"sync"
 )
 
-// DownlinkWriter encodes payload bytes with the selected downlink codec.
-type DownlinkWriter struct {
-	dataWriter io.Writer
-	writeMu    sync.Mutex
-}
-
-func NewDownlinkWriter(raw io.Writer, table *Table, pMin, pMax int) *DownlinkWriter {
-	localRng := newSeededRand()
-	return newDownlinkWriter(newSudokuDataWriter(raw, table, localRng, pMin, pMax))
-}
-
-func NewPackedDownlinkWriter(raw net.Conn, table *Table, pMin, pMax int) (*PackedConn, *DownlinkWriter) {
-	packed := NewPackedConn(raw, table, pMin, pMax)
-	return packed, newDownlinkWriter(packed)
-}
-
+// NewServerDownlinkWriter returns the server-to-client writer for a connection
+// whose uplink is already wrapped. The packed codec buffers residual bits, so
+// its Flush is returned as a closer to run before the connection is closed.
 func NewServerDownlinkWriter(raw net.Conn, table *Table, pMin, pMax int, pure bool) (io.Writer, []func() error) {
 	if pure {
-		return NewDownlinkWriter(raw, table, pMin, pMax), nil
+		return newPureWriter(raw, table, newSeededRand(), pMin, pMax), nil
 	}
 
-	packed, writer := NewPackedDownlinkWriter(raw, table, pMin, pMax)
-	return writer, []func() error{packed.Flush}
+	packed := NewPackedConn(raw, table, pMin, pMax)
+	return writerOnly{packed}, []func() error{packed.Flush}
 }
 
-func newDownlinkWriter(dataWriter io.Writer) *DownlinkWriter {
-	return &DownlinkWriter{dataWriter: dataWriter}
-}
+// writerOnly hides every method but Write, so wrapping it in a directional
+// conn does not half-close the shared socket twice.
+type writerOnly struct{ io.Writer }
 
-func (w *DownlinkWriter) Write(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-	if w == nil || w.dataWriter == nil {
-		return 0, io.ErrClosedPipe
-	}
-
-	w.writeMu.Lock()
-	defer w.writeMu.Unlock()
-
-	return w.dataWriter.Write(p)
-}
-
-type sudokuDataWriter struct {
+// pureWriter is the write half of Conn, safe for concurrent callers.
+type pureWriter struct {
+	mu               sync.Mutex
 	writer           io.Writer
 	table            *Table
 	rng              *sudokuRand
@@ -57,30 +32,28 @@ type sudokuDataWriter struct {
 	writeBuf         []byte
 }
 
-func newSudokuDataWriter(writer io.Writer, table *Table, rng *sudokuRand, pMin, pMax int) *sudokuDataWriter {
-	return &sudokuDataWriter{
+func newPureWriter(writer io.Writer, table *Table, rng *sudokuRand, pMin, pMax int) *pureWriter {
+	return &pureWriter{
 		writer:           writer,
 		table:            table,
 		rng:              rng,
 		paddingThreshold: pickPaddingThreshold(rng, pMin, pMax),
-		writeBuf:         make([]byte, 0, 4096),
 	}
 }
 
-func (w *sudokuDataWriter) Write(p []byte) (int, error) {
+func (w *pureWriter) Write(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if w == nil || w.writer == nil {
-		return 0, io.ErrClosedPipe
-	}
-	if w.table == nil || w.table.layout == nil || w.rng == nil {
+	if w == nil || w.writer == nil || w.table == nil || w.table.layout == nil || w.rng == nil {
 		return 0, io.ErrClosedPipe
 	}
 
-	w.writeBuf = encodeSudokuPayload(w.writeBuf[:0], w.table, w.rng, w.paddingThreshold, p)
-	if _, err := w.writer.Write(w.writeBuf); err != nil {
-		return len(p), err
-	}
-	return len(p), nil
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	var n int
+	var err error
+	w.writeBuf, n, err = writeSudokuPayload(w.writer, w.writeBuf, w.table, w.rng, w.paddingThreshold, p)
+	return n, err
 }

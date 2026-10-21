@@ -1,76 +1,121 @@
 package sudoku
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/netip"
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
-const (
-	maxUoTPayload = 64 * 1024
-)
+// uotHeaderSize is u16 address length | u16 payload length.
+const uotHeaderSize = 4
 
 // WriteDatagram sends a single UDP datagram frame over a reliable stream.
 func WriteDatagram(w io.Writer, addr string, payload []byte) error {
-	addrBuf, err := EncodeAddress(addr)
+	return writeDatagram(w, payload, func(b []byte) ([]byte, error) { return AppendAddress(b, addr) })
+}
+
+// writeDatagram sends the whole frame with one write, so it is sealed as one record.
+func writeDatagram(w io.Writer, payload []byte, appendAddr func([]byte) ([]byte, error)) error {
+	if len(payload) > math.MaxUint16 {
+		return fmt.Errorf("payload too large: %d", len(payload))
+	}
+	buf := pool.Get(uotHeaderSize + socks5.MaxAddrLen + len(payload))
+	defer pool.Put(buf)
+
+	frame, err := appendAddr(buf[:uotHeaderSize])
 	if err != nil {
 		return fmt.Errorf("encode address: %w", err)
 	}
-
-	if addrLen := len(addrBuf); addrLen == 0 || addrLen > maxUoTPayload {
-		return fmt.Errorf("address too long: %d", len(addrBuf))
-	}
-	if payloadLen := len(payload); payloadLen > maxUoTPayload {
-		return fmt.Errorf("payload too large: %d", payloadLen)
-	}
-
-	var header [4]byte
-	binary.BigEndian.PutUint16(header[:2], uint16(len(addrBuf)))
-	binary.BigEndian.PutUint16(header[2:], uint16(len(payload)))
-
-	return writeAllChunks(w, header[:], addrBuf, payload)
+	binary.BigEndian.PutUint16(frame, uint16(len(frame)-uotHeaderSize))
+	binary.BigEndian.PutUint16(frame[2:], uint16(len(payload)))
+	_, err = w.Write(append(frame, payload...))
+	return err
 }
 
-// ReadDatagram parses a single UDP datagram frame from the reliable stream.
-func ReadDatagram(r io.Reader) (string, []byte, error) {
-	addr, payloadLen, err := readDatagramHeaderAndAddress(r)
-	if err != nil {
-		return "", nil, err
+// UoTReader reads datagram frames from a UoT stream. The header and address are read into
+// scratch space owned by the reader, so a frame costs no allocation besides its payload.
+type UoTReader struct {
+	r   io.Reader
+	buf [uotHeaderSize + socks5.MaxAddrLen]byte
+}
+
+func NewUoTReader(r io.Reader) *UoTReader {
+	return &UoTReader{r: r}
+}
+
+// readHeader reads the next frame's header and address and leaves its payload (payloadLen bytes)
+// unread. addr is only valid until the next call.
+func (u *UoTReader) readHeader() (addr socks5.Addr, payloadLen int, err error) {
+	if _, err = io.ReadFull(u.r, u.buf[:uotHeaderSize]); err != nil {
+		return nil, 0, err
 	}
-	payload := make([]byte, payloadLen)
-	if _, err := io.ReadFull(r, payload); err != nil {
-		return "", nil, err
+	addrLen := int(binary.BigEndian.Uint16(u.buf[:2]))
+	payloadLen = int(binary.BigEndian.Uint16(u.buf[2:]))
+	if addrLen == 0 {
+		return nil, 0, fmt.Errorf("invalid address length: %d", addrLen)
 	}
 
+	// An encoded address is at most socks5.MaxAddrLen bytes; anything after it is padding.
+	n := addrLen
+	if n > socks5.MaxAddrLen {
+		n = socks5.MaxAddrLen
+	}
+	if _, err = io.ReadFull(u.r, u.buf[uotHeaderSize:uotHeaderSize+n]); err != nil {
+		return nil, 0, err
+	}
+	if err = discardBytes(u.r, addrLen-n); err != nil {
+		return nil, 0, err
+	}
+	if addr = socks5.SplitAddr(u.buf[uotHeaderSize : uotHeaderSize+n]); addr == nil {
+		return nil, 0, errors.New("decode address: invalid address")
+	}
+	return addr, payloadLen, nil
+}
+
+// ReadDatagram reads the next frame. addr is only valid until the next call; payload comes from
+// common/pool and must be released with pool.Put.
+func (u *UoTReader) ReadDatagram() (socks5.Addr, []byte, error) {
+	addr, payloadLen, err := u.readHeader()
+	if err != nil {
+		return nil, nil, err
+	}
+	payload := pool.Get(payloadLen)
+	if _, err := io.ReadFull(u.r, payload); err != nil {
+		_ = pool.Put(payload)
+		return nil, nil, err
+	}
 	return addr, payload, nil
 }
 
 // UoTPacketConn adapts a net.Conn with the Sudoku UoT framing to net.PacketConn.
 type UoTPacketConn struct {
 	conn    net.Conn
+	reader  *UoTReader
 	writeMu sync.Mutex
 }
 
 func NewUoTPacketConn(conn net.Conn) *UoTPacketConn {
-	return &UoTPacketConn{conn: conn}
+	return &UoTPacketConn{conn: conn, reader: NewUoTReader(conn)}
 }
 
 func (c *UoTPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	for {
-		addrStr, payloadLen, err := readDatagramHeaderAndAddress(c.conn)
+		addr, payloadLen, err := c.reader.readHeader()
 		if err != nil {
 			return 0, nil, err
 		}
 
-		udpAddr, err := parseDatagramUDPAddr(addrStr)
+		udpAddr, err := uotUDPAddr(addr)
 		if payloadLen > len(p) {
 			if discardErr := discardBytes(c.conn, payloadLen); discardErr != nil {
 				return 0, nil, discardErr
@@ -81,7 +126,7 @@ func (c *UoTPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 			if discardErr := discardBytes(c.conn, payloadLen); discardErr != nil {
 				return 0, nil, discardErr
 			}
-			log.Debugln("[Sudoku][UoT] discard datagram with invalid address %s: %v", addrStr, err)
+			log.Debugln("[Sudoku][UoT] discard datagram with invalid address %s: %v", addr, err)
 			continue
 		}
 		if _, err := io.ReadFull(c.conn, p[:payloadLen]); err != nil {
@@ -95,9 +140,16 @@ func (c *UoTPacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
 	if addr == nil {
 		return 0, errors.New("address is nil")
 	}
+	appendAddr := func(b []byte) ([]byte, error) { return AppendAddress(b, addr.String()) }
+	if udpAddr, ok := addr.(*net.UDPAddr); ok {
+		if ap := udpAddr.AddrPort(); ap.Addr().IsValid() {
+			appendAddr = func(b []byte) ([]byte, error) { return AppendAddrPort(b, ap), nil }
+		}
+	}
+
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
-	if err := WriteDatagram(c.conn, addr.String(), p); err != nil {
+	if err := writeDatagram(c.conn, p, appendAddr); err != nil {
 		return 0, err
 	}
 	return len(p), nil
@@ -123,39 +175,22 @@ func (c *UoTPacketConn) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
 }
 
-func readDatagramHeaderAndAddress(r io.Reader) (string, int, error) {
-	var header [4]byte
-	if _, err := io.ReadFull(r, header[:]); err != nil {
-		return "", 0, err
+// uotUDPAddr converts a datagram's peer to a *net.UDPAddr. Domain names are not resolved: only
+// the IP literals they may spell are accepted.
+func uotUDPAddr(addr socks5.Addr) (*net.UDPAddr, error) {
+	var ap netip.AddrPort
+	switch addr[0] {
+	case socks5.AtypIPv4:
+		ap = netip.AddrPortFrom(netip.AddrFrom4([4]byte(addr[1:5])), binary.BigEndian.Uint16(addr[5:]))
+	case socks5.AtypIPv6:
+		ap = netip.AddrPortFrom(netip.AddrFrom16([16]byte(addr[1:17])), binary.BigEndian.Uint16(addr[17:]))
+	default:
+		var err error
+		if ap, err = netip.ParseAddrPort(addr.String()); err != nil {
+			return nil, err
+		}
 	}
-
-	addrLen := int(binary.BigEndian.Uint16(header[:2]))
-	payloadLen := int(binary.BigEndian.Uint16(header[2:]))
-	if addrLen <= 0 || addrLen > maxUoTPayload {
-		return "", 0, fmt.Errorf("invalid address length: %d", addrLen)
-	}
-	if payloadLen < 0 || payloadLen > maxUoTPayload {
-		return "", 0, fmt.Errorf("invalid payload length: %d", payloadLen)
-	}
-
-	addrBuf := make([]byte, addrLen)
-	if _, err := io.ReadFull(r, addrBuf); err != nil {
-		return "", 0, err
-	}
-
-	addr, err := DecodeAddress(bytes.NewReader(addrBuf))
-	if err != nil {
-		return "", 0, fmt.Errorf("decode address: %w", err)
-	}
-	return addr, payloadLen, nil
-}
-
-func parseDatagramUDPAddr(addr string) (*net.UDPAddr, error) {
-	addrPort, err := netip.ParseAddrPort(addr)
-	if err != nil {
-		return nil, err
-	}
-	return net.UDPAddrFromAddrPort(netip.AddrPortFrom(addrPort.Addr().Unmap(), addrPort.Port())), nil
+	return net.UDPAddrFromAddrPort(netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())), nil
 }
 
 func discardBytes(r io.Reader, n int) error {

@@ -1,7 +1,6 @@
 package sudoku
 
 import (
-	"bufio"
 	"bytes"
 	"io"
 	"net"
@@ -9,51 +8,21 @@ import (
 	"sync/atomic"
 )
 
-const IOBufferSize = 32 * 1024
-
-const minDecodeReadSize = 64
-
-var perm4 = [24][4]byte{
-	{0, 1, 2, 3},
-	{0, 1, 3, 2},
-	{0, 2, 1, 3},
-	{0, 2, 3, 1},
-	{0, 3, 1, 2},
-	{0, 3, 2, 1},
-	{1, 0, 2, 3},
-	{1, 0, 3, 2},
-	{1, 2, 0, 3},
-	{1, 2, 3, 0},
-	{1, 3, 0, 2},
-	{1, 3, 2, 0},
-	{2, 0, 1, 3},
-	{2, 0, 3, 1},
-	{2, 1, 0, 3},
-	{2, 1, 3, 0},
-	{2, 3, 0, 1},
-	{2, 3, 1, 0},
-	{3, 0, 1, 2},
-	{3, 0, 2, 1},
-	{3, 1, 0, 2},
-	{3, 1, 2, 0},
-	{3, 2, 0, 1},
-	{3, 2, 1, 0},
-}
+// decodeWindow bounds how many wire bytes decode compacts at a time.
+const decodeWindow = 256
 
 type Conn struct {
 	net.Conn
 	table      *Table
-	reader     *bufio.Reader
+	reader     *wireReader
 	recorder   *bytes.Buffer
 	recording  atomic.Bool
 	recordLock sync.Mutex
 
-	rawBuf      []byte
-	pendingData pendingBuffer
-	hintBuf     [4]byte
-	hintCount   int
-	writeMu     sync.Mutex
-	writeBuf    []byte
+	hintBuf   [3]uint8 // hint indexes of a group still being read
+	hintCount int
+	writeMu   sync.Mutex
+	writeBuf  []byte
 
 	rng              *sudokuRand
 	paddingThreshold uint64
@@ -85,10 +54,6 @@ func NewConn(c net.Conn, table *Table, pMin, pMax int, record bool) *Conn {
 	sc := &Conn{
 		Conn:             c,
 		table:            table,
-		reader:           bufio.NewReaderSize(c, IOBufferSize),
-		rawBuf:           make([]byte, IOBufferSize),
-		pendingData:      newPendingBuffer(4096),
-		writeBuf:         make([]byte, 0, 4096),
 		rng:              localRng,
 		paddingThreshold: pickPaddingThreshold(localRng, pMin, pMax),
 	}
@@ -109,6 +74,8 @@ func (sc *Conn) StopRecording() {
 	sc.recordLock.Unlock()
 }
 
+// GetBufferedAndRecorded returns every wire byte read so far that has not been
+// stopped from recording, plus bytes buffered but not yet decoded.
 func (sc *Conn) GetBufferedAndRecorded() []byte {
 	if sc == nil {
 		return nil
@@ -121,19 +88,14 @@ func (sc *Conn) GetBufferedAndRecorded() []byte {
 	if sc.recorder != nil {
 		recorded = sc.recorder.Bytes()
 	}
-	if sc.reader == nil {
+	pending := sc.reader.pending()
+	if len(pending) == 0 {
 		return recorded
 	}
-
-	buffered := sc.reader.Buffered()
-	if buffered > 0 {
-		peeked, _ := sc.reader.Peek(buffered)
-		full := make([]byte, len(recorded)+len(peeked))
-		copy(full, recorded)
-		copy(full[len(recorded):], peeked)
-		return full
-	}
-	return recorded
+	full := make([]byte, len(recorded)+len(pending))
+	copy(full, recorded)
+	copy(full[len(recorded):], pending)
+	return full
 }
 
 func (sc *Conn) Write(p []byte) (n int, err error) {
@@ -147,83 +109,38 @@ func (sc *Conn) Write(p []byte) (n int, err error) {
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
 
-	sc.writeBuf = encodeSudokuPayload(sc.writeBuf[:0], sc.table, sc.rng, sc.paddingThreshold, p)
-	if _, err := sc.Conn.Write(sc.writeBuf); err != nil {
-		return len(p), err
-	}
-	return len(p), nil
+	sc.writeBuf, n, err = writeSudokuPayload(sc.Conn, sc.writeBuf, sc.table, sc.rng, sc.paddingThreshold, p)
+	return n, err
 }
 
 func (sc *Conn) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if sc == nil || sc.Conn == nil || sc.reader == nil || len(sc.rawBuf) == 0 || sc.table == nil || sc.table.layout == nil {
+	if sc == nil || sc.Conn == nil || sc.table == nil || sc.table.layout == nil {
 		return 0, io.ErrClosedPipe
 	}
-	if n, ok := drainPending(p, &sc.pendingData); ok {
-		return n, nil
+	if sc.reader == nil {
+		// Write-only codecs never pay for a read buffer.
+		sc.reader = &wireReader{src: sc.Conn}
 	}
 
 	outN := 0
 	for {
-		nr, rErr := readRawLimited(sc.Conn, sc.reader, sc.rawBuf[:sudokuReadSize(len(p)-outN, len(sc.rawBuf))])
-		if nr > 0 {
-			chunk := sc.rawBuf[:nr]
+		chunk, rErr := sc.reader.peek()
+		if len(chunk) > 0 {
+			var consumed int
+			outN, consumed, rErr = sc.decode(p, chunk)
 			if sc.recording.Load() {
 				sc.recordLock.Lock()
 				if sc.recording.Load() && sc.recorder != nil {
-					sc.recorder.Write(chunk)
+					sc.recorder.Write(chunk[:consumed])
 				}
 				sc.recordLock.Unlock()
 			}
-
-			table := sc.table
-			layout := table.layout
-			for i := 0; i < len(chunk); {
-				if sc.hintCount == 0 && outN < len(p) && i+3 < len(chunk) &&
-					layout.hintTable[chunk[i]] &&
-					layout.hintTable[chunk[i+1]] &&
-					layout.hintTable[chunk[i+2]] &&
-					layout.hintTable[chunk[i+3]] {
-					val, ok := table.DecodeMap[packHintBytes(chunk[i], chunk[i+1], chunk[i+2], chunk[i+3])]
-					if !ok {
-						return 0, ErrInvalidSudokuMapMiss
-					}
-					p[outN] = val
-					outN++
-					i += 4
-					continue
-				}
-
-				b := chunk[i]
-				i++
-				if !layout.hintTable[b] {
-					continue
-				}
-
-				sc.hintBuf[sc.hintCount] = b
-				sc.hintCount++
-				if sc.hintCount != len(sc.hintBuf) {
-					continue
-				}
-
-				val, ok := table.DecodeMap[packHintBytes(sc.hintBuf[0], sc.hintBuf[1], sc.hintBuf[2], sc.hintBuf[3])]
-				if !ok {
-					return 0, ErrInvalidSudokuMapMiss
-				}
-				outN = appendDecodedByte(p, outN, &sc.pendingData, val)
-				sc.hintCount = 0
-			}
+			sc.reader.discard(consumed)
 		}
-
 		if rErr != nil {
-			if outN > 0 {
-				return outN, nil
-			}
-			if n, ok := drainPending(p, &sc.pendingData); ok {
-				return n, nil
-			}
 			return 0, rErr
 		}
 		if outN > 0 {
@@ -232,26 +149,39 @@ func (sc *Conn) Read(p []byte) (n int, err error) {
 	}
 }
 
-func sudokuReadSize(decodedRemaining, maxRaw int) int {
-	if maxRaw <= minDecodeReadSize || decodedRemaining <= 0 {
-		return maxRaw
-	}
-	if decodedRemaining > (maxRaw-minDecodeReadSize)/9 {
-		return maxRaw
-	}
+// decode writes only as much plaintext as fits in p, so the wire bytes it
+// consumed can be dropped and the rest stay in the reader. It consumes whole
+// windows of wire bytes, keeping the hints of an unfinished group in hintBuf,
+// but never more than can complete into the space left in p. Compacting a
+// window through hintIdx with a branchless store skips padding without a
+// per-byte branch.
+func (sc *Conn) decode(p, chunk []byte) (outN, consumed int, err error) {
+	table := sc.table
+	hintIdx := &table.layout.hintIdx
+	var hints [512]uint8
 
-	return decodedRemaining*9 + minDecodeReadSize
-}
+	for consumed < len(chunk) && outN < len(p) {
+		window := minInt(minInt(len(chunk)-consumed, decodeWindow), 4*(len(p)-outN)+3-sc.hintCount)
+		k := copy(hints[:], sc.hintBuf[:sc.hintCount])
+		for _, b := range chunk[consumed : consumed+window] {
+			idx := hintIdx[b]
+			hints[k&511] = idx
+			k += int(idx>>7) ^ 1
+		}
+		consumed += window
 
-func readRawLimited(conn net.Conn, reader *bufio.Reader, dst []byte) (int, error) {
-	if len(dst) == 0 {
-		return 0, nil
+		groups := k / 4
+		for i := 0; i < groups; i++ {
+			h := (*[4]uint8)(hints[4*i:])
+			val, ok := table.decodeHints(h[0], h[1], h[2], h[3])
+			if !ok {
+				sc.hintCount = 0
+				return outN, consumed, ErrInvalidSudokuMapMiss
+			}
+			p[outN] = val
+			outN++
+		}
+		sc.hintCount = copy(sc.hintBuf[:], hints[4*groups:k])
 	}
-	if reader != nil && reader.Buffered() > 0 {
-		return reader.Read(dst)
-	}
-	if conn == nil {
-		return 0, io.ErrClosedPipe
-	}
-	return conn.Read(dst)
+	return outN, consumed, nil
 }

@@ -10,12 +10,15 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	mhttp "github.com/metacubex/http"
+	"github.com/metacubex/http/httputil"
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 type roundTripFunc func(*mhttp.Request) (*mhttp.Response, error)
@@ -138,6 +141,44 @@ func TestQueuedConnReadEOFDrainsBufferedPayload(t *testing.T) {
 	}
 }
 
+func TestUploadURLMatchesQueryEncoding(t *testing.T) {
+	for _, token := range []string{"T-k_9", "a+b/c=", "sp ace&x=y", "é"} {
+		pushURL := "https://h.test/root/api/v1/upload?token=" + url.QueryEscape(token)
+		u, err := url.Parse(pushURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q := u.Query()
+		q.Set(tunnelUploadSequenceQuery, "7")
+		u.RawQuery = q.Encode()
+		if got := uploadURL(pushURL, 7); got != u.String() {
+			t.Fatalf("token %q: uploadURL = %q, want %q", token, got, u.String())
+		}
+	}
+}
+
+func TestQueuedConnRecyclesDrainedPooledPayload(t *testing.T) {
+	conn := &queuedConn{
+		rxc:    make(chan []byte, 1),
+		closed: make(chan struct{}),
+	}
+	conn.rxc <- pool.Get(streamPullChunkBytes)[:100]
+
+	var buf [60]byte
+	if _, err := conn.Read(buf[:]); err != nil {
+		t.Fatal(err)
+	}
+	if conn.readPayload == nil {
+		t.Fatal("payload released with 40 bytes still unread")
+	}
+	if n, err := conn.Read(buf[:]); n != 40 || err != nil {
+		t.Fatalf("second read = (%d, %v), want 40 bytes", n, err)
+	}
+	if conn.readPayload != nil {
+		t.Fatal("drained payload still held by the conn")
+	}
+}
+
 func TestSendSessionControlRetriesTransportEOF(t *testing.T) {
 	var calls atomic.Int32
 	client := &mhttp.Client{Transport: roundTripFunc(func(req *mhttp.Request) (*mhttp.Response, error) {
@@ -229,8 +270,7 @@ func TestTunnelServerPullTakeoverSerializesReaders(t *testing.T) {
 	defer sessionConn.Close()
 
 	server := NewTunnelServer(TunnelServerOptions{})
-	sess := &tunnelSession{conn: sessionConn, closed: make(chan struct{})}
-	server.sessions[token] = sess
+	sess := server.sessionAdd(token, sessionConn)
 
 	firstClient, firstServer := net.Pipe()
 	defer firstClient.Close()
@@ -266,6 +306,116 @@ func TestTunnelServerPullTakeoverSerializesReaders(t *testing.T) {
 		server.endSessionPull(token, sess, second)
 	case <-time.After(time.Second):
 		t.Fatal("second pull remained blocked after first lease ended")
+	}
+}
+
+func TestPullFrameMatchesChunkedWriter(t *testing.T) {
+	payload := bytes.Repeat([]byte("sudoku"), 1000)
+	for _, n := range []int{1, 2, 3, 255, 4096, len(payload)} {
+		p := payload[:n]
+
+		var want bytes.Buffer
+		cw := httputil.NewChunkedWriter(&want)
+		_, _ = cw.Write(p)
+		if got := streamCodec.appendPullFrame(nil, p); !bytes.Equal(got, want.Bytes()) {
+			t.Fatalf("stream frame for %d bytes = %q, want %q", n, got, want.Bytes())
+		}
+
+		want.Reset()
+		_, _ = cw.Write([]byte(base64.StdEncoding.EncodeToString(p)))
+		_, _ = cw.Write([]byte("\n"))
+		got := pollCodec.appendPullFrame(make([]byte, 0, pollCodec.pullFrameSize(n)), p)
+		if !bytes.Equal(got, want.Bytes()) {
+			t.Fatalf("poll frame for %d bytes = %q, want %q", n, got, want.Bytes())
+		}
+		if len(got) > pollCodec.pullFrameSize(n) {
+			t.Fatalf("poll frame for %d bytes is %d, over its size bound %d", n, len(got), pollCodec.pullFrameSize(n))
+		}
+	}
+}
+
+func TestReadUploadGrowsPastPresize(t *testing.T) {
+	want := bytes.Repeat([]byte("0123456789abcdef"), 20000) // 320 KB: more than the pooled classes and the presize
+	for _, length := range []int64{-1, 0, 100, int64(len(want))} {
+		got, err := readUpload(bytes.NewReader(want), length, maxUploadBytes+1)
+		if err != nil || !bytes.Equal(got, want) {
+			t.Fatalf("declared length %d: read %d bytes, err %v, want %d bytes", length, len(got), err, len(want))
+		}
+		_ = pool.Put(got)
+	}
+	got, err := readUpload(bytes.NewReader(want), -1, 1000)
+	if err != nil || len(got) != 1000 {
+		t.Fatalf("limit: read %d bytes, err %v, want 1000", len(got), err)
+	}
+	_ = pool.Put(got)
+}
+
+func TestDecodeUploadLines(t *testing.T) {
+	enc := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	got, err := decodeUploadLines([]byte(enc("hello") + "\n\n  \r\n" + enc("w") + "\r\n" + enc("orld")))
+	if err != nil || string(got) != "helloworld" {
+		t.Fatalf("decode = %q, %v", got, err)
+	}
+	_ = pool.Put(got)
+	if _, err := decodeUploadLines([]byte(enc("ok") + "\n!!!!\n")); err == nil {
+		t.Fatal("invalid base64 line was accepted")
+	}
+}
+
+func TestReadHTTPRequestKeepsReplayAndBody(t *testing.T) {
+	raw := "POST /api/v1/upload?token=t HTTP/1.1\r\nHost: x\r\nX-SUDOKU-Tunnel:  poll \r\n" +
+		"Content-Length: 5\r\ncontent-length: 9\r\nConnection: keep-alive, Upgrade\r\nUpgrade: WebSocket\r\n\r\nhello"
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	go func() { _, _ = client.Write([]byte(raw)) }()
+
+	br := bufio.NewReader(server)
+	req, _, err := readHTTPRequest(server, br, []byte(raw[:4]))
+	if err != nil {
+		t.Fatalf("readHTTPRequest: %v", err)
+	}
+	if req.method != "POST" || req.target != "/api/v1/upload?token=t" || req.tunnel != "poll" || req.contentLength != "5" {
+		t.Fatalf("parsed request = %+v", req)
+	}
+	if !req.isWebSocketUpgrade() {
+		t.Fatal("upgrade headers were not recognised")
+	}
+	if got := req.replayPrefix(); !bytes.HasPrefix([]byte(raw), got) || !bytes.HasPrefix(got, []byte(raw[:len(raw)-5])) {
+		t.Fatalf("replay prefix = %q", got)
+	}
+	body, length, err := req.body()
+	if err != nil || length != 5 {
+		t.Fatalf("body: length %d, err %v", length, err)
+	}
+	if got, err := io.ReadAll(body); err != nil || string(got) != "hello" {
+		t.Fatalf("body = %q, %v", got, err)
+	}
+}
+
+func TestTunnelServerReapsIdleSession(t *testing.T) {
+	const token = "idle-session"
+
+	appConn, sessionConn := newHalfPipe()
+	defer appConn.Close()
+	defer sessionConn.Close()
+
+	server := NewTunnelServer(TunnelServerOptions{SessionTTL: 20 * time.Millisecond})
+	server.sessionAdd(token, sessionConn)
+
+	// The tunnel read ends once the reaper closes the session pipe.
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := appConn.Read(make([]byte, 1))
+		readDone <- err
+	}()
+	select {
+	case <-readDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("idle session was not reaped")
+	}
+	if server.sessionHas(token) {
+		t.Fatal("reaped session is still registered")
 	}
 }
 
@@ -308,20 +458,17 @@ func startTestTunnelServer(t testing.TB, server *TunnelServer) (string, func(), 
 func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 	tests := []struct {
 		name     string
-		pull     func(*TunnelServer, net.Conn, string) (HandleResult, net.Conn, error)
-		push     func(*TunnelServer, net.Conn, string, uint64, io.Reader) (HandleResult, net.Conn, error)
+		codec    sessionCodec
 		pushBody string
 	}{
 		{
 			name:     "stream",
-			pull:     (*TunnelServer).streamPull,
-			push:     (*TunnelServer).streamPush,
+			codec:    streamCodec,
 			pushBody: "tail",
 		},
 		{
 			name:     "poll",
-			pull:     (*TunnelServer).pollPull,
-			push:     (*TunnelServer).pollPush,
+			codec:    pollCodec,
 			pushBody: base64.StdEncoding.EncodeToString([]byte("tail")) + "\n",
 		},
 	}
@@ -332,7 +479,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 
 			appConn, sessionConn := newHalfPipe()
 			server := NewTunnelServer(TunnelServerOptions{PullReadTimeout: 20 * time.Millisecond})
-			server.sessions[token] = &tunnelSession{conn: sessionConn, nextUploadSeq: 1}
+			server.sessionAdd(token, sessionConn)
 			t.Cleanup(func() {
 				_ = appConn.Close()
 				server.sessionClose(token)
@@ -344,7 +491,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 					appDone <- err
 					return
 				}
-				if err := appConn.(interface{ CloseWrite() error }).CloseWrite(); err != nil {
+				if err := appConn.CloseWrite(); err != nil {
 					appDone <- err
 					return
 				}
@@ -358,7 +505,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 			clientConn, serverConn := net.Pipe()
 			done := make(chan error, 1)
 			go func() {
-				_, _, err := tt.pull(server, serverConn, token)
+				_, _, err := server.pull(serverConn, token, tt.codec)
 				done <- err
 			}()
 
@@ -385,7 +532,7 @@ func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 			clientConn, serverConn = net.Pipe()
 			done = make(chan error, 1)
 			go func() {
-				_, _, err := tt.push(server, serverConn, token, 1, strings.NewReader(tt.pushBody))
+				_, _, err := server.push(serverConn, token, 1, strings.NewReader(tt.pushBody), -1, tt.codec)
 				done <- err
 			}()
 			resp, err = http.ReadResponse(bufio.NewReader(clientConn), &http.Request{Method: http.MethodPost})
