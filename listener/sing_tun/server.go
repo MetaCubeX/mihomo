@@ -274,6 +274,12 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		excludeMACAddress = append(excludeMACAddress, addr)
 	}
 
+	switch options.DNSMode {
+	case "", tun.DNSModeDisabled, tun.DNSModeNative, tun.DNSModeHijack:
+	default:
+		return nil, fmt.Errorf("invalid dns-mode: %s", options.DNSMode)
+	}
+
 	var dnsAdds []netip.AddrPort
 
 	for _, d := range options.DNSHijack {
@@ -390,6 +396,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		GSO:                                   options.GSO,
 		Inet4Address:                          options.Inet4Address,
 		Inet6Address:                          options.Inet6Address,
+		DNSMode:                               options.DNSMode,
 		AutoRoute:                             options.AutoRoute,
 		IPRoute2TableIndex:                    tableIndex,
 		IPRoute2RuleIndex:                     ruleIndex,
@@ -543,8 +550,8 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	if options.FileDescriptor != 0 {
 		tunName = fmt.Sprintf("%s(fd=%d)", tunName, options.FileDescriptor)
 	}
-	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, auto redir: %v, ip stack: %s",
-		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.AutoRedirect, options.Stack)
+	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, auto redir: %v, ip stack: %s, dns mode: %s",
+		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.AutoRedirect, options.Stack, options.DNSMode)
 	return
 }
 

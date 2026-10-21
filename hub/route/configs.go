@@ -63,6 +63,7 @@ type tunSchema struct {
 	Enable              bool        `yaml:"enable" json:"enable"`
 	Device              *string     `yaml:"device" json:"device"`
 	Stack               *C.TUNStack `yaml:"stack" json:"stack"`
+	DNSMode             *string     `yaml:"dns-mode" json:"dns-mode,omitempty"`
 	DNSHijack           *[]string   `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           *bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface *bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
@@ -150,6 +151,9 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		}
 		if p.Stack != nil {
 			def.Stack = *p.Stack
+		}
+		if p.DNSMode != nil {
+			def.DNSMode = *p.DNSMode
 		}
 		if p.DNSHijack != nil {
 			def.DNSHijack = *p.DNSHijack
