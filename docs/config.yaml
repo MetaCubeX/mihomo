@@ -1830,6 +1830,8 @@ proxy-providers:
     interval: 3600
     path: ./provider1.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到其他位置，请通过设置 SAFE_PATHS 环境变量指定额外的安全路径。该环境变量的语法同本操作系统的PATH环境变量解析规则（即Windows下以分号分割，其他系统下以冒号分割）
     proxy: DIRECT
+    # close-connections-on-reload: true # 适用于 http/file provider，默认在配置重载后关闭经此 provider 的连接
+    # 设为 false 可跳过上述断连操作，适用于长连接；新连接使用新配置。普通订阅更新不受此项影响。
     # size-limit: 10240 # 限制下载文件最大为10kb，默认为0即不限制文件大小
     # #
     # # 如果设置会age-secret-key尝试通过此secret解密age armor格式加密的配置文件
