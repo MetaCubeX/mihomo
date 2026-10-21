@@ -105,7 +105,7 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 		proxies := u.GetProxies(touch)
 		if u.selected != "" {
 			for _, proxy := range proxies {
-				if !proxy.AliveForTestUrl(u.testUrl) {
+				if !proxyUsable(proxy, u.testUrl) {
 					continue
 				}
 				if proxy.Name() == u.selected {
@@ -124,7 +124,7 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				fastNotExist = false
 			}
 
-			if !proxy.AliveForTestUrl(u.testUrl) {
+			if !proxyUsable(proxy, u.testUrl) {
 				continue
 			}
 
@@ -136,8 +136,37 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 		}
 		// tolerance
-		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {
+		if u.fastNode == nil || fastNotExist || !proxyUsable(u.fastNode, u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {
 			u.fastNode = fast
+		}
+
+		// proxies[0] seeds `fast` unconditionally, so the winner may still be a
+		// member that blackholes traffic (an empty sub-group serving REJECT).
+		// Re-pick among the members that would not, preferring the fastest
+		// usable one - falling back to a merely non-blackholing member only
+		// when nothing is usable, mirroring Fallback.findAliveProxy.
+		if resolvesToReject(u.fastNode) {
+			var bestUsable, notBlackholed C.Proxy
+			var bestDelay uint16
+			for _, proxy := range proxies {
+				if resolvesToReject(proxy) {
+					continue
+				}
+				if notBlackholed == nil {
+					notBlackholed = proxy
+				}
+				if !proxy.AliveForTestUrl(u.testUrl) {
+					continue
+				}
+				if delay := proxy.LastDelayForTestUrl(u.testUrl); bestUsable == nil || delay < bestDelay {
+					bestUsable, bestDelay = proxy, delay
+				}
+			}
+			if bestUsable != nil {
+				u.fastNode = bestUsable
+			} else if notBlackholed != nil {
+				u.fastNode = notBlackholed
+			}
 		}
 		return u.fastNode, nil
 	})
