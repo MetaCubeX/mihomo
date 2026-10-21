@@ -352,7 +352,7 @@ func (c *Client) DialStreamOne(ctx context.Context) (net.Conn, error) {
 	}
 	pr, pw := io.Pipe()
 
-	conn := &Conn{writer: pw}
+	conn := &Conn{writer: pw, linger: true}
 
 	// Use gotConn to detect when TCP connection is established, so we can
 	// return the conn immediately without waiting for the HTTP response.
@@ -455,7 +455,7 @@ func (c *Client) DialStreamUp(ctx context.Context) (net.Conn, error) {
 	}
 	pr, pw := io.Pipe()
 
-	conn := &Conn{writer: pw}
+	conn := &Conn{writer: pw, linger: true}
 
 	sessionID := c.generateSessionID()
 
@@ -604,7 +604,7 @@ func (c *Client) DialPacketUp(ctx context.Context) (net.Conn, error) {
 		seq:                  0,
 	}
 	writer.writeCond = sync.Cond{L: &writer.writeMu}
-	conn := &Conn{writer: writer}
+	conn := &Conn{writer: writer, linger: true}
 
 	// Async download: avoid blocking on CDN response header buffering
 	gotConn := make(chan bool, 1)
