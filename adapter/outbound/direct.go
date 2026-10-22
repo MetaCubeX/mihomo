@@ -2,7 +2,9 @@ package outbound
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/loopback"
@@ -42,11 +44,37 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err := d.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	pc, err := dialer.NewDialer(d.DialOptions()...).ListenPacket(ctx, "udp", "", metadata.AddrPort())
-	if err != nil {
-		return nil, err
+	return d.listenPacketContext(ctx, metadata, dialer.NewDialer(d.DialOptions()...))
+}
+
+func (d *Direct) listenPacketContext(ctx context.Context, metadata *C.Metadata, packetDialer C.Dialer) (C.PacketConn, error) {
+	var conflicts []net.PacketConn
+	defer func() {
+		for _, pc := range conflicts {
+			_ = pc.Close()
+		}
+	}()
+	for attempt := 0; attempt < 8; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		pc, err := packetDialer.ListenPacket(ctx, "udp", "", metadata.AddrPort())
+		if err != nil {
+			return nil, err
+		}
+		if addr, ok := pc.LocalAddr().(*net.UDPAddr); ok && addr != nil {
+			if err := d.loopBack.CheckPacketConnPort(metadata, uint16(addr.Port)); err != nil {
+				// Keep the conflicting port occupied until allocation finishes.
+				conflicts = append(conflicts, pc)
+				if !errors.Is(err, loopback.ErrReject) {
+					return nil, err
+				}
+				continue
+			}
+		}
+		return d.loopBack.NewPacketConn(NewPacketConn(pc, d)), nil
 	}
-	return d.loopBack.NewPacketConn(NewPacketConn(pc, d)), nil
+	return nil, fmt.Errorf("%w: unable to allocate a UDP port distinct from source port %d", loopback.ErrReject, metadata.SrcPort)
 }
 
 func (d *Direct) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
