@@ -84,8 +84,10 @@ func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Me
 	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
 	}
-	if err := ssr.ResolveUDP(ctx, metadata); err != nil {
-		return nil, err
+	if !metadata.UDP.AllowRemote {
+		if err := ssr.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 	addr, err := resolveUDPAddr(ctx, "udp", ssr.addr, ssr.prefer)
 	if err != nil {
@@ -99,7 +101,7 @@ func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Me
 
 	epc := ssr.cipher.PacketConn(N.NewEnhancePacketConn(pc))
 	epc = ssr.protocol.PacketConn(epc)
-	return NewPacketConn(&ssrPacketConn{EnhancePacketConn: epc, rAddr: addr}, ssr, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
+	return NewPacketConn(&ssrPacketConn{EnhancePacketConn: epc, rAddr: addr}, ssr, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // ProxyInfo implements C.ProxyAdapter
@@ -211,19 +213,19 @@ func (spc *ssrPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 		return 0, nil, errors.New("parse addr error")
 	}
 
-	udpAddr := addr.UDPAddr()
-	if udpAddr == nil {
+	source := addr.NetAddr()
+	if source == nil {
 		return 0, nil, errors.New("parse addr error")
 	}
 
-	copy(b, b[len(addr):])
-	return n - len(addr), udpAddr, e
+	copy(b, b[len(addr):n])
+	return n - len(addr), source, e
 }
 
 func (spc *ssrPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
 	data, put, _, err = spc.EnhancePacketConn.WaitReadFrom()
 	if err != nil {
-		return nil, nil, nil, err
+		return
 	}
 
 	_addr := socks5.SplitAddr(data)
@@ -234,15 +236,13 @@ func (spc *ssrPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr
 		return nil, nil, nil, errors.New("parse addr error")
 	}
 
-	udpAddr := _addr.UDPAddr()
-	if udpAddr == nil {
+	addr = _addr.NetAddr()
+	if addr == nil {
 		if put != nil {
 			put()
 		}
 		return nil, nil, nil, errors.New("parse addr error")
 	}
-	addr = udpAddr
-
 	data = data[len(_addr):]
 	return
 }

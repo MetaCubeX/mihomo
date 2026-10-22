@@ -134,8 +134,10 @@ func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
 	}
-	if err = s.ResolveUDP(ctx, metadata); err != nil {
-		return nil, err
+	if !metadata.UDP.AllowRemote {
+		if err = s.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 	c, err := s.dialer.DialContext(ctx, "tcp", s.addr)
 	if err != nil {
@@ -152,7 +154,7 @@ func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	}
 
 	pc := snell.PacketConn(c)
-	return NewPacketConn(pc, s, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
+	return NewPacketConn(pc, s, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyIPOnly})
 }
 
 // SupportUOT implements C.ProxyAdapter

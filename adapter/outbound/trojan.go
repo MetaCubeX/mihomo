@@ -239,7 +239,18 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
 	}
-	if err = t.ResolveUDP(ctx, metadata); err != nil {
+	dialMetadata := metadata
+	if metadata.UDP.AllowRemote {
+		target, err := remoteUDPTarget(metadata.UDP.Target)
+		if err != nil {
+			return nil, err
+		}
+		// The handshake target must not inherit a hostname or IP used only for rules.
+		dialMetadata = metadata.Clone()
+		dialMetadata.Host = target.Fqdn
+		dialMetadata.DstIP = target.Addr
+		dialMetadata.DstPort = target.Port
+	} else if err = t.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
 
@@ -251,13 +262,13 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = t.StreamConnContext(ctx, c, metadata)
+	c, err = t.StreamConnContext(ctx, c, dialMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
 
 	pc := trojan.NewPacketConn(c)
-	return NewPacketConn(pc, t, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
+	return NewPacketConn(pc, t, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // SupportUOT implements C.ProxyAdapter
