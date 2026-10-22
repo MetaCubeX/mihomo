@@ -42,7 +42,7 @@ var (
 	status        = atomic.NewInt32Enum(Suspend)
 	udpInit       sync.Once
 	udpQueues     []chan C.PacketAdapter
-	natTable      = nat.New()
+	natTable      C.NatTable = nat.New()
 	rules         []C.Rule
 	listeners     = make(map[string]C.InboundListener)
 	subRules      map[string][]C.Rule
@@ -446,16 +446,35 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
-	key := packet.Key()
+	// Select the association from the inbound origin before fake-IP, hosts or
+	// sniffing can change the destination used to dial the outbound.
+	origin := M.Socksaddr{Addr: metadata.DstIP.Unmap(), Port: metadata.DstPort}
+	if metadata.Host != "" {
+		origin = M.Socksaddr{Fqdn: metadata.Host, Port: metadata.DstPort}
+	}
+	if sender, source, loaded := natTable.LoadSession(packet.Key(), origin); loaded {
+		packet.BindNATSource(source)
+		sender.Send(packet)
+		return
+	}
+	handleUDPConnNew(packet, metadata, origin)
+}
+
+// Keep the maker and dial closures off the established-session path: passing
+// them through NatTable would otherwise allocate even when the maker is unused.
+func handleUDPConnNew(packet C.PacketAdapter, metadata *C.Metadata, origin M.Socksaddr) {
+	remote, mapping := UDPConfig()
 	var session *udpSession
-	sender, loaded := natTable.GetOrCreate(key, func() C.PacketSender {
-		destination := newUDPDestination(metadata, udpRemoteResolve, key)
+	sender, source, loaded := natTable.GetOrCreateSession(packet.Key(), origin, C.UDPConfig{RemoteResolve: remote, Mapping: mapping}, func(key C.UDPSessionKey, _ C.NatSource, config C.UDPConfig) C.PacketSender {
+		destination := newUDPDestination(metadata, config.RemoteResolve, key.String())
 		session = newUDPSession(destination)
+		session.key = key
 		if sniffingEnable && snifferDispatcher.Enable() {
 			session.PacketSender = snifferDispatcher.UDPSniff(udpSniffPacket{packet, destination.Route}, session.PacketSender)
 		}
 		return session
 	})
+	packet.BindNATSource(source)
 	if !loaded {
 		destination := session.destination
 		dial := func() (C.PacketConn, C.WriteBackProxy, error) {
@@ -494,7 +513,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 			session.bind(pc)
 			writeBackProxy := nat.NewWriteBackProxy(packet)
 
-			go handleUDPToLocal(writeBackProxy, pc, sender, session.sender.mapping, key)
+			go handleUDPToLocal(writeBackProxy, pc, sender, session.sender.mapping, session.key)
 			return pc, writeBackProxy, nil
 		}
 
@@ -502,7 +521,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 			pc, proxy, err := dial()
 			if err != nil {
 				sender.Close()
-				natTable.DeleteIf(key, sender)
+				natTable.DeleteSession(session.key, sender)
 				return
 			}
 			sender.Process(pc, proxy)

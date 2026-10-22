@@ -298,8 +298,10 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
 			var globalID [8]byte
-			if metadata.UDP != nil && metadata.UDP.SessionKey != "" && metadata.SourceValid() {
-				globalID = utils.GlobalID(metadata.SourceAddress())
+			// The immutable association key includes the mapping mode and origin;
+			// using only the source would merge distinct sessions at the server.
+			if metadata.UDP != nil && metadata.UDP.SessionKey != "" {
+				globalID = utils.GlobalID(metadata.UDP.SessionKey)
 			}
 			if useEarly {
 				conn = v.client.DialEarlyXUDPPacketConn(c,

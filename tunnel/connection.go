@@ -69,7 +69,11 @@ func (s *packetSender) processPacket(pc C.PacketConn, packet C.PacketAdapter) {
 		return
 	}
 
-	destination := newUDPDestination(metadata, s.allowRemote, packet.Key())
+	identity := ""
+	if s.first != nil {
+		identity = s.first.Route.UDP.SessionKey
+	}
+	destination := newUDPDestination(metadata, s.allowRemote, identity)
 	if s.first != nil && destination.Origin == s.first.Origin {
 		// Sniffing belongs to the initial target, not every packet sharing a source.
 		destination.Route = s.first.Route.Clone()
@@ -175,11 +179,11 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, addr net.Addr) error
 	return nil
 }
 
-func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSender, mapping *udpNAT, key string) {
+func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSender, mapping *udpNAT, key C.UDPSessionKey) {
 	defer func() {
 		sender.Close()
 		_ = pc.Close()
-		natTable.DeleteIf(key, sender)
+		natTable.DeleteSession(key, sender)
 	}()
 
 	for {

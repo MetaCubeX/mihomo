@@ -7,12 +7,95 @@ import (
 	"testing"
 	"time"
 
+	"github.com/metacubex/mihomo/component/nat"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 
 	M "github.com/metacubex/sing/common/metadata"
 	"github.com/stretchr/testify/require"
 )
+
+type udpWorkerTestPacket struct {
+	C.PacketAdapter
+	source string
+}
+
+func (p udpWorkerTestPacket) Key() string { return p.source }
+
+type udpWorkerTestTable struct {
+	*nat.Table
+	deleted chan struct{}
+}
+
+func (t udpWorkerTestTable) DeleteSession(key C.UDPSessionKey, sender C.PacketSender) bool {
+	deleted := t.Table.DeleteSession(key, sender)
+	t.deleted <- struct{}{}
+	return deleted
+}
+
+func TestProcessUDPDuringSourceClose(t *testing.T) {
+	installUDPDestinationTestState(t, nil)
+	previousTable, previousStatus := natTable, Status()
+	table := udpWorkerTestTable{Table: nat.New(), deleted: make(chan struct{}, 2)}
+	natTable = table
+	status.Store(Running)
+	t.Cleanup(func() {
+		natTable = previousTable
+		status.Store(previousStatus)
+	})
+	origin := M.ParseSocksaddr("192.0.2.2:443")
+	old := newPacketSender()
+	defer old.Close()
+	_, source, _ := table.GetOrCreateSession("closing", origin, C.UDPConfig{}, func(C.UDPSessionKey, C.NatSource, C.UDPConfig) C.PacketSender {
+		return old
+	})
+	other := newPacketSender().(*packetSender)
+	defer other.Close()
+	table.GetOrCreateSession("other", origin, C.UDPConfig{}, func(C.UDPSessionKey, C.NatSource, C.UDPConfig) C.PacketSender {
+		return other
+	})
+	writing, release, written := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	require.NoError(t, err)
+	defer conn.Close()
+	go func() {
+		defer close(written)
+		_, _ = source.WithLocalConn(origin.String(), func() (*net.UDPConn, error) {
+			return conn, nil
+		}, func(*net.UDPConn) (int, error) {
+			close(writing)
+			<-release
+			return 0, nil
+		})
+	}()
+	<-writing
+	go table.DeleteSession(C.NewUDPSessionKey("closing", C.UDPEndpointIndependent, origin), old)
+	require.Eventually(t, func() bool {
+		_, _, loaded := table.LoadSession("closing", origin)
+		return !loaded
+	}, time.Second, time.Millisecond)
+	queue := make(chan C.PacketAdapter, 2)
+	workerDone := make(chan struct{})
+	go func() { processUDP(queue); close(workerDone) }()
+	defer func() {
+		close(release)
+		<-written
+		<-workerDone
+		<-table.deleted
+		<-table.deleted
+	}()
+	for _, source := range []string{"closing", "other"} {
+		metadata := &C.Metadata{NetWork: C.UDP, Type: C.INNER, DstIP: origin.Addr, DstPort: origin.Port, SpecialProxy: "missing"}
+		queue <- udpWorkerTestPacket{PacketAdapter: C.NewPacketAdapter(&udpTestPacket{}, metadata), source: source}
+	}
+	close(queue)
+	select {
+	case packet := <-other.ch:
+		packet.Drop()
+	case <-time.After(time.Second):
+		t.Fatal("one closing source blocked another source on the same processUDP worker")
+	}
+}
 
 type udpSessionTestConn struct {
 	C.PacketConn

@@ -389,8 +389,10 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 	if v.option.XUDP {
 		var globalID [8]byte
-		if metadata.UDP.SessionKey != "" && metadata.SourceValid() {
-			globalID = utils.GlobalID(metadata.SourceAddress())
+		// Internal requests have no association identity and must not share a
+		// synthetic ID. Business sessions include their mapping key here.
+		if metadata.UDP.SessionKey != "" {
+			globalID = utils.GlobalID(metadata.UDP.SessionKey)
 		}
 		return NewPacketConn(N.NewThreadSafePacketConn(
 			vmessSing.NewXUDPConn(c,
