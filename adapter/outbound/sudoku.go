@@ -98,8 +98,10 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
 	}
-	if err := s.ResolveUDP(ctx, metadata); err != nil {
-		return nil, err
+	if !metadata.UDP.AllowRemote {
+		if err := s.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 
 	cfg, err := s.buildConfig(metadata)
@@ -117,7 +119,7 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		return nil, fmt.Errorf("start uot failed: %w", err)
 	}
 
-	return NewPacketConn(N.NewThreadSafePacketConn(sudoku.NewUoTPacketConn(c)), s, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
+	return NewPacketConn(N.NewThreadSafePacketConn(sudoku.NewUoTPacketConn(c)), s, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // SupportUOT implements C.ProxyAdapter

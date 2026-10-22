@@ -2,6 +2,7 @@ package inbound_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/netip"
 	"sync"
@@ -114,6 +115,7 @@ func udpDomainTestPairs() []udpTestPair {
 			return outbound.NewSnell(outbound.SnellOption{BasicOption: basic, Name: "udp_snell", Server: address.Addr().String(), Port: int(address.Port()), Psk: userUUID, Version: 4, UDP: true})
 		},
 	})
+	pairs = append(pairs, udpQUICDomainTestPairs()...)
 	return pairs
 }
 
@@ -218,4 +220,118 @@ func TestInboundUDPDomainResolution(t *testing.T) {
 			})
 		}
 	}
+}
+
+// Reuse the remote/local checks and echo handler so these transports must
+// preserve the same per-packet addresses as the SOCKS and Shadowsocks peers.
+func udpQUICDomainTestPairs() []udpTestPair {
+	pairs := []udpTestPair{
+		{
+			name:         "Hysteria2",
+			udpTransport: true,
+			in: func(base inbound.BaseOption) (C.InboundListener, error) {
+				return inbound.NewHysteria2(&inbound.Hysteria2Option{
+					BaseOption: base, Users: map[string]string{"test": userUUID},
+					Certificate: tlsCertificate, PrivateKey: tlsPrivateKey,
+				})
+			},
+			out: func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+				return outbound.NewHysteria2(outbound.Hysteria2Option{
+					BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()),
+					Password: userUUID, Fingerprint: tlsFingerprint,
+				})
+			},
+		},
+		{
+			name: "AnyTLS",
+			in: func(base inbound.BaseOption) (C.InboundListener, error) {
+				return inbound.NewAnyTLS(&inbound.AnyTLSOption{
+					BaseOption: base, Users: map[string]string{"test": userUUID},
+					Certificate: tlsCertificate, PrivateKey: tlsPrivateKey,
+				})
+			},
+			out: func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+				return outbound.NewAnyTLS(outbound.AnyTLSOption{
+					BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()),
+					Password: userUUID, Fingerprint: tlsFingerprint, UDP: true,
+				})
+			},
+		},
+		{
+			name: "Sudoku",
+			in: func(base inbound.BaseOption) (C.InboundListener, error) {
+				return inbound.NewSudoku(&inbound.SudokuOption{BaseOption: base, Key: userUUID})
+			},
+			out: func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+				return outbound.NewSudoku(outbound.SudokuOption{
+					BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()), Key: userUUID,
+				})
+			},
+		},
+	}
+	for _, version := range []int{4, 5} {
+		for _, mode := range []struct {
+			name  string
+			relay string
+			uos   int
+		}{
+			{name: "native", relay: "native"},
+			{name: "quic", relay: "quic"},
+			{name: "UoSv1", uos: 1},
+			{name: "UoSv2", uos: 2},
+		} {
+			version, mode := version, mode
+			pairs = append(pairs, udpTestPair{
+				name:         fmt.Sprintf("TUICv%d/%s", version, mode.name),
+				local:        mode.uos == 1,
+				udpTransport: true,
+				in: func(base inbound.BaseOption) (C.InboundListener, error) {
+					return inbound.NewTuic(&inbound.TuicOption{
+						BaseOption: base, Token: []string{userUUID}, Users: map[string]string{userUUID: userUUID},
+						Certificate: tlsCertificate, PrivateKey: tlsPrivateKey, AuthenticationTimeout: 5000,
+					})
+				},
+				out: func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+					option := outbound.TuicOption{
+						BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()),
+						Fingerprint: tlsFingerprint, UdpRelayMode: mode.relay,
+						UDPOverStream: mode.uos != 0, UDPOverStreamVersion: mode.uos,
+					}
+					if version == 4 {
+						option.Token = userUUID
+					} else {
+						option.UUID, option.Password = userUUID, userUUID
+					}
+					return outbound.NewTuic(option)
+				},
+			})
+		}
+	}
+	for _, version := range []string{"v1", "v2"} {
+		for _, stream := range []bool{false, true} {
+			version, stream := version, stream
+			mode := "datagram"
+			if stream {
+				mode = "stream"
+			}
+			pairs = append(pairs, udpTestPair{
+				name:         "ShadowQUIC/" + version + "/" + mode,
+				udpTransport: true,
+				in: func(base inbound.BaseOption) (C.InboundListener, error) {
+					return inbound.NewShadowQuic(&inbound.ShadowQuicOption{
+						BaseOption: base, QUICVersions: []string{version},
+						Users:       []inbound.ShadowQuicUser{{Username: "udp-domain-user", Password: userUUID}},
+						JLSUpstream: inbound.ShadowQuicJLSUpstream{Addr: "127.0.0.1:1"},
+					})
+				},
+				out: func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+					return outbound.NewShadowQuic(outbound.ShadowQuicOption{
+						BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()),
+						QUICVersions: []string{version}, UDPOverStream: stream, Username: "udp-domain-user", Password: userUUID,
+					})
+				},
+			})
+		}
+	}
+	return append(pairs, udpTestPair{name: "Hysteria", peer: newUDPHysteriaPeer})
 }

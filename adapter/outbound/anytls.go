@@ -62,7 +62,16 @@ func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
 	}
-	if err = t.ResolveUDP(ctx, metadata); err != nil {
+	var destination M.Socksaddr
+	if metadata.UDP.AllowRemote {
+		destination, err = remoteUDPTarget(metadata.UDP.Target)
+	} else {
+		if err = t.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
+		destination = M.SocksaddrFromNet(metadata.UDPAddr())
+	}
+	if err != nil {
 		return nil, err
 	}
 
@@ -73,8 +82,7 @@ func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	}
 
 	// create uot on tcp
-	destination := M.SocksaddrFromNet(metadata.UDPAddr())
-	return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), t, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
+	return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), t, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // SupportUOT implements C.ProxyAdapter

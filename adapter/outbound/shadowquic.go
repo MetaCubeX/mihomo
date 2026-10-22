@@ -63,14 +63,16 @@ func (s *ShadowQuic) ListenPacketContext(ctx context.Context, metadata *C.Metada
 	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
 	}
-	if err := s.ResolveUDP(ctx, metadata); err != nil {
-		return nil, err
+	if !metadata.UDP.AllowRemote {
+		if err := s.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 	pc, err := s.client.ListenPacket(ctx, metadata)
 	if err != nil {
 		return nil, err
 	}
-	return NewPacketConn(pc, s, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
+	return NewPacketConn(pc, s, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 func (s *ShadowQuic) Close() error {
