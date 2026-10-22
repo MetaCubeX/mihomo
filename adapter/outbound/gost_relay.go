@@ -8,11 +8,13 @@ import (
 
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/gost"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 type GostRelay struct {
 	*Base
-	dialer C.Dialer
+	dialer *gost.RelayDialer
 	option *GostRelayOption
 }
 
@@ -53,16 +55,30 @@ func (g *GostRelay) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
 	}
-	if err = g.ResolveUDP(ctx, metadata); err != nil {
-		return nil, err
+	capabilities := C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyBoundDestination}
+	if g.option.Forward {
+		// Forward mode omits the target: the server chooses its fixed upstream.
+		capabilities.Destination = C.UDPIPOnly
+	}
+	var target M.Socksaddr
+	if metadata.UDP.AllowRemote && capabilities.Destination == C.UDPDomain {
+		target, err = remoteUDPTarget(metadata.UDP.Target)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if err = g.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
+		target = M.SocksaddrFromNetIP(metadata.AddrPort())
 	}
 
-	pc, err := g.dialer.ListenPacket(ctx, "udp", "", metadata.AddrPort())
+	pc, err := g.dialer.ListenPacketAddress(ctx, "udp", target)
 	if err != nil {
 		return nil, fmt.Errorf("%s udp connect error: %w", g.addr, err)
 	}
 
-	return NewPacketConn(pc, g, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyBoundDestination})
+	return NewPacketConn(pc, g, metadata, capabilities)
 }
 
 func (g *GostRelay) ProxyInfo() C.ProxyInfo {
@@ -94,7 +110,7 @@ func NewGostRelay(option GostRelayOption) (*GostRelay, error) {
 		option: &option,
 	}
 
-	relay.dialer = gost.NewRelayDialer(option.NewDialer(relay.DialOptions()), &gost.RelayOption{
+	relay.dialer = gost.NewRelayDialer(option.NewDialer(relay.DialOptions()), gost.RelayOption{
 		Server:            option.Server,
 		Port:              option.Port,
 		Forward:           option.Forward,

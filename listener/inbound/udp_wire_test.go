@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	N "github.com/metacubex/mihomo/common/net"
@@ -217,4 +218,108 @@ func serveUDPHysteriaPeer(ctx context.Context, listener *quic.Listener, echo *ud
 			data:     data, err: err,
 		})
 	}
+}
+
+func readGostUDPRequest(reader io.Reader) (M.Socksaddr, error) {
+	var header [4]byte
+	if _, err := io.ReadFull(reader, header[:]); err != nil {
+		return M.Socksaddr{}, err
+	}
+	if header[0] != 1 || header[1] != 0x81 {
+		return M.Socksaddr{}, fmt.Errorf("unexpected Gost UDP request: %x", header)
+	}
+	features := make([]byte, binary.BigEndian.Uint16(header[2:]))
+	if _, err := io.ReadFull(reader, features); err != nil {
+		return M.Socksaddr{}, err
+	}
+	var target M.Socksaddr
+	var udpNetwork bool
+	for len(features) > 0 {
+		if len(features) < 3 {
+			return target, io.ErrUnexpectedEOF
+		}
+		kind, size := features[0], int(binary.BigEndian.Uint16(features[1:3]))
+		features = features[3:]
+		if size > len(features) {
+			return target, io.ErrUnexpectedEOF
+		}
+		switch kind {
+		case 2:
+			// Gost's address feature uses the SOCKS address encoding.
+			address := socks5.SplitAddr(features[:size])
+			if address == nil || len(address) != size {
+				return target, fmt.Errorf("invalid Gost target feature")
+			}
+			target = M.ParseSocksaddr(address.String())
+		case 4:
+			udpNetwork = bytes.Equal(features[:size], []byte{0, 1})
+		}
+		features = features[size:]
+	}
+	if !udpNetwork {
+		return target, fmt.Errorf("Gost request is missing the UDP network feature")
+	}
+	return target, nil
+}
+
+func newUDPGostPeer(t *testing.T, echo *udpEchoHandler) C.ProxyAdapter {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	accepted := make(chan net.Conn, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		accepted <- conn
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		target, err := readGostUDPRequest(conn)
+		if err != nil {
+			echo.onResult(udpEchoResult{err: err})
+			return
+		}
+		if _, err = conn.Write([]byte{1, 0, 0, 0}); err != nil {
+			echo.onResult(udpEchoResult{err: err})
+			return
+		}
+		// Relay UDP frames contain only a length and payload, so neither an
+		// IP nor a domain source can be sent independently of the handshake.
+		for {
+			var header [2]byte
+			if _, err := io.ReadFull(conn, header[:]); err != nil {
+				return
+			}
+			data := make([]byte, binary.BigEndian.Uint16(header[:]))
+			if _, err := io.ReadFull(conn, data); err != nil {
+				return
+			}
+			_, err := conn.Write(append(header[:], data...))
+			echo.onResult(udpEchoResult{
+				metadata: C.Metadata{NetWork: C.UDP, Host: target.Fqdn, DstIP: target.Addr, DstPort: target.Port},
+				data:     data, err: err,
+			})
+			if err != nil {
+				return
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		_ = listener.Close()
+		if conn := <-accepted; conn != nil {
+			_ = conn.Close()
+		}
+		<-done
+	})
+	proxy, err := outbound.NewGostRelay(outbound.GostRelayOption{
+		BasicOption: outbound.BasicOption{IPVersion: C.IPv4Only},
+		Name:        "udp_gost_out", Server: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port,
+		UDP: true,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, proxy.Close()) })
+	return proxy
 }

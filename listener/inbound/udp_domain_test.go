@@ -118,6 +118,8 @@ func udpDomainTestPairs() []udpTestPair {
 	})
 	pairs = append(pairs, udpQUICDomainTestPairs()...)
 	pairs = append(pairs, udpMieruDomainTestPairs()...)
+	pairs = append(pairs, udpMuxDomainTestPairs()...)
+	pairs = append(pairs, udpTestPair{name: "Gost", bound: true, peer: newUDPGostPeer})
 	return pairs
 }
 
@@ -135,7 +137,7 @@ func udpDomainTestAddress(address M.Socksaddr) net.Addr {
 	return address
 }
 
-func exchangeUDPDomainTestPacket(t *testing.T, pc C.PacketConn, results <-chan udpEchoResult, target, reply M.Socksaddr, wait bool) {
+func exchangeUDPDomainTestPacket(t *testing.T, pc C.PacketConn, results <-chan udpEchoResult, target, reply, wire M.Socksaddr, wait bool) {
 	t.Helper()
 	payload := []byte("domain UDP payload")
 	require.NoError(t, pc.SetReadDeadline(time.Now().Add(3*time.Second)))
@@ -151,9 +153,9 @@ func exchangeUDPDomainTestPacket(t *testing.T, pc C.PacketConn, results <-chan u
 		require.NoError(t, result.err)
 		require.Equal(t, payload, result.data)
 		require.Equal(t, C.UDP, result.metadata.NetWork)
-		require.Equal(t, target.Fqdn, result.metadata.Host, "the server must receive the business domain unchanged")
-		require.Equal(t, target.Addr, result.metadata.DstIP)
-		require.Equal(t, target.Port, result.metadata.DstPort)
+		require.Equal(t, wire.Fqdn, result.metadata.Host, "the server must receive the business domain unchanged")
+		require.Equal(t, wire.Addr, result.metadata.DstIP)
+		require.Equal(t, wire.Port, result.metadata.DstPort)
 	case <-time.After(3 * time.Second):
 		t.Fatal("UDP echo handler did not finish")
 	}
@@ -180,7 +182,7 @@ func TestInboundUDPDomainResolution(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				targets := []M.Socksaddr{M.ParseSocksaddr("First.udp-remote.invalid:10001"), M.ParseSocksaddr("Second.udp-remote.invalid:10002")}
-				if pair.bound {
+				if pair.name == "Gost" {
 					targets = targets[:1]
 				}
 				pc, err := out.ListenPacketContext(ctx, udpDomainTestMetadata(targets[0], remote))
@@ -211,12 +213,19 @@ func TestInboundUDPDomainResolution(t *testing.T) {
 						if target == targets[0] {
 							require.Equal(t, want, pc.InitialDestination())
 						}
-						reply := want
+						wire, reply := want, want
+						if pair.bound {
+							wire, reply = pc.InitialDestination(), pc.InitialDestination()
+						}
 						if pair.ipReply {
 							reply = M.ParseSocksaddr("192.0.2.50:20001")
 						}
-						exchangeUDPDomainTestPacket(t, pc, results, prepared, reply, wait)
+						exchangeUDPDomainTestPacket(t, pc, results, prepared, reply, wire, wait)
 					}
+				}
+				if pair.name == "Gost" {
+					_, err = pc.WriteTo([]byte("second target"), M.ParseSocksaddr("other.example:3478"))
+					require.Error(t, err, "Gost associations remain bound to their first target")
 				}
 				r.checkQueries(t, queries)
 			})
@@ -394,4 +403,77 @@ func udpMieruDomainTestPairs() []udpTestPair {
 		}
 	}
 	return pairs
+}
+
+func udpVmessModePair(kind, mode string) udpTestPair {
+	return udpTestPair{
+		name: kind + "/" + mode, local: mode == "packetaddr", bound: mode == "", ipReply: mode == "packetaddr",
+		in: func(base inbound.BaseOption) (C.InboundListener, error) {
+			if kind == "VMess" {
+				return inbound.NewVmess(&inbound.VmessOption{
+					BaseOption: base, Users: []inbound.VmessUser{{Username: "test", UUID: userUUID}},
+				})
+			}
+			return inbound.NewVless(&inbound.VlessOption{
+				BaseOption: base, Users: []inbound.VlessUser{{Username: "test", UUID: userUUID}},
+				Certificate: tlsCertificate, PrivateKey: tlsPrivateKey,
+			})
+		},
+		out: func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+			if kind == "VMess" {
+				return outbound.NewVmess(outbound.VmessOption{
+					BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()),
+					UUID: userUUID, Cipher: "auto", UDP: true, PacketEncoding: mode,
+				})
+			}
+			return outbound.NewVless(outbound.VlessOption{
+				BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()),
+				UUID: userUUID, UDP: true, PacketEncoding: mode, TLS: true, Fingerprint: tlsFingerprint,
+			})
+		},
+	}
+}
+
+func udpMuxDomainTestPairs() []udpTestPair {
+	var pairs []udpTestPair
+	for _, kind := range []string{"VMess", "VLESS"} {
+		for _, mode := range []string{"", "xudp", "packetaddr"} {
+			// NewVless selects XUDP for every public non-packetaddr configuration.
+			if kind == "VLESS" && mode == "" {
+				continue
+			}
+			pairs = append(pairs, udpVmessModePair(kind, mode))
+		}
+	}
+	for _, protocol := range []string{"smux", "yamux", "h2mux"} {
+		protocol := protocol
+		pair := udpTestPairs[1] // Trojan's stream and UDP listeners share credentials.
+		pair.name = "SingMux/" + protocol
+		pair.out = func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+			proxy, err := udpTestPairs[1].out(address, basic)
+			if err != nil {
+				return nil, err
+			}
+			mux, err := outbound.NewSingMux(outbound.SingMuxOption{Enabled: true, Protocol: protocol}, proxy.(outbound.ProxyAdapter))
+			if err != nil {
+				_ = proxy.Close()
+			}
+			return mux, err
+		}
+		pairs = append(pairs, pair)
+	}
+	pair := udpTestPairs[1]
+	pair.name = "SingMux/only-tcp"
+	pair.out = func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+		proxy, err := udpTestPairs[1].out(address, basic)
+		if err != nil {
+			return nil, err
+		}
+		mux, err := outbound.NewSingMux(outbound.SingMuxOption{Enabled: true, Protocol: "smux", OnlyTcp: true}, proxy.(outbound.ProxyAdapter))
+		if err != nil {
+			_ = proxy.Close()
+		}
+		return mux, err
+	}
+	return append(pairs, pair)
 }

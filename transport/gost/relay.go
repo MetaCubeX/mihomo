@@ -16,6 +16,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 
+	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/smux"
 )
 
@@ -65,24 +66,20 @@ type RelayOption struct {
 	ClientFingerprint string `proxy:"client-fingerprint,omitempty"`
 }
 
-type relayDialer struct {
+type RelayDialer struct {
 	base   C.Dialer
 	option RelayOption
 }
 
 // NewRelayDialer wraps an existing dialer with gost relay connect support.
-func NewRelayDialer(base C.Dialer, option *RelayOption) C.Dialer {
-	if option == nil {
-		return base
-	}
-
-	return &relayDialer{
+func NewRelayDialer(base C.Dialer, option RelayOption) *RelayDialer {
+	return &RelayDialer{
 		base:   base,
-		option: *option,
+		option: option,
 	}
 }
 
-func (d *relayDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+func (d *RelayDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	if !strings.HasPrefix(network, "tcp") {
 		return nil, fmt.Errorf("gost relay only supports tcp dial, got %s", network)
 	}
@@ -114,15 +111,24 @@ func (d *relayDialer) DialContext(ctx context.Context, network, address string) 
 	return conn, nil
 }
 
-func (d *relayDialer) ListenPacket(ctx context.Context, network, _ string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+func (d *RelayDialer) ListenPacket(ctx context.Context, network, _ string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+	return d.ListenPacketAddress(ctx, network, M.SocksaddrFromNetIP(rAddrPort))
+}
+
+// ListenPacketAddress keeps business domains in the relay handshake without
+// changing the IP-only C.Dialer entry used for proxy-server bootstrap.
+func (d *RelayDialer) ListenPacketAddress(ctx context.Context, network string, target M.Socksaddr) (net.PacketConn, error) {
 	if !strings.HasPrefix(network, "udp") {
 		return nil, fmt.Errorf("gost relay only supports udp packet dial, got %s", network)
 	}
-	if !rAddrPort.IsValid() {
+	if !target.IsValid() {
 		return nil, fmt.Errorf("gost relay udp target address is required")
 	}
 
-	raddr := net.UDPAddrFromAddrPort(rAddrPort)
+	var raddr net.Addr = target
+	if target.IsIP() {
+		raddr = target.UDPAddr()
+	}
 	conn, err := d.dialRelayServer(ctx, raddr.String())
 	if err != nil {
 		return nil, err
@@ -153,7 +159,7 @@ func (d *relayDialer) ListenPacket(ctx context.Context, network, _ string, rAddr
 	}, nil
 }
 
-func (d *relayDialer) dialRelayServer(ctx context.Context, fallbackAddress string) (net.Conn, error) {
+func (d *RelayDialer) dialRelayServer(ctx context.Context, fallbackAddress string) (net.Conn, error) {
 	relayAddress := ""
 	if d.option.Server != "" || d.option.Port > 0 {
 		if d.option.Server == "" || d.option.Port <= 0 {
@@ -214,7 +220,7 @@ func (d *relayDialer) dialRelayServer(ctx context.Context, fallbackAddress strin
 	return conn, nil
 }
 
-func (d *relayDialer) serverName(relayAddress string) string {
+func (d *RelayDialer) serverName(relayAddress string) string {
 	if d.option.SNI != "" {
 		return d.option.SNI
 	}
