@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -116,6 +117,7 @@ func udpDomainTestPairs() []udpTestPair {
 		},
 	})
 	pairs = append(pairs, udpQUICDomainTestPairs()...)
+	pairs = append(pairs, udpMieruDomainTestPairs()...)
 	return pairs
 }
 
@@ -334,4 +336,62 @@ func udpQUICDomainTestPairs() []udpTestPair {
 		}
 	}
 	return append(pairs, udpTestPair{name: "Hysteria", peer: newUDPHysteriaPeer})
+}
+
+func udpMieruDomainTestPairs() []udpTestPair {
+	var pairs []udpTestPair
+	for _, transport := range []string{"TCP", "UDP"} {
+		for _, handshake := range []string{"HANDSHAKE_STANDARD", "HANDSHAKE_NO_WAIT"} {
+			transport, handshake := transport, handshake
+			pairs = append(pairs, udpTestPair{
+				name:         "Mieru/" + transport + "/" + handshake,
+				udpTransport: transport == "UDP",
+				in: func(base inbound.BaseOption) (C.InboundListener, error) {
+					// The SDK rejects port zero, so retain the socket selected by
+					// the shared fixture and give its bound port to the SDK.
+					lc := mieruTestInboundListenConfig{
+						ListenFn: func(context.Context, string, string) (net.Listener, error) {
+							return nil, fmt.Errorf("unexpected TCP listener for Mieru %s", transport)
+						},
+						ListenPacketFn: func(context.Context, string, string) (net.PacketConn, error) {
+							return nil, fmt.Errorf("unexpected UDP listener for Mieru %s", transport)
+						},
+					}
+					var closeSocket func() error
+					if transport == "TCP" {
+						ln, err := base.ListenConfig().Listen(context.Background(), "tcp", net.JoinHostPort(base.Listen, base.Port))
+						if err != nil {
+							return nil, err
+						}
+						closeSocket = ln.Close
+						base.Port = strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+						lc.ListenFn = func(context.Context, string, string) (net.Listener, error) { return ln, nil }
+					} else {
+						pc, err := base.ListenConfig().ListenPacket(context.Background(), "udp", net.JoinHostPort(base.Listen, base.Port))
+						if err != nil {
+							return nil, err
+						}
+						closeSocket = pc.Close
+						base.Port = strconv.Itoa(pc.LocalAddr().(*net.UDPAddr).Port)
+						lc.ListenPacketFn = func(context.Context, string, string) (net.PacketConn, error) { return pc, nil }
+					}
+					base.ListenConfigForAPI = lc
+					listener, err := inbound.NewMieru(&inbound.MieruOption{
+						BaseOption: base, Transport: transport, Users: map[string]string{"test": userUUID},
+					})
+					if err != nil {
+						_ = closeSocket()
+					}
+					return listener, err
+				},
+				out: func(address netip.AddrPort, basic outbound.BasicOption) (C.ProxyAdapter, error) {
+					return outbound.NewMieru(outbound.MieruOption{
+						BasicOption: basic, Name: "udp_domain_outbound", Server: address.Addr().String(), Port: int(address.Port()),
+						Transport: transport, UserName: "test", Password: userUUID, UDP: true, HandshakeMode: handshake,
+					})
+				},
+			})
+		}
+	}
+	return pairs
 }
