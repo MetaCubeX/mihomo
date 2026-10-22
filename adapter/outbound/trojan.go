@@ -236,6 +236,9 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = t.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -254,7 +257,7 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	}
 
 	pc := trojan.NewPacketConn(c)
-	return NewPacketConn(pc, t), err
+	return NewPacketConn(pc, t, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 // SupportUOT implements C.ProxyAdapter

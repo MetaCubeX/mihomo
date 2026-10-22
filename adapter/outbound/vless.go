@@ -367,6 +367,9 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = v.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -386,21 +389,21 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 	if v.option.XUDP {
 		var globalID [8]byte
-		if metadata.SourceValid() {
+		if metadata.UDP.SessionKey != "" && metadata.SourceValid() {
 			globalID = utils.GlobalID(metadata.SourceAddress())
 		}
 		return NewPacketConn(N.NewThreadSafePacketConn(
 			vmessSing.NewXUDPConn(c,
 				globalID,
 				M.SocksaddrFromNet(metadata.UDPAddr())),
-		), v), nil
+		), v, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 	} else if v.option.PacketAddr {
 		return NewPacketConn(N.NewThreadSafePacketConn(
 			packetaddr.NewConn(v.client.PacketConn(c, metadata.UDPAddr()),
 				M.SocksaddrFromNet(metadata.UDPAddr())),
-		), v), nil
+		), v, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 	}
-	return NewPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, metadata.UDPAddr())), v), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, metadata.UDPAddr())), v, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyBoundDestination})
 }
 
 // SupportUOT implements C.ProxyAdapter

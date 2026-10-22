@@ -298,7 +298,7 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
 			var globalID [8]byte
-			if metadata.SourceValid() {
+			if metadata.UDP != nil && metadata.UDP.SessionKey != "" && metadata.SourceValid() {
 				globalID = utils.GlobalID(metadata.SourceAddress())
 			}
 			if useEarly {
@@ -421,6 +421,9 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = v.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -438,10 +441,16 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
 
-	if pc, ok := c.(net.PacketConn); ok {
-		return NewPacketConn(N.NewThreadSafePacketConn(pc), v), nil
+	capabilities := C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyBoundDestination}
+	if v.option.XUDP {
+		capabilities.Reply = C.UDPReplyAddress
+	} else if v.option.PacketAddr {
+		capabilities.Reply = C.UDPReplyIPOnly
 	}
-	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+	if pc, ok := c.(net.PacketConn); ok {
+		return NewPacketConn(N.NewThreadSafePacketConn(pc), v, metadata, capabilities)
+	}
+	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v, metadata, capabilities)
 }
 
 // ProxyInfo implements C.ProxyAdapter

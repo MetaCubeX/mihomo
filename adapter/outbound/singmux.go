@@ -47,6 +47,9 @@ func (s *SingMux) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 }
 
 func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if s.onlyTcp {
 		return s.ProxyAdapter.ListenPacketContext(ctx, metadata)
 	}
@@ -60,7 +63,7 @@ func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return NewPacketConn(N.NewThreadSafePacketConn(pc), s), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(pc), s, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 func (s *SingMux) SupportUDP() bool {

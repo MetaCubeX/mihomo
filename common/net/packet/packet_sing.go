@@ -21,6 +21,16 @@ type enhanceSingPacketConn struct {
 	packetReadWaiter N.PacketReadWaiter
 }
 
+func (c *enhanceSingPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	// Some sing connections discard domain addresses in their net.PacketConn
+	// methods. Use the same domain-preserving path as WaitReadFrom.
+	data, put, addr, err := c.WaitReadFrom()
+	if put != nil {
+		defer put()
+	}
+	return copy(p, data), addr, err
+}
+
 func (c *enhanceSingPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
 	var buff *buf.Buffer
 	var dest M.Socksaddr
@@ -65,7 +75,7 @@ func (c *enhanceSingPacketConn) WriterReplaceable() bool {
 }
 
 func (c *enhanceSingPacketConn) ReaderReplaceable() bool {
-	return true
+	return false
 }
 
 func newEnhanceSingPacketConn(conn SingPacketConn) *enhanceSingPacketConn {

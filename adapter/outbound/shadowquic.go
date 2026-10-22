@@ -60,6 +60,9 @@ func (s *ShadowQuic) DialContext(ctx context.Context, metadata *C.Metadata) (C.C
 }
 
 func (s *ShadowQuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err := s.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -67,7 +70,7 @@ func (s *ShadowQuic) ListenPacketContext(ctx context.Context, metadata *C.Metada
 	if err != nil {
 		return nil, err
 	}
-	return NewPacketConn(pc, s), nil
+	return NewPacketConn(pc, s, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 func (s *ShadowQuic) Close() error {

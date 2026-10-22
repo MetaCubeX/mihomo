@@ -12,6 +12,8 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/dialer"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 // Adapter Type
@@ -104,7 +106,9 @@ type Conn interface {
 type PacketConn interface {
 	N.EnhancePacketConn
 	Connection
-	ResolveUDP(ctx context.Context, metadata *Metadata) error
+	PrepareUDP(ctx context.Context, metadata *Metadata) (M.Socksaddr, error)
+	InitialDestination() M.Socksaddr
+	UDPCapabilities() UDPCapabilities
 }
 
 type Dialer interface {
@@ -331,11 +335,6 @@ type PacketSender interface {
 	Close()
 	// DoSniff will blocking after sniffer work done
 	DoSniff(*Metadata) error
-	// AddMapping add a destination NAT record
-	AddMapping(originMetadata *Metadata, metadata *Metadata)
-	// RestoreReadFrom restore destination NAT for ReadFrom
-	// the implement must ensure returned netip.Add is valid (or just return input addr)
-	RestoreReadFrom(addr netip.Addr) netip.Addr
 }
 
 type NatTable interface {

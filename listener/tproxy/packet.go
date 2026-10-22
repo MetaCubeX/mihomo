@@ -26,7 +26,14 @@ func (c *packet) Data() []byte {
 
 // WriteBack opens a new socket binding `addr` to write UDP packet back
 func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
-	rAddr := addr.(*net.UDPAddr).AddrPort() // tunnel's handleUDPToLocal will ensure addr is *net.UDPAddr
+	udpAddr, ok := addr.(*net.UDPAddr)
+	if !ok || udpAddr == nil || udpAddr.Port < 0 || udpAddr.Port > 65535 {
+		return 0, fmt.Errorf("invalid tproxy UDP source address: %v", addr)
+	}
+	rAddr := udpAddr.AddrPort()
+	if !rAddr.IsValid() {
+		return 0, fmt.Errorf("invalid tproxy UDP source address: %v", addr)
+	}
 	tc, err := createOrGetLocalConn(rAddr, c.lAddr, c.tunnel, c.additions...)
 	if err != nil {
 		return

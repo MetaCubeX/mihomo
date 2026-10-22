@@ -95,6 +95,9 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 
 // ListenPacketContext implements C.ProxyAdapter
 func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err := s.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -114,7 +117,7 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		return nil, fmt.Errorf("start uot failed: %w", err)
 	}
 
-	return NewPacketConn(N.NewThreadSafePacketConn(sudoku.NewUoTPacketConn(c)), s), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(sudoku.NewUoTPacketConn(c)), s, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 // SupportUOT implements C.ProxyAdapter

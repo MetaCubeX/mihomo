@@ -213,8 +213,9 @@ type Metadata struct {
 	RemoteDst    string     `json:"remoteDestination"`
 	DSCP         uint8      `json:"dscp"`
 
-	RawSrcAddr net.Addr `json:"-"`
-	RawDstAddr net.Addr `json:"-"`
+	RawSrcAddr net.Addr    `json:"-"`
+	RawDstAddr net.Addr    `json:"-"`
+	UDP        *UDPRequest `json:"-"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
 }
@@ -289,6 +290,10 @@ func (m *Metadata) Pure() *Metadata {
 
 func (m *Metadata) Clone() *Metadata {
 	copyM := *m
+	if m.UDP != nil {
+		request := *m.UDP
+		copyM.UDP = &request
+	}
 	return &copyM
 }
 

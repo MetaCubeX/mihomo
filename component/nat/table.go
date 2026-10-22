@@ -31,6 +31,28 @@ func (t *Table) Delete(key string) {
 	t.mapping.Delete(key)
 }
 
+// DeleteIf removes only the session that owns this entry. An old read loop may
+// finish after the same source has already created a replacement session.
+func (t *Table) DeleteIf(key string, sender C.PacketSender) bool {
+	var removed *entry
+	t.mapping.Compute(key, func(item *entry, loaded bool) (*entry, xsync.ComputeOp) {
+		if !loaded || item.PacketSender != sender {
+			return item, xsync.CancelOp
+		}
+		removed = item
+		return item, xsync.DeleteOp
+	})
+	if removed == nil {
+		return false
+	}
+	// Close the detached entry, never sockets found through a reused source key.
+	removed.LocalUDPConnMap.Range(func(_ string, conn *net.UDPConn) bool {
+		_ = conn.Close()
+		return true
+	})
+	return true
+}
+
 func (t *Table) GetForLocalConn(lAddr, rAddr string) *net.UDPConn {
 	entry, exist := t.getEntry(lAddr)
 	if !exist {

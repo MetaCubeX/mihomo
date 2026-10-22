@@ -50,6 +50,9 @@ func (g *GostRelay) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.
 }
 
 func (g *GostRelay) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = g.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -59,7 +62,7 @@ func (g *GostRelay) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 		return nil, fmt.Errorf("%s udp connect error: %w", g.addr, err)
 	}
 
-	return NewPacketConn(pc, g), nil
+	return NewPacketConn(pc, g, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyBoundDestination})
 }
 
 func (g *GostRelay) ProxyInfo() C.ProxyInfo {

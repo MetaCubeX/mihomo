@@ -80,6 +80,9 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, e
 
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = t.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -98,16 +101,16 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_
 
 		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if t.option.UDPOverStreamVersion == uot.LegacyVersion {
-			return NewPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), t), nil
+			return NewPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), t, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 		} else {
-			return NewPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), t), nil
+			return NewPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), t, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 		}
 	}
 	pc, err := t.client.ListenPacket(ctx, metadata)
 	if err != nil {
 		return nil, err
 	}
-	return NewPacketConn(pc, t), nil
+	return NewPacketConn(pc, t, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 func (t *Tuic) dial(ctx context.Context) (quicConn *quic.Conn, err error) {

@@ -248,6 +248,9 @@ func (ss *ShadowSocks) listenPacketContext(ctx context.Context) (net.PacketConn,
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if ss.option.UDPOverTCP {
 		var c net.Conn
 		c, err = ss.DialContext(ctx, metadata)
@@ -262,9 +265,9 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		}
 		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
-			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
+			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 		} else {
-			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
+			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 		}
 	}
 	if err := ss.ResolveUDP(ctx, metadata); err != nil {
@@ -276,7 +279,7 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		return nil, err
 	}
 	pc = ss.method.DialPacketConn(bufio.NewBindPacketConn(pc, addr))
-	return NewPacketConn(pc, ss), nil
+	return NewPacketConn(pc, ss, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 // ProxyInfo implements C.ProxyAdapter

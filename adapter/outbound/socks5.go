@@ -88,6 +88,9 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = ss.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -152,7 +155,7 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 		pc.Close()
 	}()
 
-	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
+	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 // ProxyInfo implements C.ProxyAdapter

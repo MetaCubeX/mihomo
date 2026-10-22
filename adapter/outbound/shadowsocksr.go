@@ -81,6 +81,9 @@ func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata) 
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err := ssr.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -96,7 +99,7 @@ func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Me
 
 	epc := ssr.cipher.PacketConn(N.NewEnhancePacketConn(pc))
 	epc = ssr.protocol.PacketConn(epc)
-	return NewPacketConn(&ssrPacketConn{EnhancePacketConn: epc, rAddr: addr}, ssr), nil
+	return NewPacketConn(&ssrPacketConn{EnhancePacketConn: epc, rAddr: addr}, ssr, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
 }
 
 // ProxyInfo implements C.ProxyAdapter

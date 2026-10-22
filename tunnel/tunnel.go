@@ -29,6 +29,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
+	M "github.com/metacubex/sing/common/metadata"
 	"golang.org/x/exp/slices"
 )
 
@@ -297,11 +298,15 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				// only clear dstIP if it is confirmed to be a fake IP
 				metadata.DstIP = netip.Addr{}
 				metadata.DNSMode = C.DNSFakeIP
+				setUDPTarget(metadata, M.ParseSocksaddrHostPort(host, metadata.DstPort))
 			} else if node, ok := resolver.DefaultHosts.Search(host, false); ok {
 				// redir-host should lookup the hosts
 				metadata.DstIP, _ = node.RandIP()
 			} else if node != nil && node.IsDomain {
 				metadata.Host = node.Domain
+			}
+			if metadata.DNSMode == C.DNSMapping {
+				setUDPTarget(metadata, M.SocksaddrFrom(metadata.DstIP, metadata.DstPort))
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
@@ -309,6 +314,9 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	} else if node, ok := resolver.DefaultHosts.Search(metadata.Host, true); ok {
 		// try use domain mapping
 		metadata.Host = node.Domain
+		if metadata.UDP != nil && metadata.UDP.Target.IsFqdn() {
+			setUDPTarget(metadata, M.ParseSocksaddrHostPort(node.Domain, metadata.DstPort))
+		}
 	}
 
 	return nil
@@ -330,6 +338,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 
 	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
 		metadata.DstIP, _ = node.RandIP()
+		setUDPTarget(metadata, M.SocksaddrFrom(metadata.DstIP, metadata.DstPort))
 		resolved = true
 	}
 
@@ -438,24 +447,28 @@ func handleUDPConn(packet C.PacketAdapter) {
 	}
 
 	key := packet.Key()
+	var session *udpSession
 	sender, loaded := natTable.GetOrCreate(key, func() C.PacketSender {
-		sender := newPacketSender()
+		destination := newUDPDestination(metadata, udpRemoteResolve, key)
+		session = newUDPSession(destination)
 		if sniffingEnable && snifferDispatcher.Enable() {
-			return snifferDispatcher.UDPSniff(packet, sender)
+			session.PacketSender = snifferDispatcher.UDPSniff(udpSniffPacket{packet, destination.Route}, session.PacketSender)
 		}
-		return sender
+		return session
 	})
 	if !loaded {
+		destination := session.destination
 		dial := func() (C.PacketConn, C.WriteBackProxy, error) {
-			originMetadata := metadata  // save origin metadata
-			metadata = metadata.Clone() // don't modify PacketAdapter's metadata
+			metadata := destination.Route
 
 			if err := sender.DoSniff(metadata); err != nil {
 				log.Warnln("[UDP] DoSniff error: %s", err.Error())
 				return nil, nil, err
 			}
 
-			_ = preHandleMetadata(metadata) // error was pre-checked
+			if err := destination.prepare(); err != nil {
+				return nil, nil, err
+			}
 
 			proxy, rule, err := resolveMetadata(metadata)
 			if err != nil {
@@ -463,11 +476,11 @@ func handleUDPConn(packet C.PacketAdapter) {
 				return nil, nil, err
 			}
 
-			dialMetadata := metadata.Pure()
+			dialMetadata := destination.dialMetadata()
 			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 			defer cancel()
 			rawPc, err := retry(ctx, func(ctx context.Context) (C.PacketConn, error) {
-				return proxy.ListenPacketContext(ctx, dialMetadata)
+				return proxy.ListenPacketContext(ctx, dialMetadata.Clone())
 			}, func(err error) {
 				logMetadataErr(metadata, rule, proxy, err)
 			})
@@ -478,11 +491,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 
 			pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
 
-			sender.AddMapping(originMetadata, dialMetadata)
-			oAddrPort := dialMetadata.AddrPort()
+			session.bind(pc)
 			writeBackProxy := nat.NewWriteBackProxy(packet)
 
-			go handleUDPToLocal(writeBackProxy, pc, sender, key, oAddrPort)
+			go handleUDPToLocal(writeBackProxy, pc, sender, session.sender.mapping, key)
 			return pc, writeBackProxy, nil
 		}
 
@@ -490,7 +502,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 			pc, proxy, err := dial()
 			if err != nil {
 				sender.Close()
-				natTable.Delete(key)
+				natTable.DeleteIf(key, sender)
 				return
 			}
 			sender.Process(pc, proxy)
