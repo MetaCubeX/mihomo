@@ -1,6 +1,7 @@
 package snell
 
 import (
+	"bufio"
 	"crypto/cipher"
 	cryptorand "crypto/rand"
 	"encoding/binary"
@@ -47,7 +48,17 @@ func (c *v4Conn) initReader() error {
 	if err != nil {
 		return err
 	}
-	c.r = &v4Reader{Reader: c.Conn, aead: aead}
+	// Buffered read on top of the underlying conn. Each snell frame
+	// requires two io.ReadFull calls (23-byte AEAD'd header, then
+	// padding+payload+tag), so without userspace buffering each frame
+	// costs two recv() syscalls. At ~1.5 KB/frame a 10 MB transfer
+	// touches ~7300 frames and pays ~14k syscalls per direction — and
+	// the small reads defeat Linux's delayed-ACK heuristic, putting
+	// noticeably more empty ACK packets on the wire than the official
+	// C/libuv reference. Wrapping in a 64 KiB bufio.Reader serves ~40
+	// max-size frames from each recv(), cutting syscalls on the read
+	// path by roughly ~90×.
+	c.r = &v4Reader{Reader: bufio.NewReaderSize(c.Conn, 64*1024), aead: aead}
 	return nil
 }
 
