@@ -2591,6 +2591,8 @@ listeners:
     # traffic-pattern: ""
     # 如果开启，且客户端不发送用户提示，代理服务器将拒绝连接
     # user-hint-is-mandatory: false
+    # 在上行和下行同时空闲这个秒数后，关闭底层TCP连接。最小值为60。
+    # tcp-idle-timeout: 1800
 
   - name: sudoku-in-1
     type: sudoku
