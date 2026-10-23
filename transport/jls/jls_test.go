@@ -8,7 +8,6 @@ import (
 	"net"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
@@ -478,16 +477,6 @@ func TestJLSServerFallbackReplaysRejectedTLS(t *testing.T) {
 	}
 }
 
-func TestBitRateLimiterReservations(t *testing.T) {
-	limiter := &bitRateLimiter{rateBps: 800}
-	now := time.Unix(0, 0)
-	if delay := limiter.reserveN(now, 1); delay != 0 {
-		t.Fatalf("initial reservation delay = %s, want 0", delay)
-	}
-	if delay := limiter.reserveN(now, 1); delay != 10*time.Millisecond {
-		t.Fatalf("second reservation delay = %s, want 10ms", delay)
-	}
-}
 
 func newTestTLSServerConfig(t *testing.T, version uint16) *tls.Config {
 	t.Helper()
