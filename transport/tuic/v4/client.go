@@ -257,6 +257,13 @@ func (t *clientImpl) Close() {
 	}
 }
 
+// ForceClose implements types.Client. The stream that finishes last calls
+// forceClose again and finds no connection, which is fine.
+func (t *clientImpl) ForceClose(err error) {
+	t.closed.Store(true)
+	t.forceClose(nil, err)
+}
+
 func (t *clientImpl) DialContext(ctx context.Context, metadata *C.Metadata) (net.Conn, error) {
 	quicConn, err := t.getQuicConn(ctx)
 	if err != nil {
