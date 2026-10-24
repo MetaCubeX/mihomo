@@ -98,7 +98,7 @@ func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.
 }
 
 func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = h.ResolveUDP(ctx, metadata); err != nil {
+	if err = prepareUDP(ctx, metadata, h); err != nil {
 		return nil, err
 	}
 	pc, err := h.client.ListenPacket(ctx)
@@ -141,6 +141,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		}),
 		option: &option,
 	}
+	outbound.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 
 	var salamanderPassword string

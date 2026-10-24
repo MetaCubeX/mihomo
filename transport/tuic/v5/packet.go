@@ -105,7 +105,7 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 			}
 			if packetPtr := q.deFragger.Feed(&packet); packetPtr != nil {
 				n = copy(p, packetPtr.DATA)
-				addr = packetPtr.ADDR.UDPAddr()
+				addr = packetPtr.ADDR.UDPRemoteAddr()
 				return
 			}
 		}
@@ -125,7 +125,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 			}
 			if packetPtr := q.deFragger.Feed(&packet); packetPtr != nil {
 				data = packetPtr.DATA
-				addr = packetPtr.ADDR.UDPAddr()
+				addr = packetPtr.ADDR.UDPRemoteAddr()
 				return
 			}
 		}

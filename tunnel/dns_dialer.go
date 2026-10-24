@@ -43,14 +43,6 @@ func (d *DNSDialer) DialContext(ctx context.Context, network, addr string) (net.
 	}
 	if !strings.Contains(network, "tcp") {
 		metadata.NetWork = C.UDP
-		if !metadata.Resolved() {
-			// udp must resolve host first
-			dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
-			if err != nil {
-				return nil, err
-			}
-			metadata.DstIP = dstIP
-		}
 	}
 
 	if proxyAdapter == nil && len(proxyName) != 0 {
@@ -106,6 +98,14 @@ func (d *DNSDialer) DialContext(ctx context.Context, network, addr string) (net.
 
 		return conn, nil
 	} else {
+		if !udpRemoteDNS(proxyAdapter, metadata) && !metadata.Resolved() {
+			dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+			if err != nil {
+				return nil, err
+			}
+			metadata.DstIP = dstIP
+		}
+
 		if proxyAdapter == nil {
 			return dialer.DialContext(ctx, network, metadata.AddrPort().String(), opts...)
 		}
@@ -123,7 +123,7 @@ func (d *DNSDialer) DialContext(ctx context.Context, network, addr string) (net.
 
 		packetConn = statistic.NewUDPTracker(packetConn, statistic.DefaultManager, metadata, rule, 0, 0, false)
 
-		return N.NewBindPacketConn(packetConn, metadata.UDPAddr()), nil
+		return N.NewBindPacketConn(packetConn, metadata.UDPRemoteAddr()), nil
 	}
 
 }
@@ -141,18 +141,18 @@ func (d *DNSDialer) ListenPacket(ctx context.Context, network, addr string) (net
 	if err != nil {
 		return nil, err
 	}
-	if !metadata.Resolved() {
-		// udp must resolve host first
-		dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
-		if err != nil {
-			return nil, err
-		}
-		metadata.DstIP = dstIP
-	}
 
 	var rule C.Rule
 	if proxyAdapter == nil {
 		if proxyName == DnsRespectRules {
+			// Preserve the dedicated resolver before IP-based rule matching.
+			if !metadata.Resolved() {
+				dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+				if err != nil {
+					return nil, err
+				}
+				metadata.DstIP = dstIP
+			}
 			proxyAdapter, rule, err = resolveMetadata(metadata)
 			if err != nil {
 				return nil, err
@@ -166,6 +166,14 @@ func (d *DNSDialer) ListenPacket(ctx context.Context, network, addr string) (net
 				opts = append(opts, dialer.WithInterface(proxyName))
 			}
 		}
+	}
+
+	if !udpRemoteDNS(proxyAdapter, metadata) && !metadata.Resolved() {
+		dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+		if err != nil {
+			return nil, err
+		}
+		metadata.DstIP = dstIP
 	}
 
 	if proxyAdapter == nil {
@@ -186,4 +194,16 @@ func (d *DNSDialer) ListenPacket(ctx context.Context, network, addr string) (net
 	packetConn = statistic.NewUDPTracker(packetConn, statistic.DefaultManager, metadata, rule, 0, 0, false)
 
 	return packetConn, nil
+}
+
+// Inspect the selected leaf so a proxy group can use its node's UDP DNS policy.
+func udpRemoteDNS(proxy C.ProxyAdapter, metadata *C.Metadata) bool {
+	for proxy != nil {
+		if leaf := proxy.Unwrap(metadata, false); leaf != nil {
+			proxy = leaf
+			continue
+		}
+		return proxy.ProxyInfo().UDPRemoteDNS
+	}
+	return false
 }

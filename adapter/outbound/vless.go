@@ -17,6 +17,7 @@ import (
 	"github.com/metacubex/mihomo/component/ech"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/jls"
 	"github.com/metacubex/mihomo/transport/restls"
@@ -286,7 +287,7 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				Host:    packetaddr.SeqPacketMagicAddress,
 				DstPort: 443,
 			}
-		} else {
+		} else if !v.option.UDPRemoteDNS {
 			metadata = &C.Metadata{ // a clear metadata only contains ip
 				NetWork: C.UDP,
 				DstIP:   metadata.DstIP,
@@ -367,7 +368,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = v.ResolveUDP(ctx, metadata); err != nil {
+	if err = prepareUDP(ctx, metadata, v); err != nil {
 		return nil, err
 	}
 
@@ -392,15 +393,19 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return NewPacketConn(N.NewThreadSafePacketConn(
 			vmessSing.NewXUDPConn(c,
 				globalID,
-				M.SocksaddrFromNet(metadata.UDPAddr())),
+				M.SocksaddrFromNet(metadata.UDPRemoteAddr())),
 		), v), nil
 	} else if v.option.PacketAddr {
 		return NewPacketConn(N.NewThreadSafePacketConn(
-			packetaddr.NewConn(v.client.PacketConn(c, metadata.UDPAddr()),
-				M.SocksaddrFromNet(metadata.UDPAddr())),
+			packetaddr.NewConn(v.client.PacketConn(c, metadata.UDPRemoteAddr()),
+				M.SocksaddrFromNet(metadata.UDPRemoteAddr())),
 		), v), nil
 	}
-	return NewPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, metadata.UDPAddr())), v), nil
+	pc := v.client.PacketConn(c, metadata.UDPRemoteAddr())
+	if v.option.UDPRemoteDNS {
+		pc = newFixedRemotePacketConn(pc, metadata.UDPRemoteAddr())
+	}
+	return NewPacketConn(N.NewThreadSafePacketConn(pc), v), nil
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -483,6 +488,13 @@ func NewVless(option VlessOption) (*Vless, error) {
 	if option.XUDP {
 		option.PacketAddr = false
 	}
+	if option.UDPRemoteDNS && option.PacketAddr {
+		log.Warnln("[%s] udp-remote-dns is incompatible with packetaddr encoding; disabling remote DNS", option.Name)
+		option.UDPRemoteDNS = false
+	}
+	if option.XUDP && option.UDPRemoteDNS {
+		log.Warnln("[%s] xudp with udp-remote-dns may fail to restore domain or FakeIP reply addresses when the server reuses a UDP session after reconnecting", option.Name)
+	}
 
 	client, err := vless.NewClient(option.UUID, addons)
 	if err != nil {
@@ -506,6 +518,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		client: client,
 		option: &option,
 	}
+	v.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	v.dialer = option.NewDialer(v.DialOptions())
 
 	v.encryption, err = encryption.NewClient(option.Encryption)
