@@ -27,6 +27,19 @@ find-process-mode: strict
 
 mode: rule
 
+# UDP 远端解析，默认 false
+# 开启后，如果出站代理能在 UDP 中携带域名，目标域名会原样交给代理服务器解析，本地不再解析
+# 代理协议不支持时（如 direct、VLESS packetaddr、UoT v1）仍在本地解析
+# 不影响规则匹配时的解析，例如未加 no-resolve 的 IP 规则
+udp-remote-resolve: false
+
+# UDP 会话映射方式，默认 endpoint-independent
+# endpoint-independent：同一来源共用一个会话，出站由首个数据包决定
+# address-dependent：同一来源按原始目标地址分开会话
+# address-and-port-dependent：同一来源按原始目标地址和端口分开会话
+# 修改后只对新的 UDP 来源生效，与 tun.endpoint-independent-nat 无关
+udp-mapping: endpoint-independent
+
 #自定义 geodata url
 geox-url:
   geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"

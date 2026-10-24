@@ -18,6 +18,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/gofrs/uuid/v5"
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 type ProxyAdapter interface {
@@ -297,16 +298,12 @@ func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 
 type packetConn struct {
 	N.EnhancePacketConn
+	udpPreparation
 	chain       C.Chain
 	pdChain     C.Chain
 	adapterName string
 	connID      string
 	adapterAddr string
-	resolveUDP  func(ctx context.Context, metadata *C.Metadata) error
-}
-
-func (c *packetConn) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
-	return c.resolveUDP(ctx, metadata)
 }
 
 func (c *packetConn) RemoteDestination() string {
@@ -351,7 +348,24 @@ func (c *packetConn) AddRef(ref any) {
 	c.EnhancePacketConn = N.NewRefPacketConn(c.EnhancePacketConn, ref) // add ref for autoCloseProxyAdapter
 }
 
-func NewPacketConn(pc net.PacketConn, a ProxyAdapter) C.PacketConn {
+func NewPacketConn(pc net.PacketConn, a ProxyAdapter, metadata *C.Metadata, capabilities C.UDPCapabilities) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		if pc != nil {
+			_ = pc.Close()
+		}
+		return nil, err
+	}
+	initial := M.Socksaddr{Addr: metadata.DstIP.Unmap(), Port: metadata.DstPort}
+	if metadata.UDP.AllowRemote && capabilities.Destination == C.UDPDomain {
+		var err error
+		initial, err = remoteUDPTarget(metadata.UDP.Target)
+		if err != nil {
+			if pc != nil {
+				_ = pc.Close()
+			}
+			return nil, err
+		}
+	}
 	epc := N.NewEnhancePacketConn(pc)
 	switch pc.(type) {
 	case syscall.Conn: // exclusion system conn like *net.UDPConn
@@ -361,9 +375,20 @@ func NewPacketConn(pc net.PacketConn, a ProxyAdapter) C.PacketConn {
 	default:
 		epc = N.NewDeadlineEnhancePacketConn(epc) // most conn from outbound can't handle readDeadline correctly
 	}
-	cpc := &packetConn{epc, nil, nil, a.Name(), utils.NewUUIDV4().String(), a.Addr(), a.ResolveUDP}
+	cpc := &packetConn{
+		EnhancePacketConn: epc,
+		udpPreparation: udpPreparation{
+			initial:      initial,
+			capabilities: capabilities,
+			allowRemote:  metadata.UDP.AllowRemote,
+			resolveUDP:   a.ResolveUDP,
+		},
+		adapterName: a.Name(),
+		connID:      utils.NewUUIDV4().String(),
+		adapterAddr: a.Addr(),
+	}
 	cpc.AppendToChains(a)
-	return cpc
+	return cpc, nil
 }
 
 type AddRef interface {
