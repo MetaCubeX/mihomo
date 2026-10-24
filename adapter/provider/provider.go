@@ -124,7 +124,8 @@ type ProxySetProvider struct {
 type proxySetProvider struct {
 	baseProvider
 	*resource.Fetcher[[]C.Proxy]
-	subscriptionInfo *SubscriptionInfo
+	subscriptionInfo         *SubscriptionInfo
+	closeConnectionsOnReload bool
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -160,7 +161,9 @@ func (pp *proxySetProvider) Initial() error {
 	if subscriptionInfo := cachefile.Cache().GetSubscriptionInfo(pp.Name()); subscriptionInfo != "" {
 		pp.subscriptionInfo = NewSubscriptionInfo(subscriptionInfo)
 	}
-	pp.closeAllConnections()
+	if pp.closeConnectionsOnReload {
+		pp.closeAllConnections()
+	}
 	return nil
 }
 
@@ -183,6 +186,7 @@ func (pp *proxySetProvider) Close() error {
 
 func NewProxySetProvider(name string, interval time.Duration, payload []map[string]any, parser resource.Parser[[]C.Proxy], vehicle P.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
 	pd := &proxySetProvider{
+		closeConnectionsOnReload: true,
 		baseProvider: baseProvider{
 			name:        name,
 			proxies:     []C.Proxy{},
