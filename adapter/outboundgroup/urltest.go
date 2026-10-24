@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"time"
 
 	"github.com/metacubex/mihomo/common/callback"
@@ -16,6 +17,13 @@ import (
 
 type URLTestOption struct {
 	Tolerance uint16 `group:"tolerance,omitempty"`
+
+	Strategy            string `group:"strategy,omitempty"`
+	ThroughputURL       string `group:"throughput-url,omitempty"`
+	ThroughputTimeout   int    `group:"throughput-timeout,omitempty"`
+	ThroughputMaxBytes  int64  `group:"throughput-max-bytes,omitempty"`
+	ThroughputInterval  int    `group:"throughput-interval,omitempty"`
+	ThroughputTolerance *uint8 `group:"throughput-tolerance,omitempty"`
 }
 
 type URLTest struct {
@@ -27,6 +35,7 @@ type URLTest struct {
 	disableUDP     bool
 	fastNode       C.Proxy
 	fastSingle     *singledo.Single[C.Proxy]
+	throughput     *throughputTester
 }
 
 func (u *URLTest) Now() string {
@@ -101,6 +110,9 @@ func (u *URLTest) healthCheck() {
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
+	if touch && u.throughput != nil {
+		u.throughput.touch()
+	}
 	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
 		if u.selected != "" {
@@ -112,6 +124,13 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 					u.fastNode = proxy
 					return proxy, nil
 				}
+			}
+		}
+
+		if u.throughput != nil {
+			if fast := u.throughput.pick(proxies, u.testUrl); fast != nil {
+				u.fastNode = fast
+				return fast, nil
 			}
 		}
 
@@ -167,7 +186,7 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 	for _, proxy := range u.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
-	return json.Marshal(map[string]any{
+	mapping := map[string]any{
 		"type":           u.Type().String(),
 		"now":            u.Now(),
 		"all":            all,
@@ -177,7 +196,20 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		"hidden":         u.Hidden(),
 		"icon":           u.Icon(),
 		"emptyFallback":  u.EmptyFallback().Name(),
-	})
+	}
+	if u.throughput != nil {
+		mapping["strategy"] = urlTestStrategyThroughput
+		mapping["throughputUrl"] = u.throughput.url
+	}
+	return json.Marshal(mapping)
+}
+
+// Close implements C.ProxyAdapter
+func (u *URLTest) Close() error {
+	if u.throughput != nil {
+		u.throughput.close()
+	}
+	return u.GroupBase.Close()
 }
 
 func (u *URLTest) Providers() []P.ProxyProvider {
@@ -195,6 +227,10 @@ func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.
 func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFallback C.Proxy, providers []P.ProxyProvider) (*URLTest, error) {
 	if emptyFallback == nil {
 		return nil, errors.New("empty fallback proxy not exist")
+	}
+	throughputOpt, err := newThroughputOption(urlTestOption)
+	if err != nil {
+		return nil, err
 	}
 	urlTest := &URLTest{
 		GroupBase: NewGroupBase(GroupBaseOption{
@@ -215,6 +251,11 @@ func NewURLTest(option GroupCommonOption, urlTestOption URLTestOption, emptyFall
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
 		tolerance:      urlTestOption.Tolerance,
+	}
+
+	if throughputOpt != nil {
+		urlTest.throughput = newThroughputTester(throughputOpt, urlTest.GroupBase, urlTest.fastSingle, option.Lazy)
+		runtime.SetFinalizer(urlTest, (*URLTest).Close)
 	}
 
 	return urlTest, nil
