@@ -38,15 +38,19 @@ func (ho *HTTPObfs) Read(b []byte) (int, error) {
 
 	if ho.firstResponse {
 		buf := pool.Get(pool.RelayBufferSize)
-		n, err := ho.Conn.Read(buf)
-		if err != nil {
-			pool.Put(buf)
-			return 0, err
-		}
-		idx := bytes.Index(buf[:n], []byte("\r\n\r\n"))
-		if idx == -1 {
-			pool.Put(buf)
-			return 0, io.EOF
+		n, idx := 0, -1
+		for idx == -1 {
+			if n == len(buf) {
+				pool.Put(buf)
+				return 0, io.ErrShortBuffer
+			}
+			m, err := ho.Conn.Read(buf[n:])
+			n += m
+			idx = bytes.Index(buf[:n], []byte("\r\n\r\n"))
+			if idx == -1 && err != nil {
+				pool.Put(buf)
+				return 0, err
+			}
 		}
 		ho.firstResponse = false
 		length := n - (idx + 4)
