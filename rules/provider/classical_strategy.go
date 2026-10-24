@@ -21,7 +21,7 @@ func (c *classicalStrategy) Behavior() P.RuleBehavior {
 
 func (c *classicalStrategy) Match(metadata *C.Metadata, helper C.RuleMatchHelper) bool {
 	for _, rule := range c.rules {
-		if m, _ := rule.Match(metadata, helper); m {
+		if m, _ := helper.MatchRule(rule, metadata); m {
 			return true
 		}
 	}
