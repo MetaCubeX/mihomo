@@ -75,6 +75,20 @@ func TestNewMieru(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid TCP idle timeout",
+			args: args{
+				option: &inbound.MieruOption{
+					BaseOption: inbound.BaseOption{
+						Port: "8080",
+					},
+					Transport:            "TCP",
+					Users:                map[string]string{"user": "pass"},
+					TCPIdleTimeoutSecond: 60,
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "invalid - no port",
 			args: args{
 				option: &inbound.MieruOption{
@@ -158,6 +172,20 @@ func TestNewMieru(t *testing.T) {
 					Transport:      "TCP",
 					Users:          map[string]string{"user": "pass"},
 					TrafficPattern: "1212ababXYYX",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid TCP idle timeout",
+			args: args{
+				option: &inbound.MieruOption{
+					BaseOption: inbound.BaseOption{
+						Port: "8080",
+					},
+					Transport:            "TCP",
+					Users:                map[string]string{"user": "pass"},
+					TCPIdleTimeoutSecond: 10,
 				},
 			},
 			wantErr: true,
