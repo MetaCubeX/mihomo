@@ -44,6 +44,7 @@ const (
 	TRUSTTUNNEL
 	SHADOWQUIC
 	INNER
+	EBPF
 )
 
 type AddrType byte
@@ -126,6 +127,8 @@ func (t Type) String() string {
 		return "ShadowQuic"
 	case INNER:
 		return "Inner"
+	case EBPF:
+		return "EBPF"
 	default:
 		return "Unknown"
 	}
@@ -176,6 +179,8 @@ func ParseType(t string) (*Type, error) {
 		res = SHADOWQUIC
 	case "INNER":
 		res = INNER
+	case "EBPF":
+		res = EBPF
 	default:
 		return nil, fmt.Errorf("unknown type: %s", t)
 	}
