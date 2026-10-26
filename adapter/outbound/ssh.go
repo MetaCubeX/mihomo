@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -48,10 +49,26 @@ func (s *Ssh) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, 
 	}
 	c, err := client.DialContext(ctx, "tcp", metadata.RemoteAddress())
 	if err != nil {
+		// A rejected channel means the server is still answering; anything else
+		// (e.g. a sticky transport write error) leaves the cached client unusable
+		// while its read loop may never return, so drop it to force a reconnect.
+		var openErr *ssh.OpenChannelError
+		if !errors.As(err, &openErr) {
+			s.dropClient(client)
+		}
 		return nil, err
 	}
 
 	return NewConn(c, s), nil
+}
+
+func (s *Ssh) dropClient(client *ssh.Client) {
+	s.cMutex.Lock()
+	if s.client == client {
+		s.client = nil
+	}
+	s.cMutex.Unlock()
+	_ = client.Close()
 }
 
 func (s *Ssh) connect(ctx context.Context, addr string) (client *ssh.Client, err error) {
