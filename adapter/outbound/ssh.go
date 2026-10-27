@@ -49,11 +49,13 @@ func (s *Ssh) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, 
 	}
 	c, err := client.DialContext(ctx, "tcp", metadata.RemoteAddress())
 	if err != nil {
-		// A rejected channel means the server is still answering; anything else
-		// (e.g. a sticky transport write error) leaves the cached client unusable
-		// while its read loop may never return, so drop it to force a reconnect.
+		// A rejected channel means the server is still answering, and a context
+		// error only means this dial gave up waiting; the cached client is shared
+		// by every live channel, so keep it in both cases. Anything else (e.g. a
+		// sticky transport write error) leaves the client unusable while its read
+		// loop may never return, so drop it to force a reconnect.
 		var openErr *ssh.OpenChannelError
-		if !errors.As(err, &openErr) {
+		if !errors.As(err, &openErr) && ctx.Err() == nil {
 			s.dropClient(client)
 		}
 		return nil, err
