@@ -15,6 +15,10 @@ import (
 	"github.com/metacubex/http"
 )
 
+// execRestart is replaceable in tests so a restart can be asserted without
+// replacing the test process.
+var execRestart = syscall.Exec
+
 func restartRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/", restart)
@@ -60,7 +64,7 @@ func restartExecutable(execPath string) {
 	}
 
 	log.Infoln("restarting: %q %q", execPath, os.Args[1:])
-	err = syscall.Exec(execPath, os.Args, os.Environ())
+	err = execRestart(execPath, os.Args, os.Environ())
 	if err != nil {
 		log.Fatalln("restarting: %s", err)
 	}

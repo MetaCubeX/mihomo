@@ -216,6 +216,21 @@ func Proxies() map[string]C.Proxy {
 	return proxies
 }
 
+// CloseProxies releases the OS resources owned by outbounds (TUN devices,
+// listeners, subprocesses). It is used on shutdown/restart: syscall.Exec
+// keeps non-CLOEXEC descriptors alive, so adapters must close before the
+// process is replaced.
+func CloseProxies() {
+	for name, proxy := range Proxies() {
+		if proxy == nil {
+			continue
+		}
+		if err := proxy.Close(); err != nil {
+			log.Warnln("[Tunnel] close proxy %s failed: %v", name, err)
+		}
+	}
+}
+
 // Providers return all compatible providers
 func Providers() map[string]P.ProxyProvider {
 	return providers
