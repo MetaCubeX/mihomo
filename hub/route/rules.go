@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/hub/executor"
 	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/metacubex/chi"
@@ -15,6 +16,7 @@ func ruleRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getRules)
 	if !embedMode { // disallow update/patch rules in embed mode
+		r.Put("/", applyRules)
 		r.Patch("/disable", disableRules)
 	}
 	return r
@@ -70,6 +72,21 @@ func getRules(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, render.M{
 		"rules": rules,
 	})
+}
+
+// applyRules replaces the rules, sub-rules and rule providers with those of
+// a config, named as for PUT /configs, and reloads nothing else.
+func applyRules(w http.ResponseWriter, r *http.Request) {
+	cfg := parseConfigRequest(w, r)
+	if cfg == nil {
+		return
+	}
+	if err := executor.ApplyRules(cfg); err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
+	render.NoContent(w, r)
 }
 
 // disableRules disable or enable rules by their indexes.
