@@ -1,8 +1,10 @@
 package generator
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 
 	"github.com/metacubex/mihomo/component/ech"
 	"github.com/metacubex/mihomo/transport/sudoku"
@@ -13,7 +15,7 @@ import (
 
 func Main(args []string) {
 	if len(args) < 1 {
-		panic("Using: generate uuid/reality-keypair/wg-keypair/ech-keypair/vless-mlkem768/vless-x25519/sudoku-keypair")
+		panic("Using: generate uuid/ss-password/reality-keypair/wg-keypair/ech-keypair/vless-mlkem768/vless-x25519/sudoku-keypair")
 	}
 	switch args[0] {
 	case "uuid":
@@ -22,6 +24,19 @@ func Main(args []string) {
 			panic(err)
 		}
 		fmt.Println(newUUID.String())
+	case "ss-password":
+		if len(args) != 2 {
+			panic("Using: generate ss-password <128|256|512>")
+		}
+		bits, err := strconv.Atoi(args[1])
+		if err != nil || (bits != 128 && bits != 256 && bits != 512) {
+			panic("Using: generate ss-password <128|256|512>")
+		}
+		password := make([]byte, bits/8)
+		if _, err := rand.Read(password); err != nil {
+			panic(err)
+		}
+		fmt.Println(base64.StdEncoding.EncodeToString(password))
 	case "reality-keypair":
 		privateKey, err := GenX25519PrivateKey()
 		if err != nil {
