@@ -44,6 +44,8 @@ var ErrClientClosed = errors.New("miu: client closed")
 type ClientConfig struct {
 	// PSK is the pre-shared key, used as a string exactly as the server has it.
 	PSK string
+	// PaddingScheme overrides the PSK-derived initial scheme when non-empty.
+	PaddingScheme string
 	// Dial opens a connection to the server and completes the outer TLS handshake on it. Raw segments
 	// are available when the result is a Go TLS connection (see tlsBuffers) sitting directly on the
 	// TCP connection.
@@ -60,6 +62,9 @@ type ClientConfig struct {
 type Client struct {
 	cfg   ClientConfig
 	token [32]byte
+
+	paddingMu sync.RWMutex
+	padding   *padding.PaddingFactory
 
 	mu       sync.Mutex
 	idle     []idleLane
@@ -90,10 +95,41 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if cfg.MinIdle <= 0 {
 		cfg.MinIdle = defaultMinIdle
 	}
-	return &Client{cfg: cfg, token: token}, nil
+	scheme := cfg.PaddingScheme
+	if scheme == "" {
+		derived, err := derivedScheme(token)
+		if err != nil {
+			return nil, err
+		}
+		scheme = derived
+	}
+	p := padding.NewPaddingFactory([]byte(scheme))
+	if p == nil {
+		return nil, errors.New("miu: bad padding scheme")
+	}
+	return &Client{cfg: cfg, token: token, padding: p}, nil
 }
 
 // ---- the lane pool ----
+
+func (c *Client) currentPadding() *padding.PaddingFactory {
+	c.paddingMu.RLock()
+	p := c.padding
+	c.paddingMu.RUnlock()
+	if p == nil {
+		return padding.NewPaddingFactory(padding.DefaultPaddingScheme)
+	}
+	return p
+}
+
+func (c *Client) updatePadding(p *padding.PaddingFactory) {
+	if p == nil {
+		return
+	}
+	c.paddingMu.Lock()
+	c.padding = p
+	c.paddingMu.Unlock()
+}
 
 // dial opens a new lane: the outer handshake, then the authentication header, its padding and Settings
 // in a single write. Nothing is waited for.
@@ -103,6 +139,8 @@ func (c *Client) dial(ctx context.Context) (*lane, error) {
 		return nil, err
 	}
 	l := newLane(conn, false, !c.cfg.DisableRaw)
+	l.client = c
+	l.scheme.Store(c.currentPadding())
 	scheme := l.scheme.Load()
 	padlen := authPadding(scheme)
 	hello := append(make([]byte, 0, authHead+padlen+64), c.token[:]...)

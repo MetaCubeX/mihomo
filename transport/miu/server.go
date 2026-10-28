@@ -111,13 +111,21 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 // A nil error means the lane ended normally. ErrAuth and protocol violations are reported as errors.
 func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 	defer conn.Close()
-	user, err := s.authenticate(conn)
+	user, token, err := s.authenticate(conn)
 	if err != nil {
 		return err
 	}
 
 	l := newLane(conn, true, !s.cfg.DisableRaw)
-	l.scheme.Store(s.scheme)
+	laneScheme := s.scheme
+	if s.cfg.PaddingScheme == "" {
+		derived, err := derivedScheme(token)
+		if err != nil {
+			return err
+		}
+		laneScheme = padding.NewPaddingFactory([]byte(derived))
+	}
+	l.scheme.Store(laneScheme)
 	// cur is the stream on the lane (the last one, once it has ended); nil before the first OPEN.
 	// However the lane ends, that stream ends with it.
 	var cur atomic.Pointer[serverStream]
@@ -210,24 +218,24 @@ func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 
 // authenticate reads the authentication header — token(32) · padlen(u16) · padding — exactly, never
 // ahead, and returns the name of the user the token belongs to.
-func (s *Server) authenticate(conn net.Conn) (string, error) {
+func (s *Server) authenticate(conn net.Conn) (string, [32]byte, error) {
 	_ = conn.SetReadDeadline(time.Now().Add(s.cfg.HandshakeTimeout))
 	var h [authHead]byte
 	if _, err := io.ReadFull(conn, h[:]); err != nil {
-		return "", fmt.Errorf("miu: auth failed: %w", err)
+		return "", [32]byte{}, fmt.Errorf("miu: auth failed: %w", err)
 	}
 	var token [32]byte
 	copy(token[:], h[:])
 	user, ok := s.users[token]
 	if !ok {
-		return "", ErrAuth
+		return "", [32]byte{}, ErrAuth
 	}
 	if padlen := int64(binary.BigEndian.Uint16(h[32:])); padlen > 0 {
 		if _, err := io.CopyN(io.Discard, conn, padlen); err != nil {
-			return "", fmt.Errorf("miu: auth failed: %w", err)
+			return "", [32]byte{}, fmt.Errorf("miu: auth failed: %w", err)
 		}
 	}
-	return user, nil
+	return user, token, nil
 }
 
 // handleSettings notes whether the client can receive raw segments and answers with ServerSettings,
@@ -236,8 +244,9 @@ func (s *Server) handleSettings(l *lane, text string) error {
 	kv := parseKV(text)
 	l.peerRaw.Store(kv["raw"] == "1")
 	reply := appendFrame(nil, frServerSettings, l.settingsText(fmt.Sprintf("\nidle=%d", int(s.cfg.IdleTimeout/time.Second))))
-	if md5 := strings.ToLower(strings.TrimSpace(kv["padding-md5"])); md5 != "" && md5 != s.scheme.Md5 {
-		reply = appendFrame(reply, frUpdatePadding, s.scheme.RawScheme)
+	scheme := l.scheme.Load()
+	if md5 := strings.ToLower(strings.TrimSpace(kv["padding-md5"])); md5 != "" && md5 != scheme.Md5 {
+		reply = appendFrame(reply, frUpdatePadding, scheme.RawScheme)
 	}
 	return l.writeUnshaped(reply)
 }

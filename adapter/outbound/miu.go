@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
@@ -28,6 +29,7 @@ type MiuOption struct {
 	Server             string         `proxy:"server"`
 	Port               int            `proxy:"port"`
 	PSK                string         `proxy:"psk"`
+	PaddingScheme      []string       `proxy:"padding-scheme,omitempty"`
 	ALPN               []string       `proxy:"alpn,omitempty"`
 	SNI                string         `proxy:"sni,omitempty"`
 	ECHOpts            ECHOptions     `proxy:"ech-opts,omitempty"`
@@ -146,10 +148,11 @@ func NewMiu(option MiuOption) (*Miu, error) {
 	}
 
 	outbound.client, err = miu.NewClient(miu.ClientConfig{
-		PSK:      option.PSK,
-		Dial:     outbound.dialLane,
-		LaneIdle: time.Duration(option.IdleSessionTimeout) * time.Second,
-		MinIdle:  option.MinIdleSession,
+		PSK:           option.PSK,
+		PaddingScheme: strings.Join(option.PaddingScheme, "\n"),
+		Dial:          outbound.dialLane,
+		LaneIdle:      time.Duration(option.IdleSessionTimeout) * time.Second,
+		MinIdle:       option.MinIdleSession,
 	})
 	if err != nil {
 		return nil, err

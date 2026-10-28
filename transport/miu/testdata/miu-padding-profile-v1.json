@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "binding": "psk-only",
+  "canonical_psk": "trim using the same boundary-whitespace rule as the authentication implementation; encode UTF-8",
+  "algorithm": {
+    "ikm": "SHA256(canonical_psk)",
+    "hash": "SHA-256",
+    "salt_ascii": "miu/v2/padding-profile/salt",
+    "info_ascii": "miu/v2/padding-profile/v1/psk-only",
+    "expand_bytes": 128,
+    "counter_info": "miu/v2/padding-profile/v1/psk-only/counter/<decimal-counter>"
+  },
+  "constraints": {
+    "shaped_packet_count_range": "4..9",
+    "stop": "shaped_packet_count + 1",
+    "auth_padding_hi_exclusive": 65,
+    "record_size_min_inclusive": 128,
+    "record_size_max_exclusive": 8192,
+    "conservative_padding_budget_max": 1984,
+    "scheme_line_endings": "LF; no trailing LF",
+    "sampling": "uint16 big-endian rejection sampling; span=hi-lo; accept x < 65536-(65536 mod span); result=lo+(x mod span)"
+  },
+  "vectors": [
+    {
+      "id": "ascii-alpha",
+      "psk": "miu-test-psk-alpha-2026",
+      "canonical_psk_utf8_hex": "6d69752d746573742d70736b2d616c7068612d32303236",
+      "auth_token_sha256_hex": "098a31e1e080067365014b03bea25ae3598fcae74f26da44936fb08787087520",
+      "hkdf": {
+        "prk_hex": "329f3ebdfd7f28c68ea954cdacaf17cc6042b7dba4681eaec1f0cd2d15dd4cb3",
+        "okm_128_hex": "5afc7310d56a9f633c7f66abf1befdb27d81df799f066ef0c6d460e126538624e9009ef5947546b78cc05564c0e83e8564bd769c6613dc8593a3013aa4375be764b82c48b39c3f0c0cd04f2795e4e50ee8f39375e6a6b4add83c9bfc3f7a18d6bc44e8b307cff1ccd8ccdaf11318b520917ffca9c64a2565be09f2e1002fbc3f"
+      },
+      "scheme": {
+        "text": "stop=5\n0=36-60\n1=192-202,c,128-192\n2=204-235,c,204-217\n3=142-183,c,218-239\n4=189-237,c,163-205",
+        "md5": "9e6f7e4c45d051d2e82c7e43d9cfa2a9",
+        "stop": 5,
+        "shaped_packet_count": 4,
+        "auth_range": {
+          "lo": 36,
+          "hiExclusive": 60
+        },
+        "conservative_padding_budget_upper_bound": 1770,
+        "packets": [
+          {
+            "index": 1,
+            "text": "192-202,c,128-192",
+            "ranges": [
+              {
+                "lo": 192,
+                "hiExclusive": 202
+              },
+              {
+                "lo": 128,
+                "hiExclusive": 192
+              }
+            ]
+          },
+          {
+            "index": 2,
+            "text": "204-235,c,204-217",
+            "ranges": [
+              {
+                "lo": 204,
+                "hiExclusive": 235
+              },
+              {
+                "lo": 204,
+                "hiExclusive": 217
+              }
+            ]
+          },
+          {
+            "index": 3,
+            "text": "142-183,c,218-239",
+            "ranges": [
+              {
+                "lo": 142,
+                "hiExclusive": 183
+              },
+              {
+                "lo": 218,
+                "hiExclusive": 239
+              }
+            ]
+          },
+          {
+            "index": 4,
+            "text": "189-237,c,163-205",
+            "ranges": [
+              {
+                "lo": 189,
+                "hiExclusive": 237
+              },
+              {
+                "lo": 163,
+                "hiExclusive": 205
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "base64-looking",
+      "psk": "QWxhZGRpbjpvcGVuIHNlc2FtZQ==",
+      "canonical_psk_utf8_hex": "515778685a475270626a70766347567549484e6c633246745a513d3d",
+      "auth_token_sha256_hex": "cf4d418ed3de92d71f767db5391d5a2dacd40e1ce49e75d1137e2ecf4982d844",
+      "hkdf": {
+        "prk_hex": "bae92e584eb3cbcfac828efe4cde0dd1412caaca0a7f615db78ab8d2ace22b7f",
+        "okm_128_hex": "54125d0b7d7bce3b0c2c4e3cb9c2267566db2adf26eac50409beaa51a51b7b1f5c532a9134e1198008b697efec3547fa485ff5e3d989732d3a33495494b98f34aa07984d14571dcfb19a8186f76d7daed553524d886977b1bec9c2cd7cbf46e3e2ca87f96dda603966ba60015163eb3e1a842b849372e242c0a3c32dd9388355"
+      },
+      "scheme": {
+        "text": "stop=5\n0=26-57\n1=140-181,c,152-204\n2=142-193,c,221-239\n3=200-212,c,192-232\n4=157-191,c,223-240",
+        "md5": "6c438b74d0a6fae73e6c9d11d3887f64",
+        "stop": 5,
+        "shaped_packet_count": 4,
+        "auth_range": {
+          "lo": 26,
+          "hiExclusive": 57
+        },
+        "conservative_padding_budget_upper_bound": 1749,
+        "packets": [
+          {
+            "index": 1,
+            "text": "140-181,c,152-204",
+            "ranges": [
+              {
+                "lo": 140,
+                "hiExclusive": 181
+              },
+              {
+                "lo": 152,
+                "hiExclusive": 204
+              }
+            ]
+          },
+          {
+            "index": 2,
+            "text": "142-193,c,221-239",
+            "ranges": [
+              {
+                "lo": 142,
+                "hiExclusive": 193
+              },
+              {
+                "lo": 221,
+                "hiExclusive": 239
+              }
+            ]
+          },
+          {
+            "index": 3,
+            "text": "200-212,c,192-232",
+            "ranges": [
+              {
+                "lo": 200,
+                "hiExclusive": 212
+              },
+              {
+                "lo": 192,
+                "hiExclusive": 232
+              }
+            ]
+          },
+          {
+            "index": 4,
+            "text": "157-191,c,223-240",
+            "ranges": [
+              {
+                "lo": 157,
+                "hiExclusive": 191
+              },
+              {
+                "lo": 223,
+                "hiExclusive": 240
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "trimmed",
+      "psk": "  miu-trimmed-psk-2026  ",
+      "canonical_psk_utf8_hex": "6d69752d7472696d6d65642d70736b2d32303236",
+      "auth_token_sha256_hex": "d1e69a949d20a61deddb0f4cd306f198e08d904d83db90add7f5fc4f8bb3bc94",
+      "hkdf": {
+        "prk_hex": "cbcb0d6905640400b70e685bd98e3f03df513b37ba53476186f29356a0e2ca47",
+        "okm_128_hex": "77fe5fab8ad8a97fd0a7d2910cb3e025cc909195796308bb78bd754aeeed7811efff8a417fcd731f46a30ca1846db2b29deeab9628f66d464a8d6404156a8693e869de6b52db5cfff248b8d8b8f32350ae8b2bd37ace9e3040db5361532156167590a0a99b529577640ddb3a661e55c60a64dcb128abff17432ba81a494fbb4a"
+      },
+      "scheme": {
+        "text": "stop=9\n0=35-63\n1=184-233\n2=168-186\n3=161-193\n4=137-164\n5=176-231\n6=184-234\n7=166-202\n8=205-238",
+        "md5": "96adc3f9ccd96ed1de907b605173a78c",
+        "stop": 9,
+        "shaped_packet_count": 8,
+        "auth_range": {
+          "lo": 35,
+          "hiExclusive": 63
+        },
+        "conservative_padding_budget_upper_bound": 1744,
+        "packets": [
+          {
+            "index": 1,
+            "text": "184-233",
+            "ranges": [
+              {
+                "lo": 184,
+                "hiExclusive": 233
+              }
+            ]
+          },
+          {
+            "index": 2,
+            "text": "168-186",
+            "ranges": [
+              {
+                "lo": 168,
+                "hiExclusive": 186
+              }
+            ]
+          },
+          {
+            "index": 3,
+            "text": "161-193",
+            "ranges": [
+              {
+                "lo": 161,
+                "hiExclusive": 193
+              }
+            ]
+          },
+          {
+            "index": 4,
+            "text": "137-164",
+            "ranges": [
+              {
+                "lo": 137,
+                "hiExclusive": 164
+              }
+            ]
+          },
+          {
+            "index": 5,
+            "text": "176-231",
+            "ranges": [
+              {
+                "lo": 176,
+                "hiExclusive": 231
+              }
+            ]
+          },
+          {
+            "index": 6,
+            "text": "184-234",
+            "ranges": [
+              {
+                "lo": 184,
+                "hiExclusive": 234
+              }
+            ]
+          },
+          {
+            "index": 7,
+            "text": "166-202",
+            "ranges": [
+              {
+                "lo": 166,
+                "hiExclusive": 202
+              }
+            ]
+          },
+          {
+            "index": 8,
+            "text": "205-238",
+            "ranges": [
+              {
+                "lo": 205,
+                "hiExclusive": 238
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "unicode",
+      "psk": "miu-测试-psk-2026",
+      "canonical_psk_utf8_hex": "6d69752de6b58be8af952d70736b2d32303236",
+      "auth_token_sha256_hex": "79a0061fcc74ab2dd58002e30ca437167b2b4e5e6a6896879fa9b32bf6d9b677",
+      "hkdf": {
+        "prk_hex": "0981800ad31bbc70ce1d3f32614fe59e9263f7a7e1b4064de52cae7ca1d98221",
+        "okm_128_hex": "f889ad871cfce034539577e96f80dbf85659b651e501c445492c48c6f80e7b68204de8af0c141537026c99728a0f115a44996f8a0f884e0a2ebfc3809dcbca25eb00e5cc87c67536fdddc1f36c8b500730904425638957e4f8d338922b77ba4252611e09dc6edd6da40fec26cb236d87c43d90193eac495cff39884573b993f4"
+      },
+      "scheme": {
+        "text": "stop=6\n0=26-56\n1=281-378\n2=166-255\n3=149-182,c,142-161\n4=306-335\n5=133-164,c,160-175",
+        "md5": "be885c22d4d8fce77b56cfe2506d0559",
+        "stop": 6,
+        "shaped_packet_count": 5,
+        "auth_range": {
+          "lo": 26,
+          "hiExclusive": 56
+        },
+        "conservative_padding_budget_upper_bound": 1706,
+        "packets": [
+          {
+            "index": 1,
+            "text": "281-378",
+            "ranges": [
+              {
+                "lo": 281,
+                "hiExclusive": 378
+              }
+            ]
+          },
+          {
+            "index": 2,
+            "text": "166-255",
+            "ranges": [
+              {
+                "lo": 166,
+                "hiExclusive": 255
+              }
+            ]
+          },
+          {
+            "index": 3,
+            "text": "149-182,c,142-161",
+            "ranges": [
+              {
+                "lo": 149,
+                "hiExclusive": 182
+              },
+              {
+                "lo": 142,
+                "hiExclusive": 161
+              }
+            ]
+          },
+          {
+            "index": 4,
+            "text": "306-335",
+            "ranges": [
+              {
+                "lo": 306,
+                "hiExclusive": 335
+              }
+            ]
+          },
+          {
+            "index": 5,
+            "text": "133-164,c,160-175",
+            "ranges": [
+              {
+                "lo": 133,
+                "hiExclusive": 164
+              },
+              {
+                "lo": 160,
+                "hiExclusive": 175
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

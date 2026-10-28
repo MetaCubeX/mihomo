@@ -1725,6 +1725,8 @@ proxies: # socks5
     server: 1.2.3.4
     port: 443
     psk: "<your psk>" # 与服务端逐字符相同的字符串，至少 16 个字符
+    # 默认按 PSK 派生初始整形方案；服务端仍可下发覆盖，并在当前客户端内记忆。
+    # padding-scheme: ["stop=2", "0=30-30", "1=128-160"] # 可选初始覆盖
     udp: true
     # sni: "example.com"
     # skip-cert-verify: true
