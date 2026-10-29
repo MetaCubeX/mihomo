@@ -69,6 +69,30 @@ func (t *PoolClient) newClient(udp bool) (client Client) {
 	return client
 }
 
+// CloseAll force-closes every pooled client, TCP and UDP, and empties both
+// pools, so the next dial opens a fresh QUIC connection. For the moments the
+// platform knows the sessions are dead, such as a default interface change:
+// no stream, open or yet to open, has to wait out the idle timer on a session
+// the server has already forgotten.
+func (t *PoolClient) CloseAll(err error) {
+	for _, pool := range []struct {
+		clients *list.List[Client]
+		mutex   *sync.Mutex
+	}{
+		{&t.tcpClients, &t.tcpClientsMutex},
+		{&t.udpClients, &t.udpClientsMutex},
+	} {
+		pool.mutex.Lock()
+		for it := pool.clients.Front(); it != nil; it = it.Next() {
+			if it.Value != nil {
+				it.Value.ForceClose(err)
+			}
+		}
+		pool.clients.Init()
+		pool.mutex.Unlock()
+	}
+}
+
 func (t *PoolClient) getClient(udp bool) Client {
 	clients := &t.tcpClients
 	clientsMutex := &t.tcpClientsMutex

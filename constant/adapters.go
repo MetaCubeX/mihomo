@@ -163,6 +163,21 @@ type ProxyState struct {
 
 type DelayHistoryStoreType int
 
+// SessionResetter is implemented by outbounds that multiplex every connection
+// over one long-lived transport session (the QUIC ones: Hysteria, Hysteria2 and
+// TUIC). ResetSession discards that session so the next dial handshakes a new
+// one; the call itself dials nothing.
+//
+// A TCP outbound dials per connection, so a path that died under it is found
+// out by the very next dial. A QUIC session outlives the path it was dialed
+// on, and quic-go only learns it is dead from its idle timer (30 s by default);
+// until then every stream opened on it hangs with "timeout: no recent network
+// activity". This is how the platform, which knows the path changed, tells the
+// outbound.
+type SessionResetter interface {
+	ResetSession(reason string)
+}
+
 type Proxy interface {
 	ProxyAdapter
 	Adapter() ProxyAdapter
