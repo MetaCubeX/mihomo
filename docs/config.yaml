@@ -1998,6 +1998,8 @@ rule-providers:
 rules:
   - RULE-SET,rule1,REJECT
   - IP-ASN,1,PROXY
+  # 按 ASN 组织名匹配，不区分大小写的关键字匹配
+  - IP-ASN-ORG,cloudflare,PROXY
   - DOMAIN-REGEX,^abc,DIRECT
   - DOMAIN-SUFFIX,baidu.com,DIRECT
   - DOMAIN-KEYWORD,google,ss1
