@@ -1796,9 +1796,14 @@ proxy-groups:
       - vmess1
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
-  # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
+  # strategy: consistent-hashing # 可选 round-robin、sticky-sessions 和 least-connections
+  #   least-connections: 每个新连接交给「当前打开的连接数 / 份额」最小的存活节点;
+  #   同一节点在 proxies 中写 N 次即占 N 份(与 round-robin 对重复节点的处理一致),
+  #   可用来让更快的出口分到更多连接(使用 filter 时重复节点会被去重)。
+  #   它不做哈希,同一目标的多条连接也会被分散(适合多线程下载),
+  #   代价是没有任何粘性:把出口 IP 绑定到会话的站点应交给 sticky-sessions 组。
   # hash-key: in-user # 可选,仅 consistent-hashing 和 sticky-sessions 支持;
-  #                   # round-robin 不做哈希,配置它会报错而不是被忽略。
+  #                   # round-robin 和 least-connections 不做哈希,配置它会报错而不是被忽略。
   #                   # 只改变「拿什么值去哈希」,不改变策略拿到哈希值之后如何选节点;
   #                   # 不填时行为与旧版完全一致。
   #                   # in-user 用 inbound 的认证用户名作 key(与 IN-USER 规则读取的是
