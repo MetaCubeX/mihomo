@@ -457,6 +457,9 @@ func (e *EasyTier) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.C
 }
 
 func (e *EasyTier) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = e.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -474,7 +477,7 @@ func (e *EasyTier) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	if pc == nil {
 		return nil, errors.New("packetConn is nil")
 	}
-	return NewPacketConn(pc, e), nil
+	return NewPacketConn(pc, e, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (e *EasyTier) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

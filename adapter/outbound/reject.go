@@ -31,10 +31,13 @@ func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 
 // ListenPacketContext implements C.ProxyAdapter
 func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err := r.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	return NewPacketConn(&nopPacketConn{}, r), nil
+	return NewPacketConn(&nopPacketConn{}, r, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (r *Reject) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

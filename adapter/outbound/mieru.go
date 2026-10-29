@@ -86,17 +86,33 @@ func (m *Mieru) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, 
 
 // ListenPacketContext implements C.ProxyAdapter
 func (m *Mieru) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = m.ResolveUDP(ctx, metadata); err != nil {
+	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
+	}
+	var destination net.Addr
+	if metadata.UDP.AllowRemote {
+		target, err := remoteUDPTarget(metadata.UDP.Target)
+		if err != nil {
+			return nil, err
+		}
+		// The SDK requires network "udp"; Socksaddr itself reports "socks".
+		destination = metadataToMieruNetAddrSpec(&C.Metadata{
+			NetWork: C.UDP, Host: target.Fqdn, DstIP: target.Addr, DstPort: target.Port,
+		})
+	} else {
+		if err = m.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
+		destination = metadata.UDPAddr()
 	}
 	if err := m.ensureClientIsRunning(); err != nil {
 		return nil, err
 	}
-	c, err := m.client.DialContext(ctx, metadata.UDPAddr())
+	c, err := m.client.DialContext(ctx, destination)
 	if err != nil {
-		return nil, fmt.Errorf("dial to %s failed: %w", metadata.UDPAddr(), err)
+		return nil, fmt.Errorf("dial to %s failed: %w", destination, err)
 	}
-	return NewPacketConn(N.NewThreadSafePacketConn(mierucommon.NewUDPAssociateWrapper(mierucommon.NewPacketOverStreamTunnel(c))), m), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(&mieruPacketConn{mierucommon.NewPacketOverStreamTunnel(c)}), m, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // SupportUOT implements C.ProxyAdapter

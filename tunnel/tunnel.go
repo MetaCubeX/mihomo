@@ -29,6 +29,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
+	M "github.com/metacubex/sing/common/metadata"
 	"golang.org/x/exp/slices"
 )
 
@@ -41,7 +42,7 @@ var (
 	status        = atomic.NewInt32Enum(Suspend)
 	udpInit       sync.Once
 	udpQueues     []chan C.PacketAdapter
-	natTable      = nat.New()
+	natTable      C.NatTable = nat.New()
 	rules         []C.Rule
 	listeners     = make(map[string]C.InboundListener)
 	subRules      map[string][]C.Rule
@@ -297,11 +298,15 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				// only clear dstIP if it is confirmed to be a fake IP
 				metadata.DstIP = netip.Addr{}
 				metadata.DNSMode = C.DNSFakeIP
+				setUDPTarget(metadata, M.ParseSocksaddrHostPort(host, metadata.DstPort))
 			} else if node, ok := resolver.DefaultHosts.Search(host, false); ok {
 				// redir-host should lookup the hosts
 				metadata.DstIP, _ = node.RandIP()
 			} else if node != nil && node.IsDomain {
 				metadata.Host = node.Domain
+			}
+			if metadata.DNSMode == C.DNSMapping {
+				setUDPTarget(metadata, M.SocksaddrFrom(metadata.DstIP, metadata.DstPort))
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
@@ -309,6 +314,9 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	} else if node, ok := resolver.DefaultHosts.Search(metadata.Host, true); ok {
 		// try use domain mapping
 		metadata.Host = node.Domain
+		if metadata.UDP != nil && metadata.UDP.Target.IsFqdn() {
+			setUDPTarget(metadata, M.ParseSocksaddrHostPort(node.Domain, metadata.DstPort))
+		}
 	}
 
 	return nil
@@ -330,6 +338,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 
 	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
 		metadata.DstIP, _ = node.RandIP()
+		setUDPTarget(metadata, M.SocksaddrFrom(metadata.DstIP, metadata.DstPort))
 		resolved = true
 	}
 
@@ -437,25 +446,48 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
-	key := packet.Key()
-	sender, loaded := natTable.GetOrCreate(key, func() C.PacketSender {
-		sender := newPacketSender()
+	// Select the association from the inbound origin before fake-IP, hosts or
+	// sniffing can change the destination used to dial the outbound.
+	origin := M.Socksaddr{Addr: metadata.DstIP.Unmap(), Port: metadata.DstPort}
+	if metadata.Host != "" {
+		origin = M.Socksaddr{Fqdn: metadata.Host, Port: metadata.DstPort}
+	}
+	if sender, source, loaded := natTable.LoadSession(packet.Key(), origin); loaded {
+		packet.BindNATSource(source)
+		sender.Send(packet)
+		return
+	}
+	handleUDPConnNew(packet, metadata, origin)
+}
+
+// Keep the maker and dial closures off the established-session path: passing
+// them through NatTable would otherwise allocate even when the maker is unused.
+func handleUDPConnNew(packet C.PacketAdapter, metadata *C.Metadata, origin M.Socksaddr) {
+	remote, mapping := UDPConfig()
+	var session *udpSession
+	sender, source, loaded := natTable.GetOrCreateSession(packet.Key(), origin, C.UDPConfig{RemoteResolve: remote, Mapping: mapping}, func(key C.UDPSessionKey, _ C.NatSource, config C.UDPConfig) C.PacketSender {
+		destination := newUDPDestination(metadata, config.RemoteResolve, key.String())
+		session = newUDPSession(destination)
+		session.key = key
 		if sniffingEnable && snifferDispatcher.Enable() {
-			return snifferDispatcher.UDPSniff(packet, sender)
+			session.PacketSender = snifferDispatcher.UDPSniff(udpSniffPacket{packet, destination.Route}, session.PacketSender)
 		}
-		return sender
+		return session
 	})
+	packet.BindNATSource(source)
 	if !loaded {
+		destination := session.destination
 		dial := func() (C.PacketConn, C.WriteBackProxy, error) {
-			originMetadata := metadata  // save origin metadata
-			metadata = metadata.Clone() // don't modify PacketAdapter's metadata
+			metadata := destination.Route
 
 			if err := sender.DoSniff(metadata); err != nil {
 				log.Warnln("[UDP] DoSniff error: %s", err.Error())
 				return nil, nil, err
 			}
 
-			_ = preHandleMetadata(metadata) // error was pre-checked
+			if err := destination.prepare(); err != nil {
+				return nil, nil, err
+			}
 
 			proxy, rule, err := resolveMetadata(metadata)
 			if err != nil {
@@ -463,11 +495,11 @@ func handleUDPConn(packet C.PacketAdapter) {
 				return nil, nil, err
 			}
 
-			dialMetadata := metadata.Pure()
+			dialMetadata := destination.dialMetadata()
 			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 			defer cancel()
 			rawPc, err := retry(ctx, func(ctx context.Context) (C.PacketConn, error) {
-				return proxy.ListenPacketContext(ctx, dialMetadata)
+				return proxy.ListenPacketContext(ctx, dialMetadata.Clone())
 			}, func(err error) {
 				logMetadataErr(metadata, rule, proxy, err)
 			})
@@ -478,11 +510,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 
 			pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
 
-			sender.AddMapping(originMetadata, dialMetadata)
-			oAddrPort := dialMetadata.AddrPort()
+			session.bind(pc)
 			writeBackProxy := nat.NewWriteBackProxy(packet)
 
-			go handleUDPToLocal(writeBackProxy, pc, sender, key, oAddrPort)
+			go handleUDPToLocal(writeBackProxy, pc, sender, session.sender.mapping, session.key)
 			return pc, writeBackProxy, nil
 		}
 
@@ -490,7 +521,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 			pc, proxy, err := dial()
 			if err != nil {
 				sender.Close()
-				natTable.Delete(key)
+				natTable.DeleteSession(session.key, sender)
 				return
 			}
 			sender.Process(pc, proxy)
