@@ -13,7 +13,7 @@ import (
 type RealityOptions struct {
 	PublicKey string `proxy:"public-key"`
 	ShortID   string `proxy:"short-id,omitempty"`
-	Version 	string `proxy:"version,omitempty"`
+	Version   string `proxy:"version,omitempty"`
 
 	SupportX25519MLKEM768 bool `proxy:"support-x25519mlkem768,omitempty"`
 }

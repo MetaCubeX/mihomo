@@ -61,7 +61,7 @@ func ParseRealityVersion(v string) ([3]byte, error) {
 type RealityConfig struct {
 	PublicKey *ecdh.PublicKey
 	ShortID   [RealityMaxShortIDLen]byte
-	Version		[3]byte
+	Version	  [3]byte
 
 	SupportX25519MLKEM768 bool
 }
