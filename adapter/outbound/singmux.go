@@ -20,6 +20,10 @@ type SingMux struct {
 	onlyTcp bool
 }
 
+func (s *SingMux) TailscaleExitNodes(ctx context.Context) (*C.TailscaleExitNodes, error) {
+	return tailscaleExitNodes(ctx, s.ProxyAdapter)
+}
+
 type SingMuxOption struct {
 	Enabled        bool         `proxy:"enabled,omitempty"`
 	Protocol       string       `proxy:"protocol,omitempty"`
