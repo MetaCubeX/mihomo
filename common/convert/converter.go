@@ -638,6 +638,78 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			proxies = append(proxies, anytls)
 
+		case "x365":
+			// https://github.com/SakurakaiCat/x365-core
+			link, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+			server := link.Hostname()
+			if server == "" {
+				continue
+			}
+			portStr := link.Port()
+			if portStr == "" {
+				continue
+			}
+			query := link.Query()
+
+			remarks := link.Fragment
+			if remarks == "" {
+				remarks = fmt.Sprintf("%s:%s", server, portStr)
+			}
+			x365 := make(map[string]any, 10)
+			x365["name"] = uniqueName(names, remarks)
+			x365["type"] = "x365"
+			x365["server"] = server
+			x365["port"] = portStr
+			x365["uuid"] = link.User.Username()
+
+			network := query.Get("type")
+			if network == "" {
+				network = query.Get("network")
+			}
+			switch strings.ToLower(network) {
+			case "", "xhttp", "splithttp":
+			case "h1", "http":
+				x365["alpn"] = []string{"http/1.1"}
+			default:
+				log.Warnln("error:unsupported x365 transport %q server:%s:%s", network, server, portStr)
+				continue
+			}
+
+			host := query.Get("host")
+			if sni := query.Get("sni"); sni != "" {
+				x365["servername"] = sni
+			} else if host != "" {
+				x365["servername"] = host
+			}
+			fingerprint := query.Get("fp")
+			if fingerprint == "" || fingerprint == "chrome120" {
+				fingerprint = "chrome"
+			}
+			x365["client-fingerprint"] = fingerprint
+			if publicKey := query.Get("pbk"); publicKey != "" {
+				x365["reality-opts"] = map[string]any{
+					"public-key": publicKey,
+					"short-id":   query.Get("sid"),
+				}
+			}
+
+			xhttpOpts := make(map[string]any)
+			if path := query.Get("path"); path != "" {
+				xhttpOpts["path"] = path
+			}
+			if host != "" {
+				xhttpOpts["host"] = host
+			}
+			if token := query.Get("token"); token != "" {
+				xhttpOpts["headers"] = map[string]any{"Authorization": "Bearer " + token}
+			}
+			x365["xhttp-opts"] = xhttpOpts
+
+			proxies = append(proxies, x365)
+
 		case "mierus":
 			urlMieru, err := url.Parse(line)
 			if err != nil {

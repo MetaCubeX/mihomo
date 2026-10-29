@@ -329,3 +329,47 @@ func TestConvertsV2RayVmessBase64HTTPRemappedToH2Transport(t *testing.T) {
 	_, err = adapter.ParseProxy(proxies[0])
 	assert.NoError(t, err)
 }
+
+func TestConvertsV2RayX365(t *testing.T) {
+	const publicKey = "ppQ9FwLrLIa0AOrp1WvcyiaQ37vg2WSy_CD4bIdiTUw"
+	const uuid = "b831381d-6324-4d53-ad4f-8cda48b30811"
+	links := "x365://" + uuid + "@example.com:443?path=/hk&host=cdn.example.com&sni=www.example.com&pbk=" + publicKey + "&sid=6ba85179f3a2b4c5#hk\n" +
+		"x365://" + uuid + "@example.com:443?type=h1&path=/jp&host=cdn.example.com&pbk=" + publicKey + "&sid=6ba85179f3a2b4c5&fp=chrome120&token=jwt\n" +
+		"x365://" + uuid + "@example.com:443?path=/us&host=cdn.example.com&pbk=" + publicKey + "\n" +
+		"x365://" + uuid + "@example.com:443?type=ws&path=/ws#unsupported\n"
+
+	proxies, err := ConvertsV2Ray([]byte(base64.StdEncoding.EncodeToString([]byte(links))))
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 3)
+
+	assert.Equal(t, map[string]any{
+		"name":               "hk",
+		"type":               "x365",
+		"server":             "example.com",
+		"port":               "443",
+		"uuid":               uuid,
+		"servername":         "www.example.com",
+		"client-fingerprint": "chrome",
+		"reality-opts": map[string]any{
+			"public-key": publicKey,
+			"short-id":   "6ba85179f3a2b4c5",
+		},
+		"xhttp-opts": map[string]any{
+			"path": "/hk",
+			"host": "cdn.example.com",
+		},
+	}, proxies[0])
+
+	assert.Equal(t, "example.com:443", proxies[1]["name"])
+	assert.Equal(t, []string{"http/1.1"}, proxies[1]["alpn"])
+	assert.Equal(t, "cdn.example.com", proxies[1]["servername"])
+	assert.Equal(t, "chrome", proxies[1]["client-fingerprint"])
+	assert.Equal(t, map[string]any{"Authorization": "Bearer jwt"}, proxies[1]["xhttp-opts"].(map[string]any)["headers"])
+
+	assert.Equal(t, "example.com:443-01", proxies[2]["name"])
+
+	for _, proxy := range proxies {
+		_, err = adapter.ParseProxy(proxy)
+		assert.NoError(t, err)
+	}
+}
