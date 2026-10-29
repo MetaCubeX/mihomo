@@ -13,6 +13,7 @@ import (
 type RealityOptions struct {
 	PublicKey string `proxy:"public-key"`
 	ShortID   string `proxy:"short-id,omitempty"`
+	Version 	string `proxy:"version,omitempty"`
 
 	SupportX25519MLKEM768 bool `proxy:"support-x25519mlkem768,omitempty"`
 }
@@ -39,6 +40,11 @@ func (o RealityOptions) Parse() (*tlsC.RealityConfig, error) {
 		n, err = hex.Decode(config.ShortID[:], []byte(o.ShortID))
 		if err != nil || n > tlsC.RealityMaxShortIDLen {
 			return nil, errors.New("invalid REALITY short ID")
+		}
+
+		config.Version, err = tlsC.ParseRealityVersion(o.Version)
+		if err != nil {
+			return nil, fmt.Errorf("invalid REALITY version: %w", err)
 		}
 
 		return config, nil

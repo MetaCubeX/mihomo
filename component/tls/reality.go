@@ -15,6 +15,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/metacubex/mihomo/log"
@@ -28,9 +29,39 @@ import (
 
 const RealityMaxShortIDLen = 8
 
+const (
+	DefaultRealityVersionX = 1
+	DefaultRealityVersionY = 8
+	DefaultRealityVersionZ = 2
+)
+
+var DefaultRealityVersion = [3]byte{DefaultRealityVersionX, DefaultRealityVersionY, DefaultRealityVersionZ}
+
+func ParseRealityVersion(v string) ([3]byte, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return DefaultRealityVersion, nil
+	}
+
+	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	if len(parts) > 3 {
+		return [3]byte{}, errors.New("invalid reality version format")
+	}
+	var ver [3]byte
+	for i, part := range parts {
+		val, err := strconv.ParseUint(part, 10, 8)
+		if err != nil {
+			return [3]byte{}, err
+		}
+		ver[i] = byte(val)
+	}
+	return ver, nil
+}
+
 type RealityConfig struct {
 	PublicKey *ecdh.PublicKey
 	ShortID   [RealityMaxShortIDLen]byte
+	Version		[3]byte
 
 	SupportX25519MLKEM768 bool
 }
@@ -71,9 +102,11 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
 
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
-		hello.SessionId[0] = 1
-		hello.SessionId[1] = 8
-		hello.SessionId[2] = 2
+		version := realityConfig.Version
+		if version == [3]byte{} {
+			version = DefaultRealityVersion
+		}
+		copy(hello.SessionId[:3], version[:])
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
