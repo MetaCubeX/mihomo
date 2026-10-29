@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/mihomo/common/httputils"
 )
 
 const (
@@ -42,20 +43,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func clientIP(r *http.Request, header string) string {
-	if header != "" {
-		if v := r.Header.Get(header); v != "" {
-			if i := strings.Index(v, ","); i >= 0 {
-				v = v[:i]
-			}
-			v = strings.TrimSpace(v)
-			if h, _, err := net.SplitHostPort(v); err == nil {
-				v = h
-			}
-			if addr, err := netip.ParseAddr(v); err == nil {
-				return addr.Unmap().String()
-			}
-		}
+	if ap := httputils.ClientAddrPortFromHeader(r, header); ap.IsValid() {
+		return ap.Addr().String()
 	}
+
 	host := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
