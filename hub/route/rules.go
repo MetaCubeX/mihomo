@@ -95,5 +95,6 @@ func disableRules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	tunnel.RefreshSourceMAC()
 	render.NoContent(w, r)
 }
