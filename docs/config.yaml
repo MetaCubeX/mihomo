@@ -1048,6 +1048,8 @@ proxies: # socks5
     xhttp-opts:
       path: "/"
       host: xxx.com
+      # h2-max-receive-buffer-per-stream: 0 # Bytes; 0 keeps the HTTP/2 library default. HTTP/2 only.
+      # Larger windows may improve high-bandwidth/high-latency downloads but increase memory use and loaded latency.
       # mode: "stream-one" # Available: "stream-one", "stream-up" or "packet-up"
       # headers:
       #   X-Forwarded-For: ""
@@ -1077,6 +1079,7 @@ proxies: # socks5
       #   h-keep-alive-period: 0
       # download-settings:
       #   ## xhttp part
+      #   h2-max-receive-buffer-per-stream: 8388608 # 8 MiB; omitted inherits above, explicit 0 restores the library default.
       #   path: "/"
       #   host: xxx.com
       #   headers:
