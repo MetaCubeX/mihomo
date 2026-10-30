@@ -29,6 +29,7 @@ func proxyRouter() http.Handler {
 		r.Use(parseProxyName, findProxyByName)
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
+		r.Get("/tailscale/exit-nodes", getTailscaleExitNodes)
 		r.Put("/", updateProxy)
 		r.Delete("/", unfixedProxy)
 	})

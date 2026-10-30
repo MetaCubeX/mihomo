@@ -47,6 +47,7 @@ type Tailscale struct {
 	backendInitErr  error
 
 	serverStarted bool
+	discovery     tailscaleDiscovery
 
 	unregisterDNSResolver func()
 }
@@ -185,8 +186,10 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 
 func (t *Tailscale) start() error {
 	t.startOnce.Do(func() {
+		t.discovery.update("Starting", nil)
 		if err := t.server.Start(); err != nil {
 			t.startErr = err
+			t.discovery.update("Error", nil)
 			t.setBackendInitialized(err)
 			return
 		}
@@ -195,9 +198,18 @@ func (t *Tailscale) start() error {
 		defer cancel()
 		if err := t.applyPrefs(ctx); err != nil {
 			t.startErr = err
+			t.discovery.update("Error", nil)
 			t.setBackendInitialized(err)
 			return
 		}
+		lc, err := t.server.LocalClient()
+		if err != nil {
+			t.startErr = err
+			t.discovery.update("Error", nil)
+			t.setBackendInitialized(err)
+			return
+		}
+		t.discovery.update("Starting", lc.Status)
 		go t.watchBackendState()
 	})
 	return t.startErr
@@ -466,6 +478,7 @@ func (t *Tailscale) IsL3Protocol(metadata *C.Metadata) bool {
 
 func (t *Tailscale) Close() error {
 	t.cancel()
+	t.discovery.update("Closed", nil)
 	if t.unregisterDNSResolver != nil {
 		t.unregisterDNSResolver()
 	}
