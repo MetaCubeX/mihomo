@@ -62,6 +62,7 @@ func (bp *baseProvider) Version() uint32 {
 }
 
 func (bp *baseProvider) Initial() error {
+	startBackgroundProxies(bp.Proxies())
 	if bp.healthCheck.auto() {
 		go bp.healthCheck.process()
 	}
@@ -106,8 +107,17 @@ func (bp *baseProvider) setProxies(proxies []C.Proxy) {
 	bp.proxies = proxies
 	bp.version += 1
 	bp.healthCheck.setProxies(proxies)
+	startBackgroundProxies(proxies)
 	if bp.healthCheck.auto() {
 		go bp.healthCheck.check()
+	}
+}
+
+func startBackgroundProxies(proxies []C.Proxy) {
+	for _, proxy := range proxies {
+		if starter, ok := proxy.Adapter().(C.BackgroundProxy); ok {
+			starter.StartBackground()
+		}
 	}
 }
 
