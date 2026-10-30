@@ -125,3 +125,40 @@ func TestHTTPDiagnosticsRemaining(t *testing.T) {
 		t.Fatalf("expired deadline: %s", got)
 	}
 }
+
+func TestHTTPDiagnosticsMalformedResponse(t *testing.T) {
+	h := diagnosticHTTP(t)
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		reader := bufio.NewReader(server)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				return
+			}
+			if line == "\r\n" {
+				break
+			}
+		}
+		_, _ = fmt.Fprint(server, "PRIVATE_REMOTE_STATUS_LINE\r\n\r\n")
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := h.StreamConnContext(ctx, client, &C.Metadata{Host: "example.invalid", DstPort: 443})
+	<-done
+	var responseErr *httpProxyResponseError
+	if !errors.As(err, &responseErr) || errors.Unwrap(responseErr) == nil {
+		t.Fatalf("missing wrapped parser cause: %v", err)
+	}
+	if strings.Contains(err.Error(), "PRIVATE_REMOTE_STATUS_LINE") || !strings.Contains(err.Error(), "stage=http-connect") {
+		t.Fatalf("unsafe or missing stage diagnostic: %v", err)
+	}
+	cause := errors.New("synthetic cause")
+	if !errors.Is(&httpProxyResponseError{cause: cause}, cause) {
+		t.Fatal("lost error identity")
+	}
+}

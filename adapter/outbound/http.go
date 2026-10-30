@@ -106,6 +106,15 @@ func httpProxyRemaining(ctx context.Context) string {
 	return "none"
 }
 
+// ReadResponse errors may quote untrusted response headers or status lines.
+// Preserve their identity without copying response contents into log messages.
+type httpProxyResponseError struct {
+	cause error
+}
+
+func (e *httpProxyResponseError) Error() string { return "HTTP CONNECT response read/parse failed" }
+func (e *httpProxyResponseError) Unwrap() error { return e.cause }
+
 // ProxyInfo implements C.ProxyAdapter
 func (h *Http) ProxyInfo() C.ProxyInfo {
 	info := h.Base.ProxyInfo()
@@ -151,7 +160,7 @@ func (h *Http) shakeHandContext(ctx context.Context, c net.Conn, metadata *C.Met
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 
 	if err != nil {
-		return err
+		return &httpProxyResponseError{cause: err}
 	}
 
 	if resp.StatusCode == http.StatusOK {
