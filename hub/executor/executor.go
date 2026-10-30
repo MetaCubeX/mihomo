@@ -122,6 +122,53 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	resolver.ResetConnection()
 }
 
+// ApplyRules replaces the rules, sub-rules and rule providers with those of
+// cfg and leaves proxies, DNS, listeners and everything else running, so
+// traffic is not suspended as it is during ApplyConfig.
+//
+// It changes nothing and returns an error when a rule targets a proxy or
+// group that is not running; adding those needs ApplyConfig.
+func ApplyRules(cfg *config.Config) error {
+	mux.Lock()
+	defer mux.Unlock()
+
+	if err := checkRuleTargets(cfg.Rules, cfg.SubRules, tunnel.Proxies()); err != nil {
+		return err
+	}
+	// Parsing creates rule providers empty. Load them before they take effect,
+	// or every RULE-SET rule stops matching until the next ApplyConfig.
+	loadProvider(cfg.RuleProviders)
+	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
+	return nil
+}
+
+// checkRuleTargets reports a rule whose proxy is not running. The tunnel
+// skips such a rule when matching, so without this check it would silently
+// never take effect.
+func checkRuleTargets(rules []C.Rule, subRules map[string][]C.Rule, proxies map[string]C.Proxy) error {
+	check := func(format string, rules []C.Rule) error {
+		for idx, rule := range rules {
+			if rule.RuleType() == C.SubRules { // targets a sub-rule, checked below
+				continue
+			}
+			if _, ok := proxies[rule.Adapter()]; !ok {
+				return fmt.Errorf("%s[%d] [%s,%s] error: proxy [%s] is not running, apply the whole config to add it",
+					format, idx, rule.RuleType(), rule.Payload(), rule.Adapter())
+			}
+		}
+		return nil
+	}
+	if err := check("rules", rules); err != nil {
+		return err
+	}
+	for name, rules := range subRules {
+		if err := check("sub-rules."+name, rules); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func initInnerTcp() {
 	inner.New(tunnel.Tunnel)
 }
