@@ -127,6 +127,7 @@ func initInnerTcp() {
 }
 
 func GetGeneral() *config.General {
+	clientTimeout, serverTimeout := tunnel.TCPHalfCloseTimeout()
 	ports := listener.GetPorts()
 	var authenticator []string
 	if auth := authStore.Default.Authenticator(); auth != nil {
@@ -171,6 +172,10 @@ func GetGeneral() *config.General {
 		GeodataLoader:     geodata.LoaderName(),
 		GeositeMatcher:    geodata.SiteMatcherName(),
 		TCPConcurrent:     dialer.GetTcpConcurrent(),
+		TCPHalfCloseTimeout: config.TCPHalfCloseTimeout{
+			Client: int(clientTimeout / time.Second),
+			Server: int(serverTimeout / time.Second),
+		},
 		FindProcessMode:   tunnel.FindProcessMode(),
 		Sniffing:          tunnel.IsSniffing(),
 		GlobalUA:          mihomoHttp.UA(),
@@ -396,6 +401,8 @@ func updateGeneral(general *config.General, logging bool) {
 	resolver.DisableIPv6 = !general.IPv6
 
 	dialer.SetTcpConcurrent(general.TCPConcurrent)
+	tunnel.SetTCPHalfCloseTimeout(time.Duration(general.TCPHalfCloseTimeout.Client)*time.Second,
+		time.Duration(general.TCPHalfCloseTimeout.Server)*time.Second)
 	if logging && general.TCPConcurrent {
 		log.Infoln("Use tcp concurrent")
 	}
