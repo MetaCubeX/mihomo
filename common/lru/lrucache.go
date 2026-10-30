@@ -101,6 +101,18 @@ func (c *LruCache[K, V]) Get(key K) (V, bool) {
 	return value, true
 }
 
+// Peek reads an unexpired entry without changing recency, expiry, or cache contents.
+func (c *LruCache[K, V]) Peek(key K) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	le, ok := c.cache[key]
+	if !ok || (!c.staleReturn && c.maxAge > 0 && le.Value.expires <= time.Now().Unix()) {
+		return lo.Empty[V](), false
+	}
+	return le.Value.value, true
+}
+
 func (c *LruCache[K, V]) GetOrStore(key K, constructor func() V) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

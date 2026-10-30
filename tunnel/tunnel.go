@@ -335,18 +335,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 
 	helper := C.RuleMatchHelper{
 		ResolveIP: func() {
-			if !resolved && metadata.Host != "" && !metadata.Resolved() {
-				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
-				defer cancel()
-				ip, err := resolver.ResolveIP(ctx, metadata.Host)
-				if err != nil {
-					log.Debugln("[DNS] resolve %s error: %s", metadata.Host, err.Error())
-				} else {
-					log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())
-					metadata.DstIP = ip
-				}
-				resolved = true
-			}
+			_, _ = resolveRuleIP(context.Background(), metadata, &resolved)
 		},
 		FindProcess: func() {
 			if attemptProcessLookup {
@@ -654,21 +643,41 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
+	return matchWithConfig(metadata, helper, &ruleMatchConfig{rules: rules, subRules: subRules, proxies: proxies})
+}
+
+// ruleMatchConfig holds references to a loaded configuration, whose maps and rule
+// slices are replaced rather than modified by configuration updates.
+type ruleMatchConfig struct {
+	rules    []C.Rule
+	subRules map[string][]C.Rule
+	proxies  map[string]C.Proxy
+}
+
+// matchWithConfig is shared by live traffic and diagnostic rule evaluation.
+func matchWithConfig(metadata *C.Metadata, helper C.RuleMatchHelper, config *ruleMatchConfig) (C.Proxy, C.Rule, error) {
 
 	var rematchChain []string
 	for {
 		var rematchProxy C.Proxy
 		var rematchRule C.Rule
 	GetRules:
-		for _, rule := range getRules(metadata) {
-			if matched, ada := rule.Match(metadata, helper); matched {
-				adapter, ok := proxies[ada]
+		for _, rule := range config.getRules(metadata) {
+			if helper.Diagnostics != nil && helper.Diagnostics.BeginRule != nil {
+				helper.Diagnostics.BeginRule()
+			}
+			matched, ada := helper.MatchRule(rule, metadata)
+			if helper.Diagnostics != nil && helper.Diagnostics.Incomplete != nil && helper.Diagnostics.Incomplete() {
+				return nil, rule, nil
+			}
+			if matched {
+				adapter, ok := config.proxies[ada]
 				if !ok {
 					continue
 				}
 
 				// parse multi-layer nesting
-				for adapter := adapter; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
+				for adapter := adapter; adapter != nil; adapter = unwrapRuleProxy(adapter, metadata, helper.Diagnostics != nil) {
 					if adapter.Type() == C.Pass {
 						log.Debugln("%s match Pass rule", adapter.Name())
 						continue GetRules
@@ -706,17 +715,17 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 			log.Debugln("[Rule] rematch proxy %s update metadata to rematch-name=%q sub-rule=%q", rematchProxy.Name(), metadata.InName, metadata.SpecialRules)
 			continue
 		}
-		return proxies["DIRECT"], nil, nil
+		return config.proxies["DIRECT"], nil, nil
 	}
 }
 
-func getRules(metadata *C.Metadata) []C.Rule {
-	if sr, ok := subRules[metadata.SpecialRules]; ok {
+func (config *ruleMatchConfig) getRules(metadata *C.Metadata) []C.Rule {
+	if sr, ok := config.subRules[metadata.SpecialRules]; ok {
 		log.Debugln("[Rule] use %s rules", metadata.SpecialRules)
 		return sr
 	} else {
 		log.Debugln("[Rule] use default rules")
-		return rules
+		return config.rules
 	}
 }
 
