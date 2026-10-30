@@ -2132,6 +2132,11 @@ listeners:
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
     cipher: 2022-blake3-aes-256-gcm
+    # users: # 多用户，匹配到的用户名可用于 IN-USER 规则，仅支持 AEAD 加密及 2022-blake3-aes-* 加密
+    #        # 2022-blake3-aes-*: 上方 password 为服务端 PSK，此处为用户 PSK，客户端密码填写 "服务端PSK:用户PSK"
+    #        # AEAD 加密: 上方 password 需留空，客户端密码直接填写此处的密码
+    #   username1: 6NNH4wlU1Sg+r8uILmCzg9qogjbKGDh/RXT7SYwFx1g=
+    #   username2: 9x0ZrXIZTB5+nwF4QzF+Rn4KfJ2kchNm74aOYhZ+8Sg=
     # simple-obfs:
     #   enable: false # 设置为true时开启
     #   mode: http # Available: http, tls
