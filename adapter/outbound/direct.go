@@ -3,8 +3,10 @@ package outbound
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/loopback"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
@@ -42,11 +44,42 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err := d.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	pc, err := dialer.NewDialer(d.DialOptions()...).ListenPacket(ctx, "udp", "", metadata.AddrPort())
+	pc, err := listenDirectPacket(ctx, metadata, dialer.NewDialer(d.DialOptions()...))
 	if err != nil {
 		return nil, err
 	}
 	return d.loopBack.NewPacketConn(NewPacketConn(pc, d)), nil
+}
+
+func listenDirectPacket(ctx context.Context, metadata *C.Metadata, packetDialer C.Dialer) (net.PacketConn, error) {
+	for attempt := 0; attempt < 8; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		pc, err := packetDialer.ListenPacket(ctx, "udp", "", metadata.AddrPort())
+		if err != nil {
+			return nil, err
+		}
+		addr, ok := pc.LocalAddr().(*net.UDPAddr)
+		if !ok || addr.Port != int(metadata.SrcPort) {
+			return pc, nil
+		}
+		source := metadata.SrcIP.Unmap()
+		isLocal := source.IsLoopback()
+		if !isLocal {
+			isLocal, err = iface.IsLocalIp(source)
+			if err != nil {
+				_ = pc.Close()
+				return nil, err
+			}
+		}
+		if !isLocal {
+			return pc, nil
+		}
+		// A macOS TUN write-back can reach this socket after the client releases its port.
+		_ = pc.Close()
+	}
+	return nil, fmt.Errorf("%w: UDP source port %d reused by outbound socket", loopback.ErrReject, metadata.SrcPort)
 }
 
 func (d *Direct) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
