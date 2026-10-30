@@ -88,7 +88,7 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = ss.ResolveUDP(ctx, metadata); err != nil {
+	if err = prepareUDP(ctx, metadata, ss); err != nil {
 		return nil, err
 	}
 	c, err := ss.dialer.DialContext(ctx, "tcp", ss.addr)
@@ -209,6 +209,7 @@ func NewSocks5(option Socks5Option) (*Socks5, error) {
 		skipCertVerify: option.SkipCertVerify,
 		tlsConfig:      tlsConfig,
 	}
+	outbound.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	return outbound, nil
 }
@@ -236,12 +237,12 @@ func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	if e != nil {
 		return 0, nil, e
 	}
-	addr, payload, err := socks5.DecodeUDPPacket(b)
+	addr, payload, err := socks5.DecodeUDPPacket(b[:n])
 	if err != nil {
 		return 0, nil, err
 	}
 
-	udpAddr := addr.UDPAddr()
+	udpAddr := addr.UDPRemoteAddr()
 	if udpAddr == nil {
 		return 0, nil, errors.New("parse udp addr error")
 	}

@@ -98,7 +98,7 @@ func ReadPacket(r io.Reader, payload []byte) (net.Addr, int, int, error) {
 	if err != nil {
 		return nil, 0, 0, errors.New("read addr error")
 	}
-	uAddr := addr.UDPAddr()
+	uAddr := addr.UDPRemoteAddr()
 	if uAddr == nil {
 		return nil, 0, 0, errors.New("parse addr error")
 	}
@@ -186,7 +186,7 @@ func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	udpAddr := destination.UDPAddr()
+	udpAddr := destination.UDPRemoteAddr()
 	if udpAddr == nil {
 		return nil, nil, nil, errors.New("parse addr error")
 	}

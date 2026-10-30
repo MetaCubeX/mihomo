@@ -464,7 +464,9 @@ func handleUDPConn(packet C.PacketAdapter) {
 			}
 
 			dialMetadata := metadata.Pure()
-			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
+			// The first packet fixes the session's remote DNS domain. An initial
+			// literal IP disables remote DNS for subsequent packets of this session.
+			ctx, cancel := context.WithTimeout(C.WithUDPRemoteDNSDomain(context.Background(), dialMetadata.Host), C.DefaultUDPTimeout)
 			defer cancel()
 			rawPc, err := retry(ctx, func(ctx context.Context) (C.PacketConn, error) {
 				return proxy.ListenPacketContext(ctx, dialMetadata)
@@ -480,6 +482,9 @@ func handleUDPConn(packet C.PacketAdapter) {
 
 			sender.AddMapping(originMetadata, dialMetadata)
 			oAddrPort := dialMetadata.AddrPort()
+			if !oAddrPort.IsValid() {
+				oAddrPort = originMetadata.AddrPort()
+			}
 			writeBackProxy := nat.NewWriteBackProxy(packet)
 
 			go handleUDPToLocal(writeBackProxy, pc, sender, key, oAddrPort)

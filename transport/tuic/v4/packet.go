@@ -99,7 +99,7 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 			return
 		}
 		n = copy(p, packet.DATA)
-		addr = packet.ADDR.UDPAddr()
+		addr = packet.ADDR.UDPRemoteAddr()
 	} else {
 		err = net.ErrClosed
 	}
@@ -114,7 +114,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 			return
 		}
 		data = packet.DATA
-		addr = packet.ADDR.UDPAddr()
+		addr = packet.ADDR.UDPRemoteAddr()
 	} else {
 		err = net.ErrClosed
 	}

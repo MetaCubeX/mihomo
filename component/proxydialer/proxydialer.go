@@ -31,14 +31,14 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 		if err != nil {
 			return nil, err
 		}
-		if !currentMeta.Resolved() { // should not happen, maybe by a wrongly implemented proxy, but we can handle this (:
-			err = pc.ResolveUDP(ctx, currentMeta)
+		if !currentMeta.Resolved() { // Remote DNS may intentionally retain the target domain.
+			err = pc.PrepareUDP(ctx, currentMeta)
 			if err != nil {
 				_ = pc.Close()
 				return nil, err
 			}
 		}
-		return N.NewBindPacketConn(pc, currentMeta.UDPAddr()), nil
+		return N.NewBindPacketConn(pc, currentMeta.UDPRemoteAddr()), nil
 	}
 	conn, err := p.proxy.DialContext(ctx, currentMeta)
 	if err != nil {

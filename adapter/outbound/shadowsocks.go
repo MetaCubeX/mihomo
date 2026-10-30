@@ -257,17 +257,17 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		defer func(c net.Conn) {
 			safeConnClose(c, err)
 		}(c)
-		if err = ss.ResolveUDP(ctx, metadata); err != nil {
+		if err = prepareUDP(ctx, metadata, ss); err != nil {
 			return nil, err
 		}
-		destination := M.SocksaddrFromNet(metadata.UDPAddr())
+		destination := M.SocksaddrFromNet(metadata.UDPRemoteAddr())
 		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
 			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
 		} else {
 			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
 		}
 	}
-	if err := ss.ResolveUDP(ctx, metadata); err != nil {
+	if err := prepareUDP(ctx, metadata, ss); err != nil {
 		return nil, err
 	}
 
@@ -520,6 +520,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		jlsConfig:       jlsConfig,
 		kcptunClient:    kcptunClient,
 	}
+	outbound.SetUDPRemoteDNS(option.UDPRemoteDNS)
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	return outbound, nil
 }

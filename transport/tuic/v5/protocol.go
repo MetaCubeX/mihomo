@@ -563,6 +563,10 @@ func (c Address) SocksAddr() socks5.Addr {
 	return addr
 }
 
+func (c Address) UDPRemoteAddr() net.Addr {
+	return c.SocksAddr().UDPRemoteAddr()
+}
+
 func (c Address) UDPAddr() *net.UDPAddr {
 	return &net.UDPAddr{
 		IP:   c.ADDR,
