@@ -4,10 +4,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
@@ -45,25 +45,31 @@ type HttpOption struct {
 // StreamConnContext implements C.ProxyAdapter
 func (h *Http) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if h.tlsConfig != nil {
+		started := time.Now()
+		remaining := httpProxyRemaining(ctx)
 		cc := tls.Client(c, h.tlsConfig)
 		err := cc.HandshakeContext(ctx)
 		c = cc
 		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
+			return nil, h.diagnosticError("proxy-tls", c, started, remaining, err)
 		}
 	}
 
+	started := time.Now()
+	remaining := httpProxyRemaining(ctx)
 	if err := h.shakeHandContext(ctx, c, metadata); err != nil {
-		return nil, err
+		return nil, h.diagnosticError("http-connect", c, started, remaining, err)
 	}
 	return c, nil
 }
 
 // DialContext implements C.ProxyAdapter
 func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	started := time.Now()
+	remaining := httpProxyRemaining(ctx)
 	c, err := h.dialer.DialContext(ctx, "tcp", h.addr)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
+		return nil, h.diagnosticError("proxy-dial", nil, started, remaining, err)
 	}
 
 	defer func(c net.Conn) {
@@ -77,6 +83,37 @@ func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn,
 
 	return NewConn(c, h), nil
 }
+
+// proxy-dial includes address resolution and any configured upstream dialer.
+// Wrapping CONNECT errors here keeps stage information after context cancellation.
+func (h *Http) diagnosticError(stage string, conn net.Conn, started time.Time, remaining string, err error) error {
+	peer := "unavailable"
+	if conn != nil && conn.RemoteAddr() != nil {
+		peer = conn.RemoteAddr().String()
+	}
+	return fmt.Errorf("stage=%s proxy=%s peer=%s stage_elapsed=%s remaining_at_start=%s: %w",
+		stage, h.addr, peer, time.Since(started).Round(time.Millisecond), remaining, err)
+}
+
+func httpProxyRemaining(ctx context.Context) string {
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining < 0 {
+			remaining = 0
+		}
+		return remaining.Round(time.Millisecond).String()
+	}
+	return "none"
+}
+
+// ReadResponse errors may quote untrusted response headers or status lines.
+// Preserve their identity without copying response contents into log messages.
+type httpProxyResponseError struct {
+	cause error
+}
+
+func (e *httpProxyResponseError) Error() string { return "HTTP CONNECT response read/parse failed" }
+func (e *httpProxyResponseError) Unwrap() error { return e.cause }
 
 // ProxyInfo implements C.ProxyAdapter
 func (h *Http) ProxyInfo() C.ProxyInfo {
@@ -123,7 +160,7 @@ func (h *Http) shakeHandContext(ctx context.Context, c net.Conn, metadata *C.Met
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 
 	if err != nil {
-		return err
+		return &httpProxyResponseError{cause: err}
 	}
 
 	if resp.StatusCode == http.StatusOK {
@@ -131,15 +168,15 @@ func (h *Http) shakeHandContext(ctx context.Context, c net.Conn, metadata *C.Met
 	}
 
 	if resp.StatusCode == http.StatusProxyAuthRequired {
-		return errors.New("HTTP need auth")
+		return fmt.Errorf("HTTP need auth (status=%d %s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
 	if resp.StatusCode == http.StatusMethodNotAllowed {
-		return errors.New("CONNECT method not allowed by proxy")
+		return fmt.Errorf("CONNECT method not allowed by proxy (status=%d %s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
 	if resp.StatusCode >= http.StatusInternalServerError {
-		return errors.New(resp.Status)
+		return fmt.Errorf("HTTP CONNECT rejected (status=%d %s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
 	return fmt.Errorf("can not connect remote err code: %d", resp.StatusCode)

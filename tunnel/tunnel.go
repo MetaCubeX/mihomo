@@ -571,9 +571,16 @@ func handleTCPConn(connCtx C.ConnContext) {
 	var peekBytes []byte
 	var peekLen int
 
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
+	ctx, cancel := tcpConnectContext(context.Background())
 	defer cancel()
+	dialStarted := time.Now()
+	dialDeadline, _ := ctx.Deadline()
+	dialBudget := time.Until(dialDeadline)
+	attempt := 0
+	var attemptStarted time.Time
 	remoteConn, err := retry(ctx, func(ctx context.Context) (remoteConn C.Conn, err error) {
+		attempt++
+		attemptStarted = time.Now()
 		remoteConn, err = proxy.DialContext(ctx, dialMetadata)
 		if err != nil {
 			return
@@ -605,12 +612,13 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}
 		return
 	}, func(err error) {
-		logMetadataErr(metadata, rule, proxy, err)
+		logMetadataErr(metadata, rule, proxy, tcpDialDiagnosticError(err, attempt, attemptStarted, dialStarted, dialBudget))
 	})
 	if err != nil {
 		return
 	}
 	logMetadata(metadata, rule, remoteConn)
+	log.Debugln("[TCP] dial established target=%s attempts=%d elapsed=%s budget=%s", metadata.RemoteAddress(), attempt, time.Since(dialStarted).Round(time.Millisecond), dialBudget.Round(time.Millisecond))
 
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, int64(peekLen), 0, true)
 	defer func(remoteConn C.Conn) {
