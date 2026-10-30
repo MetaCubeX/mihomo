@@ -249,6 +249,8 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 // For 2022-blake3-aes-* methods, config.Password is the server PSK (iPSK) and each user password is
 // the user PSK (uPSK), so the client password is "iPSK:uPSK".
 // For legacy AEAD methods, each user password is used directly and config.Password must be empty.
+// Legacy AEAD has no user identity in the packet, so every user is tried for each packet, which makes
+// the cost grow linearly with the number of users.
 func newMultiService(config LC.ShadowsocksServer, udpTimeout int64, handler shadowsocks.Handler) (service, error) {
 	var multiService shadowsocks.MultiService[string]
 	var err error
