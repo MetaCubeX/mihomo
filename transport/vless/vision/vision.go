@@ -26,15 +26,13 @@ var ErrNotTLS13 = errors.New("XTLS Vision based on TLS 1.3 outer connection")
 
 func NewConn(conn net.Conn, tlsConn net.Conn, userUUID uuid.UUID) (*Conn, error) {
 	c := &Conn{
-		ExtendedReader:             N.NewExtendedReader(conn),
-		ExtendedWriter:             N.NewExtendedWriter(conn),
-		Conn:                       conn,
-		userUUID:                   userUUID,
-		packetsToFilter:            8,
-		readProcess:                true,
-		readFilterUUID:             true,
-		writeFilterApplicationData: true,
-		writeOnceUserUUID:          userUUID.Bytes(),
+		ExtendedReader:    N.NewExtendedReader(conn),
+		ExtendedWriter:    N.NewExtendedWriter(conn),
+		Conn:              conn,
+		userUUID:          userUUID,
+		packetsToFilter:   8,
+		readFilterUUID:    true,
+		writeOnceUserUUID: userUUID.Bytes(),
 	}
 	var t reflect.Type
 	var p unsafe.Pointer
