@@ -87,3 +87,12 @@ jobs:
           go test -race ./transport/anytls/session ./listener/inbound
           -run 'TestStream|TestSessionSettings|TestInboundAnyTLS_TLS'
           -count=1 -timeout=3m
+
+      - name: Test TUIC concurrency
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        env:
+          CGO_ENABLED: 1
+        run: >-
+          go test -race ./transport/tuic/v4 ./transport/tuic/v5 ./listener/inbound
+          -run 'TestPacketConn|TestInboundTuic_TLS'
+          -count=1 -timeout=3m
