@@ -185,9 +185,8 @@ func (c *serverConn) WriteBuffer(buffer *buf.Buffer) error {
 }
 
 func (c *serverConn) FrontHeadroom() int {
-	if c.responseWritten {
-		return 0
-	}
+	// Buffer allocators may query headroom concurrently with the first write.
+	// Reserving the two-byte response header unconditionally is safe in both states.
 	return 2
 }
 
