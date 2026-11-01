@@ -28,6 +28,7 @@ import (
 	"github.com/metacubex/mihomo/component/sniffer"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 	P "github.com/metacubex/mihomo/constant/provider"
 	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
 	"github.com/metacubex/mihomo/dns"
@@ -179,6 +180,11 @@ type DNS struct {
 type Profile struct {
 	StoreSelected bool
 	StoreFakeIP   bool
+
+	StoreTrafficStats            bool
+	TrafficStatsRetentionDays    int
+	TrafficStatsMaxHosts         int
+	TrafficStatsPersistInterval  int
 }
 
 // TLS config
@@ -363,6 +369,11 @@ type RawExperimental struct {
 type RawProfile struct {
 	StoreSelected bool `yaml:"store-selected" json:"store-selected"`
 	StoreFakeIP   bool `yaml:"store-fake-ip" json:"store-fake-ip"`
+
+	StoreTrafficStats           bool `yaml:"store-traffic-stats" json:"store-traffic-stats"`
+	TrafficStatsRetentionDays   int  `yaml:"traffic-stats-retention-days" json:"traffic-stats-retention-days"`
+	TrafficStatsMaxHosts        int  `yaml:"traffic-stats-max-hosts" json:"traffic-stats-max-hosts"`
+	TrafficStatsPersistInterval int  `yaml:"traffic-stats-persist-interval" json:"traffic-stats-persist-interval"`
 }
 
 type RawGeoXUrl struct {
@@ -579,7 +590,10 @@ func DefaultRawConfig() *RawConfig {
 			QUICGoDisableECN: true,
 		},
 		Profile: RawProfile{
-			StoreSelected: true,
+			StoreSelected:               true,
+			TrafficStatsRetentionDays:   defaultTrafficStatsRetentionDays,
+			TrafficStatsMaxHosts:        defaultTrafficStatsMaxHosts,
+			TrafficStatsPersistInterval: defaultTrafficStatsPersistInterval,
 		},
 		GeoXUrl: RawGeoXUrl{
 			Mmdb:    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb",
@@ -749,6 +763,22 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 
+	statistic.InitTrafficStats(statistic.TrafficStatsOptions{
+		Enabled:         config.Profile.StoreTrafficStats,
+		RetentionDays:   config.Profile.TrafficStatsRetentionDays,
+		MaxHosts:        config.Profile.TrafficStatsMaxHosts,
+		PersistInterval: time.Duration(config.Profile.TrafficStatsPersistInterval) * time.Second,
+		Path:            C.Path.Resolve("traffic-stats.json"),
+	})
+
+	statistic.InitTrafficStats(statistic.TrafficStatsOptions{
+		Enabled:         config.Profile.StoreTrafficStats,
+		RetentionDays:   config.Profile.TrafficStatsRetentionDays,
+		MaxHosts:        config.Profile.TrafficStatsMaxHosts,
+		PersistInterval: time.Duration(config.Profile.TrafficStatsPersistInterval) * time.Second,
+		Path:            C.Path.Resolve("traffic-stats.json"),
+	})
+
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
 
@@ -859,10 +889,20 @@ func parseNTP(cfg *RawConfig) (*NTP, error) {
 	}, nil
 }
 
+const (
+	defaultTrafficStatsRetentionDays   = 30
+	defaultTrafficStatsMaxHosts        = 20000
+	defaultTrafficStatsPersistInterval = 300
+)
+
 func parseProfile(cfg *RawConfig) (*Profile, error) {
 	return &Profile{
-		StoreSelected: cfg.Profile.StoreSelected,
-		StoreFakeIP:   cfg.Profile.StoreFakeIP,
+		StoreSelected:               cfg.Profile.StoreSelected,
+		StoreFakeIP:                 cfg.Profile.StoreFakeIP,
+		StoreTrafficStats:           cfg.Profile.StoreTrafficStats,
+		TrafficStatsRetentionDays:   cfg.Profile.TrafficStatsRetentionDays,
+		TrafficStatsMaxHosts:        cfg.Profile.TrafficStatsMaxHosts,
+		TrafficStatsPersistInterval: cfg.Profile.TrafficStatsPersistInterval,
 	}, nil
 }
 
