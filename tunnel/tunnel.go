@@ -563,7 +563,17 @@ func handleTCPConn(connCtx C.ConnContext) {
 			if dstIp, _ := node.RandIP(); !resolver.IsFakeIP(dstIp) {
 				dialMetadata.DstIP = dstIp
 				dialMetadata.DNSMode = C.DNSHosts
-				dialMetadata = dialMetadata.Pure()
+				// Keep the original host for per-target cache identity and remote DNS.
+				targetScoped := false
+				for p, depth := proxy, 0; p != nil && depth < 16; p, depth = p.Unwrap(dialMetadata, false), depth+1 {
+					if p.Type() == C.TargetFallback {
+						targetScoped = true
+						break
+					}
+				}
+				if !targetScoped {
+					dialMetadata = dialMetadata.Pure()
+				}
 			}
 		}
 	}
@@ -721,6 +731,9 @@ func getRules(metadata *C.Metadata) []C.Rule {
 }
 
 func shouldStopRetry(err error) bool {
+	if errors.Is(err, C.ErrTargetFallbackTerminal) {
+		return true
+	}
 	if errors.Is(err, resolver.ErrIPNotFound) {
 		return true
 	}

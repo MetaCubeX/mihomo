@@ -167,7 +167,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		}
 
 		// select don't need auto health check
-		if groupOption.Type != "select" && groupOption.Type != "relay" {
+		if groupOption.Type != "select" && groupOption.Type != "relay" && groupOption.Type != "target-fallback" {
 			if groupOption.Interval == 0 {
 				groupOption.Interval = 300
 			}
@@ -185,6 +185,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 
 	switch groupOption.Type {
+	case "target-fallback":
+		opt := TargetFallbackOption{}
+		if err := decoder.Decode(config, &opt); err != nil {
+			return nil, err
+		}
+		return NewTargetFallback(groupOption, opt, emptyFallback, providers)
 	case "url-test":
 		opt := URLTestOption{}
 		err = decoder.Decode(config, &opt)
