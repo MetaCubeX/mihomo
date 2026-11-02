@@ -159,7 +159,13 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		},
 		SystemPacketListener: func(ctx context.Context, network, address string) (net.PacketConn, error) {
 			log.Debugln("[Tailscale](%s) SystemPacketListener: start listen %s %s", option.Name, network, address)
-			pc, err := outbound.dialer.ListenPacket(ctx, network, address, netip.AddrPort{})
+			var pc net.PacketConn
+			var err error
+			if option.DialerProxy != "" {
+				pc, err = listenTailscaleProxyPacket(ctx, outbound.dialer, network, address)
+			} else {
+				pc, err = outbound.dialer.ListenPacket(ctx, network, address, netip.AddrPort{})
+			}
 			log.Debugln("[Tailscale](%s) SystemPacketListener: finish listen %s %s, err: %v", option.Name, network, address, err)
 			return pc, err
 		},
