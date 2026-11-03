@@ -1403,7 +1403,6 @@ proxies: # socks5
 
   # easytier
   # overlay 仅支持 IPv4；ip-version 只影响底层 peer 连接，不启用 overlay IPv6
-  # 使用 core 内置协议栈，不创建宿主 TUN；发往宿主 TUN 的原始 IP 包会被消费并丢弃
   - name: "easytier"
     type: easytier
     network-name: example
