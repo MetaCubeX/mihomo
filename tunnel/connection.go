@@ -13,6 +13,21 @@ import (
 	"github.com/metacubex/mihomo/log"
 )
 
+// maxCheckedDestinations bounds the per-association cache of rule results.
+// Destinations beyond it are matched against the rules on every packet.
+const maxCheckedDestinations = 1024
+
+// udpDestination is a destination as the inbound reported it, before any NAT mapping.
+type udpDestination struct {
+	host string
+	ip   netip.Addr
+	port uint16
+}
+
+func newUDPDestination(metadata *C.Metadata) udpDestination {
+	return udpDestination{host: metadata.Host, ip: metadata.DstIP, port: metadata.DstPort}
+}
+
 type packetSender struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -21,7 +36,9 @@ type packetSender struct {
 	// destination NAT mapping
 	originToTarget map[string]netip.Addr
 	targetToOrigin map[netip.Addr]netip.Addr
-	mappingMutex   sync.RWMutex
+	// rule result per destination: true if it is rejected
+	checked      map[udpDestination]bool
+	mappingMutex sync.RWMutex
 }
 
 // newPacketSender return a chan based C.PacketSender
@@ -36,6 +53,7 @@ func newPacketSender() C.PacketSender {
 
 		originToTarget: make(map[string]netip.Addr),
 		targetToOrigin: make(map[netip.Addr]netip.Addr),
+		checked:        make(map[udpDestination]bool),
 	}
 }
 
@@ -51,6 +69,45 @@ func (s *packetSender) AddMapping(originMetadata *C.Metadata, metadata *C.Metada
 	if addr := s.targetToOrigin[targetAddr]; !addr.IsValid() { // overwrite only if the record is illegal
 		s.targetToOrigin[targetAddr] = originAddr
 	}
+	// the association was matched for this destination, don't match it again
+	s.setChecked(newUDPDestination(originMetadata), false)
+}
+
+// setChecked must be called with mappingMutex held.
+func (s *packetSender) setChecked(destination udpDestination, rejected bool) {
+	if _, ok := s.checked[destination]; ok || len(s.checked) < maxCheckedDestinations {
+		s.checked[destination] = rejected
+	}
+}
+
+// matchRejected reports whether the rules reject a destination the association has not sent to yet.
+// The association keeps the proxy chosen for its first destination,
+// but the destinations it sends to later must still pass the rules.
+func (s *packetSender) matchRejected(destination udpDestination, metadata *C.Metadata) (rejected bool) {
+	metadata = metadata.Clone()
+	_ = preHandleMetadata(metadata) // error was pre-checked
+	proxy, rule, err := resolveMetadata(metadata)
+	if err != nil {
+		return false
+	}
+	for adapter := proxy; adapter != nil && !rejected; adapter = adapter.Unwrap(metadata, false) {
+		rejected = adapter.Type() == C.Reject || adapter.Type() == C.RejectDrop
+	}
+	if rejected {
+		ruleName := "no rule"
+		if rule != nil {
+			ruleName = rule.RuleType().String()
+			if rule.Payload() != "" {
+				ruleName += "(" + rule.Payload() + ")"
+			}
+		}
+		log.Infoln("[UDP] %s --> %s match %s using %s, dropped", metadata.SourceDetail(), metadata.RemoteAddress(), ruleName, proxy.Name())
+	}
+
+	s.mappingMutex.Lock()
+	s.setChecked(destination, rejected)
+	s.mappingMutex.Unlock()
+	return rejected
 }
 
 func (s *packetSender) RestoreReadFrom(addr netip.Addr) netip.Addr {
@@ -68,9 +125,18 @@ func (s *packetSender) processPacket(pc C.PacketConn, packet C.PacketAdapter) {
 
 	var addr *net.UDPAddr
 
+	destination := newUDPDestination(metadata)
 	s.mappingMutex.RLock()
+	rejected, checked := s.checked[destination]
 	targetAddr := s.originToTarget[metadata.String()]
 	s.mappingMutex.RUnlock()
+
+	if !checked {
+		rejected = s.matchRejected(destination, metadata)
+	}
+	if rejected {
+		return
+	}
 
 	if targetAddr.IsValid() {
 		addr = net.UDPAddrFromAddrPort(netip.AddrPortFrom(targetAddr, metadata.DstPort))
