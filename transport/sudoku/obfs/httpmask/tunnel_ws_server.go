@@ -11,33 +11,10 @@ import (
 	"github.com/gobwas/ws"
 )
 
-func looksLikeWebSocketUpgrade(headers map[string]string) bool {
-	if headers == nil {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(headers["upgrade"]), "websocket") {
-		return false
-	}
-	conn := headers["connection"]
-	for _, part := range strings.Split(conn, ",") {
-		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *TunnelServer) handleWS(rawConn net.Conn, req *httpRequestHeader, headerBytes []byte, buffered []byte) (HandleResult, net.Conn, error) {
+func (s *TunnelServer) handleWS(req *tunnelRequest) (HandleResult, net.Conn, error) {
+	rawConn := req.conn
 	rejectOrReply := func(code int, body string) (HandleResult, net.Conn, error) {
-		if s.passThroughOnReject {
-			prefix := make([]byte, 0, len(headerBytes)+len(buffered))
-			prefix = append(prefix, headerBytes...)
-			prefix = append(prefix, buffered...)
-			return HandlePassThrough, newRejectedPreBufferedConn(rawConn, prefix), nil
-		}
-		_ = writeSimpleHTTPResponse(rawConn, code, body)
-		_ = rawConn.Close()
-		return HandleDone, nil, nil
+		return s.rejectOrRespond(req, code, body)
 	}
 
 	u, err := url.ParseRequestURI(req.target)
@@ -52,11 +29,11 @@ func (s *TunnelServer) handleWS(rawConn net.Conn, req *httpRequestHeader, header
 	if strings.ToUpper(strings.TrimSpace(req.method)) != http.MethodGet {
 		return rejectOrReply(http.StatusBadRequest, "bad request")
 	}
-	if !looksLikeWebSocketUpgrade(req.headers) {
+	if !req.isWebSocketUpgrade() {
 		return rejectOrReply(http.StatusBadRequest, "bad request")
 	}
 
-	authVal := req.headers["authorization"]
+	authVal := req.authorization
 	if authVal == "" {
 		authVal = u.Query().Get(tunnelAuthQueryKey)
 	}
@@ -64,7 +41,7 @@ func (s *TunnelServer) handleWS(rawConn net.Conn, req *httpRequestHeader, header
 		return rejectOrReply(http.StatusNotFound, "not found")
 	}
 
-	earlyPayload, err := parseEarlyDataQuery(u)
+	earlyPayload, err := parseEarlyDataQuery(u.Query())
 	if err != nil {
 		return rejectOrReply(http.StatusBadRequest, "bad request")
 	}
@@ -76,10 +53,7 @@ func (s *TunnelServer) handleWS(rawConn net.Conn, req *httpRequestHeader, header
 		}
 	}
 
-	prefix := make([]byte, 0, len(headerBytes)+len(buffered))
-	prefix = append(prefix, headerBytes...)
-	prefix = append(prefix, buffered...)
-	wsConnRaw := newPreBufferedConn(rawConn, prefix)
+	wsConnRaw := newPreBufferedConn(rawConn, req.replayPrefix())
 
 	upgrader := ws.Upgrader{}
 	if prepared != nil && len(prepared.ResponsePayload) > 0 {

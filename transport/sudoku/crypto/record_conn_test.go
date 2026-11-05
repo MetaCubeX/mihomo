@@ -84,3 +84,41 @@ func TestRecordConn_FirstFrameUsesRandomizedCounters(t *testing.T) {
 		t.Fatalf("plaintext mismatch: got %q want %q", got, want)
 	}
 }
+
+func TestRecordConn_SmallReadsReleaseFrame(t *testing.T) {
+	pskSend := sha256.Sum256([]byte("record-send"))
+	pskRecv := sha256.Sum256([]byte("record-recv"))
+
+	raw := &captureConn{}
+	writer, err := NewRecordConn(raw, "chacha20-poly1305", pskSend[:], pskRecv[:])
+	if err != nil {
+		t.Fatalf("new writer: %v", err)
+	}
+	want := bytes.Repeat([]byte("0123456789abcdef"), 1024)
+	if _, err := writer.Write(want); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	reader, err := NewRecordConn(&replayConn{reader: bytes.NewReader(raw.Bytes())}, "chacha20-poly1305", pskRecv[:], pskSend[:])
+	if err != nil {
+		t.Fatalf("new reader: %v", err)
+	}
+	got := make([]byte, len(want))
+	buf := make([]byte, 100)
+	for off := 0; off < len(got); {
+		n, err := reader.Read(buf)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if reader.readFrame != nil && reader.readOff >= len(reader.readPlain) {
+			t.Fatal("drained record still holds its frame")
+		}
+		off += copy(got[off:], buf[:n])
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("plaintext mismatch")
+	}
+	if reader.readFrame != nil {
+		t.Fatal("idle reader holds a frame")
+	}
+}

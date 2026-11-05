@@ -10,6 +10,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/transport/sudoku/crypto"
 	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 )
@@ -115,7 +116,10 @@ func selectTableByProbe(r *bufio.Reader, cfg *ProtocolConfig, tables []*sudoku.T
 		return nil, nil, fmt.Errorf("drain buffered bytes failed: %w", err)
 	}
 
-	tmp := make([]byte, readChunk)
+	// Most handshakes are decided by the bytes bufio already holds, so the read chunk is
+	// only taken once another read is needed.
+	var chunk []byte
+	defer func() { _ = pool.Put(chunk) }()
 	for {
 		if len(candidates) == 1 {
 			tail, err := drainBuffered(r)
@@ -153,9 +157,12 @@ func selectTableByProbe(r *bufio.Reader, cfg *ProtocolConfig, tables []*sudoku.T
 			return nil, probe, fmt.Errorf("handshake probe exceeded %d bytes", maxProbeBytes)
 		}
 
-		n, err := r.Read(tmp)
+		if chunk == nil {
+			chunk = pool.Get(readChunk)
+		}
+		n, err := r.Read(chunk)
 		if n > 0 {
-			probe = append(probe, tmp[:n]...)
+			probe = append(probe, chunk[:n]...)
 		}
 		if err != nil {
 			return nil, probe, fmt.Errorf("handshake probe read failed: %w", err)

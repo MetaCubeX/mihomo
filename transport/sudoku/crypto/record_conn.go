@@ -1,7 +1,6 @@
 package crypto
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -14,6 +13,8 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+
+	"github.com/metacubex/mihomo/common/pool"
 
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -67,11 +68,12 @@ type RecordConn struct {
 	recvSeq         uint64
 	recvInitialized bool
 
-	readBuf bytes.Buffer
-
-	// writeFrame is a reusable buffer for [len||header||ciphertext] on the wire.
-	// Guarded by writeMu.
-	writeFrame []byte
+	// readFrame is the pooled record whose decrypted plaintext (readPlain) the
+	// caller has not fully read yet; it is nil whenever the connection is idle.
+	// Guarded by readMu.
+	readFrame []byte
+	readPlain []byte
+	readOff   int
 }
 
 func (c *RecordConn) CloseWrite() error {
@@ -137,7 +139,7 @@ func (c *RecordConn) Rekey(baseSend, baseRecv []byte) error {
 	if err := c.resetTrafficState(); err != nil {
 		return err
 	}
-	c.readBuf.Reset()
+	c.releaseReadFrame()
 
 	c.sendAEAD = nil
 	c.recvAEAD = nil
@@ -357,17 +359,16 @@ func (c *RecordConn) Write(p []byte) (int, error) {
 		if bodyLen > maxFrameBodySize {
 			return total, errors.New("frame too large")
 		}
-		if cap(c.writeFrame) < frameLen {
-			c.writeFrame = make([]byte, frameLen)
-		}
-		frame := c.writeFrame[:frameLen]
+		frame := pool.Get(frameLen)
 		binary.BigEndian.PutUint16(frame[:2], uint16(bodyLen))
 		copy(frame[2:2+recordHeaderSize], header[:])
 
 		dst := frame[2+recordHeaderSize : 2+recordHeaderSize : frameLen]
 		_ = aead.Seal(dst[:0], header[:], chunk, header[:])
 
-		if _, err := c.Conn.Write(frame); err != nil {
+		_, err := c.Conn.Write(frame)
+		_ = pool.Put(frame)
+		if err != nil {
 			return total, err
 		}
 
@@ -390,8 +391,8 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 	c.readMu.Lock()
 	defer c.readMu.Unlock()
 
-	if c.readBuf.Len() > 0 {
-		return c.readBuf.Read(p)
+	if c.readOff < len(c.readPlain) {
+		return c.drainPlain(p), nil
 	}
 
 	var lenBuf [2]byte
@@ -406,10 +407,25 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 		return 0, errors.New("frame too large")
 	}
 
-	body := make([]byte, bodyLen)
+	body := pool.Get(bodyLen)
 	if _, err := io.ReadFull(c.Conn, body); err != nil {
+		_ = pool.Put(body)
 		return 0, err
 	}
+	n, plain, err := c.open(body, p)
+	if plain == nil {
+		_ = pool.Put(body)
+		return n, err
+	}
+	// p was too small for the record: keep the frame until it is drained.
+	c.readFrame, c.readPlain, c.readOff = body, plain, 0
+	return c.drainPlain(p), nil
+}
+
+// open authenticates one record body. The plaintext goes straight into p when it
+// fits (n bytes, plain == nil); otherwise it is decrypted in place and returned as
+// plain for drainPlain to hand out.
+func (c *RecordConn) open(body, p []byte) (n int, plain []byte, err error) {
 	header := body[:recordHeaderSize]
 	ciphertext := body[recordHeaderSize:]
 
@@ -417,25 +433,49 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 	seq := binary.BigEndian.Uint64(header[4:])
 
 	if err := c.validateRecvPosition(epoch, seq); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	if c.recvAEAD == nil || c.recvAEADEpoch != epoch {
 		a, err := c.newAEADFor(c.keys.baseRecv, epoch)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		c.recvAEAD = a
 		c.recvAEADEpoch = epoch
 	}
 	aead := c.recvAEAD
 
-	plaintext, err := aead.Open(nil, header, ciphertext, header)
+	plainSize := len(ciphertext) - aead.Overhead()
+	direct := plainSize >= 0 && len(p) >= plainSize
+	dst := ciphertext[:0]
+	if direct {
+		dst = p[:0]
+	}
+	plaintext, err := aead.Open(dst, header, ciphertext, header)
 	if err != nil {
-		return 0, fmt.Errorf("decryption failed: epoch=%d seq=%d: %w", epoch, seq, err)
+		return 0, nil, fmt.Errorf("decryption failed: epoch=%d seq=%d: %w", epoch, seq, err)
 	}
 	c.markRecvPosition(epoch, seq)
 
-	c.readBuf.Write(plaintext)
-	return c.readBuf.Read(p)
+	if direct {
+		return len(plaintext), nil, nil
+	}
+	return 0, plaintext, nil
+}
+
+func (c *RecordConn) drainPlain(dst []byte) int {
+	n := copy(dst, c.readPlain[c.readOff:])
+	c.readOff += n
+	if c.readOff >= len(c.readPlain) {
+		c.releaseReadFrame()
+	}
+	return n
+}
+
+func (c *RecordConn) releaseReadFrame() {
+	if c.readFrame != nil {
+		_ = pool.Put(c.readFrame)
+	}
+	c.readFrame, c.readPlain, c.readOff = nil, nil, 0
 }

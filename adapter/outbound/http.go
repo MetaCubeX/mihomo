@@ -53,10 +53,13 @@ func (h *Http) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Me
 		}
 	}
 
-	if err := h.shakeHandContext(ctx, c, metadata); err != nil {
+	// The proxy may send the target's first bytes right behind its response.
+	// They can end up in br, so the returned conn reads them first.
+	br := bufio.NewReader(c)
+	if err := h.shakeHandContext(ctx, c, br, metadata); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return N.WarpConnWithBioReader(c, br), nil
 }
 
 // DialContext implements C.ProxyAdapter
@@ -85,7 +88,7 @@ func (h *Http) ProxyInfo() C.ProxyInfo {
 	return info
 }
 
-func (h *Http) shakeHandContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (err error) {
+func (h *Http) shakeHandContext(ctx context.Context, c net.Conn, br *bufio.Reader, metadata *C.Metadata) (err error) {
 	if ctx.Done() != nil {
 		done := N.SetupContextForConn(ctx, c)
 		defer done(&err)
@@ -120,7 +123,7 @@ func (h *Http) shakeHandContext(ctx context.Context, c net.Conn, metadata *C.Met
 		return err
 	}
 
-	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	resp, err := http.ReadResponse(br, nil)
 
 	if err != nil {
 		return err

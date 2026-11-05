@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -25,10 +26,11 @@ type Mieru struct {
 
 type MieruOption struct {
 	BaseOption
-	Transport           string            `inbound:"transport"`
-	Users               map[string]string `inbound:"users"`
-	TrafficPattern      string            `inbound:"traffic-pattern,omitempty"`
-	UserHintIsMandatory bool              `inbound:"user-hint-is-mandatory,omitempty"`
+	Transport            string            `inbound:"transport"`
+	Users                map[string]string `inbound:"users"`
+	TrafficPattern       string            `inbound:"traffic-pattern,omitempty"`
+	UserHintIsMandatory  bool              `inbound:"user-hint-is-mandatory,omitempty"`
+	TCPIdleTimeoutSecond int               `inbound:"tcp-idle-timeout,omitempty"`
 }
 
 func NewMieru(option *MieruOption) (*Mieru, error) {
@@ -147,11 +149,12 @@ func buildMieruServerConfig(option *MieruOption, ports utils.IntRanges[uint16]) 
 	}
 	var trafficPattern *mierupb.TrafficPattern
 	trafficPattern, _ = mierutp.Decode(option.TrafficPattern)
-	var advancedSettings *mierupb.ServerAdvancedSettings
+	advancedSettings := &mierupb.ServerAdvancedSettings{}
 	if option.UserHintIsMandatory {
-		advancedSettings = &mierupb.ServerAdvancedSettings{
-			UserHintIsMandatory: proto.Bool(true),
-		}
+		advancedSettings.UserHintIsMandatory = proto.Bool(true)
+	}
+	if option.TCPIdleTimeoutSecond != 0 {
+		advancedSettings.TcpIdleTimeout = proto.String(strconv.Itoa(option.TCPIdleTimeoutSecond) + "s")
 	}
 	lc := option.ListenConfig()
 	return &mieruserver.ServerConfig{
@@ -190,6 +193,9 @@ func validateMieruOption(option *MieruOption) error {
 		if err := mierutp.Validate(trafficPattern); err != nil {
 			return fmt.Errorf("invalid traffic pattern %q: %w", option.TrafficPattern, err)
 		}
+	}
+	if option.TCPIdleTimeoutSecond != 0 && option.TCPIdleTimeoutSecond < 60 {
+		return fmt.Errorf("invalid TCP idle timeout: mininum supported value is 60")
 	}
 	return nil
 }

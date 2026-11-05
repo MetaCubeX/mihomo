@@ -526,7 +526,7 @@ func ReadServerSession(conn net.Conn, meta *HandshakeMeta) (*ServerSession, erro
 	case KIPTypeStartMux:
 		return &ServerSession{Conn: conn, Type: SessionTypeMultiplex, UserHash: userHash}, nil
 	case KIPTypeOpenTCP:
-		target, err := DecodeAddress(bytes.NewReader(first.Payload))
+		target, err := DecodeAddress(first.Payload)
 		if err != nil {
 			return nil, fmt.Errorf("decode target address failed: %w", err)
 		}

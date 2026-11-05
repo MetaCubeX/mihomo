@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/metacubex/mihomo/common/pool"
 	sudokuobfs "github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 )
 
@@ -53,6 +54,11 @@ type KIPMessage struct {
 	Payload []byte
 }
 
+// kipHeaderSize is magic | type | u16 payload length.
+const kipHeaderSize = len(kipMagic) + 1 + 2
+
+// WriteKIPMessage sends header and payload with a single write, so the transport frames
+// them as one record instead of two.
 func WriteKIPMessage(w io.Writer, typ byte, payload []byte) error {
 	if w == nil {
 		return fmt.Errorf("%w: nil writer", errKIP)
@@ -61,19 +67,22 @@ func WriteKIPMessage(w io.Writer, typ byte, payload []byte) error {
 		return fmt.Errorf("%w: payload too large: %d", errKIP, len(payload))
 	}
 
-	var hdr [3 + 1 + 2]byte
-	copy(hdr[:3], []byte(kipMagic))
-	hdr[3] = typ
-	binary.BigEndian.PutUint16(hdr[4:], uint16(len(payload)))
+	buf := pool.Get(kipHeaderSize + len(payload))
+	defer pool.Put(buf)
+	copy(buf, kipMagic)
+	buf[3] = typ
+	binary.BigEndian.PutUint16(buf[4:], uint16(len(payload)))
+	copy(buf[kipHeaderSize:], payload)
 
-	return writeAllChunks(w, hdr[:], payload)
+	_, err := w.Write(buf)
+	return err
 }
 
 func ReadKIPMessage(r io.Reader) (*KIPMessage, error) {
 	if r == nil {
 		return nil, fmt.Errorf("%w: nil reader", errKIP)
 	}
-	var hdr [3 + 1 + 2]byte
+	var hdr [kipHeaderSize]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
 		return nil, err
 	}

@@ -220,9 +220,7 @@ func (d *DataChannel) encryptAEAD(packet []byte, packetID uint32) ([]byte, error
 	var packetIDBytes [4]byte
 	binary.BigEndian.PutUint32(packetIDBytes[:], packetID)
 	nonce := d.nonce(packetID, d.sendImplicitIV)
-	ad := make([]byte, 0, len(header)+len(packetIDBytes))
-	ad = append(ad, header...)
-	ad = append(ad, packetIDBytes[:]...)
+	ad := aeadAdditionalData(header, packetIDBytes[:])
 	sealed := d.sendAEAD.Seal(nil, nonce[:], packet, ad)
 
 	out := make([]byte, 0, len(header)+4+DataChannelTagSize+len(packet))
@@ -288,9 +286,7 @@ func (d *DataChannel) decryptAEAD(packet []byte, headerSize int) ([]byte, error)
 	combined := make([]byte, 0, len(ciphertext)+DataChannelTagSize)
 	combined = append(combined, ciphertext...)
 	combined = append(combined, tag...)
-	ad := make([]byte, 0, len(header)+len(packetIDBytes))
-	ad = append(ad, header...)
-	ad = append(ad, packetIDBytes...)
+	ad := aeadAdditionalData(header, packetIDBytes)
 
 	nonce := d.nonce(packetID, d.recvImplicitIV)
 	plain, err := d.recvAEAD.Open(nil, nonce[:], combined, ad)
@@ -424,6 +420,23 @@ func (d *DataChannel) acceptPacketID(packetID uint32) error {
 	}
 	d.recvWindow |= mask
 	return nil
+}
+
+// aeadAdditionalData returns the AEAD additional data of a data channel packet.
+//
+// OpenVPN only authenticates the opcode/peer-id header for P_DATA_V2. For
+// P_DATA_V1 the additional data is the packet ID alone: in OpenVPN's
+// handle_data_channel_packet (ssl.c) ad_start is set after the opcode byte has
+// been skipped for P_DATA_V1, but before it for P_DATA_V2. Servers that only
+// speak P_DATA_V1 (e.g. SoftEther) reject packets that include the opcode.
+func aeadAdditionalData(header, packetID []byte) []byte {
+	ad := make([]byte, 0, len(header)+len(packetID))
+	if len(header) > 0 {
+		if opcode, _ := parseOpcodeKeyID(header[0]); opcode == PDataV2 {
+			ad = append(ad, header...)
+		}
+	}
+	return append(ad, packetID...)
 }
 
 func dataHeader(peerID uint32, keyID uint8) []byte {

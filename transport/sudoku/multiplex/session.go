@@ -1,6 +1,7 @@
 package multiplex
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 const (
@@ -16,6 +19,8 @@ const (
 	frameData  byte = 0x02
 	frameClose byte = 0x03
 	frameReset byte = 0x04
+	framePing  byte = 0x05
+	framePong  byte = 0x06
 )
 
 const (
@@ -26,6 +31,12 @@ const (
 	maxFrameSize            = 256 * 1024
 	maxDataPayload          = 128 * 1024
 	keepaliveInterval       = 15 * time.Second
+
+	// Frames of at most coalesceMaxPayload bytes are queued and written together with the
+	// frames of other streams; larger ones are written directly behind the queue. A sender
+	// that finds coalesceMaxPending bytes queued waits for its turn to write.
+	coalesceMaxPayload = 4 * 1024
+	coalesceMaxPending = 64 * 1024
 )
 
 var errMuxReceiveQueueFull = errors.New("mux receive queue full")
@@ -38,7 +49,11 @@ type acceptEvent struct {
 type Session struct {
 	conn net.Conn
 
+	// writeMu is held by whichever goroutine is writing to conn. Small frames wait in
+	// pending (guarded by pendMu) so that one write can carry the frames of several streams.
 	writeMu sync.Mutex
+	pendMu  sync.Mutex
+	pending *bytes.Buffer
 
 	streamsMu sync.Mutex
 	streams   map[uint32]*stream
@@ -50,8 +65,10 @@ type Session struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	lastWrite     atomic.Int64
-	keepaliveOnce sync.Once
+	// wroteSinceTick is set by sendFrame and consumed by the idle keepalive tick.
+	wroteSinceTick atomic.Bool
+	keepaliveOnce  sync.Once
+	pongPending    atomic.Bool
 }
 
 func NewClientSession(conn net.Conn) (*Session, error) {
@@ -63,7 +80,6 @@ func NewClientSession(conn net.Conn) (*Session, error) {
 		streams: make(map[uint32]*stream),
 		closed:  make(chan struct{}),
 	}
-	s.lastWrite.Store(time.Now().UnixNano())
 	go s.readLoop()
 	s.startKeepalive(keepaliveInterval)
 	return s, nil
@@ -79,7 +95,6 @@ func NewServerSession(conn net.Conn) (*Session, error) {
 		acceptCh: make(chan acceptEvent, 256),
 		closed:   make(chan struct{}),
 	}
-	s.lastWrite.Store(time.Now().UnixNano())
 	go s.readLoop()
 	s.startKeepalive(keepaliveInterval)
 	return s, nil
@@ -138,6 +153,13 @@ func (s *Session) closeWithError(err error) {
 
 		close(s.closed)
 		_ = s.conn.Close()
+
+		s.pendMu.Lock()
+		if s.pending != nil {
+			pool.PutBuffer(s.pending)
+			s.pending = nil
+		}
+		s.pendMu.Unlock()
 	})
 }
 
@@ -188,20 +210,130 @@ func (s *Session) sendFrame(frameType byte, streamID uint32, payload []byte) err
 		return fmt.Errorf("mux payload too large: %d", len(payload))
 	}
 
-	var header [headerSize]byte
-	header[0] = frameType
-	binary.BigEndian.PutUint32(header[1:5], streamID)
-	binary.BigEndian.PutUint32(header[5:9], uint32(len(payload)))
-
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	if err := writeAllChunks(s.conn, header[:], payload); err != nil {
-		s.closeWithError(err)
+	var err error
+	if len(payload) <= coalesceMaxPayload {
+		err = s.sendQueued(frameType, streamID, payload)
+	} else {
+		err = s.sendDirect(frameType, streamID, payload)
+	}
+	if err != nil {
 		return err
 	}
-	s.lastWrite.Store(time.Now().UnixNano())
+	// Load first: the store only happens once per keepalive interval, so the hot path
+	// never writes the shared cache line.
+	if !s.wroteSinceTick.Load() {
+		s.wroteSinceTick.Store(true)
+	}
 	return nil
+}
+
+func putHeader(header []byte, frameType byte, streamID uint32, payloadLen int) {
+	header[0] = frameType
+	binary.BigEndian.PutUint32(header[1:5], streamID)
+	binary.BigEndian.PutUint32(header[5:9], uint32(payloadLen))
+}
+
+// sendQueued appends the frame to the pending batch, then writes the batch unless another
+// goroutine is already writing, which picks the frame up when it finishes its current write.
+func (s *Session) sendQueued(frameType byte, streamID uint32, payload []byte) error {
+	var header [headerSize]byte
+	putHeader(header[:], frameType, streamID, len(payload))
+
+	s.pendMu.Lock()
+	if s.pending == nil {
+		s.pending = pool.GetBuffer()
+	}
+	s.pending.Write(header[:])
+	s.pending.Write(payload)
+	full := s.pending.Len() >= coalesceMaxPending
+	s.pendMu.Unlock()
+	return s.flushPending(full)
+}
+
+// flushPending writes the pending batch. Unless wait is set it gives up when another
+// goroutine holds the write role; that goroutine rechecks the batch after each write, so
+// no frame is stranded.
+func (s *Session) flushPending(wait bool) error {
+	for {
+		if wait {
+			s.writeMu.Lock()
+		} else if !s.writeMu.TryLock() {
+			return nil
+		}
+		err := s.writeBatch(nil)
+		s.writeMu.Unlock()
+		if err != nil {
+			return err
+		}
+		wait = false
+
+		s.pendMu.Lock()
+		empty := s.pending == nil
+		s.pendMu.Unlock()
+		if empty {
+			return nil
+		}
+	}
+}
+
+// writeBatch writes the pending batch, followed by header when it is not nil, with one
+// write. writeMu must be held.
+func (s *Session) writeBatch(header []byte) error {
+	s.pendMu.Lock()
+	batch := s.pending
+	s.pending = nil
+	s.pendMu.Unlock()
+
+	var err error
+	switch {
+	case batch == nil && header == nil:
+		return nil
+	case batch == nil:
+		_, err = s.conn.Write(header)
+	default:
+		batch.Write(header)
+		_, err = s.conn.Write(batch.Bytes())
+		pool.PutBuffer(batch)
+	}
+	if err != nil {
+		s.closeWithError(err)
+	}
+	return err
+}
+
+// sendDirect writes a large frame behind any batch that is already pending, which keeps the
+// frames of a stream in order. The header travels with the batch; nothing can be queued in
+// front of the payload because writeMu is held until it is written.
+func (s *Session) sendDirect(frameType byte, streamID uint32, payload []byte) error {
+	var header [headerSize]byte
+	putHeader(header[:], frameType, streamID, len(payload))
+
+	s.writeMu.Lock()
+	err := s.writeBatch(header[:])
+	if err == nil {
+		if _, err = s.conn.Write(payload); err != nil {
+			s.closeWithError(err)
+		}
+	}
+	s.writeMu.Unlock()
+	if err != nil {
+		return err
+	}
+	// Frames queued while this one was being written still need a writer.
+	_ = s.flushPending(false)
+	return nil
+}
+
+// requestPong answers a ping off the read loop, which must not block on a write. Pings that
+// arrive while a pong is still waiting to be sent share it.
+func (s *Session) requestPong() {
+	if s.pongPending.Swap(true) {
+		return
+	}
+	go func() {
+		s.pongPending.Store(false)
+		_ = s.sendFrame(framePong, 0, nil)
+	}()
 }
 
 func (s *Session) startKeepalive(interval time.Duration) {
@@ -215,8 +347,7 @@ func (s *Session) startKeepalive(interval time.Duration) {
 			for {
 				select {
 				case <-ticker.C:
-					lastWrite := time.Unix(0, s.lastWrite.Load())
-					if time.Since(lastWrite) < interval {
+					if s.wroteSinceTick.Swap(false) {
 						continue
 					}
 					// Stream zero is never allocated. v0.4.7 peers ignore DATA
@@ -224,6 +355,8 @@ func (s *Session) startKeepalive(interval time.Duration) {
 					if err := s.sendFrame(frameData, 0, nil); err != nil {
 						return
 					}
+					// The keepalive itself is not traffic.
+					s.wroteSinceTick.Store(false)
 				case <-s.closed:
 					return
 				}
@@ -299,6 +432,19 @@ func (s *Session) readLoop() {
 			}
 		}
 		switch frameType {
+		case framePing:
+			if streamID != 0 || len(payload) != 0 {
+				s.closeWithError(errors.New("invalid mux ping frame"))
+				return
+			}
+			s.requestPong()
+
+		case framePong:
+			if streamID != 0 || len(payload) != 0 {
+				s.closeWithError(errors.New("invalid mux pong frame"))
+				return
+			}
+
 		case frameOpen:
 			if s.acceptCh == nil {
 				s.sendReset(streamID, "unexpected open")
@@ -397,7 +543,7 @@ type stream struct {
 	writeMu sync.Mutex
 
 	mu                sync.Mutex
-	cond              *sync.Cond
+	cond              sync.Cond // cond.L is &mu.
 	closed            bool
 	localReadClosed   bool
 	localWriteClosed  bool
@@ -407,19 +553,15 @@ type stream struct {
 	queue             [][]byte
 	// queuedBytes includes unread bytes in readBuf and queue.
 	queuedBytes int
-
-	localAddr  net.Addr
-	remoteAddr net.Addr
 }
 
+// streamAddr is the placeholder address every stream reports; streams have no network
+// address of their own, and sharing one value saves two allocations per stream.
+var streamAddr net.Addr = &net.TCPAddr{}
+
 func newStream(session *Session, id uint32) *stream {
-	st := &stream{
-		session:    session,
-		id:         id,
-		localAddr:  &net.TCPAddr{},
-		remoteAddr: &net.TCPAddr{},
-	}
-	st.cond = sync.NewCond(&st.mu)
+	st := &stream{session: session, id: id}
+	st.cond.L = &st.mu
 	return st
 }
 
@@ -623,8 +765,8 @@ func (c *stream) CloseRead() error {
 	return nil
 }
 
-func (c *stream) LocalAddr() net.Addr  { return c.localAddr }
-func (c *stream) RemoteAddr() net.Addr { return c.remoteAddr }
+func (c *stream) LocalAddr() net.Addr  { return streamAddr }
+func (c *stream) RemoteAddr() net.Addr { return streamAddr }
 
 func (c *stream) SetDeadline(t time.Time) error {
 	_ = c.SetReadDeadline(t)

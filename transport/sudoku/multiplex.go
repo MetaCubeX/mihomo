@@ -1,7 +1,6 @@
 package sudoku
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -119,7 +118,7 @@ func (s *MultiplexServer) AcceptTCP() (net.Conn, string, error) {
 		return nil, "", err
 	}
 
-	target, err := DecodeAddress(bytes.NewReader(payload))
+	target, err := DecodeAddress(payload)
 	if err != nil {
 		_ = stream.Close()
 		return nil, "", err

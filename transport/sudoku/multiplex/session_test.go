@@ -18,7 +18,6 @@ func TestSessionKeepaliveUsesV047CompatibleFrame(t *testing.T) {
 		streams: make(map[uint32]*stream),
 		closed:  make(chan struct{}),
 	}
-	session.lastWrite.Store(time.Now().UnixNano())
 	t.Cleanup(func() {
 		session.closeWithError(net.ErrClosed)
 		_ = peerConn.Close()
@@ -264,5 +263,120 @@ func TestStreamConcurrentWritesRemainContiguous(t *testing.T) {
 		if !bytes.Equal(block, bytes.Repeat([]byte{marker}, payloadSize)) {
 			t.Fatalf("write with marker %d was interleaved", marker)
 		}
+	}
+}
+
+func TestSessionMixedFrameSizesKeepStreamOrder(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	clientSession, err := NewClientSession(clientConn)
+	if err != nil {
+		t.Fatalf("new client session: %v", err)
+	}
+	serverSession, err := NewServerSession(serverConn)
+	if err != nil {
+		t.Fatalf("new server session: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = clientSession.Close()
+		_ = serverSession.Close()
+	})
+
+	// Small writes are batched, large ones are written directly behind the batch; each
+	// stream must still see its own bytes in order.
+	const streams = 6
+	sizes := []int{1, 700, coalesceMaxPayload + 1, 40, maxDataPayload + 5, 3, coalesceMaxPayload, 9000}
+	expected := func(marker byte) []byte {
+		var out []byte
+		for i := 0; i < 20; i++ {
+			out = append(out, bytes.Repeat([]byte{marker + byte(i)}, sizes[i%len(sizes)])...)
+		}
+		return out
+	}
+
+	type result struct {
+		marker byte
+		data   []byte
+		err    error
+	}
+	results := make(chan result, streams)
+	go func() {
+		for i := 0; i < streams; i++ {
+			st, _, err := serverSession.AcceptStream()
+			if err != nil {
+				results <- result{err: err}
+				continue
+			}
+			go func() {
+				data, err := io.ReadAll(st)
+				r := result{data: data, err: err}
+				if len(data) > 0 {
+					r.marker = data[0]
+				}
+				results <- r
+			}()
+		}
+	}()
+
+	var wg sync.WaitGroup
+	for i := 0; i < streams; i++ {
+		st, err := clientSession.OpenStream(nil)
+		if err != nil {
+			t.Fatalf("open stream: %v", err)
+		}
+		wg.Add(1)
+		go func(st net.Conn, marker byte) {
+			defer wg.Done()
+			offset := 0
+			data := expected(marker)
+			for i := 0; offset < len(data); i++ {
+				n := sizes[i%len(sizes)]
+				if _, err := st.Write(data[offset : offset+n]); err != nil {
+					t.Errorf("write: %v", err)
+					return
+				}
+				offset += n
+			}
+			_ = st.(interface{ CloseWrite() error }).CloseWrite()
+		}(st, byte(i*40))
+	}
+	wg.Wait()
+
+	for i := 0; i < streams; i++ {
+		r := <-results
+		if r.err != nil {
+			t.Fatalf("read stream: %v", r.err)
+		}
+		if !bytes.Equal(r.data, expected(r.marker)) {
+			t.Fatalf("stream with marker %d received reordered or corrupted data", r.marker)
+		}
+	}
+}
+
+func TestSessionAnswersPingWithPong(t *testing.T) {
+	sessionConn, peerConn := net.Pipe()
+	session, err := NewServerSession(sessionConn)
+	if err != nil {
+		t.Fatalf("new server session: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = session.Close()
+		_ = peerConn.Close()
+	})
+	_ = peerConn.SetDeadline(time.Now().Add(2 * time.Second))
+
+	var ping [headerSize]byte
+	ping[0] = framePing
+	if _, err := peerConn.Write(ping[:]); err != nil {
+		t.Fatalf("write ping: %v", err)
+	}
+	var pong [headerSize]byte
+	if _, err := io.ReadFull(peerConn, pong[:]); err != nil {
+		t.Fatalf("read pong: %v", err)
+	}
+	if pong[0] != framePong || binary.BigEndian.Uint32(pong[1:5]) != 0 || binary.BigEndian.Uint32(pong[5:9]) != 0 {
+		t.Fatalf("reply = %v, want an empty PONG on stream 0", pong)
+	}
+	if session.IsClosed() {
+		t.Fatal("session closed by ping")
 	}
 }
