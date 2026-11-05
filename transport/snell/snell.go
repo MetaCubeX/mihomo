@@ -155,6 +155,9 @@ func HalfClose(conn net.Conn) error {
 }
 
 func StreamConn(conn net.Conn, psk []byte, version int) *Snell {
+	if version >= Version6 {
+		return StreamConnV6(conn, psk, V6ModeDefault)
+	}
 	if version >= Version4 {
 		return &Snell{Conn: newV4Conn(conn, psk)}
 	}
@@ -170,6 +173,18 @@ func StreamConn(conn net.Conn, psk []byte, version int) *Snell {
 
 func ServerStreamConn(conn net.Conn, psk []byte, version int) *Snell {
 	stream := StreamConn(conn, psk, version)
+	stream.reply = true
+	return stream
+}
+
+// StreamConnV6 wraps conn with the Snell v6 record layer in the given mode.
+// The request/reply layer above it is shared with the other versions.
+func StreamConnV6(conn net.Conn, psk []byte, mode V6Mode) *Snell {
+	return &Snell{Conn: newV6Conn(conn, psk, mode)}
+}
+
+func ServerStreamConnV6(conn net.Conn, psk []byte, mode V6Mode) *Snell {
+	stream := StreamConnV6(conn, psk, mode)
 	stream.reply = true
 	return stream
 }
