@@ -329,7 +329,8 @@ func (h *requestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// packet-up upload: POST /path/{session}/{seq}
-	if r.Method != http.MethodGet && sessionId != "" && seqStr != "" && h.allowPacketUpUpload() {
+	// GET with seq is an upload too (uplink-http-method: GET, as in Xray splithttp/hub.go): CDNs that pass only GET/HEAD
+	if sessionId != "" && seqStr != "" && h.allowPacketUpUpload() {
 		scMaxEachPostBytes := h.scMaxEachPostBytes.Max
 		dataPlacement := h.config.GetNormalizedUplinkDataPlacement()
 		uplinkDataKey := h.config.UplinkDataKey
@@ -418,7 +419,7 @@ func (h *requestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if len(payload) == 0 {
+		if len(payload) == 0 || r.Method == http.MethodGet {
 			// Methods without a body are usually cached by default.
 			w.Header().Set("Cache-Control", "no-store")
 		}
