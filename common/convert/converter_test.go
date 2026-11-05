@@ -329,3 +329,102 @@ func TestConvertsV2RayVmessBase64HTTPRemappedToH2Transport(t *testing.T) {
 	_, err = adapter.ParseProxy(proxies[0])
 	assert.NoError(t, err)
 }
+
+// httpupgrade is a ws-opts mode of the ws transport, not a network of its
+// own, so links with type=httpupgrade must become network ws with
+// v2ray-http-upgrade set.
+func TestConvertsV2RayVlessHTTPUpgrade(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		link     string
+		fastOpen bool
+	}{
+		{"without ed", "vless://uuid@example.com:443?security=tls&type=httpupgrade&host=cdn.example.com&path=%2Fup#vless-hu", false},
+		{"with ed", "vless://uuid@example.com:443?security=tls&type=httpupgrade&host=cdn.example.com&path=%2Fup&ed=2048#vless-hu", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			proxies, err := ConvertsV2Ray([]byte(tt.link))
+			assert.Nil(t, err)
+			assert.Len(t, proxies, 1)
+			assert.Equal(t, "ws", proxies[0]["network"])
+
+			wsOpts, ok := proxies[0]["ws-opts"].(map[string]any)
+			assert.True(t, ok)
+			assert.Equal(t, true, wsOpts["v2ray-http-upgrade"])
+			assert.Equal(t, "/up", wsOpts["path"])
+			assert.Equal(t, "cdn.example.com", wsOpts["headers"].(map[string]any)["Host"])
+			if tt.fastOpen {
+				assert.Equal(t, true, wsOpts["v2ray-http-upgrade-fast-open"])
+			} else {
+				assert.NotContains(t, wsOpts, "v2ray-http-upgrade-fast-open")
+			}
+			assert.NotContains(t, wsOpts, "max-early-data")
+
+			_, err = adapter.ParseProxy(proxies[0])
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestConvertsV2RayVlessWSNotHTTPUpgrade(t *testing.T) {
+	proxies, err := ConvertsV2Ray([]byte("vless://uuid@example.com:443?security=tls&type=ws&host=cdn.example.com&path=%2Fws&ed=2048#vless-ws"))
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "ws", proxies[0]["network"])
+	wsOpts := proxies[0]["ws-opts"].(map[string]any)
+	assert.NotContains(t, wsOpts, "v2ray-http-upgrade")
+	assert.Equal(t, 2048, wsOpts["max-early-data"])
+}
+
+func TestConvertsV2RayVmessBase64HTTPUpgrade(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		path     string
+		fastOpen bool
+	}{
+		{"without ed", "/up", false},
+		{"with ed", "/up?ed=2048", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := `{"v":"2","ps":"vmess-hu","add":"server.example.com","port":"443",` +
+				`"id":"b831381d-6324-4d53-ad4f-8cda48b30811","aid":"0","scy":"auto",` +
+				`"net":"httpupgrade","type":"none","host":"cdn.example.com","path":"` + tt.path + `","tls":"tls"}`
+			vmessTest := "vmess://" + base64.StdEncoding.EncodeToString([]byte(payload))
+
+			proxies, err := ConvertsV2Ray([]byte(vmessTest))
+			assert.Nil(t, err)
+			assert.Len(t, proxies, 1)
+			assert.Equal(t, "ws", proxies[0]["network"])
+
+			wsOpts, ok := proxies[0]["ws-opts"].(map[string]any)
+			assert.True(t, ok)
+			assert.Equal(t, true, wsOpts["v2ray-http-upgrade"])
+			assert.Equal(t, "/up", wsOpts["path"])
+			assert.Equal(t, map[string]any{"Host": "cdn.example.com"}, wsOpts["headers"])
+			if tt.fastOpen {
+				assert.Equal(t, true, wsOpts["v2ray-http-upgrade-fast-open"])
+			} else {
+				assert.NotContains(t, wsOpts, "v2ray-http-upgrade-fast-open")
+			}
+			assert.NotContains(t, wsOpts, "max-early-data")
+
+			_, err = adapter.ParseProxy(proxies[0])
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestConvertsV2RayTrojanHTTPUpgrade(t *testing.T) {
+	proxies, err := ConvertsV2Ray([]byte("trojan://secret@example.com:443?security=tls&type=httpupgrade&host=cdn.example.com&path=%2Fup#trojan-hu"))
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "ws", proxies[0]["network"])
+
+	wsOpts, ok := proxies[0]["ws-opts"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, true, wsOpts["v2ray-http-upgrade"])
+	assert.Equal(t, "/up", wsOpts["path"])
+
+	_, err = adapter.ParseProxy(proxies[0])
+	assert.NoError(t, err)
+}
