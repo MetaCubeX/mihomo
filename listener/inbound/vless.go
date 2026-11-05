@@ -11,22 +11,23 @@ import (
 
 type VlessOption struct {
 	BaseOption
-	Users           []VlessUser   `inbound:"users"`
-	Decryption      string        `inbound:"decryption,omitempty"`
-	WsPath          string        `inbound:"ws-path,omitempty"`
-	XHTTPConfig     XHTTPConfig   `inbound:"xhttp-config,omitempty"`
-	GrpcServiceName string        `inbound:"grpc-service-name,omitempty"`
-	Certificate     string        `inbound:"certificate,omitempty"`
-	PrivateKey      string        `inbound:"private-key,omitempty"`
-	ClientAuthType  string        `inbound:"client-auth-type,omitempty"`
-	ClientAuthCert  string        `inbound:"client-auth-cert,omitempty"`
-	EchKey          string        `inbound:"ech-key,omitempty"`
-	AllowInsecure   bool          `inbound:"allow-insecure,omitempty"`
-	ShadowTLS       ShadowTLS     `inbound:"shadow-tls,omitempty"`
-	ResTLS          ResTLS        `inbound:"res-tls,omitempty"`
-	JLSConfig       JLSConfig     `inbound:"jls-config,omitempty"`
-	RealityConfig   RealityConfig `inbound:"reality-config,omitempty"`
-	MuxOption       MuxOption     `inbound:"mux-option,omitempty"`
+	Users              []VlessUser   `inbound:"users"`
+	Decryption         string        `inbound:"decryption,omitempty"`
+	WsPath             string        `inbound:"ws-path,omitempty"`
+	XHTTPConfig        XHTTPConfig   `inbound:"xhttp-config,omitempty"`
+	GrpcServiceName    string        `inbound:"grpc-service-name,omitempty"`
+	Certificate        string        `inbound:"certificate,omitempty"`
+	PrivateKey         string        `inbound:"private-key,omitempty"`
+	ClientAuthType     string        `inbound:"client-auth-type,omitempty"`
+	ClientAuthCert     string        `inbound:"client-auth-cert,omitempty"`
+	EchKey             string        `inbound:"ech-key,omitempty"`
+	AllowInsecure      bool          `inbound:"allow-insecure,omitempty"`
+	TrustedProxyHeader string        `inbound:"trusted-proxy-header,omitempty"`
+	ShadowTLS          ShadowTLS     `inbound:"shadow-tls,omitempty"`
+	ResTLS             ResTLS        `inbound:"res-tls,omitempty"`
+	JLSConfig          JLSConfig     `inbound:"jls-config,omitempty"`
+	RealityConfig      RealityConfig `inbound:"reality-config,omitempty"`
+	MuxOption          MuxOption     `inbound:"mux-option,omitempty"`
 }
 
 type VlessUser struct {
@@ -113,24 +114,25 @@ func NewVless(options *VlessOption) (*Vless, error) {
 		Base:   base,
 		config: options,
 		vs: LC.VlessServer{
-			Enable:          true,
-			Listen:          base.RawAddress(),
-			Users:           users,
-			Decryption:      options.Decryption,
-			WsPath:          options.WsPath,
-			XHTTPConfig:     options.XHTTPConfig.Build(),
-			GrpcServiceName: options.GrpcServiceName,
-			Certificate:     options.Certificate,
-			PrivateKey:      options.PrivateKey,
-			ClientAuthType:  options.ClientAuthType,
-			ClientAuthCert:  options.ClientAuthCert,
-			EchKey:          options.EchKey,
-			AllowInsecure:   options.AllowInsecure,
-			ShadowTLS:       options.ShadowTLS.Build(),
-			ResTLS:          options.ResTLS.Build(),
-			JLSConfig:       options.JLSConfig.Build(),
-			RealityConfig:   options.RealityConfig.Build(),
-			MuxOption:       options.MuxOption.Build(),
+			Enable:             true,
+			Listen:             base.RawAddress(),
+			Users:              users,
+			Decryption:         options.Decryption,
+			WsPath:             options.WsPath,
+			XHTTPConfig:        options.XHTTPConfig.Build(),
+			GrpcServiceName:    options.GrpcServiceName,
+			Certificate:        options.Certificate,
+			PrivateKey:         options.PrivateKey,
+			ClientAuthType:     options.ClientAuthType,
+			ClientAuthCert:     options.ClientAuthCert,
+			EchKey:             options.EchKey,
+			AllowInsecure:      options.AllowInsecure,
+			TrustedProxyHeader: options.TrustedProxyHeader,
+			ShadowTLS:          options.ShadowTLS.Build(),
+			ResTLS:             options.ResTLS.Build(),
+			JLSConfig:          options.JLSConfig.Build(),
+			RealityConfig:      options.RealityConfig.Build(),
+			MuxOption:          options.MuxOption.Build(),
 		},
 	}, nil
 }

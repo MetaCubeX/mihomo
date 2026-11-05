@@ -16,7 +16,7 @@ import (
 
 type ServerOption struct {
 	ServiceName string
-	ConnHandler func(conn net.Conn)
+	ConnHandler func(conn net.Conn, r *http.Request)
 	HttpHandler http.Handler
 }
 
@@ -50,7 +50,7 @@ func NewServerHandler(options ServerOption) http.Handler {
 				// so call N.NewDeadlineConn to add a safe wrapper
 				ExtendedConn: N.NewDeadlineConn(conn),
 			}
-			connHandler(wrapper)
+			connHandler(wrapper, request)
 			wrapper.CloseWrapper()
 
 			return
