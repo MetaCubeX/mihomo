@@ -3,6 +3,7 @@ package statistic
 import (
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
@@ -10,6 +11,7 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -39,6 +41,7 @@ type tcpTracker struct {
 	manager *Manager
 
 	pushToManager bool `json:"-"`
+	logCloseOnce  sync.Once
 }
 
 func (tt *tcpTracker) ID() string {
@@ -109,7 +112,11 @@ func (tt *tcpTracker) UnwrapWriter() (io.Writer, []N.CountFunc) {
 
 func (tt *tcpTracker) Close() error {
 	tt.manager.Leave(tt)
-	return tt.Conn.Close()
+	err := tt.Conn.Close()
+	tt.logCloseOnce.Do(func() {
+		logTrackerClose("TCP", tt.TrackerInfo)
+	})
+	return err
 }
 
 func (tt *tcpTracker) Upstream() any {
@@ -159,6 +166,7 @@ type udpTracker struct {
 	manager *Manager
 
 	pushToManager bool `json:"-"`
+	logCloseOnce  sync.Once
 }
 
 func (ut *udpTracker) ID() string {
@@ -201,7 +209,11 @@ func (ut *udpTracker) WriteTo(b []byte, addr net.Addr) (int, error) {
 
 func (ut *udpTracker) Close() error {
 	ut.manager.Leave(ut)
-	return ut.PacketConn.Close()
+	err := ut.PacketConn.Close()
+	ut.logCloseOnce.Do(func() {
+		logTrackerClose("UDP", ut.TrackerInfo)
+	})
+	return err
 }
 
 func (ut *udpTracker) Upstream() any {
@@ -243,4 +255,11 @@ func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, ru
 
 	manager.Join(ut)
 	return ut
+}
+
+func logTrackerClose(network string, info *TrackerInfo) {
+	log.Infoln("[%s] %s --> %s closed, upload: %d, download: %d, duration: %s, using %s, uuid: %s",
+		network, info.Metadata.SourceDetail(), info.Metadata.RemoteAddress(),
+		info.UploadTotal.Load(), info.DownloadTotal.Load(), time.Since(info.Start).Round(time.Second),
+		info.Chain.String(), info.UUID)
 }
