@@ -145,6 +145,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...
 		if err != nil || resp.Close {
 			break // close connection
 		}
+
+		// http.Transport may still be reading the request body from conn in its own goroutine.
+		// Close the body before reading the next request so the bufio.Reader is not shared.
+		_ = request.Body.Close()
 	}
 
 	_ = conn.Close()
