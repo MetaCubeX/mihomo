@@ -414,20 +414,21 @@ proxies: # socks5
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
-    # udp: true # support UDP on version 3/4/5
-    # reuse: false # v4/5 only
+    # version: 4 # support 1/2/3/4/5/6
+    # udp: true # support UDP on version 3/4/5/6
+    # reuse: false # v4/5/6 only
+    # mode: default # v6 only, default / unshaped / unsafe-raw, must match the server
     # obfs-opts:
-    #   mode: http # or tls/shadow-tls/restls/jls
+    #   mode: http # or tls/shadow-tls/restls/jls (http/tls are not available on v6)
 
   - name: "snell-shadow-tls"
     type: snell
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
-    # udp: true # support UDP on version 3/4/5
-    # reuse: false # v4/5 only
+    # version: 4 # support 1/2/3/4/5/6
+    # udp: true # support UDP on version 3/4/5/6
+    # reuse: false # v4/5/6 only
     # client-fingerprint: chrome
     obfs-opts:
       mode: shadow-tls
@@ -441,7 +442,7 @@ proxies: # socks5
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
+    # version: 4 # support 1/2/3/4/5/6
     # client-fingerprint: chrome
     obfs-opts:
       mode: restls
@@ -454,7 +455,7 @@ proxies: # socks5
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
+    # version: 4 # support 1/2/3/4/5/6
     # client-fingerprint: chrome
     obfs-opts:
       mode: jls
