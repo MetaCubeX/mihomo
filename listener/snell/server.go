@@ -22,6 +22,7 @@ import (
 	"github.com/metacubex/mihomo/listener/shadowtls"
 	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
 	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
+	"github.com/metacubex/mihomo/transport/singsnell/snellv6"
 	"github.com/metacubex/mihomo/transport/snell"
 )
 
@@ -31,6 +32,7 @@ type Listener struct {
 	closed    bool
 	config    LC.SnellServer
 	listeners []net.Listener
+	v6        *snellv6.Service // only set for version 6
 }
 
 func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
@@ -39,6 +41,10 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	}
 	switch config.Version {
 	case snell.Version1, snell.Version2, snell.Version3, snell.Version4, snell.Version5:
+		if config.Mode != "" {
+			return nil, errors.New("snell inbound mode is only supported on version 6")
+		}
+	case snell.Version6:
 	default:
 		return nil, fmt.Errorf("snell inbound version %d is not supported", config.Version)
 	}
@@ -52,6 +58,13 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	}
 
 	l := &Listener{config: config}
+	if config.Version == snell.Version6 {
+		var err error
+		l.v6, err = newV6Service(config, tunnel)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	securityModes := make([]string, 0, 3)
 	if config.ShadowTLS.Enable {
@@ -144,7 +157,6 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 }
 
 func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	defer rawConn.Close()
 	user, loaded := shadowtls.UserFromConn(rawConn)
 	if jlsUser, jlsLoaded := jls.UserFromConn(rawConn); jlsLoaded {
 		user, loaded = jlsUser, true
@@ -152,6 +164,12 @@ func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...in
 	if loaded {
 		additions = append(append([]inbound.Addition(nil), additions...), inbound.WithInUser(user))
 	}
+	if l.v6 != nil {
+		// the v6 service and its handler own rawConn from here on
+		l.handleV6Conn(rawConn, additions...)
+		return
+	}
+	defer rawConn.Close()
 	conn := rawConn
 	switch l.config.ObfsMode {
 	case "http":

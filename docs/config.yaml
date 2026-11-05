@@ -2196,10 +2196,11 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     psk: your-password
-    version: 4 # 支持 1/2/3/4/5
+    version: 4 # 支持 1/2/3/4/5/6
     udp: true # UDP over TCP tunnel，默认 true
+    # mode: default # 仅 v6：default / unshaped / unsafe-raw，需与客户端一致；v6 的 psk 长度须为 12 到 255 字节
     # obfs-opts:
-    #   mode: http # 可选：http / tls
+    #   mode: http # 可选：http / tls（v6 不支持，配置时会报错）
     #   host: bing.com
     # shadow-tls:
     #   enable: false # 设置为true时开启
