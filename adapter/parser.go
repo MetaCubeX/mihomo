@@ -125,6 +125,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewGostRelay(*relayOption)
+	case "x365":
+		x365Option := &outbound.X365Option{BasicOption: basicOption}
+		err = decoder.Decode(mapping, x365Option)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewX365(*x365Option)
 	case "direct":
 		directOption := &outbound.DirectOption{BasicOption: basicOption}
 		err = decoder.Decode(mapping, directOption)
