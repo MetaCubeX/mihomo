@@ -2,6 +2,7 @@ package convert_test
 
 import (
 	"encoding/base64"
+	"fmt"
 	"testing"
 
 	"github.com/metacubex/mihomo/adapter"
@@ -328,4 +329,35 @@ func TestConvertsV2RayVmessBase64HTTPRemappedToH2Transport(t *testing.T) {
 
 	_, err = adapter.ParseProxy(proxies[0])
 	assert.NoError(t, err)
+}
+
+func TestConvertsV2Ray_vlessXhttpAndSplithttp(t *testing.T) {
+	link := "vless://38692aa1-e5ce-4ca8-81a4-a1051bff9f7b@example.com:443?encryption=none&security=tls&sni=example.com&alpn=h2&type=%s&path=%%2Fthe-path&host=example.com&mode=packet-up#xhttp-test"
+	expected := map[string]interface{}{
+		"name":               "xhttp-test",
+		"type":               "vless",
+		"server":             "example.com",
+		"port":               "443",
+		"uuid":               "38692aa1-e5ce-4ca8-81a4-a1051bff9f7b",
+		"udp":                true,
+		"xudp":               true,
+		"tls":                true,
+		"client-fingerprint": "chrome",
+		"alpn":               []string{"h2"},
+		"servername":         "example.com",
+		"encryption":         "none",
+		"network":            "xhttp",
+		"xhttp-opts": map[string]interface{}{
+			"path": "/the-path",
+			"host": "example.com",
+			"mode": "packet-up",
+		},
+	}
+
+	// legacy type=splithttp links must behave like type=xhttp
+	for _, networkType := range []string{"xhttp", "splithttp"} {
+		proxies, err := ConvertsV2Ray([]byte(fmt.Sprintf(link, networkType)))
+		assert.Nil(t, err)
+		assert.Equal(t, expected, proxies[0], networkType)
+	}
 }
