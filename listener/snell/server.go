@@ -22,7 +22,6 @@ import (
 	"github.com/metacubex/mihomo/listener/shadowtls"
 	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
 	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
-	"github.com/metacubex/mihomo/transport/singsnell/snellv6"
 	"github.com/metacubex/mihomo/transport/snell"
 )
 
@@ -32,7 +31,7 @@ type Listener struct {
 	closed    bool
 	config    LC.SnellServer
 	listeners []net.Listener
-	v6        *snellv6.Service // only set for version 6
+	v6Mode    snell.V6Mode // only used for version 6
 }
 
 func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
@@ -59,10 +58,17 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 
 	l := &Listener{config: config}
 	if config.Version == snell.Version6 {
+		if err := snell.ValidateV6PSK([]byte(config.Psk)); err != nil {
+			return nil, fmt.Errorf("snell inbound %w", err)
+		}
+		if config.ObfsMode != "" {
+			// v6 replaced the simple-obfs layer with PSK-derived traffic shaping
+			return nil, fmt.Errorf("snell inbound version 6 does not support obfs mode %s", config.ObfsMode)
+		}
 		var err error
-		l.v6, err = newV6Service(config, tunnel)
+		l.v6Mode, err = snell.ParseV6Mode(config.Mode)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("snell inbound %w", err)
 		}
 	}
 
@@ -157,6 +163,7 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 }
 
 func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
+	defer rawConn.Close()
 	user, loaded := shadowtls.UserFromConn(rawConn)
 	if jlsUser, jlsLoaded := jls.UserFromConn(rawConn); jlsLoaded {
 		user, loaded = jlsUser, true
@@ -164,12 +171,6 @@ func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...in
 	if loaded {
 		additions = append(append([]inbound.Addition(nil), additions...), inbound.WithInUser(user))
 	}
-	if l.v6 != nil {
-		// the v6 service and its handler own rawConn from here on
-		l.handleV6Conn(rawConn, additions...)
-		return
-	}
-	defer rawConn.Close()
 	conn := rawConn
 	switch l.config.ObfsMode {
 	case "http":
@@ -180,7 +181,12 @@ func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...in
 	default:
 		return
 	}
-	stream := snell.ServerStreamConn(conn, []byte(l.config.Psk), l.config.Version)
+	var stream *snell.Snell
+	if l.config.Version == snell.Version6 {
+		stream = snell.ServerStreamConnV6(conn, []byte(l.config.Psk), l.v6Mode)
+	} else {
+		stream = snell.ServerStreamConn(conn, []byte(l.config.Psk), l.config.Version)
+	}
 	for {
 		reuse, err := l.handleRequest(stream, tunnel, additions...)
 		if err != nil || !reuse {
