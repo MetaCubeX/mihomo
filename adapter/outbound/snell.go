@@ -26,6 +26,7 @@ type Snell struct {
 	restlsConfig    *restls.Config
 	jlsConfig       *jls.ClientConfig
 	version         int
+	v6Mode          snell.V6Mode
 	reuse           bool
 }
 
@@ -38,6 +39,7 @@ type SnellOption struct {
 	UDP               bool           `proxy:"udp,omitempty"`
 	Version           int            `proxy:"version,omitempty"`
 	Reuse             bool           `proxy:"reuse,omitempty"`
+	Mode              string         `proxy:"mode,omitempty"` // v6 only: default / unshaped / unsafe-raw
 	ObfsOpts          map[string]any `proxy:"obfs-opts,omitempty"`
 	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
 }
@@ -65,6 +67,9 @@ func (s *Snell) streamConnContext(ctx context.Context, c net.Conn) (*snell.Snell
 		if err != nil {
 			return nil, err
 		}
+	}
+	if s.version == snell.Version6 {
+		return snell.StreamConnV6(c, s.psk, s.v6Mode), nil
 	}
 	return snell.StreamConn(c, s.psk, s.version), nil
 }
@@ -249,15 +254,34 @@ func NewSnell(option SnellOption) (*Snell, error) {
 		// Snell v5 servers are backward-compatible with v4 clients.
 		option.Version = snell.Version4
 	}
-	reuse := option.Version == snell.Version2 || (option.Version == snell.Version4 && option.Reuse)
+	reuse := option.Version == snell.Version2 ||
+		((option.Version == snell.Version4 || option.Version == snell.Version6) && option.Reuse)
+	var v6Mode snell.V6Mode
 	switch option.Version {
 	case snell.Version1, snell.Version2:
 		if option.UDP {
 			return nil, fmt.Errorf("snell version %d not support UDP", option.Version)
 		}
 	case snell.Version3, snell.Version4:
+	case snell.Version6:
+		if err := snell.ValidateV6PSK(psk); err != nil {
+			return nil, fmt.Errorf("snell %s %w", addr, err)
+		}
+		switch obfsOption.Mode {
+		case "tls", "http":
+			// v6 replaced the simple-obfs layer with PSK-derived traffic shaping
+			return nil, fmt.Errorf("snell %s version 6 does not support obfs mode %s", addr, obfsOption.Mode)
+		}
+		var err error
+		v6Mode, err = snell.ParseV6Mode(option.Mode)
+		if err != nil {
+			return nil, fmt.Errorf("snell %s %w", addr, err)
+		}
 	default:
 		return nil, fmt.Errorf("snell version error: %d", option.Version)
+	}
+	if option.Mode != "" && option.Version != snell.Version6 {
+		return nil, fmt.Errorf("snell %s mode is only supported on version 6", addr)
 	}
 
 	s := &Snell{
@@ -280,6 +304,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 		restlsConfig:    restlsConfig,
 		jlsConfig:       jlsConfig,
 		version:         option.Version,
+		v6Mode:          v6Mode,
 		reuse:           reuse,
 	}
 	s.dialer = option.NewDialer(s.DialOptions())

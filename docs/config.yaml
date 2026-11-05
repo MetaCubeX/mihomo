@@ -414,20 +414,21 @@ proxies: # socks5
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
-    # udp: true # support UDP on version 3/4/5
-    # reuse: false # v4/5 only
+    # version: 4 # support 1/2/3/4/5/6
+    # udp: true # support UDP on version 3/4/5/6
+    # reuse: false # v4/5/6 only
+    # mode: default # v6 only, default / unshaped / unsafe-raw, must match the server
     # obfs-opts:
-    #   mode: http # or tls/shadow-tls/restls/jls
+    #   mode: http # or tls/shadow-tls/restls/jls (http/tls are not available on v6)
 
   - name: "snell-shadow-tls"
     type: snell
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
-    # udp: true # support UDP on version 3/4/5
-    # reuse: false # v4/5 only
+    # version: 4 # support 1/2/3/4/5/6
+    # udp: true # support UDP on version 3/4/5/6
+    # reuse: false # v4/5/6 only
     # client-fingerprint: chrome
     obfs-opts:
       mode: shadow-tls
@@ -441,7 +442,7 @@ proxies: # socks5
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
+    # version: 4 # support 1/2/3/4/5/6
     # client-fingerprint: chrome
     obfs-opts:
       mode: restls
@@ -454,7 +455,7 @@ proxies: # socks5
     server: server
     port: 44046
     psk: yourpsk
-    # version: 4 # support 1/2/3/4/5
+    # version: 4 # support 1/2/3/4/5/6
     # client-fingerprint: chrome
     obfs-opts:
       mode: jls
@@ -2195,10 +2196,11 @@ listeners:
     listen: 0.0.0.0
     # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     psk: your-password
-    version: 4 # 支持 1/2/3/4/5
+    version: 4 # 支持 1/2/3/4/5/6
     udp: true # UDP over TCP tunnel，默认 true
+    # mode: default # 仅 v6：default / unshaped / unsafe-raw，需与客户端一致；v6 的 psk 长度须为 12 到 255 字节
     # obfs-opts:
-    #   mode: http # 可选：http / tls
+    #   mode: http # 可选：http / tls（v6 不支持，配置时会报错）
     #   host: bing.com
     # shadow-tls:
     #   enable: false # 设置为true时开启
