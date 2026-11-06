@@ -7,6 +7,7 @@ import (
 
 type dnsPolicy interface {
 	Match(domain string) []dnsClient
+	ResetConnection()
 }
 
 type domainTriePolicy struct {
@@ -21,6 +22,18 @@ func (p domainTriePolicy) Match(domain string) []dnsClient {
 	return nil
 }
 
+func (p domainTriePolicy) ResetConnection() {
+	if p.DomainTrie == nil {
+		return
+	}
+	p.DomainTrie.Foreach(func(_ string, dnsClients []dnsClient) bool {
+		for _, c := range dnsClients {
+			c.ResetConnection()
+		}
+		return true
+	})
+}
+
 type domainMatcherPolicy struct {
 	matcher    C.DomainMatcher
 	dnsClients []dnsClient
@@ -31,4 +44,10 @@ func (p domainMatcherPolicy) Match(domain string) []dnsClient {
 		return p.dnsClients
 	}
 	return nil
+}
+
+func (p domainMatcherPolicy) ResetConnection() {
+	for _, c := range p.dnsClients {
+		c.ResetConnection()
+	}
 }
