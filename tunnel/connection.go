@@ -26,7 +26,7 @@ type packetSender struct {
 
 // newPacketSender return a chan based C.PacketSender
 // It ensures that packets can be sent sequentially and without blocking
-func newPacketSender() C.PacketSender {
+func newPacketSender() *packetSender {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan C.PacketAdapter, senderCapacity)
 	return &packetSender{
