@@ -41,6 +41,8 @@ type Resolver struct {
 	ipv6Timeout           time.Duration
 	main                  []dnsClient
 	fallback              []dnsClient
+	mainUpstreams         []string
+	fallbackUpstreams     []string
 	fallbackDomainFilters []C.DomainMatcher
 	fallbackIPFilters     []C.IpMatcher
 	fallbackLazyQuery     bool
@@ -212,8 +214,8 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 			return r.ipExchange(ctx, m)
 		}
 
-		if matched := r.matchPolicy(m); len(matched) != 0 {
-			result, cache, err = batchExchange(ctx, matched, m)
+		if matched := r.matchPolicy(m); matched != nil {
+			result, cache, err = batchExchange(ctx, matched.dnsClients, m)
 			return
 		}
 		result, cache, err = batchExchange(ctx, r.main, m)
@@ -258,7 +260,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	return
 }
 
-func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
+func (r *Resolver) matchPolicy(m *D.Msg) *policyTarget {
 	if r.policy == nil {
 		return nil
 	}
@@ -269,8 +271,8 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 	}
 
 	for _, policy := range r.policy {
-		if dnsClients := policy.Match(domain); len(dnsClients) > 0 {
-			return dnsClients
+		if target := policy.Match(domain); target != nil && len(target.dnsClients) > 0 {
+			return target
 		}
 	}
 	return nil
@@ -297,8 +299,8 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 }
 
 func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-	if matched := r.matchPolicy(m); len(matched) != 0 {
-		res := <-r.asyncExchange(ctx, matched, m)
+	if matched := r.matchPolicy(m); matched != nil {
+		res := <-r.asyncExchange(ctx, matched.dnsClients, m)
 		return res.Msg, res.Error
 	}
 
@@ -411,6 +413,8 @@ func (r *Resolver) ResetConnection() {
 }
 
 type NameServer struct {
+	// Source retains the configured upstream spelling, including wrapper parameters.
+	Source       string
 	Net          string
 	Addr         string
 	ProxyAdapter C.ProxyAdapter
@@ -463,6 +467,8 @@ func (ns NameServer) transportEqual(ns2 NameServer) bool {
 }
 
 type Policy struct {
+	// Key retains the original policy key before comma expansion or matcher parsing.
+	Key         string
 	Domain      string
 	Matcher     C.DomainMatcher
 	NameServers []NameServer
@@ -517,17 +523,19 @@ func (rs Resolvers) ResetConnection() {
 
 func NewResolverFromClient(client dnsClient) *Resolver {
 	return &Resolver{
-		ipv6:  true,
-		main:  []dnsClient{client},
-		cache: Config{}.newCache(),
+		ipv6:          true,
+		main:          []dnsClient{client},
+		mainUpstreams: []string{client.Address()},
+		cache:         Config{}.newCache(),
 	}
 }
 
 func NewResolver(config Config) (rs Resolvers) {
 	defaultResolver := &Resolver{
-		main:        transform(config.Default, nil),
-		cache:       config.newCache(),
-		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+		main:          transform(config.Default, nil),
+		mainUpstreams: describeNameServers(config.Default),
+		cache:         config.newCache(),
+		ipv6Timeout:   time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
 	var nameServerCache []struct {
@@ -566,7 +574,7 @@ func NewResolver(config Config) (rs Resolvers) {
 	}
 
 	makePolicy := func(policies []Policy) (dnsPolicies []dnsPolicy) {
-		var triePolicy *trie.DomainTrie[[]dnsClient]
+		var triePolicy *trie.DomainTrie[*policyTarget]
 		insertPolicy := func(policy dnsPolicy) {
 			if triePolicy != nil {
 				triePolicy.Optimize()
@@ -579,13 +587,23 @@ func NewResolver(config Config) (rs Resolvers) {
 		}
 
 		for _, policy := range policies {
+			key := policy.Key
+			if key == "" {
+				key = policy.Domain
+			}
+			target := &policyTarget{
+				dnsClients: cacheTransform(policy.NameServers),
+				key:        key,
+				domain:     policy.Domain,
+				upstreams:  describeNameServers(policy.NameServers),
+			}
 			if policy.Matcher != nil {
-				insertPolicy(domainMatcherPolicy{matcher: policy.Matcher, dnsClients: cacheTransform(policy.NameServers)})
+				insertPolicy(domainMatcherPolicy{matcher: policy.Matcher, target: target})
 			} else {
 				if triePolicy == nil {
-					triePolicy = trie.New[[]dnsClient]()
+					triePolicy = trie.New[*policyTarget]()
 				}
-				if err := triePolicy.Insert(policy.Domain, cacheTransform(policy.NameServers)); err != nil {
+				if err := triePolicy.Insert(policy.Domain, target); err != nil {
 					log.Warnln("[DNS] skip invalid nameserver policy: %s", err)
 				}
 			}
@@ -595,31 +613,34 @@ func NewResolver(config Config) (rs Resolvers) {
 	}
 
 	r := &Resolver{
-		ipv6:        config.IPv6,
-		main:        cacheTransform(config.Main),
-		cache:       config.newCache(),
-		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
-		policy:      makePolicy(config.Policy),
+		ipv6:          config.IPv6,
+		main:          cacheTransform(config.Main),
+		mainUpstreams: describeNameServers(config.Main),
+		cache:         config.newCache(),
+		ipv6Timeout:   time.Duration(config.IPv6Timeout) * time.Millisecond,
+		policy:        makePolicy(config.Policy),
 	}
 	r.defaultResolver = defaultResolver
 	rs.Resolver = r
 
 	if len(config.ProxyServer) != 0 {
 		rs.ProxyResolver = &Resolver{
-			ipv6:        config.IPv6,
-			main:        cacheTransform(config.ProxyServer),
-			cache:       config.newCache(),
-			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
-			policy:      makePolicy(config.ProxyServerPolicy),
+			ipv6:          config.IPv6,
+			main:          cacheTransform(config.ProxyServer),
+			mainUpstreams: describeNameServers(config.ProxyServer),
+			cache:         config.newCache(),
+			ipv6Timeout:   time.Duration(config.IPv6Timeout) * time.Millisecond,
+			policy:        makePolicy(config.ProxyServerPolicy),
 		}
 	}
 
 	if len(config.DirectServer) != 0 {
 		rs.DirectResolver = &Resolver{
-			ipv6:        config.IPv6,
-			main:        cacheTransform(config.DirectServer),
-			cache:       config.newCache(),
-			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+			ipv6:          config.IPv6,
+			main:          cacheTransform(config.DirectServer),
+			mainUpstreams: describeNameServers(config.DirectServer),
+			cache:         config.newCache(),
+			ipv6Timeout:   time.Duration(config.IPv6Timeout) * time.Millisecond,
 		}
 		if config.DirectFollowPolicy {
 			rs.DirectResolver.policy = r.policy
@@ -628,6 +649,7 @@ func NewResolver(config Config) (rs Resolvers) {
 
 	if len(config.Fallback) != 0 {
 		r.fallback = cacheTransform(config.Fallback)
+		r.fallbackUpstreams = describeNameServers(config.Fallback)
 		r.fallbackIPFilters = config.FallbackIPFilter
 		r.fallbackDomainFilters = config.FallbackDomainFilter
 		r.fallbackLazyQuery = config.FallbackLazyQuery
