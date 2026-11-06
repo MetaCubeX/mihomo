@@ -26,8 +26,10 @@ import (
 	"github.com/metacubex/tailscale/hostinfo"
 	"github.com/metacubex/tailscale/ipn"
 	"github.com/metacubex/tailscale/net/netmon"
+	"github.com/metacubex/tailscale/net/tsaddr"
 	"github.com/metacubex/tailscale/tailcfg"
 	"github.com/metacubex/tailscale/tsnet"
+	"github.com/metacubex/tailscale/types/views"
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
 )
@@ -216,7 +218,14 @@ func (t *Tailscale) watchBackendState() {
 		t.setBackendInitialized(err)
 		return
 	}
-	watcher, err := lc.WatchIPNBus(t.ctx, ipn.NotifyInitialState)
+	exitNodeNeedsStatus := tailscaleExitNodeNeedsStatus(t.option)
+	mask := ipn.NotifyInitialState
+	if exitNodeNeedsStatus {
+		// The backend can be running before the exit node is in the netmap, which may then
+		// only be added by a peer delta that is announced to watchers of peer changes.
+		mask |= ipn.NotifyPeerChanges
+	}
+	watcher, err := lc.WatchIPNBus(t.ctx, mask)
 	if err != nil {
 		t.setBackendInitialized(err)
 		return
@@ -224,31 +233,49 @@ func (t *Tailscale) watchBackendState() {
 	defer watcher.Close()
 
 	backendInitialized := false
-	exitNodeNeedsStatus := tailscaleExitNodeNeedsStatus(t.option)
+	running := false
+	exitNodeErrLogged := false
 	for {
 		n, err := watcher.Next()
 		if err != nil {
 			t.setBackendInitialized(err)
 			return
 		}
-		if n.State == nil {
+		if n.State != nil {
+			if *n.State != ipn.NoState && !backendInitialized {
+				t.setBackendInitialized(nil)
+				backendInitialized = true
+				if !exitNodeNeedsStatus {
+					return
+				}
+			}
+			running = *n.State == ipn.Running
+		} else if !tailscaleOffersExitNode(n.PeersChanged) {
 			continue
 		}
-
-		if *n.State != ipn.NoState && !backendInitialized {
-			t.setBackendInitialized(nil)
-			backendInitialized = true
-			if !exitNodeNeedsStatus {
-				return
-			}
+		if !running {
+			continue
 		}
-		if exitNodeNeedsStatus && *n.State == ipn.Running {
-			if err := t.applyExitNodePrefs(t.ctx); err != nil {
-				log.Warnln("[Tailscale](%s) set exit node failed: %v", t.Name(), err)
+		if err := t.applyExitNodePrefs(t.ctx); err != nil {
+			if !exitNodeErrLogged {
+				log.Infoln("[Tailscale](%s) exit node %s is not available yet, will retry when peers change: %v", t.Name(), t.option.ExitNode, err)
+				exitNodeErrLogged = true
 			}
-			return
+			continue
+		}
+		log.Infoln("[Tailscale](%s) using exit node %s", t.Name(), t.option.ExitNode)
+		return
+	}
+}
+
+// tailscaleOffersExitNode reports whether any of the peers can be used as an exit node.
+func tailscaleOffersExitNode(peers []*tailcfg.Node) bool {
+	for _, peer := range peers {
+		if tsaddr.ContainsExitRoutes(views.SliceOf(peer.AllowedIPs)) {
+			return true
 		}
 	}
+	return false
 }
 
 func (t *Tailscale) setBackendInitialized(err error) {
@@ -307,8 +334,14 @@ func (t *Tailscale) applyExitNodePrefs(ctx context.Context) error {
 	if err = mp.SetExitNodeIP(t.option.ExitNode, status); err != nil {
 		return err
 	}
-	_, err = lc.EditPrefs(ctx, mp)
-	return err
+	prefs, err := lc.EditPrefs(ctx, mp)
+	if err != nil {
+		return err
+	}
+	if prefs.ExitNodeID.IsZero() { // ExitNodeIP is resolved to the ID once the node is in the netmap
+		return fmt.Errorf("no node found in netmap with IP %v", mp.ExitNodeIP)
+	}
+	return nil
 }
 
 func buildTailscaleMaskedPrefs(option TailscaleOption) (*ipn.MaskedPrefs, error) {
