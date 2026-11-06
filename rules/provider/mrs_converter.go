@@ -14,7 +14,7 @@ import (
 
 func ConvertToMrs(buf []byte, behavior P.RuleBehavior, format P.RuleFormat, w io.Writer) (err error) {
 	strategy := newStrategy(behavior, nil)
-	strategy, err = rulesParse(buf, strategy, format)
+	strategy, err = rulesParse(buf, strategy, format, nil)
 	if err != nil {
 		return err
 	}

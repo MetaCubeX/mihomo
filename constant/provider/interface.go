@@ -149,6 +149,7 @@ const (
 	YamlRule RuleFormat = iota
 	TextRule
 	MrsRule
+	JsonRule
 )
 
 type RuleFormat int
@@ -161,6 +162,8 @@ func (rf RuleFormat) String() string {
 		return "TextRule"
 	case MrsRule:
 		return "MrsRule"
+	case JsonRule:
+		return "JsonRule"
 	default:
 		return "Unknown"
 	}
@@ -174,6 +177,8 @@ func ParseRuleFormat(s string) (format RuleFormat, err error) {
 		format = TextRule
 	case "mrs":
 		format = MrsRule
+	case "json":
+		format = JsonRule
 	default:
 		err = fmt.Errorf("unsupported format type: %s", s)
 	}
