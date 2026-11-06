@@ -398,7 +398,10 @@ type RawTLS struct {
 	ClientAuthType  string   `yaml:"client-auth-type" json:"client-auth-type"`
 	ClientAuthCert  string   `yaml:"client-auth-cert" json:"client-auth-cert"`
 	EchKey          string   `yaml:"ech-key" json:"ech-key"`
-	CustomTrustCert []string `yaml:"custom-certifactes" json:"custom-certifactes"`
+	CustomTrustCert []string `yaml:"custom-certificates" json:"custom-certificates"`
+
+	// Deprecated: misspelled key kept for compatibility with existing configs, use CustomTrustCert instead
+	CustomTrustCertDeprecated []string `yaml:"custom-certifactes" json:"custom-certifactes"`
 }
 
 type RawConfig struct {
@@ -867,13 +870,20 @@ func parseProfile(cfg *RawConfig) (*Profile, error) {
 }
 
 func parseTLS(cfg *RawConfig) (*TLS, error) {
+	customTrustCert := cfg.TLS.CustomTrustCert
+	if len(cfg.TLS.CustomTrustCertDeprecated) != 0 {
+		// Deprecated: "custom-certifactes" is a misspelling of "custom-certificates",
+		// certificates listed under both keys are trusted
+		log.Warnln("Deprecated: tls.custom-certifactes is misspelled, use tls.custom-certificates instead")
+		customTrustCert = append(append([]string{}, customTrustCert...), cfg.TLS.CustomTrustCertDeprecated...)
+	}
 	return &TLS{
 		Certificate:     cfg.TLS.Certificate,
 		PrivateKey:      cfg.TLS.PrivateKey,
 		ClientAuthType:  cfg.TLS.ClientAuthType,
 		ClientAuthCert:  cfg.TLS.ClientAuthCert,
 		EchKey:          cfg.TLS.EchKey,
-		CustomTrustCert: cfg.TLS.CustomTrustCert,
+		CustomTrustCert: customTrustCert,
 	}, nil
 }
 

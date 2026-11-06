@@ -58,7 +58,7 @@ tls:
   #   madSJjYQIf9o1N5GXjkW4DEEeb17qMxHdwMdNnwADAABAAEAAQACAAEAAwAIdGVz
   #   dC5jb20AAA==
   #   -----END ECH KEYS-----
-  custom-certifactes:
+  custom-certificates:
     - |
       -----BEGIN CERTIFICATE-----
       format/pem...
