@@ -29,6 +29,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
+	"github.com/metacubex/sing/common"
 	"golang.org/x/exp/slices"
 )
 
@@ -500,14 +501,25 @@ func handleUDPConn(packet C.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
+	abort := true
+	defer func() {
+		conn := connCtx.Conn()
+		if abort {
+			// TUN and transparent inbounds are backed by a local TCP stack, reset the
+			// connection so that the application gets a RST instead of a FIN.
+			switch connCtx.Metadata().Type {
+			case C.TUN, C.REDIR, C.TPROXY:
+				if lingerConn, ok := common.Cast[interface{ SetLinger(int) error }](conn); ok {
+					_ = lingerConn.SetLinger(0)
+				}
+			}
+		}
+		_ = conn.Close()
+	}()
+
 	if !isHandle(connCtx.Metadata().Type) {
-		_ = connCtx.Conn().Close()
 		return
 	}
-
-	defer func(conn net.Conn) {
-		_ = conn.Close()
-	}(connCtx.Conn())
 
 	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
@@ -621,6 +633,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
+	abort = false                         // entered bidirectional relay, close gracefully
 	handleSocket(conn, remoteConn)
 }
 
