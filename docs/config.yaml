@@ -27,6 +27,15 @@ find-process-mode: strict
 
 mode: rule
 
+# TCP 半关闭后的空闲回收，单位：秒；缺省均为 0（禁用，保留原有行为）。
+# client：收到客户端 EOF 后，剩余服务端→客户端方向的空闲时长。
+# server：收到服务端 EOF 后，剩余客户端→服务端方向的空闲时长。
+# 成功转发刷新空闲计时；完整连接不受影响。配置重载只作用于新连接。
+# 例如按需启用 client: 300 / server: 30；依赖长时间静默半关闭的协议应保持禁用或增大数值。
+# tcp-half-close-timeout:
+#   client: 0
+#   server: 0
+
 #自定义 geodata url
 geox-url:
   geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
