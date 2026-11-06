@@ -55,6 +55,9 @@ func (t *TrustTunnel) DialContext(ctx context.Context, metadata *C.Metadata) (_ 
 }
 
 func (t *TrustTunnel) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = t.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
@@ -64,7 +67,7 @@ func (t *TrustTunnel) ListenPacketContext(ctx context.Context, metadata *C.Metad
 		return nil, err
 	}
 
-	return NewPacketConn(N.NewThreadSafePacketConn(pc), t), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(pc), t, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 // SupportUOT implements C.ProxyAdapter

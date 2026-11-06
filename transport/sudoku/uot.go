@@ -115,7 +115,7 @@ func (c *UoTPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 			return 0, nil, err
 		}
 
-		udpAddr, err := uotUDPAddr(addr)
+		peer, err := uotNetAddr(addr)
 		if payloadLen > len(p) {
 			if discardErr := discardBytes(c.conn, payloadLen); discardErr != nil {
 				return 0, nil, discardErr
@@ -132,7 +132,7 @@ func (c *UoTPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 		if _, err := io.ReadFull(c.conn, p[:payloadLen]); err != nil {
 			return 0, nil, err
 		}
-		return payloadLen, udpAddr, nil
+		return payloadLen, peer, nil
 	}
 }
 
@@ -175,11 +175,16 @@ func (c *UoTPacketConn) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
 }
 
-// uotUDPAddr converts a datagram's peer to a *net.UDPAddr. Domain names are not resolved: only
-// the IP literals they may spell are accepted.
-func uotUDPAddr(addr socks5.Addr) (*net.UDPAddr, error) {
+func uotNetAddr(addr socks5.Addr) (net.Addr, error) {
 	var ap netip.AddrPort
 	switch addr[0] {
+	case socks5.AtypDomainName:
+		// The NAT layer needs the domain to restore any target in this association.
+		peer := addr.NetAddr()
+		if peer == nil {
+			return nil, errors.New("invalid domain address")
+		}
+		return peer, nil
 	case socks5.AtypIPv4:
 		ap = netip.AddrPortFrom(netip.AddrFrom4([4]byte(addr[1:5])), binary.BigEndian.Uint16(addr[5:]))
 	case socks5.AtypIPv6:

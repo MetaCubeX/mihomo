@@ -93,6 +93,7 @@ type TestTunnel struct {
 	DoSequentialTestFn func(t *testing.T, proxy C.ProxyAdapter)
 	DoConcurrentTestFn func(t *testing.T, proxy C.ProxyAdapter)
 	NewDialerFn        func() C.Dialer
+	udpEcho            *udpEchoHandler
 }
 
 func (tt *TestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
@@ -114,14 +115,17 @@ func (tt *TestTunnel) Close() error {
 func (tt *TestTunnel) DoTest(t *testing.T, proxy C.ProxyAdapter) {
 	tt.DoSequentialTestFn(t, proxy)
 	tt.DoConcurrentTestFn(t, proxy)
+	tt.checkUDPEcho(t)
 }
 
 func (tt *TestTunnel) DoSequentialTest(t *testing.T, proxy C.ProxyAdapter) {
 	tt.DoSequentialTestFn(t, proxy)
+	tt.checkUDPEcho(t)
 }
 
 func (tt *TestTunnel) DoConcurrentTest(t *testing.T, proxy C.ProxyAdapter) {
 	tt.DoConcurrentTestFn(t, proxy)
+	tt.checkUDPEcho(t)
 }
 
 func (tt *TestTunnel) NewDialer() C.Dialer {
@@ -319,6 +323,7 @@ func NewHttpTestTunnel() *TestTunnel {
 		})
 	}
 
+	udpEcho := &udpEchoHandler{}
 	tunnel := &TestTunnel{
 		HandleTCPConnFn: func(conn net.Conn, metadata *C.Metadata) {
 			defer conn.Close()
@@ -357,13 +362,12 @@ func NewHttpTestTunnel() *TestTunnel {
 			}
 			<-c.ch
 		},
-		HandleUDPPacketFn: func(packet C.UDPPacket, metadata *C.Metadata) {
-			// TODO
-		},
+		HandleUDPPacketFn:  udpEcho.Handle,
 		CloseFn:            ln.Close,
 		DoSequentialTestFn: sequentialTestFn,
 		DoConcurrentTestFn: concurrentTestFn,
 		NewDialerFn:        func() C.Dialer { return &TestDialer{dialer: dialer.NewDialer(), ctx: ctx} },
+		udpEcho:            udpEcho,
 	}
 	return tunnel
 }

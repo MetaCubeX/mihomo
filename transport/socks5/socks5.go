@@ -10,6 +10,8 @@ import (
 	"strconv"
 
 	"github.com/metacubex/mihomo/component/auth"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 // Error represents a SOCKS error
@@ -82,6 +84,29 @@ func (a Addr) UDPAddr() *net.UDPAddr {
 		return &net.UDPAddr{IP: net.IP(ip[:]), Port: int(binary.BigEndian.Uint16(a[1+net.IPv6len : 1+net.IPv6len+2]))}
 	}
 	// Other Atyp
+	return nil
+}
+
+// NetAddr preserves domain replies without resolving them. Copy the domain
+// before the caller reuses the packet buffer for its payload.
+func (a Addr) NetAddr() net.Addr {
+	a = SplitAddr(a)
+	if len(a) == 0 {
+		return nil
+	}
+	if a[0] == AtypDomainName {
+		hostLen := int(a[1])
+		if hostLen == 0 {
+			return nil
+		}
+		return M.Socksaddr{
+			Fqdn: string(a[2 : 2+hostLen]),
+			Port: binary.BigEndian.Uint16(a[2+hostLen:]),
+		}
+	}
+	if address := a.UDPAddr(); address != nil {
+		return address
+	}
 	return nil
 }
 

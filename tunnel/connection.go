@@ -11,6 +11,8 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 type packetSender struct {
@@ -18,10 +20,29 @@ type packetSender struct {
 	cancel context.CancelFunc
 	ch     chan C.PacketAdapter
 
-	// destination NAT mapping
-	originToTarget map[string]netip.Addr
-	targetToOrigin map[netip.Addr]netip.Addr
-	mappingMutex   sync.RWMutex
+	mu          sync.Mutex
+	closed      bool
+	mapping     *udpNAT
+	first       *udpDestination
+	allowRemote bool
+
+	// Seeded before Process starts, then owned by its single consumer. Cache
+	// the wire address too, so hits need neither NAT locking nor allocations.
+	destinations map[udpPacketKey]net.Addr
+}
+
+type udpPacketKey struct {
+	address netip.AddrPort
+	host    string
+}
+
+func udpPacketKeyFromMetadata(metadata *C.Metadata) udpPacketKey {
+	// Use the inbound identity; hosts, rules and sniffing only change Route.
+	key := udpPacketKey{address: netip.AddrPortFrom(metadata.DstIP, metadata.DstPort)}
+	if !metadata.DstIP.IsValid() {
+		key.host = metadata.Host
+	}
+	return key
 }
 
 // newPacketSender return a chan based C.PacketSender
@@ -34,71 +55,56 @@ func newPacketSender() C.PacketSender {
 		cancel: cancel,
 		ch:     ch,
 
-		originToTarget: make(map[string]netip.Addr),
-		targetToOrigin: make(map[netip.Addr]netip.Addr),
+		mapping:      newUDPNAT(),
+		destinations: make(map[udpPacketKey]net.Addr),
 	}
-}
-
-func (s *packetSender) AddMapping(originMetadata *C.Metadata, metadata *C.Metadata) {
-	s.mappingMutex.Lock()
-	defer s.mappingMutex.Unlock()
-	originKey := originMetadata.String()
-	originAddr := originMetadata.DstIP
-	targetAddr := metadata.DstIP
-	if addr := s.originToTarget[originKey]; !addr.IsValid() { // overwrite only if the record is illegal
-		s.originToTarget[originKey] = targetAddr
-	}
-	if addr := s.targetToOrigin[targetAddr]; !addr.IsValid() { // overwrite only if the record is illegal
-		s.targetToOrigin[targetAddr] = originAddr
-	}
-}
-
-func (s *packetSender) RestoreReadFrom(addr netip.Addr) netip.Addr {
-	s.mappingMutex.RLock()
-	defer s.mappingMutex.RUnlock()
-	if originAddr := s.targetToOrigin[addr]; originAddr.IsValid() {
-		return originAddr
-	}
-	return addr
 }
 
 func (s *packetSender) processPacket(pc C.PacketConn, packet C.PacketAdapter) {
 	defer packet.Drop()
 	metadata := packet.Metadata()
-
-	var addr *net.UDPAddr
-
-	s.mappingMutex.RLock()
-	targetAddr := s.originToTarget[metadata.String()]
-	s.mappingMutex.RUnlock()
-
-	if targetAddr.IsValid() {
-		addr = net.UDPAddrFromAddrPort(netip.AddrPortFrom(targetAddr, metadata.DstPort))
+	key := udpPacketKeyFromMetadata(metadata)
+	if address, loaded := s.destinations[key]; loaded {
+		_ = handleUDPToRemote(packet, pc, address)
+		return
 	}
 
-	if addr == nil {
-		originMetadata := metadata  // save origin metadata
-		metadata = metadata.Clone() // don't modify PacketAdapter's metadata
-
-		_ = preHandleMetadata(metadata) // error was pre-checked
-		metadata = metadata.Pure()
-		if metadata.Host != "" {
-			// TODO: ResolveUDP may take a long time to block the Process loop
-			//       but we want keep sequence sending so can't open a new goroutine
-			if err := pc.ResolveUDP(s.ctx, metadata); err != nil {
-				log.Warnln("[UDP] Resolve Ip error: %s", err)
-				return
-			}
-		}
-
-		if !metadata.DstIP.IsValid() {
-			log.Warnln("[UDP] Destination ip not valid: %#v", metadata)
+	identity := ""
+	if s.first != nil {
+		identity = s.first.Route.UDP.SessionKey
+	}
+	destination := newUDPDestination(metadata, s.allowRemote, identity)
+	if s.first != nil && destination.Origin == s.first.Origin {
+		// Sniffing belongs to the initial target, not every packet sharing a source.
+		destination.Route = s.first.Route.Clone()
+		destination.Route.DstPort = destination.Origin.Port
+		destination.Route.UDP.Target.Port = destination.Origin.Port
+		destination.Target = destination.Route.UDP.Target
+		destination.fixedIP = s.first.fixedIP
+	} else if err := destination.prepare(); err != nil {
+		log.Debugln("[Metadata PreHandle] error: %s", err)
+		return
+	}
+	prepared, cached := s.mapping.cached(destination.Origin, destination.Target)
+	if !cached {
+		// Keep preparation in the single consumer: resolving in another goroutine
+		// would reorder datagrams and their NAT records.
+		var err error
+		prepared, err = pc.PrepareUDP(s.ctx, destination.dialMetadata())
+		if err != nil {
+			log.Warnln("[UDP] Prepare destination error: %s", err)
 			return
 		}
-		s.AddMapping(originMetadata, metadata)
-		addr = metadata.UDPAddr()
 	}
-	_ = handleUDPToRemote(packet, pc, addr)
+	if !prepared.IsValid() {
+		log.Warnln("[UDP] Destination address not valid: %s", prepared)
+		return
+	}
+	// Publish before WriteTo: even an immediate response must see this target.
+	s.mapping.register(destination.Origin, destination.Target, prepared, destination.direct, pc.UDPCapabilities())
+	address := udpNetAddr(prepared)
+	s.destinations[key] = address
+	_ = handleUDPToRemote(packet, pc, address)
 }
 
 func (s *packetSender) Process(pc C.PacketConn, proxy C.WriteBackProxy) {
@@ -107,6 +113,10 @@ func (s *packetSender) Process(pc C.PacketConn, proxy C.WriteBackProxy) {
 		case <-s.ctx.Done():
 			return // sender closed
 		case packet := <-s.ch:
+			if s.ctx.Err() != nil {
+				packet.Drop()
+				return
+			}
 			if proxy != nil {
 				proxy.UpdateWriteBack(packet)
 			}
@@ -127,31 +137,35 @@ func (s *packetSender) dropAll() {
 }
 
 func (s *packetSender) Send(packet C.PacketAdapter) {
-	select {
-	case <-s.ctx.Done():
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
 		packet.Drop() // sender closed before Send()
 		return
-	default:
 	}
 
 	select {
 	case s.ch <- packet:
 		// put ok, so don't drop packet, will process by other side of chan
-	case <-s.ctx.Done():
-		packet.Drop() // sender closed when putting data to chan
 	default:
 		packet.Drop() // chan is full
 	}
 }
 
 func (s *packetSender) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	s.closed = true
 	s.cancel()
 	s.dropAll()
 }
 
 func (s *packetSender) DoSniff(metadata *C.Metadata) error { return nil }
 
-func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, addr *net.UDPAddr) error {
+func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, addr net.Addr) error {
 	if addr == nil {
 		return errors.New("udp addr invalid")
 	}
@@ -165,39 +179,34 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, addr *net.UDPAddr) e
 	return nil
 }
 
-func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSender, key string, oAddrPort netip.AddrPort) {
+func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSender, mapping *udpNAT, key C.UDPSessionKey) {
 	defer func() {
 		sender.Close()
 		_ = pc.Close()
-		closeAllLocalCoon(key)
-		natTable.Delete(key)
+		natTable.DeleteSession(key, sender)
 	}()
 
 	for {
 		_ = pc.SetReadDeadline(time.Now().Add(udpTimeout))
 		data, put, from, err := pc.WaitReadFrom()
 		if err != nil {
+			if put != nil {
+				put()
+			}
 			return
 		}
-
-		fromUDPAddr, isUDPAddr := from.(*net.UDPAddr)
-		if !isUDPAddr {
-			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
-			log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
-		} else if fromUDPAddr == nil {
-			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
-			log.Warnln("server return a nil *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", oAddrPort)
+		address, err := udpSocksaddr(from)
+		if err == nil {
+			address, err = mapping.restore(address)
 		}
-
-		fromAddrPort := fromUDPAddr.AddrPort()
-		fromAddr := fromAddrPort.Addr().Unmap()
-
-		// restore DestinationNAT
-		fromAddr = sender.RestoreReadFrom(fromAddr).Unmap()
-
-		fromAddrPort = netip.AddrPortFrom(fromAddr, fromAddrPort.Port())
-
-		_, err = writeBack.WriteBack(data, net.UDPAddrFromAddrPort(fromAddrPort))
+		if err != nil {
+			if put != nil {
+				put()
+			}
+			log.Debugln("[UDP] Drop reply with invalid source address: %s", err)
+			continue
+		}
+		_, err = writeBack.WriteBack(data, udpNetAddr(address))
 		if put != nil {
 			put()
 		}
@@ -207,14 +216,35 @@ func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSen
 	}
 }
 
-func closeAllLocalCoon(lAddr string) {
-	natTable.RangeForLocalConn(lAddr, func(key string, value *net.UDPConn) bool {
-		conn := value
+func udpNetAddr(address M.Socksaddr) net.Addr {
+	if address.IsIP() {
+		return address.UDPAddr()
+	}
+	return address
+}
 
-		conn.Close()
-		log.Debugln("Closing TProxy local conn... lAddr=%s rAddr=%s", lAddr, key)
-		return true
-	})
+func udpSocksaddr(address net.Addr) (M.Socksaddr, error) {
+	var result M.Socksaddr
+	switch address := address.(type) {
+	case *net.UDPAddr:
+		if address == nil || address.Port < 0 || address.Port > 65535 {
+			return result, errors.New("invalid UDP source address")
+		}
+		result = M.SocksaddrFromNet(address)
+	case M.Socksaddr:
+		result = address
+	case *M.Socksaddr:
+		if address == nil {
+			return result, errors.New("missing UDP source address")
+		}
+		result = *address
+	default:
+		return result, errors.New("unsupported UDP source address")
+	}
+	if !result.IsValid() || result.IsIP() && result.Fqdn != "" {
+		return M.Socksaddr{}, errors.New("invalid UDP source address")
+	}
+	return result.Unwrap(), nil
 }
 
 func handleSocket(inbound, outbound net.Conn) {

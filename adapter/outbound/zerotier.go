@@ -1280,6 +1280,9 @@ func (z *ZeroTier) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.C
 }
 
 func (z *ZeroTier) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err = z.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -1307,7 +1310,7 @@ func (z *ZeroTier) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 			return errors.New("ZeroTier stack changed while packet connection was active")
 		}
 		return nil
-	}}, z), nil
+	}}, z, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (z *ZeroTier) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

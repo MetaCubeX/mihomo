@@ -98,8 +98,13 @@ func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.
 }
 
 func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = h.ResolveUDP(ctx, metadata); err != nil {
+	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
+	}
+	if !metadata.UDP.AllowRemote {
+		if err = h.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 	pc, err := h.client.ListenPacket(ctx)
 	if err != nil {
@@ -108,7 +113,7 @@ func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if pc == nil {
 		return nil, errors.New("packetConn is nil")
 	}
-	return NewPacketConn(N.NewThreadSafePacketConn(pc), h), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(pc), h, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // Close implements C.ProxyAdapter

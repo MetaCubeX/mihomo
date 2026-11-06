@@ -287,10 +287,21 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				DstPort: 443,
 			}
 		} else {
-			metadata = &C.Metadata{ // a clear metadata only contains ip
+			var destination M.Socksaddr
+			if metadata.UDP != nil && metadata.UDP.AllowRemote {
+				destination, err = remoteUDPTarget(metadata.UDP.Target)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				destination = M.Socksaddr{Addr: metadata.DstIP.Unmap(), Port: metadata.DstPort}
+			}
+			// Rule matching may have changed Host; only the prepared target belongs in the handshake.
+			metadata = &C.Metadata{
 				NetWork: C.UDP,
-				DstIP:   metadata.DstIP,
-				DstPort: metadata.DstPort,
+				Host:    destination.Fqdn,
+				DstIP:   destination.Addr,
+				DstPort: destination.Port,
 			}
 		}
 		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
@@ -367,8 +378,20 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = v.ResolveUDP(ctx, metadata); err != nil {
+	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
+	}
+	var destination M.Socksaddr
+	if metadata.UDP.AllowRemote && !v.option.PacketAddr {
+		destination, err = remoteUDPTarget(metadata.UDP.Target)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if err = v.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
+		destination = M.SocksaddrFromNet(metadata.UDPAddr())
 	}
 
 	c, err := v.dialContext(ctx)
@@ -386,21 +409,27 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 	if v.option.XUDP {
 		var globalID [8]byte
-		if metadata.SourceValid() {
-			globalID = utils.GlobalID(metadata.SourceAddress())
+		// Internal requests have no association identity and must not share a
+		// synthetic ID. Business sessions include their mapping key here.
+		if metadata.UDP.SessionKey != "" {
+			globalID = utils.GlobalID(metadata.UDP.SessionKey)
 		}
 		return NewPacketConn(N.NewThreadSafePacketConn(
 			vmessSing.NewXUDPConn(c,
 				globalID,
-				M.SocksaddrFromNet(metadata.UDPAddr())),
-		), v), nil
+				destination),
+		), v, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 	} else if v.option.PacketAddr {
 		return NewPacketConn(N.NewThreadSafePacketConn(
 			packetaddr.NewConn(v.client.PacketConn(c, metadata.UDPAddr()),
 				M.SocksaddrFromNet(metadata.UDPAddr())),
-		), v), nil
+		), v, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 	}
-	return NewPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, metadata.UDPAddr())), v), nil
+	var boundAddress net.Addr = metadata.UDPAddr()
+	if metadata.UDP.AllowRemote {
+		boundAddress = destination
+	}
+	return NewPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, boundAddress)), v, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyBoundDestination})
 }
 
 // SupportUOT implements C.ProxyAdapter
