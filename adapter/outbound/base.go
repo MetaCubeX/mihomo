@@ -387,6 +387,26 @@ func (p *autoCloseProxyAdapter) DialContext(ctx context.Context, metadata *C.Met
 	return c, nil
 }
 
+// ConfirmedDialer is an opt-in path for consumers requiring target CONNECT acknowledgement.
+type ConfirmedDialer interface {
+	DialContextConfirmed(context.Context, *C.Metadata) (C.Conn, error)
+}
+
+func (p *autoCloseProxyAdapter) DialContextConfirmed(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	confirmed, ok := p.ProxyAdapter.(ConfirmedDialer)
+	if !ok {
+		return nil, C.ErrNotSupport
+	}
+	c, err := confirmed.DialContextConfirmed(ctx, metadata)
+	if err != nil {
+		return nil, err
+	}
+	if ref, ok := c.(AddRef); ok {
+		ref.AddRef(p)
+	}
+	return c, nil
+}
+
 func (p *autoCloseProxyAdapter) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	pc, err := p.ProxyAdapter.ListenPacketContext(ctx, metadata)
 	if err != nil {
