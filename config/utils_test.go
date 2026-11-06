@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -146,4 +147,24 @@ func TestValidateDialerProxies(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHasInternetIP6(t *testing.T) {
+	cidr := func(s string) net.Addr {
+		ip, ipNet, err := net.ParseCIDR(s)
+		assert.NoError(t, err)
+		ipNet.IP = ip
+		return ipNet
+	}
+	ip4Only := []net.Addr{
+		cidr("192.168.1.10/24"),
+		cidr("fdfe:dcba:9876::1/126"),
+		cidr("fd12:3456:789a::1/64"),
+		cidr("2001:0:2851:782c:1c4d:2bd1:3f57:fe9b/32"),
+		cidr("2002:c0a8:10a::1/48"),
+		cidr("fe80::1/64"),
+		cidr("::1/128"),
+	}
+	assert.False(t, hasInternetIP6(ip4Only))
+	assert.True(t, hasInternetIP6(append(ip4Only, cidr("240e:3b0:1234::5/64"))))
 }

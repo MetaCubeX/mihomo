@@ -190,17 +190,38 @@ func verifyIP6() bool {
 		return true
 	}
 	if iAddrs, err := net.InterfaceAddrs(); err == nil {
-		for _, addr := range iAddrs {
-			if prefix, err := netip.ParsePrefix(addr.String()); err == nil {
-				if addr := prefix.Addr().Unmap(); addr.Is6() && addr.IsGlobalUnicast() {
-					return true
-				}
-			}
-		}
+		return hasInternetIP6(iAddrs)
 	} else {
 		// eg: Calling net.InterfaceAddrs() fails on Android SDK 30
 		// https://github.com/golang/go/issues/40569
 		return true // just ignore
+	}
+}
+
+// IsGlobalUnicast holds for these too, including the TUN's own ULA, but none
+// of them reaches the IPv6 internet.
+var nonInternetIP6Prefixes = []netip.Prefix{
+	netip.MustParsePrefix("fc00::/7"),  // ULA
+	netip.MustParsePrefix("2001::/32"), // Teredo
+	netip.MustParsePrefix("2002::/16"), // 6to4
+}
+
+func hasInternetIP6(addrs []net.Addr) bool {
+	for _, addr := range addrs {
+		if prefix, err := netip.ParsePrefix(addr.String()); err == nil {
+			if addr := prefix.Addr().Unmap(); addr.Is6() && addr.IsGlobalUnicast() && !isNonInternetIP6(addr) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isNonInternetIP6(addr netip.Addr) bool {
+	for _, prefix := range nonInternetIP6Prefixes {
+		if prefix.Contains(addr) {
+			return true
+		}
 	}
 	return false
 }
