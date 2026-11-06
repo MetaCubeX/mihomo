@@ -69,6 +69,9 @@ func (l ListenConfig) Listen(ctx context.Context, network, address string) (net.
 	if err != nil {
 		return nil, err
 	}
+	if host, _, err := net.SplitHostPort(address); err == nil && host == "0.0.0.0" && network == "tcp" {
+		network = "tcp4"
+	}
 	return l.newListenConfig().Listen(ctx, network, address)
 }
 
@@ -76,6 +79,9 @@ func (l ListenConfig) ListenPacket(ctx context.Context, network, address string)
 	address, err := preResolve(network, address)
 	if err != nil {
 		return nil, err
+	}
+	if host, _, err := net.SplitHostPort(address); err == nil && host == "0.0.0.0" && network == "udp" {
+		network = "udp4"
 	}
 	return l.newListenConfig().ListenPacket(ctx, network, address)
 }
