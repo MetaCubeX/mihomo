@@ -1,7 +1,6 @@
 package generator
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"strconv"
@@ -32,11 +31,11 @@ func Main(args []string) {
 		if err != nil || (bits != 128 && bits != 256 && bits != 512) {
 			panic("Using: generate ss-password <128|256|512>")
 		}
-		password := make([]byte, bits/8)
-		if _, err := rand.Read(password); err != nil {
+		password, err := GenShadowsocksPassword(bits)
+		if err != nil {
 			panic(err)
 		}
-		fmt.Println(base64.StdEncoding.EncodeToString(password))
+		fmt.Println(password)
 	case "reality-keypair":
 		privateKey, err := GenX25519PrivateKey()
 		if err != nil {
