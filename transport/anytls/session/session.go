@@ -39,7 +39,7 @@ type Session struct {
 	idleSince time.Time
 	padding   *atomic.Pointer[padding.PaddingFactory]
 
-	peerVersion byte
+	peerVersion atomic.Uint32
 
 	// client
 	isClient       bool
@@ -90,7 +90,9 @@ func (s *Session) Run() {
 	}
 	f := newFrame(cmdSettings, 0)
 	f.data = settings.ToBytes()
+	s.connLock.Lock()
 	s.buffering = true
+	s.connLock.Unlock()
 	s.writeControlFrame(f)
 
 	go s.recvLoop()
@@ -140,7 +142,7 @@ func (s *Session) OpenStream() (*Stream, error) {
 	sid := s.streamId.Add(1)
 	stream := newStream(sid, s)
 
-	if sid >= 2 && s.peerVersion >= 2 {
+	if sid >= 2 && s.peerVersion.Load() >= 2 {
 		s.synDoneLock.Lock()
 		if s.synDone != nil {
 			s.synDone()
@@ -155,7 +157,9 @@ func (s *Session) OpenStream() (*Stream, error) {
 		return nil, err
 	}
 
+	s.connLock.Lock()
 	s.buffering = false // proxy Write it's SocksAddr to flush the buffer
+	s.connLock.Unlock()
 
 	s.streamLock.Lock()
 	defer s.streamLock.Unlock()
@@ -284,7 +288,7 @@ func (s *Session) recvLoop() error {
 						}
 						// check client's version
 						if v, err := strconv.Atoi(m["v"]); err == nil && v >= 2 {
-							s.peerVersion = byte(v)
+							s.peerVersion.Store(uint32(byte(v)))
 							// send cmdServerSettings
 							f := newFrame(cmdServerSettings, 0)
 							f.data = util.StringMap{
@@ -345,7 +349,7 @@ func (s *Session) recvLoop() error {
 						// check server's version
 						m := util.StringMapFromBytes(buffer)
 						if v, err := strconv.Atoi(m["v"]); err == nil {
-							s.peerVersion = byte(v)
+							s.peerVersion.Store(uint32(byte(v)))
 						}
 					}
 					pool.Put(buffer)

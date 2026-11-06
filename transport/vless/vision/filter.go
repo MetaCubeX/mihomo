@@ -28,6 +28,9 @@ const (
 )
 
 func (vc *Conn) FilterTLS(buffer []byte) (index int) {
+	vc.filterMu.Lock()
+	defer vc.filterMu.Unlock()
+
 	if vc.packetsToFilter <= 0 {
 		return 0
 	}
