@@ -89,7 +89,7 @@ func (c *Config) EffectiveMode(hasReality bool) string {
 }
 
 func (c *Config) NormalizedPath() string {
-	path := c.Path
+	path, _, _ := strings.Cut(c.Path, "?")
 	if path == "" {
 		path = "/"
 	}
@@ -103,6 +103,11 @@ func (c *Config) NormalizedPath() string {
 		}
 	}
 	return path
+}
+
+func (c *Config) NormalizedQuery() string {
+	_, query, _ := strings.Cut(c.Path, "?")
+	return query
 }
 
 func (c *Config) GetRequestHeader() http.Header {
