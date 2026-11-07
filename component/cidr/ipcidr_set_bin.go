@@ -58,14 +58,14 @@ func ReadIpCidrSet(r io.Reader) (ss *IpCidrSet, err error) {
 		return nil, errors.New("length is invalid")
 	}
 	ss.rr = make([]netipx.IPRange, length)
+	var a16 [16]byte
 	for i := int64(0); i < length; i++ {
-		var a16 [16]byte
-		err = binary.Read(r, binary.BigEndian, &a16)
+		_, err = io.ReadFull(r, a16[:])
 		if err != nil {
 			return nil, err
 		}
 		from := netip.AddrFrom16(a16).Unmap()
-		err = binary.Read(r, binary.BigEndian, &a16)
+		_, err = io.ReadFull(r, a16[:])
 		if err != nil {
 			return nil, err
 		}
