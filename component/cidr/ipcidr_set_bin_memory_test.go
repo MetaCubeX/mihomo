@@ -15,6 +15,7 @@ func (r shortIPReader) Read(p []byte) (int, error) {
 	}
 	return r.Reader.Read(p)
 }
+
 func cidrBinaryFixture(tb testing.TB, count int) (*IpCidrSet, []byte) {
 	tb.Helper()
 	set := NewIpCidrSet()
@@ -28,6 +29,7 @@ func cidrBinaryFixture(tb testing.TB, count int) (*IpCidrSet, []byte) {
 	}
 	return set, out.Bytes()
 }
+
 func TestIPBinaryMemoryRoundTrip(t *testing.T) {
 	want, data := cidrBinaryFixture(t, 5)
 	for _, short := range []bool{false, true} {
@@ -59,6 +61,7 @@ func TestIPBinaryMemoryRoundTrip(t *testing.T) {
 		}
 	}
 }
+
 func BenchmarkIPBinaryReadMemory(b *testing.B) {
 	_, data := cidrBinaryFixture(b, 10000)
 	b.ReportAllocs()

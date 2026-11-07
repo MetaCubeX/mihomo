@@ -7,8 +7,9 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/klauspost/compress/zstd"
 	C "github.com/metacubex/mihomo/constant"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func mrsMemoryFixture(tb testing.TB, count int) ([]byte, []byte) {
@@ -33,6 +34,7 @@ func mrsMemoryFixture(tb testing.TB, count int) ([]byte, []byte) {
 	defer encoder.Close()
 	return encoder.EncodeAll(raw.Bytes(), nil), raw.Bytes()
 }
+
 func TestMrsMemoryDecoderCompatibility(t *testing.T) {
 	for _, count := range []int{1, 50000} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
@@ -69,6 +71,7 @@ func TestMrsMemoryDecoderCompatibility(t *testing.T) {
 		})
 	}
 }
+
 func BenchmarkMrsReadMemory(b *testing.B) {
 	data, _ := mrsMemoryFixture(b, 50000)
 	b.ReportAllocs()
