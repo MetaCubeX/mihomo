@@ -55,6 +55,7 @@ const (
 	ZeroTier
 	EasyTier
 	GostRelay
+	Nowhere
 )
 
 const (
@@ -224,6 +225,8 @@ func (at AdapterType) String() string {
 		return "Mieru"
 	case AnyTLS:
 		return "AnyTLS"
+	case Nowhere:
+		return "Nowhere"
 	case Sudoku:
 		return "Sudoku"
 	case Masque:
