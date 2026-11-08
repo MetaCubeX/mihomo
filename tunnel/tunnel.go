@@ -28,6 +28,7 @@ import (
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
+	"github.com/metacubex/sing/common/network"
 
 	"golang.org/x/exp/slices"
 )
@@ -608,6 +609,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 		logMetadataErr(metadata, rule, proxy, err)
 	})
 	if err != nil {
+		if metadata.Type == C.TUN {
+			_ = network.ReportHandshakeFailure(conn, err)
+		}
 		return
 	}
 	logMetadata(metadata, rule, remoteConn)
