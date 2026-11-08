@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	syncatomic "sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/outbound"
@@ -36,9 +37,14 @@ type GroupBase struct {
 	emptyFallback     C.Proxy
 
 	// for GetProxies
-	getProxiesMutex  sync.Mutex
-	providerVersions []uint32
-	providerProxies  []C.Proxy
+	getProxiesMutex sync.Mutex
+	proxiesCache    syncatomic.Pointer[groupProxiesCache]
+}
+
+// Published entries are immutable; stable hits do not take the rebuild mutex.
+type groupProxiesCache struct {
+	versions []uint32
+	proxies  []C.Proxy
 }
 
 type GroupBaseOption struct {
@@ -120,21 +126,33 @@ func (gb *GroupBase) Touch() {
 }
 
 func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
-	providerVersions := make([]uint32, len(gb.providers))
+	cached := gb.proxiesCache.Load()
+	unchanged := cached != nil && len(gb.providers) == len(cached.versions)
 	for i, pd := range gb.providers {
-		if touch { // touch first
+		if touch {
 			pd.Touch()
 		}
-		providerVersions[i] = pd.Version()
+		if unchanged && pd.Version() != cached.versions[i] {
+			unchanged = false
+		}
+	}
+	if unchanged {
+		return cached.proxies
+	}
+	if len(gb.providers) == 0 {
+		return nil
 	}
 
-	// thread safe
 	gb.getProxiesMutex.Lock()
 	defer gb.getProxiesMutex.Unlock()
-
-	// return the cached proxies if version not changed
-	if slices.Equal(providerVersions, gb.providerVersions) {
-		return gb.providerProxies
+	providerVersions := make([]uint32, len(gb.providers))
+	for i, pd := range gb.providers {
+		providerVersions[i] = pd.Version()
+	}
+	// Another caller may have rebuilt while this caller waited for the mutex.
+	cached = gb.proxiesCache.Load()
+	if cached != nil && slices.Equal(providerVersions, cached.versions) {
+		return cached.proxies
 	}
 
 	var proxies []C.Proxy
@@ -228,8 +246,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	}
 
 	// only cache when proxies not empty
-	gb.providerVersions = providerVersions
-	gb.providerProxies = proxies
+	gb.proxiesCache.Store(&groupProxiesCache{versions: providerVersions, proxies: proxies})
 
 	return proxies
 }
