@@ -28,6 +28,7 @@ import (
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
+	"github.com/metacubex/sing/common"
 
 	"golang.org/x/exp/slices"
 )
@@ -573,10 +574,28 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
+	var stopCloseCancellation func() bool
+	if source, ok := common.Cast[interface {
+		CancelOnClose(context.CancelFunc) func() bool
+	}](conn); ok {
+		stopCloseCancellation = source.CancelOnClose(cancel)
+		defer func() {
+			if stopCloseCancellation != nil {
+				stopCloseCancellation()
+			}
+		}()
+	}
 	remoteConn, err := retry(ctx, func(ctx context.Context) (remoteConn C.Conn, err error) {
+		if err = ctx.Err(); err != nil {
+			return nil, err
+		}
 		remoteConn, err = proxy.DialContext(ctx, dialMetadata)
 		if err != nil {
 			return
+		}
+		if err = ctx.Err(); err != nil {
+			_ = remoteConn.Close()
+			return nil, err
 		}
 
 		if N.NeedHandshake(remoteConn) {
@@ -592,6 +611,10 @@ func handleTCPConn(connCtx C.ConnContext) {
 					remoteConn = nil
 				}
 			}()
+			// Deferred transports may not use the dial context for their first
+			// Write. End this interrupter before handing a winner to the relay.
+			done := N.SetupContextForConn(ctx, remoteConn)
+			defer done(&err)
 			peekMutex.Lock()
 			defer peekMutex.Unlock()
 			peekBytes, _ = conn.Peek(conn.Buffered())
@@ -608,6 +631,18 @@ func handleTCPConn(connCtx C.ConnContext) {
 		logMetadataErr(metadata, rule, proxy, err)
 	})
 	if err != nil {
+		return
+	}
+	if stopCloseCancellation != nil {
+		stopped := stopCloseCancellation()
+		stopCloseCancellation = nil
+		if !stopped {
+			_ = remoteConn.Close()
+			return
+		}
+	}
+	if ctx.Err() != nil {
+		_ = remoteConn.Close()
 		return
 	}
 	logMetadata(metadata, rule, remoteConn)
