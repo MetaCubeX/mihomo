@@ -64,6 +64,7 @@ type lifecycleOutbound struct {
 }
 
 func (c *lifecycleOutbound) NeedHandshake() bool           { return c.early }
+func (c *lifecycleOutbound) Upstream() any                 { return c.ExtendedConn }
 func (c *lifecycleOutbound) Chains() C.Chain               { return C.Chain{"lifecycle"} }
 func (c *lifecycleOutbound) ProviderChains() C.Chain       { return nil }
 func (c *lifecycleOutbound) AppendToChains(C.ProxyAdapter) {}
