@@ -37,6 +37,8 @@ type handshakeBudgetConn struct {
 	reject bool
 }
 
+// Preserve transport capabilities such as CloseWrite through this test wrapper.
+func (c *handshakeBudgetConn) Upstream() any       { return c.ExtendedConn }
 func (c *handshakeBudgetConn) NeedHandshake() bool { return c.early }
 func (c *handshakeBudgetConn) Chains() C.Chain {
 	if c.reject {
