@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/http/httptest"
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	icontext "github.com/metacubex/mihomo/context"
@@ -148,6 +149,54 @@ func TestDeferredHandshakeSilentWebSocketBudget(t *testing.T) {
 			handshakeBudgetWait(t, serverDone, time.Second)
 		})
 	}
+}
+
+func TestDeferredHandshakeWebSocketWinnerLifetime(t *testing.T) {
+	serverDone := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(serverDone)
+		conn, err := vmess.StreamUpgradedWebsocketConn(w, r)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.Copy(conn, conn)
+	}))
+	defer server.Close()
+	raw, err := net.Dial("tcp", server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	budgets := make(chan context.Context, 1)
+	peer, done := startHandshakeBudget(t, "hello", func(ctx context.Context) (C.Conn, error) {
+		budgets <- ctx
+		conn, err := vmess.StreamWebsocketConn(ctx, raw, &vmess.WebsocketConfig{Host: "handshake.invalid", Port: "80", Path: "/", Headers: http.Header{}, MaxEarlyData: 128, EarlyDataHeaderName: "Sec-WebSocket-Protocol"})
+		if err != nil {
+			return nil, err
+		}
+		return &handshakeBudgetConn{ExtendedConn: N.NewExtendedConn(conn), early: true}, nil
+	})
+	peer.SetReadDeadline(time.Now().Add(2 * time.Second))
+	got := make([]byte, 5)
+	if _, err := io.ReadFull(peer, got); err != nil || string(got) != "hello" {
+		t.Fatalf("WebSocket Upgrade/early data: %q %v", got, err)
+	}
+	budget := <-budgets
+	handshakeBudgetWait(t, budget.Done(), C.DefaultTCPTimeout+2*time.Second)
+	if budget.Err() != context.DeadlineExceeded {
+		t.Fatalf("dial budget: %v", budget.Err())
+	}
+	peer.SetDeadline(time.Now().Add(2 * time.Second))
+	if _, err := io.WriteString(peer, "again"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadFull(peer, got); err != nil || string(got) != "again" {
+		t.Fatalf("dial budget interrupted established WebSocket: %q %v", got, err)
+	}
+	peer.Close()
+	handshakeBudgetWait(t, done, 2*time.Second)
+	handshakeBudgetWait(t, serverDone, 2*time.Second)
 }
 
 func TestDeferredHandshakeLateDialSuccessClosed(t *testing.T) {
