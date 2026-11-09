@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"testing"
 	"testing/synctest"
 
@@ -27,6 +28,7 @@ func (c *completionConn) Close() error {
 }
 
 func TestSetupContextCompletionStopped(t *testing.T) {
+	t.Setenv("GODEBUG", os.Getenv("GODEBUG")+",asynctimerchan=0")
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -43,6 +45,7 @@ func TestSetupContextCompletionStopped(t *testing.T) {
 	})
 }
 func TestSetupContextCompletionWaits(t *testing.T) {
+	t.Setenv("GODEBUG", os.Getenv("GODEBUG")+",asynctimerchan=0")
 	for _, alreadyCanceled := range []bool{false, true} {
 		name := "cancel-after-register"
 		if alreadyCanceled {
@@ -56,6 +59,13 @@ func TestSetupContextCompletionWaits(t *testing.T) {
 					cancel()
 				}
 				gate := make(chan struct{})
+				defer func() {
+					select {
+					case <-gate:
+					default:
+						close(gate)
+					}
+				}()
 				c := &completionConn{gate: gate}
 				done := N.SetupContextForConn(ctx, c)
 				cancel()
@@ -77,6 +87,7 @@ func TestSetupContextCompletionWaits(t *testing.T) {
 	}
 }
 func TestSetupContextCompletionNilError(t *testing.T) {
+	t.Setenv("GODEBUG", os.Getenv("GODEBUG")+",asynctimerchan=0")
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		c := &completionConn{}
@@ -97,6 +108,7 @@ func TestSetupContextCompletionBackground(t *testing.T) {
 	}
 }
 func TestSetupContextCompletionRace(t *testing.T) {
+	t.Setenv("GODEBUG", os.Getenv("GODEBUG")+",asynctimerchan=0")
 	for i := 0; i < 100; i++ {
 		synctest.Test(t, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
