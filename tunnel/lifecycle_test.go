@@ -99,11 +99,10 @@ func lifecycleStart(t *testing.T, capable bool, dial func(context.Context) (C.Co
 	metadata := &C.Metadata{Type: C.INNER, NetWork: C.TCP, DstIP: netip.MustParseAddr("203.0.113.80"), DstPort: 443, SpecialProxy: "lifecycle"}
 	go func() { handleTCPConn(icontext.NewConnContext(input, metadata)); close(done) }()
 	t.Cleanup(func() {
+		defer func() { status.Store(oldStatus); proxies = oldProxies }()
 		_ = peer.Close()
 		_ = front.Close()
 		lifecycleWait(t, done, 7*time.Second)
-		status.Store(oldStatus)
-		proxies = oldProxies
 	})
 	_ = peer.SetWriteDeadline(time.Now().Add(time.Second))
 	if _, err := peer.Write([]byte("hello")); err != nil {
@@ -151,11 +150,10 @@ func TestLifecycleAlreadyTerminatedBeforeRegistration(t *testing.T) {
 	metadata := &C.Metadata{Type: C.INNER, NetWork: C.TCP, DstIP: netip.MustParseAddr("203.0.113.80"), DstPort: 443, SpecialProxy: "lifecycle"}
 	done := make(chan struct{})
 	t.Cleanup(func() {
+		defer func() { status.Store(oldStatus); proxies = oldProxies }()
 		peer.Close()
 		front.Close()
 		lifecycleWait(t, done, 7*time.Second)
-		status.Store(oldStatus)
-		proxies = oldProxies
 	})
 	go func() { handleTCPConn(icontext.NewConnContext(source, metadata)); close(done) }()
 	lifecycleWait(t, done, time.Second)
