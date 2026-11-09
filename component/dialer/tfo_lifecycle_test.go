@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/tfo-go"
 )
 
 // Use the production TFO dialer and SOCKS5 handshake with a loopback peer.
@@ -63,6 +65,11 @@ func TestLifecycleTFORealSOCKS5Cancellation(t *testing.T) {
 		if string(data) != "\x05\x01\x00" {
 			t.Fatalf("unexpected SOCKS5 greeting: %x", data)
 		}
+	case err = <-finished:
+		if errors.Is(err, tfo.ErrUnsupported) && os.Getenv("MIHOMO_TEST_TFO_REQUIRED") != "1" {
+			t.Skipf("kernel/platform does not support TFO: %v", err)
+		}
+		t.Fatalf("real SOCKS5 handshake ended before its greeting: %v", err)
 	case <-time.After(time.Second):
 		t.Fatal("real lazy TFO handshake did not reach the peer")
 	}
