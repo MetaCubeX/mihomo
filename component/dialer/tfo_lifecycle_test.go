@@ -9,7 +9,81 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
+
+// Use the production TFO dialer and SOCKS5 handshake with a loopback peer.
+// Unlike the late-success fault injection, no dial function is replaced here.
+func TestLifecycleTFORealSOCKS5Cancellation(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	greeting := make(chan []byte, 1)
+	serverDone := make(chan error, 1)
+	go func() {
+		server, err := listener.Accept()
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		defer server.Close()
+		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+		data := make([]byte, 3)
+		if _, err = io.ReadFull(server, data); err != nil {
+			serverDone <- err
+			return
+		}
+		greeting <- data
+		_, err = server.Read(make([]byte, 1)) // Withhold the method selection.
+		serverDone <- err
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn, err := dialTFO(ctx, net.Dialer{}, "tcp4", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	finished := make(chan error, 1)
+	go func() {
+		var err error
+		func() {
+			done := N.SetupContextForConn(ctx, conn)
+			defer done(&err)
+			_, err = socks5.ClientHandshake(conn, socks5.ParseAddr("192.0.2.80:443"), socks5.CmdConnect, nil)
+		}()
+		finished <- err
+	}()
+	select {
+	case data := <-greeting:
+		if string(data) != "\x05\x01\x00" {
+			t.Fatalf("unexpected SOCKS5 greeting: %x", data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("real lazy TFO handshake did not reach the peer")
+	}
+	cancel()
+	select {
+	case err = <-finished:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("handshake after cancellation: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("real SOCKS5 cancellation exceeded its bound")
+	}
+	select {
+	case err = <-serverDone:
+		if !errors.Is(err, io.EOF) {
+			t.Fatalf("canceled socket peer did not receive EOF: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("real TFO socket remained open")
+	}
+}
 
 func TestLifecycleTFOCloseRetiresLateDialSuccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
