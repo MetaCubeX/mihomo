@@ -34,10 +34,16 @@ type handshakeBudgetConn struct {
 	write  func([]byte) (int, error)
 	closed chan struct{}
 	once   sync.Once
+	reject bool
 }
 
-func (c *handshakeBudgetConn) NeedHandshake() bool           { return c.early }
-func (c *handshakeBudgetConn) Chains() C.Chain               { return C.Chain{"handshake-budget"} }
+func (c *handshakeBudgetConn) NeedHandshake() bool { return c.early }
+func (c *handshakeBudgetConn) Chains() C.Chain {
+	if c.reject {
+		return C.Chain{"REJECT"}
+	}
+	return C.Chain{"handshake-budget"}
+}
 func (c *handshakeBudgetConn) ProviderChains() C.Chain       { return nil }
 func (c *handshakeBudgetConn) AppendToChains(C.ProxyAdapter) {}
 func (c *handshakeBudgetConn) RemoteDestination() string     { return "handshake.invalid" }
@@ -255,4 +261,17 @@ func TestDeferredHandshakeFrontendHalfClose(t *testing.T) {
 	}
 	handshakeBudgetWait(t, serverDone, time.Second)
 	handshakeBudgetWait(t, done, time.Second)
+}
+
+func TestDeferredHandshakeRejectDoesNotRetry(t *testing.T) {
+	raw, server := net.Pipe()
+	defer server.Close()
+	rejected := &handshakeBudgetConn{ExtendedConn: N.NewExtendedConn(raw), early: true, reject: true, closed: make(chan struct{}), write: func([]byte) (int, error) { return 0, io.ErrClosedPipe }}
+	var calls atomic.Int32
+	_, done := startHandshakeBudget(t, "hello", func(context.Context) (C.Conn, error) { calls.Add(1); return rejected, nil })
+	handshakeBudgetWait(t, done, 2*time.Second)
+	handshakeBudgetWait(t, rejected.closed, time.Second)
+	if calls.Load() != 1 {
+		t.Fatalf("REJECT retried %d times", calls.Load())
+	}
 }
