@@ -90,7 +90,18 @@ func (c *tfoConn) Read(b []byte) (n int, err error) {
 	if conn == nil {
 		select {
 		case <-c.ctx.Done():
-			return 0, io.ErrUnexpectedEOF
+			conn, closed = c.state()
+			if closed {
+				return 0, io.ErrClosedPipe
+			}
+			if conn != nil {
+				return conn.Read(b)
+			}
+			select {
+			case <-c.dialed:
+			default:
+				return 0, io.ErrUnexpectedEOF
+			}
 		case <-c.dialed:
 		}
 		conn, closed = c.state()
