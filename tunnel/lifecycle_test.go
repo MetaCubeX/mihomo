@@ -26,6 +26,11 @@ type lifecycleSource struct {
 
 func (c *lifecycleSource) CancelOnClose(cancel context.CancelFunc) func() bool {
 	c.mu.Lock()
+	if c.claimed {
+		c.mu.Unlock()
+		cancel()
+		return func() bool { return false }
+	}
 	c.cancel = cancel
 	c.mu.Unlock()
 	return func() bool {
@@ -127,6 +132,37 @@ func TestLifecycleCanceledDialClosesLateSuccess(t *testing.T) {
 	_ = peer.SetReadDeadline(time.Now().Add(time.Second))
 	if _, err := peer.Read(make([]byte, 1)); err != io.EOF {
 		t.Fatalf("late outbound not closed: %v", err)
+	}
+}
+
+func TestLifecycleAlreadyTerminatedBeforeRegistration(t *testing.T) {
+	oldStatus, oldProxies := status.Load(), proxies
+	status.Store(Running)
+	called := make(chan struct{}, 1)
+	proxies = map[string]C.Proxy{"lifecycle": &lifecycleProxy{dial: func(context.Context) (C.Conn, error) {
+		select {
+		case called <- struct{}{}:
+		default:
+		}
+		return nil, context.Canceled
+	}}}
+	front, peer := net.Pipe()
+	source := &lifecycleSource{Conn: front, claimed: true}
+	metadata := &C.Metadata{Type: C.INNER, NetWork: C.TCP, DstIP: netip.MustParseAddr("203.0.113.80"), DstPort: 443, SpecialProxy: "lifecycle"}
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		peer.Close()
+		front.Close()
+		lifecycleWait(t, done, 7*time.Second)
+		status.Store(oldStatus)
+		proxies = oldProxies
+	})
+	go func() { handleTCPConn(icontext.NewConnContext(source, metadata)); close(done) }()
+	lifecycleWait(t, done, time.Second)
+	select {
+	case <-called:
+		t.Fatal("terminal source initiated a new dial")
+	default:
 	}
 }
 
