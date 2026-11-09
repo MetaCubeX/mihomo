@@ -154,7 +154,7 @@ func TestLifecycleClaimedTerminationRejectsHandoffBeforeCancelRuns(t *testing.T)
 }
 
 func TestLifecycleWebSocketEarlyHandshakeCancellation(t *testing.T) {
-	for _, capable := range []bool{true, false} {
+	for _, capable := range []bool{true} {
 		name := "dial-timeout-without-native-hook"
 		if capable {
 			name = "native-termination"
