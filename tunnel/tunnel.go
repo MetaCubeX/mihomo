@@ -501,27 +501,25 @@ func handleUDPConn(packet C.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
+	metadata := connCtx.Metadata()
+	// TUN and transparent inbounds are backed by a local TCP stack, reset the
+	// connection so that the application gets a RST instead of a FIN.
+	resetOnError := metadata.Type == C.TUN || metadata.Type == C.REDIR || metadata.Type == C.TPROXY
 	abort := true
 	defer func() {
 		conn := connCtx.Conn()
-		if abort {
-			// TUN and transparent inbounds are backed by a local TCP stack, reset the
-			// connection so that the application gets a RST instead of a FIN.
-			switch connCtx.Metadata().Type {
-			case C.TUN, C.REDIR, C.TPROXY:
-				if lingerConn, ok := common.Cast[interface{ SetLinger(int) error }](conn); ok {
-					_ = lingerConn.SetLinger(0)
-				}
+		if abort && resetOnError {
+			if lingerConn, ok := common.Cast[interface{ SetLinger(int) error }](conn); ok {
+				_ = lingerConn.SetLinger(0)
 			}
 		}
 		_ = conn.Close()
 	}()
 
-	if !isHandle(connCtx.Metadata().Type) {
+	if !isHandle(metadata.Type) {
 		return
 	}
 
-	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
 		return
@@ -633,8 +631,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
-	abort = false                         // entered bidirectional relay, close gracefully
-	handleSocket(conn, remoteConn)
+	abort = false                         // relay handles connection closure
+	handleSocket(conn, remoteConn, resetOnError)
 }
 
 func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err error) {

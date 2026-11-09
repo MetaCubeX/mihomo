@@ -3,6 +3,7 @@ package net
 import (
 	"io"
 	"net"
+	"sync/atomic"
 
 	"github.com/metacubex/mihomo/common/net/deadline"
 
@@ -65,19 +66,28 @@ func closeWrite(writer io.Closer) error {
 }
 
 // Relay copies between left and right bidirectionally.
+// If resetLeftOnError is true, copy errors reset the left connection when supported.
 // like [bufio.CopyConn] but remove unneeded [context.Context] handle and the cost of [task.Group]
-func Relay(leftConn, rightConn net.Conn) {
+func Relay(leftConn, rightConn net.Conn, resetLeftOnError ...bool) {
+	var lingerConn interface{ SetLinger(int) error }
+	if len(resetLeftOnError) > 0 && resetLeftOnError[0] {
+		lingerConn, _ = common.Cast[interface{ SetLinger(int) error }](leftConn)
+	}
 	defer func() {
 		_ = leftConn.Close()
 		_ = rightConn.Close()
 	}()
 
+	var closingOutboundAfterEOF atomic.Bool
 	ch := make(chan struct{})
 	go func() {
 		_, err := bufio.Copy(leftConn, rightConn)
 		if err == nil {
 			_ = closeWrite(leftConn)
 		} else {
+			if lingerConn != nil && !closingOutboundAfterEOF.Load() {
+				_ = lingerConn.SetLinger(0)
+			}
 			_ = leftConn.Close()
 		}
 		close(ch)
@@ -85,8 +95,19 @@ func Relay(leftConn, rightConn net.Conn) {
 
 	_, err := bufio.Copy(rightConn, leftConn)
 	if err == nil {
-		_ = closeWrite(rightConn)
+		if c, ok := common.Cast[network.WriteCloser](rightConn); ok {
+			_ = c.CloseWrite()
+		} else {
+			// Closing the whole outbound can interrupt the reverse copy.
+			closingOutboundAfterEOF.Store(true)
+			_ = rightConn.Close()
+		}
 	} else {
+		if lingerConn != nil {
+			// Reset the inbound before closing the outbound can make the reverse copy see EOF.
+			_ = lingerConn.SetLinger(0)
+			_ = leftConn.Close()
+		}
 		_ = rightConn.Close()
 	}
 	<-ch
