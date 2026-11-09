@@ -35,7 +35,7 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 	if err == nil {
 		c.AppendToChains(f)
 	} else {
-		f.onDialFailed(proxy.Type(), err, f.healthCheck)
+		f.onTCPDialFailed(ctx, proxy.Type(), err, f.healthCheck)
 	}
 
 	if N.NeedHandshake(c) {
@@ -43,7 +43,7 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 			if err == nil {
 				f.onDialSuccess()
 			} else {
-				f.onDialFailed(proxy.Type(), err, f.healthCheck)
+				f.onTCPDialFailed(ctx, proxy.Type(), err, f.healthCheck)
 			}
 		})
 	}
