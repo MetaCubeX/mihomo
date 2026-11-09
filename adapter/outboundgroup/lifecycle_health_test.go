@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -194,6 +195,47 @@ func TestLifecycleGroupTCPFailureAttribution(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Concurrent successful first writes and failed dials enter the same public
+// group paths as independent requests. Keep this fixture compatible with Alpha
+// so its race result can be compared without candidate-only accounting helpers.
+func TestLifecycleGroupConcurrentPublicPaths(t *testing.T) {
+	lifecycleHealthTimers(t)
+	synctest.Test(t, func(t *testing.T) {
+		var calls, successes, failures atomic.Int32
+		leaf := lifecycleHealthProxy(func(context.Context) (C.Conn, error) {
+			if calls.Add(1)%2 == 0 {
+				return nil, net.ErrClosed
+			}
+			return &lifecycleHealthConn{}, nil
+		})
+		g := lifecycleHealthGroup(t, "fallback", leaf)
+		var workers sync.WaitGroup
+		for i := 0; i < 64; i++ {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				for j := 0; j < 8; j++ {
+					conn, err := g.proxy.DialContext(context.Background(), lifecycleHealthMetadata())
+					if err != nil {
+						failures.Add(1)
+						continue
+					}
+					if _, err = conn.Write([]byte("request")); err != nil {
+						t.Error(err)
+					}
+					successes.Add(1)
+					_ = conn.Close()
+				}
+			}()
+		}
+		workers.Wait()
+		synctest.Wait()
+		if successes.Load() == 0 || failures.Load() == 0 {
+			t.Fatal("concurrent public paths did not exercise both outcomes")
+		}
+	})
 }
 
 func TestLifecycleGroupSuccessfulFirstWrite(t *testing.T) {
