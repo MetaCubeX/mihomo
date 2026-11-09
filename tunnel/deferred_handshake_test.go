@@ -96,11 +96,10 @@ func startHandshakeBudget(t *testing.T, payload string, dial func(context.Contex
 	metadata := &C.Metadata{Type: C.INNER, NetWork: C.TCP, DstIP: netip.MustParseAddr("203.0.113.80"), DstPort: 443, SpecialProxy: "handshake-budget"}
 	go func() { handleTCPConn(icontext.NewConnContext(front, metadata)); close(done) }()
 	t.Cleanup(func() {
+		defer func() { status.Store(oldStatus); proxies = oldProxies }()
 		peer.Close()
 		front.Close()
 		handshakeBudgetWait(t, done, C.DefaultTCPTimeout+2*time.Second)
-		status.Store(oldStatus)
-		proxies = oldProxies
 	})
 	if payload != "" {
 		peer.SetWriteDeadline(time.Now().Add(time.Second))
@@ -170,7 +169,10 @@ func TestDeferredHandshakeWebSocketWinnerLifetime(t *testing.T) {
 	defer raw.Close()
 	budgets := make(chan context.Context, 1)
 	peer, done := startHandshakeBudget(t, "hello", func(ctx context.Context) (C.Conn, error) {
-		budgets <- ctx
+		select {
+		case budgets <- ctx:
+		default:
+		}
 		conn, err := vmess.StreamWebsocketConn(ctx, raw, &vmess.WebsocketConfig{Host: "handshake.invalid", Port: "80", Path: "/", Headers: http.Header{}, MaxEarlyData: 128, EarlyDataHeaderName: "Sec-WebSocket-Protocol"})
 		if err != nil {
 			return nil, err
