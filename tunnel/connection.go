@@ -69,7 +69,13 @@ func (s *packetSender) processPacket(pc C.PacketConn, packet C.PacketAdapter) {
 	var addr *net.UDPAddr
 
 	s.mappingMutex.RLock()
-	targetAddr := s.originToTarget[metadata.String()]
+	var targetAddr netip.Addr
+	if metadata.Host == "" && metadata.DstIP.IsValid() {
+		var addrBuf [64]byte
+		targetAddr = s.originToTarget[string(metadata.DstIP.AppendTo(addrBuf[:0]))]
+	} else {
+		targetAddr = s.originToTarget[metadata.String()]
+	}
 	s.mappingMutex.RUnlock()
 
 	if targetAddr.IsValid() {
