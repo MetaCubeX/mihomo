@@ -225,7 +225,7 @@ func TestLifecycleWebSocketEarlyHandshakeCancellation(t *testing.T) {
 			if capable {
 				source.claim()()
 			}
-			lifecycleWait(t, done, 7*time.Second)
+			lifecycleWait(t, done, time.Second)
 			lifecycleWait(t, serverDone, time.Second)
 		})
 	}
