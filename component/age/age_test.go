@@ -48,3 +48,27 @@ func TestAge(t *testing.T) {
 		})
 	}
 }
+
+// A proxy-provider without its own age-secret-key calls DecryptBytes(buf, "").
+// The empty key must be skipped so the global secret keys are still used.
+func TestDecryptBytesEmptySecretKey(t *testing.T) {
+	secretKey, publicKey, err := age.GenX25519KeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plaintext := []byte("proxies: []\n")
+	encrypted, err := age.EncryptBytes(plaintext, publicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	age.SetGlobalSecretKeys(secretKey)
+	defer age.SetGlobalSecretKeys()
+
+	decrypted, err := age.DecryptBytes(encrypted, "")
+	if err != nil {
+		t.Fatalf("DecryptBytes with empty secret key: %v", err)
+	}
+	if string(decrypted) != string(plaintext) {
+		t.Fatalf("got %q, want %q", decrypted, plaintext)
+	}
+}
