@@ -160,10 +160,12 @@ func (a *authAES128) DecodePacket(b []byte) ([]byte, error) {
 	if len(b) < 4 {
 		return nil, errAuthAES128LengthError
 	}
-	if !bytes.Equal(a.hmac(a.Key, b[:len(b)-4])[:4], b[len(b)-4:]) {
+	chk := b[len(b)-4:]
+	data := b[:len(b)-4]
+	if !bytes.Equal(a.hmac(a.Key, data)[:4], chk) && (len(a.userKey) == 0 || !bytes.Equal(a.hmac(a.userKey, data)[:4], chk)) {
 		return nil, errAuthAES128ChksumError
 	}
-	return b[:len(b)-4], nil
+	return data, nil
 }
 
 func (a *authAES128) EncodePacket(buf *bytes.Buffer, b []byte) error {
