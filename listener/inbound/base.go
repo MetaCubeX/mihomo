@@ -95,7 +95,11 @@ type BaseOption struct {
 	Port         string `inbound:"port,omitempty"`
 	SpecialRules string `inbound:"rule,omitempty"`
 	SpecialProxy string `inbound:"proxy,omitempty"`
-	RoutingMark  int    `inbound:"routing-mark,omitempty"`
+
+	SpecialMode          string `inbound:"mode,omitempty"`
+	SpecialFallbackProxy string `inbound:"fallback-proxy,omitempty"`
+
+	RoutingMark int `inbound:"routing-mark,omitempty"`
 
 	//
 	// The following parameters are used internally, assign value by the structure decoder are disallowed
@@ -116,6 +120,8 @@ func (o BaseOption) Additions() []inbound.Addition {
 		inbound.WithInName(o.NameStr),
 		inbound.WithSpecialRules(o.SpecialRules),
 		inbound.WithSpecialProxy(o.SpecialProxy),
+		inbound.WithSpecialMode(o.SpecialMode),
+		inbound.WithSpecialFallbackProxy(o.SpecialFallbackProxy),
 	}
 }
 

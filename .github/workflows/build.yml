@@ -415,9 +415,13 @@ jobs:
 
       - name: Tag the commit on Alpha
         run: |
-          git checkout Alpha 
-          git tag ${{ github.event.inputs.version }}
-          git push origin ${{ github.event.inputs.version }}
+          git checkout Alpha
+          if git rev-parse "${{ github.event.inputs.version }}" >/dev/null 2>&1; then
+            echo "Tag ${{ github.event.inputs.version }} already exists; reusing it."
+          else
+            git tag "${{ github.event.inputs.version }}"
+            git push origin "${{ github.event.inputs.version }}"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

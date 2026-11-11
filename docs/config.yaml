@@ -2848,6 +2848,30 @@ listeners:
     # - com.android.captiveportallogin
     # disable-icmp-forwarding: true # 禁用 ICMP 转发，防止某些情况下的 ICMP 环回问题，ping 将不会显示真实的延迟
     # congestion-controller: cubic # TCP congestion controller: cubic, reno, bbr, or bbr3; only effective on mips
+# 多入口配置：一个 mihomo 实例可暴露多个独立入站端口，每个端口拥有自己的
+# mode / 规则集 / 兜底出口，不同客户端连接不同端口即可获得不同分流结果。
+# proxies、proxy-groups、proxy-providers、rule-providers、DNS 等全局资源仍然共享，
+# 只有「mode + 规则集 + 兜底出口」按端口隔离。
+# 出口优先级：proxy-group > matchs 生成的组 > 模式回落（global → GLOBAL，rule → DIRECT）。
+# 注意：这里的 rules 只作用于本条目，不会影响全局 rules 或其它端口。
+multiple-proxy:
+  # 端口三选一，必须且只能填写一个（mixed-port 混合入站 / port 为 http 入站 / socks-port 为 socks 入站）
+  - name: hk                  # 可选，缺省为 multiple-proxy-<序号>；用作监听器名与生成的组/规则集名前缀
+    mixed-port: 10802
+    mode: rule                # global | rule | direct，省略则继承全局 mode；global/direct 下规则集不参与路由
+    enable-global-rule: true  # 仅本条目：以全局 rules 为只读基底
+    rules:                    # 仅本条目：插入到基底 MATCH 之前；命中规则就走规则里写的那个组
+      - DOMAIN-SUFFIX,acl4.ssr,DIRECT
+    proxy-group: Proxy        # 可选：引用已有 proxy-groups 中的组作为出口；与 matchs 同时存在时以它为准
+  - name: tw
+    port: 10803               # 端口三选一
+    matchs:                   # 可选：按节点名通配筛选节点，现场合成一个出口组（匹配 0 个节点会报错）
+      - name: "*台湾*|*TW*"    # 通配模式（* 匹配任意字符，? 匹配单字符；不支持正则），| 分隔多个模式取并集
+        type: url-test        # select | url-test | fallback | load-balance，默认 select
+        # default-selected: TW-01 # 仅 select：生成组的初始选中节点，须在筛选结果中，否则报错
+  - socks-port: 10804         # 端口三选一；name 省略时名为 multiple-proxy-2
+    mode: direct              # 全部直连，忽略 proxy-group / matchs
+
 # 入口配置与 Listener 等价，传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理
 # shadowsocks,vmess 入口配置（传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理）
 # ss-config: ss://2022-blake3-aes-256-gcm:vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=@:23456
