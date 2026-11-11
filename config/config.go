@@ -484,6 +484,7 @@ type RawMultipleProxy struct {
 	SocksPort        int              `yaml:"socks-port" json:"socks-port"`
 	Mode             string           `yaml:"mode" json:"mode"`
 	EnableGlobalRule bool             `yaml:"enable-global-rule" json:"enable-global-rule"`
+	LoadBalance      bool             `yaml:"load-balance" json:"load-balance"`
 	Rules            []string         `yaml:"rules" json:"rules"`
 	ProxyGroup       string           `yaml:"proxy-group" json:"proxy-group"`
 	Matchs           []RawMatchsEntry `yaml:"matchs" json:"matchs"`

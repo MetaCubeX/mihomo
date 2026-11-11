@@ -368,6 +368,19 @@ func parseMultipleProxy(cfg *RawConfig, proxies map[string]C.Proxy, providersMap
 			}
 		}
 
+		// In global mode, optionally distribute traffic across all concrete proxies.
+		// Explicit proxy-group or matchs configuration takes precedence.
+		if entry.LoadBalance && strings.EqualFold(entry.Mode, "global") && exitGroup == "" {
+			groupName := id + "-group"
+			if _, exist := proxies[groupName]; exist {
+				return fmt.Errorf("%s: generated group %q already exists", multipleProxyEntryPrefix(entry), groupName)
+			}
+			if _, err = buildMatchsGroup(groupName, []RawMatchsEntry{{Name: "*", Type: "load-balance"}}, proxies, providersMap); err != nil {
+				return err
+			}
+			exitGroup = groupName
+		}
+
 		ruleName, merged := buildPortRuleSet(cfg.Rule, entry, id)
 		if ruleName != "" {
 			if _, exist := subRules[ruleName]; exist {

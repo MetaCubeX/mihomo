@@ -422,3 +422,16 @@ func TestBuildMatchsGroupSkipsExistingGroup(t *testing.T) {
 	assert.NotContains(t, names, "EXISTING-GROUP")
 	assert.Contains(t, names, "HK-01")
 }
+
+func TestParseMultipleProxyGlobalLoadBalance(t *testing.T) {
+	cfg := &RawConfig{MultipleProxy: []RawMultipleProxy{{Name: "lb", MixedPort: 7910, Mode: "global", LoadBalance: true}}}
+	proxies := testProxiesMap("HK-01", "US-01")
+	providers := map[string]P.ProxyProvider{}
+	listeners := map[string]C.InboundListener{}
+	err := parseMultipleProxy(cfg, proxies, providers, map[string]P.RuleProvider{}, map[string][]C.Rule{}, listeners)
+	assert.NoError(t, err)
+	assert.Contains(t, proxies, "lb-group")
+	assert.Equal(t, C.LoadBalance, proxies["lb-group"].Type())
+	option := listeners["lb"].Config().(*IN.MixedOption)
+	assert.Equal(t, "lb-group", option.SpecialFallbackProxy)
+}
