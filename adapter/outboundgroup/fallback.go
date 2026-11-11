@@ -21,6 +21,8 @@ type Fallback struct {
 	testUrl        string
 	selected       string
 	expectedStatus string
+	expectedBody   string
+	excludeBody    string
 }
 
 func (f *Fallback) Now() string {
@@ -89,6 +91,8 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        f.testUrl,
 		"expectedStatus": f.expectedStatus,
+		"expectedBody":   f.expectedBody,
+		"excludeBody":    f.excludeBody,
 		"fixed":          f.selected,
 		"hidden":         f.Hidden(),
 		"icon":           f.Icon(),
@@ -141,7 +145,7 @@ func (f *Fallback) Set(name string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
 		expectedStatus, _ := utils.NewUnsignedRanges[uint16](f.expectedStatus)
-		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus)
+		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, f.expectedBody, f.excludeBody)
 	}
 
 	return nil
@@ -177,5 +181,7 @@ func NewFallback(option GroupCommonOption, fallbackOption FallbackOption, emptyF
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
+		expectedBody:   option.ExpectedBody,
+		excludeBody:    option.ExcludeBody,
 	}, nil
 }
