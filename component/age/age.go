@@ -89,6 +89,9 @@ func DecryptBytes(data []byte, secretKeys ...string) ([]byte, error) {
 	}
 	var identities []age.Identity
 	for _, secretKey := range secretKeys {
+		if secretKey == "" { // e.g. a proxy-provider without its own age-secret-key
+			continue // the empty key must be skipped so the global secret keys are still used.
+		}
 		identity, err := parseIdentities(secretKey)
 		if err != nil {
 			return nil, err
