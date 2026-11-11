@@ -71,9 +71,13 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
 
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
-		hello.SessionId[0] = 1
-		hello.SessionId[1] = 8
-		hello.SessionId[2] = 2
+		// REALITY servers (xtls/reality) compare the first 3 bytes of the session ID
+		// against their minClientVer and silently fall back to the decoy certificate
+		// when the client is too old. Hardcoding 1.8.2 made every server with
+		// minClientVer set reject us, so mirror xray-core's current version instead.
+		hello.SessionId[0] = 26
+		hello.SessionId[1] = 10
+		hello.SessionId[2] = 21
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
