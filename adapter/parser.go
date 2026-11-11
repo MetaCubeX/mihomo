@@ -5,6 +5,7 @@ import (
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/structure"
+	"github.com/metacubex/mihomo/component/fragment"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -36,6 +37,12 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			if _, err = fragmentOption.Parse(); err != nil {
 				return nil, err
 			}
+		}
+	}
+
+	if tcpOOB, exist := mapping["tcp-oob"]; exist {
+		if _, err = fragment.ParseOOB(fmt.Sprint(tcpOOB)); err != nil {
+			return nil, err
 		}
 	}
 

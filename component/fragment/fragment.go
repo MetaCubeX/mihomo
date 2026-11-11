@@ -32,6 +32,15 @@ const (
 	maxFragmentedWrites = 1 << 16
 )
 
+// Range is an inclusive range of integers.
+type Range struct {
+	Min, Max int
+}
+
+func (r Range) rand() int {
+	return randBetween(r.Min, r.Max)
+}
+
 type Config struct {
 	// TLSHello only fragments the first write when it is a TLS handshake record,
 	// each fragment is sent as its own TLS record.
@@ -39,64 +48,124 @@ type Config struct {
 	// PacketsFrom and PacketsTo are the range of writes (starting from 1) to fragment
 	// when TLSHello is false.
 	PacketsFrom, PacketsTo uint32
-	// LengthMin and LengthMax are the size of each fragment in bytes.
-	LengthMin, LengthMax int
-	// IntervalMin and IntervalMax are the delay between fragments in milliseconds.
-	IntervalMin, IntervalMax int
+	// Lengths are the sizes in bytes of the fragments of one write: the first entry is
+	// used by the first fragment, the second by the second one and so on, the last
+	// entry is used by all the remaining fragments. Never empty.
+	Lengths []Range
+	// Intervals are the delays in milliseconds after each fragment, indexed like Lengths.
+	// Never empty.
+	Intervals []Range
+	// MaxSplit limits how many fragments one write is split into, the last fragment
+	// carries all the remaining data. Zero means no limit.
+	MaxSplit Range
 }
 
-func parseRange(name, s string, min, max int) (from, to int, err error) {
+// Options are the user facing options, empty values mean the default.
+type Options struct {
+	Packets   string   // "tlshello" or a range of writes like "1-3"
+	Length    string   // size of every fragment like "100-200"
+	Interval  string   // delay after every fragment like "10-20"
+	Lengths   []string // per fragment sizes, takes precedence over Length
+	Intervals []string // per fragment delays, takes precedence over Interval
+	MaxSplit  string   // max number of fragments like "3" or "2-4", "0" or empty for no limit
+}
+
+func parseRange(name, s string, min, max int) (r Range, err error) {
 	a, b, isRange := strings.Cut(strings.TrimSpace(s), "-")
-	from, err = strconv.Atoi(strings.TrimSpace(a))
+	r.Min, err = strconv.Atoi(strings.TrimSpace(a))
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid fragment %s %q", name, s)
+		return Range{}, fmt.Errorf("invalid fragment %s %q", name, s)
 	}
-	to = from
+	r.Max = r.Min
 	if isRange {
-		to, err = strconv.Atoi(strings.TrimSpace(b))
+		r.Max, err = strconv.Atoi(strings.TrimSpace(b))
 		if err != nil {
-			return 0, 0, fmt.Errorf("invalid fragment %s %q", name, s)
+			return Range{}, fmt.Errorf("invalid fragment %s %q", name, s)
 		}
 	}
-	if from > to || from < min || to > max {
-		return 0, 0, fmt.Errorf("invalid fragment %s %q: must be in %d-%d", name, s, min, max)
+	if r.Min > r.Max || r.Min < min || r.Max > max {
+		return Range{}, fmt.Errorf("invalid fragment %s %q: must be in %d-%d", name, s, min, max)
 	}
-	return from, to, nil
+	return r, nil
 }
 
-// ParseConfig parses the user facing options, empty strings mean the default value.
-func ParseConfig(packets, length, interval string) (*Config, error) {
-	if packets == "" {
-		packets = DefaultPackets
+func parseRanges(name string, list []string, fallback string, min, max int) ([]Range, error) {
+	if len(list) == 0 {
+		list = []string{fallback}
 	}
-	if length == "" {
-		length = DefaultLength
+	ranges := make([]Range, 0, len(list))
+	for _, s := range list {
+		r, err := parseRange(name, s, min, max)
+		if err != nil {
+			return nil, err
+		}
+		ranges = append(ranges, r)
 	}
-	if interval == "" {
-		interval = DefaultInterval
+	return ranges, nil
+}
+
+// ParseConfig parses the user facing options.
+func ParseConfig(options Options) (*Config, error) {
+	if options.Packets == "" {
+		options.Packets = DefaultPackets
+	}
+	if options.Length == "" {
+		options.Length = DefaultLength
+	}
+	if options.Interval == "" {
+		options.Interval = DefaultInterval
+	}
+	if options.MaxSplit == "" {
+		options.MaxSplit = "0"
 	}
 
 	config := &Config{}
 	var err error
-	if strings.EqualFold(strings.TrimSpace(packets), "tlshello") {
+	if strings.EqualFold(strings.TrimSpace(options.Packets), "tlshello") {
 		config.TLSHello = true
 	} else {
-		var from, to int
-		from, to, err = parseRange("packets", packets, 1, maxFragmentedWrites)
+		var packets Range
+		packets, err = parseRange("packets", options.Packets, 1, maxFragmentedWrites)
 		if err != nil {
 			return nil, err
 		}
-		config.PacketsFrom, config.PacketsTo = uint32(from), uint32(to)
+		config.PacketsFrom, config.PacketsTo = uint32(packets.Min), uint32(packets.Max)
 	}
-	config.LengthMin, config.LengthMax, err = parseRange("length", length, 1, 1<<14)
+	config.Lengths, err = parseRanges("length", options.Lengths, options.Length, 1, 1<<14)
 	if err != nil {
 		return nil, err
 	}
-	config.IntervalMin, config.IntervalMax, err = parseRange("interval", interval, 0, maxInterval)
+	config.Intervals, err = parseRanges("interval", options.Intervals, options.Interval, 0, maxInterval)
 	if err != nil {
 		return nil, err
+	}
+	config.MaxSplit, err = parseRange("max-split", options.MaxSplit, 0, 1<<14)
+	if err != nil {
+		return nil, err
+	}
+	if config.MaxSplit.Min == 0 && config.MaxSplit.Max != 0 {
+		return nil, fmt.Errorf("invalid fragment max-split %q: a range can't start from 0", options.MaxSplit)
 	}
 	return config, nil
+}
+
+// at returns the range used by the fragment number index (starting from 0)
+func at(ranges []Range, index int) Range {
+	if index >= len(ranges) {
+		index = len(ranges) - 1
+	}
+	return ranges[index]
+}
+
+// nextSize returns the size of the fragment number index when remaining bytes are left
+func (c *Config) nextSize(index, maxSplit, remaining int) int {
+	if maxSplit > 0 && index+1 >= maxSplit {
+		return remaining
+	}
+	if size := at(c.Lengths, index).rand(); size < remaining {
+		return size
+	}
+	return remaining
 }
 
 func randBetween(min, max int) int {
@@ -154,17 +223,15 @@ func (c *Conn) Write(b []byte) (int, error) {
 	if c.count < c.config.PacketsFrom || c.count > c.config.PacketsTo {
 		return c.ExtendedConn.Write(b)
 	}
-	for n := 0; n < len(b); {
-		size := randBetween(c.config.LengthMin, c.config.LengthMax)
-		if size > len(b)-n {
-			size = len(b) - n
-		}
+	maxSplit := c.config.MaxSplit.rand()
+	for n, index := 0, 0; n < len(b); index++ {
+		size := c.config.nextSize(index, maxSplit, len(b)-n)
 		if _, err := c.ExtendedConn.Write(b[n : n+size]); err != nil {
 			return n, err
 		}
 		n += size
 		if n < len(b) {
-			c.sleep()
+			c.sleep(index)
 		}
 	}
 	return len(b), nil
@@ -173,20 +240,19 @@ func (c *Conn) Write(b []byte) (int, error) {
 // writeTLSRecords re-frames one TLS record into many smaller ones
 func (c *Conn) writeTLSRecords(record []byte) error {
 	header, data := record[:3], record[tlsRecordHeaderLen:]
-	noDelay := c.config.IntervalMax == 0
+	// without any delay there is no point in doing many syscalls
+	noDelay := len(c.config.Intervals) == 1 && c.config.Intervals[0].Max == 0
+	maxSplit := c.config.MaxSplit.rand()
 	var merged []byte
-	for len(data) > 0 {
-		size := randBetween(c.config.LengthMin, c.config.LengthMax)
-		if size > len(data) {
-			size = len(data)
-		}
+	for index := 0; len(data) > 0; index++ {
+		size := c.config.nextSize(index, maxSplit, len(data))
 		fragment := make([]byte, 0, tlsRecordHeaderLen+size)
 		fragment = append(fragment, header...)
 		fragment = binary.BigEndian.AppendUint16(fragment, uint16(size))
 		fragment = append(fragment, data[:size]...)
 		data = data[size:]
 
-		if noDelay { // without delay there is no point in doing many syscalls
+		if noDelay {
 			merged = append(merged, fragment...)
 			continue
 		}
@@ -194,7 +260,7 @@ func (c *Conn) writeTLSRecords(record []byte) error {
 			return err
 		}
 		if len(data) > 0 {
-			c.sleep()
+			c.sleep(index)
 		}
 	}
 	if noDelay {
@@ -204,8 +270,9 @@ func (c *Conn) writeTLSRecords(record []byte) error {
 	return nil
 }
 
-func (c *Conn) sleep() {
-	if ms := randBetween(c.config.IntervalMin, c.config.IntervalMax); ms > 0 {
+// sleep waits the delay following the fragment number index
+func (c *Conn) sleep(index int) {
+	if ms := at(c.config.Intervals, index).rand(); ms > 0 {
 		time.Sleep(time.Duration(ms) * time.Millisecond)
 	}
 }
@@ -234,11 +301,16 @@ func (c *Conn) WriterReplaceable() bool {
 type fragmentDialer struct {
 	C.Dialer
 	config *Config
+	oob    []OOBStep
 }
 
-// NewDialer wraps dialer so that every TCP connection it creates is fragmented.
-func NewDialer(dialer C.Dialer, config *Config) C.Dialer {
-	return &fragmentDialer{Dialer: dialer, config: config}
+// NewDialer wraps dialer so that every TCP connection it creates is fragmented following config
+// and/or tagged with TCP urgent data following oob. Both are optional.
+func NewDialer(dialer C.Dialer, config *Config, oob []OOBStep) C.Dialer {
+	if config == nil && len(oob) == 0 {
+		return dialer
+	}
+	return &fragmentDialer{Dialer: dialer, config: config, oob: oob}
 }
 
 func (d *fragmentDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -247,7 +319,12 @@ func (d *fragmentDialer) DialContext(ctx context.Context, network, address strin
 		return nil, err
 	}
 	if strings.HasPrefix(network, "tcp") {
-		return NewConn(conn, d.config), nil
+		if len(d.oob) > 0 { // the innermost one, it needs the real socket
+			conn = NewOOBConn(conn, d.oob)
+		}
+		if d.config != nil {
+			conn = NewConn(conn, d.config)
+		}
 	}
 	return conn, nil
 }

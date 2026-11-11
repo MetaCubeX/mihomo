@@ -162,14 +162,19 @@ func TestInboundVless_TLS_Fragment(t *testing.T) {
 		{Enabled: true}, // default: tlshello
 		{Enabled: true, Packets: "tlshello", Length: "10-20", Interval: "0"},
 		{Enabled: true, Packets: "1-3", Length: "5-50", Interval: "0-1"},
+		{Enabled: true, Lengths: []string{"1", "5-10", "100-200"}, Intervals: []string{"0", "1"}, MaxSplit: "3-5"},
+		{}, // tcp-oob alone
 	} {
 		fragment := fragment
-		t.Run(fragment.Packets+"_"+fragment.Length+"_"+fragment.Interval, func(t *testing.T) {
+		t.Run(fragment.Packets+"_"+fragment.Length+"_"+fragment.Interval+"_"+fragment.MaxSplit, func(t *testing.T) {
 			outboundOptions := outbound.VlessOption{
 				TLS:         true,
 				Fingerprint: tlsFingerprint,
 			}
 			outboundOptions.Fragment = fragment
+			if !fragment.Enabled || fragment.MaxSplit != "" {
+				outboundOptions.TCPOOB = "0"
+			}
 			testInboundVless(t, inboundOptions, outboundOptions)
 		})
 	}

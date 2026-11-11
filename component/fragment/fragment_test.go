@@ -50,28 +50,50 @@ func reassemble(t *testing.T, stream []byte, maxLen int) (payload []byte, record
 	return
 }
 
-func TestParseConfig(t *testing.T) {
-	config, err := ParseConfig("", "", "")
-	require.NoError(t, err)
-	assert.Equal(t, &Config{TLSHello: true, LengthMin: 100, LengthMax: 200, IntervalMin: 10, IntervalMax: 20}, config)
+func parse(packets, length, interval string) (*Config, error) {
+	return ParseConfig(Options{Packets: packets, Length: length, Interval: interval})
+}
 
-	config, err = ParseConfig("1-3", "5", "0")
+func TestParseConfig(t *testing.T) {
+	config, err := ParseConfig(Options{})
 	require.NoError(t, err)
-	assert.Equal(t, &Config{PacketsFrom: 1, PacketsTo: 3, LengthMin: 5, LengthMax: 5}, config)
+	assert.Equal(t, &Config{TLSHello: true, Lengths: []Range{{100, 200}}, Intervals: []Range{{10, 20}}}, config)
+
+	config, err = parse("1-3", "5", "0")
+	require.NoError(t, err)
+	assert.Equal(t, &Config{PacketsFrom: 1, PacketsTo: 3, Lengths: []Range{{5, 5}}, Intervals: []Range{{0, 0}}}, config)
+
+	// the lists take precedence over the single values
+	config, err = ParseConfig(Options{Length: "5", Lengths: []string{"1", "2-3", "100-200"}, Intervals: []string{"0", "5-10"}, MaxSplit: "2-4"})
+	require.NoError(t, err)
+	assert.Equal(t, &Config{
+		TLSHello:  true,
+		Lengths:   []Range{{1, 1}, {2, 3}, {100, 200}},
+		Intervals: []Range{{0, 0}, {5, 10}},
+		MaxSplit:  Range{2, 4},
+	}, config)
 
 	for _, bad := range [][3]string{
 		{"hello", "", ""}, {"0-3", "", ""}, {"3-1", "", ""},
 		{"", "0", ""}, {"", "20-10", ""}, {"", "abc", ""},
 		{"", "", "-1"}, {"", "", "1-x"}, {"", "", "999999"},
 	} {
-		_, err = ParseConfig(bad[0], bad[1], bad[2])
+		_, err = parse(bad[0], bad[1], bad[2])
+		assert.Error(t, err, "%v", bad)
+	}
+	for _, bad := range []Options{
+		{Lengths: []string{"10", "0"}}, {Lengths: []string{"x"}},
+		{Intervals: []string{"1", "-1"}},
+		{MaxSplit: "x"}, {MaxSplit: "0-3"}, {MaxSplit: "-1"},
+	} {
+		_, err = ParseConfig(bad)
 		assert.Error(t, err, "%v", bad)
 	}
 }
 
 func TestTLSHello(t *testing.T) {
 	for _, interval := range []string{"0", "0-1"} {
-		config, err := ParseConfig("tlshello", "10-20", interval)
+		config, err := parse("tlshello", "10-20", interval)
 		require.NoError(t, err)
 		rc := &recordConn{}
 		conn := NewConn(rc, config)
@@ -102,7 +124,7 @@ func TestTLSHello(t *testing.T) {
 }
 
 func TestTLSHelloNotTLS(t *testing.T) {
-	config, err := ParseConfig("tlshello", "1", "0")
+	config, err := parse("tlshello", "1", "0")
 	require.NoError(t, err)
 	for _, data := range [][]byte{
 		[]byte("GET / HTTP/1.1\r\n\r\n"),
@@ -118,7 +140,7 @@ func TestTLSHelloNotTLS(t *testing.T) {
 }
 
 func TestPackets(t *testing.T) {
-	config, err := ParseConfig("2-3", "3-7", "0")
+	config, err := parse("2-3", "3-7", "0")
 	require.NoError(t, err)
 	rc := &recordConn{}
 	conn := NewConn(rc, config)
@@ -141,4 +163,57 @@ func TestPackets(t *testing.T) {
 		}
 	}
 	assert.True(t, conn.WriterReplaceable())
+}
+
+// recordSizes returns the payload size of each TLS record in stream
+func recordSizes(t *testing.T, stream []byte) (sizes []int) {
+	for len(stream) > 0 {
+		require.GreaterOrEqual(t, len(stream), 5)
+		size := int(binary.BigEndian.Uint16(stream[3:5]))
+		require.GreaterOrEqual(t, len(stream), 5+size)
+		sizes = append(sizes, size)
+		stream = stream[5+size:]
+	}
+	return
+}
+
+func TestLengthsAndMaxSplit(t *testing.T) {
+	// tlshello: the sizes follow the list, the last entry repeats
+	config, err := ParseConfig(Options{Lengths: []string{"1", "2", "40"}, Interval: "0"})
+	require.NoError(t, err)
+	rc := &recordConn{}
+	hello := clientHello(100)
+	_, err = NewConn(rc, config).Write(hello)
+	require.NoError(t, err)
+	require.Len(t, rc.writes, 1)
+	assert.Equal(t, []int{1, 2, 40, 40, 17}, recordSizes(t, rc.writes[0]))
+	payload, _ := reassemble(t, rc.writes[0], 40)
+	assert.Equal(t, hello[5:], payload)
+
+	// tlshello: max-split puts everything left in the last record
+	config, err = ParseConfig(Options{Lengths: []string{"1", "2", "40"}, Interval: "0", MaxSplit: "3"})
+	require.NoError(t, err)
+	rc = &recordConn{}
+	_, err = NewConn(rc, config).Write(hello)
+	require.NoError(t, err)
+	assert.Equal(t, []int{1, 2, 97}, recordSizes(t, bytes.Join(rc.writes, nil)))
+
+	// tlshello: a list of intervals sends every record on its own, even with zero delays
+	config, err = ParseConfig(Options{Length: "30", Intervals: []string{"0", "1"}})
+	require.NoError(t, err)
+	rc = &recordConn{}
+	_, err = NewConn(rc, config).Write(hello)
+	require.NoError(t, err)
+	assert.Len(t, rc.writes, 4)
+	assert.Equal(t, []int{30, 30, 30, 10}, recordSizes(t, bytes.Join(rc.writes, nil)))
+
+	// packets: same rules on plain writes
+	config, err = ParseConfig(Options{Packets: "1", Lengths: []string{"3", "5"}, Interval: "0", MaxSplit: "4"})
+	require.NoError(t, err)
+	rc = &recordConn{}
+	data := []byte("0123456789abcdefghijklmnopqrstuvwxyz")
+	n, err := NewConn(rc, config).Write(data)
+	require.NoError(t, err)
+	assert.Equal(t, len(data), n)
+	assert.Equal(t, [][]byte{data[:3], data[3:8], data[8:13], data[13:]}, rc.writes)
 }

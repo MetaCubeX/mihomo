@@ -38,6 +38,9 @@ func TestParseProxyMuxCoolAndFragment(t *testing.T) {
 		base("trojan", map[string]any{"fragment": map[string]any{"enabled": true, "packets": "1-3", "length": "10-20", "interval": 0}}),
 		base("trojan", map[string]any{"mux-cool": map[string]any{"enabled": false}}),
 		base("vless", map[string]any{"fragment": map[string]any{"enabled": false, "packets": "bad"}}),
+		base("vless", map[string]any{"fragment": map[string]any{"enabled": true, "lengths": []any{1, "5-10", "100-200"}, "intervals": []any{0, "10-20"}, "max-split": 4}}),
+		base("vless", map[string]any{"tcp-oob": 0}),
+		base("trojan", map[string]any{"tcp-oob": "0,_,12"}),
 	} {
 		proxy, err := ParseProxy(good)
 		require.NoError(t, err, "%v", good)
@@ -50,6 +53,10 @@ func TestParseProxyMuxCoolAndFragment(t *testing.T) {
 		base("vless", map[string]any{"mux-cool": muxCool, "smux": map[string]any{"enabled": true}}),
 		base("vless", map[string]any{"fragment": map[string]any{"enabled": true, "packets": "bad"}}),
 		base("vless", map[string]any{"fragment": map[string]any{"enabled": true, "length": "0"}}),
+		base("vless", map[string]any{"fragment": map[string]any{"enabled": true, "lengths": []any{"10", "0"}}}),
+		base("vless", map[string]any{"fragment": map[string]any{"enabled": true, "max-split": "0-3"}}),
+		base("vless", map[string]any{"tcp-oob": "256"}),
+		base("vless", map[string]any{"tcp-oob": "a"}),
 	} {
 		_, err := ParseProxy(bad)
 		assert.Error(t, err, "%v", bad)
