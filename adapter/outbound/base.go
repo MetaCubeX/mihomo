@@ -12,6 +12,7 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/fragment"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
@@ -191,12 +192,13 @@ func (b *Base) Close() error {
 }
 
 type BasicOption struct {
-	TFO         bool        `proxy:"tfo,omitempty"`
-	MPTCP       bool        `proxy:"mptcp,omitempty"`
-	Interface   string      `proxy:"interface-name,omitempty"`
-	RoutingMark int         `proxy:"routing-mark,omitempty"`
-	IPVersion   C.DNSPrefer `proxy:"ip-version,omitempty"`
-	DialerProxy string      `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
+	TFO         bool           `proxy:"tfo,omitempty"`
+	MPTCP       bool           `proxy:"mptcp,omitempty"`
+	Interface   string         `proxy:"interface-name,omitempty"`
+	RoutingMark int            `proxy:"routing-mark,omitempty"`
+	IPVersion   C.DNSPrefer    `proxy:"ip-version,omitempty"`
+	DialerProxy string         `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
+	Fragment    FragmentOption `proxy:"fragment,omitempty"`
 
 	//
 	// The following parameters are used internally, assign value by the structure decoder are disallowed
@@ -215,7 +217,26 @@ func (b *BasicOption) NewDialer(opts []dialer.Option) C.Dialer {
 			cDialer = dialer.NewDialer(opts...)
 		}
 	}
+	if b.Fragment.Enabled {
+		if config, err := b.Fragment.Parse(); err == nil {
+			cDialer = fragment.NewDialer(cDialer, config)
+		} else { // already checked when parsing the proxy, should not happen
+			log.Warnln("ignore invalid fragment option: %s", err)
+		}
+	}
 	return cDialer
+}
+
+// FragmentOption splits the first packets of outgoing TCP connections (usually the TLS ClientHello)
+type FragmentOption struct {
+	Enabled  bool   `proxy:"enabled,omitempty"`
+	Packets  string `proxy:"packets,omitempty"`  // "tlshello" (default) or a range of write counts like "1-3"
+	Length   string `proxy:"length,omitempty"`   // fragment size in bytes, like "100-200" (default)
+	Interval string `proxy:"interval,omitempty"` // delay between fragments in milliseconds, like "10-20" (default)
+}
+
+func (o FragmentOption) Parse() (*fragment.Config, error) {
+	return fragment.ParseConfig(o.Packets, o.Length, o.Interval)
 }
 
 func (b *BasicOption) NewTunnel() C.Tunnel {
