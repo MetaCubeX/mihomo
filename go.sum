@@ -27,8 +27,8 @@ github.com/dlclark/regexp2 v1.12.0 h1:0j4c5qQmnC6XOWNjP3PIXURXN2gWx76rd3KvgdPkCz
 github.com/dlclark/regexp2 v1.12.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/dunglas/httpsfv v1.0.2 h1:iERDp/YAfnojSDJ7PW3dj1AReJz4MrwbECSSE59JWL0=
 github.com/dunglas/httpsfv v1.0.2/go.mod h1:zID2mqw9mFsnt7YC3vYQ9/cjq30q41W+1AnDwH8TiMg=
-github.com/easytier/easytier/easytier-go v0.0.0-20260910071355-3d0c9c3ca5e2 h1:2/9iRUcMR3QPrT2XFf/i7QV5YoSHPFjkgBM5tP8xbcc=
-github.com/easytier/easytier/easytier-go v0.0.0-20260910071355-3d0c9c3ca5e2/go.mod h1:fCEi5+K2yt+sPDONSWO1uNpOifrwPgFGvm3J0YrFRvk=
+github.com/easytier/easytier/easytier-go v0.0.0-20261111015056-2abb1676b475 h1:L5C1yfYJyzcX7lCWi6aEX8H/0gBKqnlGcVxaBfQVTY8=
+github.com/easytier/easytier/easytier-go v0.0.0-20261111015056-2abb1676b475/go.mod h1:fCEi5+K2yt+sPDONSWO1uNpOifrwPgFGvm3J0YrFRvk=
 github.com/enfein/mieru/v3 v3.39.0 h1:22WJN9i7I4FrY1cTAVp5KfKOFm4sWrXVOXhqf5fkdr8=
 github.com/enfein/mieru/v3 v3.39.0/go.mod h1:zJBUCsi5rxyvHM8fjFf+GLaEl4OEjjBXr1s5F6Qd3hM=
 github.com/ericlagergren/aegis v0.0.0-20250325060835-cd0defd64358 h1:kXYqH/sL8dS/FdoFjr12ePjnLPorPo2FsnrHNuXSDyo=
