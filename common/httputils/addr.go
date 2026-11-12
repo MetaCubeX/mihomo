@@ -3,6 +3,9 @@ package httputils
 import (
 	"context"
 	"net"
+	"net/netip"
+	"strconv"
+	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
 
@@ -42,4 +45,28 @@ func NewAddrContext(addr *NetAddr, ctx context.Context) context.Context {
 			addr.remoteAddr = connInfo.Conn.RemoteAddr()
 		},
 	})
+}
+
+func ClientAddrPortFromHeader(r *http.Request, header string) netip.AddrPort {
+	if header != "" {
+		if v := r.Header.Get(header); v != "" {
+			if i := strings.Index(v, ","); i >= 0 {
+				v = v[:i]
+			}
+
+			var port uint16
+			v = strings.TrimSpace(v)
+			if h, p, err := net.SplitHostPort(v); err == nil {
+				v = h
+				if p, err := strconv.ParseUint(p, 10, 16); err == nil {
+					port = uint16(p)
+				}
+			}
+
+			if addr, err := netip.ParseAddr(v); err == nil {
+				return netip.AddrPortFrom(addr.Unmap(), port)
+			}
+		}
+	}
+	return netip.AddrPort{}
 }
