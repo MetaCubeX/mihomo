@@ -39,6 +39,8 @@ type proxyProviderSchema struct {
 	Payload       []map[string]any `provider:"payload,omitempty"`
 	AgeSecretKey  string           `provider:"age-secret-key,omitempty"`
 
+	CloseConnectionsOnReload bool `provider:"close-connections-on-reload,omitempty"`
+
 	HealthCheck healthCheckSchema   `provider:"health-check,omitempty"`
 	Override    overrideSchema      `provider:"override,omitempty"`
 	Header      map[string][]string `provider:"header,omitempty"`
@@ -48,6 +50,7 @@ func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 
 	schema := &proxyProviderSchema{
+		CloseConnectionsOnReload: true,
 		HealthCheck: healthCheckSchema{
 			Lazy: true,
 		},
@@ -100,5 +103,10 @@ func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 
-	return NewProxySetProvider(name, interval, schema.Payload, parser, vehicle, hc)
+	pd, err := NewProxySetProvider(name, interval, schema.Payload, parser, vehicle, hc)
+	if err != nil {
+		return nil, err
+	}
+	pd.closeConnectionsOnReload = schema.CloseConnectionsOnReload
+	return pd, nil
 }
