@@ -175,6 +175,20 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewTrustTunnel(trusttunnelOption)
+	case "reverse-bridge":
+		reverseBridgeOption := &IN.ReverseBridgeOption{}
+		err = decoder.Decode(mapping, reverseBridgeOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewReverseBridge(reverseBridgeOption)
+	case "reverse-portal":
+		reversePortalOption := &IN.ReversePortalOption{}
+		err = decoder.Decode(mapping, reversePortalOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewReversePortal(reversePortalOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}

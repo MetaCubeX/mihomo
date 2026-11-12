@@ -22,6 +22,7 @@ const (
 	CommandTCP byte = 1
 	CommandUDP byte = 2
 	CommandMux byte = 3
+	CommandRvs byte = 4
 )
 
 // Addr types
@@ -38,6 +39,7 @@ type DstAddr struct {
 	Addr     []byte
 	Port     uint16
 	Mux      bool // currently used for XUDP only
+	Rvs      bool // reverse proxy (Rvs command); no address written
 }
 
 // Client is vless connection generator
