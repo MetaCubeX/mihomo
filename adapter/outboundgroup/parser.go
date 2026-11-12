@@ -10,6 +10,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/common/structure"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/ratelimit"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
@@ -43,6 +44,7 @@ type GroupCommonOption struct {
 	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
 	Hidden              bool     `group:"hidden,omitempty"`
 	Icon                string   `group:"icon,omitempty"`
+	Bandwidth           string   `group:"bandwidth,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]P.ProxyProvider, AllProxies []string, AllProviders []string) (ProxyGroup, error) {
@@ -54,6 +56,8 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	if err := decoder.Decode(config, &groupOption); err != nil {
 		return nil, errFormat
 	}
+
+	bandwidth := ratelimit.ParseBandwidth(groupOption.Bandwidth)
 
 	if groupOption.Type == "" || groupOption.Name == "" {
 		return nil, errFormat
@@ -191,28 +195,28 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		if err != nil {
 			return nil, err
 		}
-		return NewURLTest(groupOption, opt, emptyFallback, providers)
+		return NewURLTest(groupOption, opt, emptyFallback, providers, bandwidth)
 	case "select":
 		opt := SelectorOption{}
 		err = decoder.Decode(config, &opt)
 		if err != nil {
 			return nil, err
 		}
-		return NewSelector(groupOption, opt, emptyFallback, providers)
+		return NewSelector(groupOption, opt, emptyFallback, providers, bandwidth)
 	case "fallback":
 		opt := FallbackOption{}
 		err = decoder.Decode(config, &opt)
 		if err != nil {
 			return nil, err
 		}
-		return NewFallback(groupOption, opt, emptyFallback, providers)
+		return NewFallback(groupOption, opt, emptyFallback, providers, bandwidth)
 	case "load-balance":
 		opt := LoadBalanceOption{}
 		err = decoder.Decode(config, &opt)
 		if err != nil {
 			return nil, err
 		}
-		return NewLoadBalance(groupOption, opt, emptyFallback, providers)
+		return NewLoadBalance(groupOption, opt, emptyFallback, providers, bandwidth)
 	case "relay":
 		return nil, fmt.Errorf("%w: The group [%s] with relay type was removed, please using dialer-proxy instead", errType, groupName)
 	default:
