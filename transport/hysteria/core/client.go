@@ -287,6 +287,18 @@ func (c *Client) Close() error {
 	return err
 }
 
+// ResetSession drops the current QUIC session without closing the client: the
+// next dial goes through connectToServer again. Close is the permanent one.
+func (c *Client) ResetSession(reason string) {
+	c.reconnectMutex.Lock()
+	defer c.reconnectMutex.Unlock()
+	if c.quicSession == nil {
+		return
+	}
+	_ = c.quicSession.CloseWithError(closeErrorCodeGeneric, reason)
+	c.quicSession = nil
+}
+
 type quicConn struct {
 	Orig             *wrappedQUICStream
 	PseudoLocalAddr  net.Addr
