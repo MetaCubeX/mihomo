@@ -49,8 +49,9 @@ func (u *Uid) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, strin
 		if u.uids.Check(metadata.Uid) {
 			return true, u.adapter
 		}
+	} else {
+		log.Warnln("[UID] could not get uid from %s", metadata.String())
 	}
-	log.Warnln("[UID] could not get uid from %s", metadata.String())
 	return false, ""
 }
 
