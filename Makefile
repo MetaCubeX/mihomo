@@ -198,6 +198,12 @@ vet:
 lint:
 	golangci-lint run ./...
 
+# Windows only; supply stock and patched core executable paths explicitly.
+HALFCLOSE_REPORT ?= bin/halfclose-result.json
+.PHONY: test-halfclose-windows
+test-halfclose-windows:
+	python test/halfclose_windows.py --stock "$(STOCK_CORE)" --patched "$(PATCHED_CORE)" --output "$(HALFCLOSE_REPORT)"
+
 clean:
 	rm $(BINDIR)/*
 
