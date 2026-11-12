@@ -108,9 +108,10 @@ func (c *PacketUpWriter) flush() {
 
 func (c *PacketUpWriter) write(b []byte) (int, error) {
 	u := url.URL{
-		Scheme: "https",
-		Host:   c.cfg.Host,
-		Path:   c.cfg.NormalizedPath(),
+		Scheme:   "https",
+		Host:     c.cfg.Host,
+		Path:     c.cfg.NormalizedPath(),
+		RawQuery: c.cfg.NormalizedQuery(),
 	}
 
 	req, err := http.NewRequestWithContext(c.ctx, c.cfg.GetNormalizedUplinkHTTPMethod(), u.String(), nil)
@@ -346,9 +347,10 @@ func (c *Client) DialStreamOne(ctx context.Context) (net.Conn, error) {
 	}
 
 	requestURL := url.URL{
-		Scheme: "https",
-		Host:   c.cfg.Host,
-		Path:   c.cfg.NormalizedPath(),
+		Scheme:   "https",
+		Host:     c.cfg.Host,
+		Path:     c.cfg.NormalizedPath(),
+		RawQuery: c.cfg.NormalizedQuery(),
 	}
 	pr, pw := io.Pipe()
 
@@ -443,15 +445,17 @@ func (c *Client) DialStreamUp(ctx context.Context) (net.Conn, error) {
 	}
 
 	streamURL := url.URL{
-		Scheme: "https",
-		Host:   c.cfg.Host,
-		Path:   c.cfg.NormalizedPath(),
+		Scheme:   "https",
+		Host:     c.cfg.Host,
+		Path:     c.cfg.NormalizedPath(),
+		RawQuery: c.cfg.NormalizedQuery(),
 	}
 
 	downloadURL := url.URL{
-		Scheme: "https",
-		Host:   downloadCfg.Host,
-		Path:   downloadCfg.NormalizedPath(),
+		Scheme:   "https",
+		Host:     downloadCfg.Host,
+		Path:     downloadCfg.NormalizedPath(),
+		RawQuery: downloadCfg.NormalizedQuery(),
 	}
 	pr, pw := io.Pipe()
 
@@ -587,9 +591,10 @@ func (c *Client) DialPacketUp(ctx context.Context) (net.Conn, error) {
 	sessionID := c.generateSessionID()
 
 	downloadURL := url.URL{
-		Scheme: "https",
-		Host:   downloadCfg.Host,
-		Path:   downloadCfg.NormalizedPath(),
+		Scheme:   "https",
+		Host:     downloadCfg.Host,
+		Path:     downloadCfg.NormalizedPath(),
+		RawQuery: downloadCfg.NormalizedQuery(),
 	}
 
 	writerCtx, writerCancel := context.WithCancel(c.ctx)
