@@ -407,6 +407,20 @@ func (p *autoCloseProxyAdapter) Close() error {
 	return p.closeErr
 }
 
+func (p *autoCloseProxyAdapter) TailscaleExitNodes(ctx context.Context) (*C.TailscaleExitNodes, error) {
+	result, err := tailscaleExitNodes(ctx, p.ProxyAdapter)
+	// Do not let the finalizer close the instance during discovery.
+	runtime.KeepAlive(p)
+	return result, err
+}
+
+func tailscaleExitNodes(ctx context.Context, adapter ProxyAdapter) (*C.TailscaleExitNodes, error) {
+	if provider, ok := adapter.(C.TailscaleExitNodeProvider); ok {
+		return provider.TailscaleExitNodes(ctx)
+	}
+	return nil, C.ErrNotSupport
+}
+
 func NewAutoCloseProxyAdapter(adapter ProxyAdapter) ProxyAdapter {
 	proxy := &autoCloseProxyAdapter{
 		ProxyAdapter: adapter,
