@@ -141,3 +141,94 @@ func TestLoadBalanceHashKeyRejectsUnusableConfigs(t *testing.T) {
 		LoadBalanceOption{Strategy: "consistent-hashing", HashKey: "nonsense"}, nil, nil)
 	require.ErrorIs(t, err, errHashKey)
 }
+
+// deadProxy fails its health check, so every strategy must skip it.
+type deadProxy struct{ C.Proxy }
+
+func (deadProxy) AliveForTestUrl(string) bool { return false }
+
+func countPicks(t *testing.T, lc *leastConnections, proxies []C.Proxy, n int) ([]int, []func()) {
+	t.Helper()
+	counts := make([]int, len(proxies))
+	releases := make([]func(), 0, n)
+	for i := 0; i < n; i++ {
+		proxy, release := lc.pick(proxies, testUrl, true)
+		counts[indexOf(t, proxies, proxy)]++
+		releases = append(releases, release)
+	}
+	return counts, releases
+}
+
+// Connections of one destination must spread: this is the case the hashing
+// strategies cannot serve and the reason the strategy exists.
+func TestLoadBalanceLeastConnectionsSpreadsOpenConnections(t *testing.T) {
+	proxies := balancedProxies(3)
+	counts, _ := countPicks(t, newLeastConnections(), proxies, 9)
+	require.Equal(t, []int{3, 3, 3}, counts)
+}
+
+func TestLoadBalanceLeastConnectionsReusesAReleasedMember(t *testing.T) {
+	proxies := balancedProxies(3)
+	lc := newLeastConnections()
+	first, release := lc.pick(proxies, testUrl, true)
+	_, _ = countPicks(t, lc, proxies, 2) // one connection on every member
+
+	release()
+	release() // a second release must not free a connection that is still open
+	next, _ := lc.pick(proxies, testUrl, true)
+	require.Same(t, first, next, "the only member below the others must get the next connection")
+
+	_, _ = countPicks(t, lc, proxies, 3) // two on every member again
+	require.Equal(t, map[C.Proxy]int{proxies[0]: 2, proxies[1]: 2, proxies[2]: 2}, lc.active)
+}
+
+// A member listed twice holds two shares, the same weighting round-robin
+// already gives a repeated name.
+func TestLoadBalanceLeastConnectionsWeighsARepeatedMember(t *testing.T) {
+	members := balancedProxies(2)
+	fast, slow := members[0], members[1]
+	proxies := []C.Proxy{fast, fast, slow}
+	lc := newLeastConnections()
+	got := map[C.Proxy]int{}
+	for i := 0; i < 6; i++ {
+		proxy, _ := lc.pick(proxies, testUrl, true)
+		got[proxy]++
+	}
+	require.Equal(t, 4, got[fast])
+	require.Equal(t, 2, got[slow])
+}
+
+func TestLoadBalanceLeastConnectionsSkipsADeadMember(t *testing.T) {
+	alive := balancedProxies(2)
+	dead := deadProxy{balancedProxies(1)[0]}
+	proxies := []C.Proxy{dead, alive[0], alive[1]}
+	counts, _ := countPicks(t, newLeastConnections(), proxies, 4)
+	require.Equal(t, []int{0, 2, 2}, counts)
+
+	// With nobody alive the group still answers, like every other strategy.
+	allDead := []C.Proxy{deadProxy{alive[0]}, deadProxy{alive[1]}}
+	proxy, _ := newLeastConnections().pick(allDead, testUrl, true)
+	require.Equal(t, allDead[0], proxy)
+}
+
+// Unwrap reports a member without opening anything, so it must not count.
+func TestLoadBalanceLeastConnectionsReportingDoesNotCount(t *testing.T) {
+	proxies := balancedProxies(2)
+	lc := newLeastConnections()
+	for i := 0; i < 5; i++ {
+		_, release := lc.pick(proxies, testUrl, false)
+		release()
+	}
+	require.Empty(t, lc.active)
+}
+
+func TestLoadBalanceLeastConnectionsRejectsAHashKey(t *testing.T) {
+	_, err := NewLoadBalance(GroupCommonOption{Name: "lb"},
+		LoadBalanceOption{Strategy: "least-connections", HashKey: "in-user"}, nil, nil)
+	require.ErrorIs(t, err, errHashKey)
+
+	lb, err := NewLoadBalance(GroupCommonOption{Name: "lb"},
+		LoadBalanceOption{Strategy: "least-connections"}, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, lb.leastConn)
+}
