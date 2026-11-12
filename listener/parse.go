@@ -147,6 +147,12 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewShadowQuic(shadowQuicOption)
+	case "nowhere":
+		option := &IN.NowhereOption{}
+		if err = decoder.Decode(mapping, option); err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewNowhere(option)
 	case "anytls":
 		anytlsOption := &IN.AnyTLSOption{}
 		err = decoder.Decode(mapping, anytlsOption)
