@@ -19,6 +19,7 @@ const (
 	TCP NetWork = iota
 	UDP
 	ALLNet
+	ICMP
 	InvalidNet = 0xff
 )
 
@@ -71,6 +72,8 @@ func (n NetWork) String() string {
 		return "udp"
 	case ALLNet:
 		return "all"
+	case ICMP:
+		return "icmp"
 	default:
 		return "invalid"
 	}

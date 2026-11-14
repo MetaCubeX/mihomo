@@ -123,6 +123,13 @@ type ProxyInfo struct {
 	DialerProxy  string
 }
 
+// BackgroundProxy is implemented by adapters that must run without outbound traffic.
+// StartBackground is non-blocking and idempotent, and is called only when a
+// provider is initialized or updated, never while parsing or testing config.
+type BackgroundProxy interface {
+	StartBackground()
+}
+
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType

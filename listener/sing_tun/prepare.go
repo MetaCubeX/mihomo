@@ -2,11 +2,14 @@ package sing_tun
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 	"time"
 
+	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
 	tun "github.com/metacubex/sing-tun"
@@ -21,6 +24,28 @@ func (h *ListenerHandler) PrepareConnection(network string, source M.Socksaddr, 
 		if h.DisableICMPForwarding || h.skipPingForwardingByAddr(destination.Addr) { // skip if ICMP handling is disabled or other condition
 			log.Infoln("[ICMP] %s %s --> %s using fake ping echo", network, source, destination)
 			return nil, nil
+		}
+		if router, ok := h.Tunnel.(C.ICMPRouter); ok {
+			metadata := &C.Metadata{NetWork: C.ICMP, Type: h.Type, SrcIP: source.Addr, DstIP: destination.Addr}
+			inbound.ApplyAdditions(metadata, h.Additions...)
+			proxy, err := router.ResolveICMP(metadata)
+			if err != nil {
+				return nil, err
+			}
+			if proxy.Type() == C.Reject || proxy.Type() == C.RejectDrop {
+				return nil, fmt.Errorf("ICMP rejected by %s", proxy.Name())
+			}
+			if echo, ok := proxy.Adapter().(C.ICMPEchoProxy); ok && echo.SupportICMP() {
+				log.Infoln("[ICMP] %s --> %s using %s", source, destination, proxy.Name())
+				return newICMPEchoDestination(source.Addr, destination.Addr, routeContext, timeout, func(ctx context.Context, _ netip.Addr) error {
+					return echo.PingICMP(ctx, metadata.DstIP)
+				}), nil
+			}
+			// A Tailscale failure must never send private Tailnet traffic to WAN.
+			if proxy.Type() == C.Tailscale {
+				return nil, C.ErrNotSupport
+			}
+			// Preserve existing DIRECT behavior for other adapters without ICMP support.
 		}
 		log.Infoln("[ICMP] %s %s --> %s using DIRECT", network, source, destination)
 		directRouteDestination, err := ping.ConnectDestination(context.TODO(), log.SingLogger, dialer.ICMPControl(destination.Addr), destination.Addr, routeContext, timeout)
