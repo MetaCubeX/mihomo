@@ -123,6 +123,14 @@ func (g *Group[T]) Do(key string, fn func() (T, error)) (v T, err error, shared 
 //
 // The returned channel will not be closed.
 func (g *Group[T]) DoChan(key string, fn func() (T, error)) <-chan Result[T] {
+	ch, _ := g.DoChanWithOwner(key, fn)
+	return ch
+}
+
+// DoChanWithOwner also reports whether this call started the work rather than
+// joining an existing call. Result delivery and panic/Goexit handling are the
+// same as DoChan.
+func (g *Group[T]) DoChanWithOwner(key string, fn func() (T, error)) (<-chan Result[T], bool) {
 	ch := make(chan Result[T], 1)
 	g.mu.Lock()
 	if g.m == nil {
@@ -132,7 +140,7 @@ func (g *Group[T]) DoChan(key string, fn func() (T, error)) <-chan Result[T] {
 		c.dups++
 		c.chans = append(c.chans, ch)
 		g.mu.Unlock()
-		return ch
+		return ch, false
 	}
 	c := &call[T]{chans: []chan<- Result[T]{ch}}
 	c.wg.Add(1)
@@ -141,7 +149,7 @@ func (g *Group[T]) DoChan(key string, fn func() (T, error)) <-chan Result[T] {
 
 	go g.doCall(c, key, fn)
 
-	return ch
+	return ch, true
 }
 
 // doCall handles the single call for a key.
