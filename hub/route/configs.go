@@ -403,6 +403,19 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateConfigs(w http.ResponseWriter, r *http.Request) {
+	cfg := parseConfigRequest(w, r)
+	if cfg == nil {
+		return
+	}
+	force := r.URL.Query().Get("force") == "true"
+	executor.ApplyConfig(cfg, force)
+	render.NoContent(w, r)
+}
+
+// parseConfigRequest parses the config a PUT request names: the "payload"
+// text, or the file at "path", defaulting to the current config file. When
+// the request is invalid it writes the error response and returns nil.
+func parseConfigRequest(w http.ResponseWriter, r *http.Request) *config.Config {
 	req := struct {
 		Path    string `json:"path"`
 		Payload string `json:"payload"`
@@ -410,10 +423,9 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
-		return
+		return nil
 	}
 
-	force := r.URL.Query().Get("force") == "true"
 	var cfg *config.Config
 	var err error
 
@@ -422,7 +434,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, newError(err.Error()))
-			return
+			return nil
 		}
 	} else {
 		if req.Path == "" { // default path unneeded any safe check
@@ -431,13 +443,13 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 			if !filepath.IsAbs(req.Path) {
 				render.Status(r, http.StatusBadRequest)
 				render.JSON(w, r, newError("path is not a absolute path"))
-				return
+				return nil
 			}
 
 			if !C.Path.IsSafePath(req.Path) {
 				render.Status(r, http.StatusBadRequest)
 				render.JSON(w, r, newError(C.Path.ErrNotSafePath(req.Path).Error()))
-				return
+				return nil
 			}
 		}
 
@@ -445,12 +457,10 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, newError(err.Error()))
-			return
+			return nil
 		}
 	}
-
-	executor.ApplyConfig(cfg, force)
-	render.NoContent(w, r)
+	return cfg
 }
 
 func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
