@@ -1,6 +1,7 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -72,12 +73,19 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 	if length < 1 {
 		return nil, errors.New("length is invalid")
 	}
-	ds.leaves = make([]uint64, length)
+	// length is untrusted; grow via append so a crafted huge length hits EOF while reading the
+	// elements instead of OOMing the process on the allocation.
+	leavesCap := length
+	if leavesCap > 64 {
+		leavesCap = 64
+	}
+	ds.leaves = make([]uint64, 0, leavesCap)
 	for i := int64(0); i < length; i++ {
-		err = binary.Read(r, binary.BigEndian, &ds.leaves[i])
-		if err != nil {
+		var value uint64
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return nil, err
 		}
+		ds.leaves = append(ds.leaves, value)
 	}
 
 	// labelBitmap
@@ -88,12 +96,17 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 	if length < 1 {
 		return nil, errors.New("length is invalid")
 	}
-	ds.labelBitmap = make([]uint64, length)
+	labelBitmapCap := length
+	if labelBitmapCap > 64 {
+		labelBitmapCap = 64
+	}
+	ds.labelBitmap = make([]uint64, 0, labelBitmapCap)
 	for i := int64(0); i < length; i++ {
-		err = binary.Read(r, binary.BigEndian, &ds.labelBitmap[i])
-		if err != nil {
+		var value uint64
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return nil, err
 		}
+		ds.labelBitmap = append(ds.labelBitmap, value)
 	}
 
 	// labels
@@ -104,11 +117,17 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 	if length < 1 {
 		return nil, errors.New("length is invalid")
 	}
-	ds.labels = make([]byte, length)
-	_, err = io.ReadFull(r, ds.labels)
+	// length is untrusted; read via io.CopyN so the buffer grows only as bytes actually arrive,
+	// instead of pre-allocating make([]byte, length) and OOMing on a crafted length.
+	var labelsBuf bytes.Buffer
+	_, err = io.CopyN(&labelsBuf, r, length)
 	if err != nil {
 		return nil, err
 	}
+	if int64(labelsBuf.Len()) != length {
+		return nil, io.ErrUnexpectedEOF
+	}
+	ds.labels = labelsBuf.Bytes()
 
 	ds.init()
 	return ds, nil
