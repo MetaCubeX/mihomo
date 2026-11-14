@@ -64,24 +64,33 @@ func putMsgToCache(c dnsCache, q D.Question, msg *D.Msg) {
 		return
 	}
 
-	msg = msg.Copy() // never modify the original msg
-
-	// OPT RRs MUST NOT be cached, forwarded, or stored in or loaded from master files.
-	msg.Extra = lo.Filter(msg.Extra, func(rr D.RR, index int) bool {
-		return rr.Header().Rrtype != D.TypeOPT
-	})
-
 	var ttl uint32
 	if msg.Rcode == D.RcodeServerFailure {
-		// [...] a resolver MAY cache a server failure response.
-		// If it does so it MUST NOT cache it for longer than five (5) minutes [...]
 		ttl = serverFailureCacheTTL
 	} else {
-		ttl = minimalTTL(lo.Concat(msg.Answer, msg.Ns, msg.Extra))
+		found := false
+		for section, records := range [...][]D.RR{msg.Answer, msg.Ns, msg.Extra} {
+			for _, rr := range records {
+				header := rr.Header()
+				if section == 2 && header.Rrtype == D.TypeOPT {
+					continue
+				}
+				if !found || header.Ttl < ttl {
+					ttl = header.Ttl
+					found = true
+				}
+			}
+		}
 	}
 	if ttl == 0 {
 		return
 	}
+
+	msg = msg.Copy() // never modify the original msg
+	// OPT RRs MUST NOT be cached (RFC 6891).
+	msg.Extra = lo.Filter(msg.Extra, func(rr D.RR, index int) bool {
+		return rr.Header().Rrtype != D.TypeOPT
+	})
 
 	c.SetWithExpire(q.String(), msg, time.Now().Add(time.Duration(ttl)*time.Second))
 }
