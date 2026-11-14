@@ -64,6 +64,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...
 		}
 		additions[inUserIdx] = inbound.WithInUser(user)
 
+		bodyForwarded := false
 		if trusted {
 			if request.Method == http.MethodConnect {
 				// Manual writing to support CONNECT for http 1.0 (workaround for uplay client)
@@ -119,9 +120,12 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...
 				} else {
 					request.Body = &bodyWrapper{ReadCloser: request.Body, onHitEOF: startBackgroundRead}
 				}
+				bodyForwarded = true
 				resp, err = client.Do(request)
 				if err != nil {
 					resp = responseWith(request, http.StatusBadGateway)
+					// the transport may still be reading or closing the request body
+					resp.Close = request.Body != http.NoBody
 				}
 			}
 
@@ -133,6 +137,9 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...
 		}
 		if keepAlive && resp.ContentLength > 0 {
 			resp.Close = false // don't need to close connection if content length is positive numbers
+		}
+		if !bodyForwarded && !discardBody(request) {
+			resp.Close = true // the rest of the body would be read as the next request
 		}
 
 		if !resp.Close {
@@ -148,6 +155,24 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...
 	}
 
 	_ = conn.Close()
+}
+
+// maxDiscardBodyBytes limits how much of an unused request body is read to keep
+// the connection alive, the same limit as net/http's server.
+const maxDiscardBodyBytes = 256 << 10
+
+// discardBody reads the body of a request that was answered without forwarding
+// it, so that the next request on the connection is read from the right place.
+// It reports false if the body was not fully read and the connection must be closed.
+func discardBody(request *http.Request) bool {
+	if request.Body == nil || request.Body == http.NoBody {
+		return true
+	}
+	if request.Header.Get("Expect") != "" {
+		return false // the client waits for "100 Continue" before it sends the body
+	}
+	n, err := io.CopyN(io.Discard, request.Body, maxDiscardBodyBytes+1)
+	return err == io.EOF && n <= maxDiscardBodyBytes
 }
 
 func authenticate(request *http.Request, authenticator auth.Authenticator) (resp *http.Response, user string) {
