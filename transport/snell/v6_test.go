@@ -202,3 +202,41 @@ func TestValidateV6PSK(t *testing.T) {
 	require.Error(t, ValidateV6PSK(make([]byte, 256)))
 	require.NoError(t, ValidateV6PSK([]byte(v6TestPSK)))
 }
+
+func TestSnellV6ClientIDHeaders(t *testing.T) {
+	clientID := []byte("alice-key")
+
+	for _, tt := range []struct {
+		name  string
+		reuse bool
+		cmd   byte
+	}{
+		{name: "connect", cmd: CommandConnect},
+		{name: "reuse", reuse: true, cmd: CommandConnectV2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			conn := &bufferConn{}
+			if err := WriteHeader(conn, "example.com", 443, Version6, tt.reuse, clientID); err != nil {
+				t.Fatal(err)
+			}
+
+			want := []byte{Version, tt.cmd, byte(len(clientID))}
+			want = append(want, clientID...)
+			want = append(want, byte(len("example.com")))
+			want = append(want, "example.com"...)
+			want = append(want, 0x01, 0xbb)
+			if !bytes.Equal(conn.Bytes(), want) {
+				t.Fatalf("TCP header = %x, want %x", conn.Bytes(), want)
+			}
+		})
+	}
+
+	udpConn := &bufferConn{}
+	if err := WriteUDPHeader(udpConn, Version6, clientID); err != nil {
+		t.Fatal(err)
+	}
+	wantUDP := append([]byte{Version, CommandUDP, byte(len(clientID))}, clientID...)
+	if !bytes.Equal(udpConn.Bytes(), wantUDP) {
+		t.Fatalf("UDP header = %x, want %x", udpConn.Bytes(), wantUDP)
+	}
+}

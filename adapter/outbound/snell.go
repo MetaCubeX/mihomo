@@ -93,7 +93,7 @@ func (s *Snell) writeHeaderContext(ctx context.Context, c net.Conn, metadata *C.
 	}
 
 	if metadata.NetWork == C.UDP {
-		err = snell.WriteUDPHeaderWithClientID(c, s.version, s.userKey)
+		err = snell.WriteUDPHeader(c, s.version, s.userKey)
 		if err == nil && s.version >= snell.Version4 {
 			if sc, ok := c.(*snell.Snell); ok {
 				err = sc.ReadReply()
@@ -101,7 +101,7 @@ func (s *Snell) writeHeaderContext(ctx context.Context, c net.Conn, metadata *C.
 		}
 		return
 	}
-	err = snell.WriteHeaderWithReuseAndClientID(c, metadata.String(), uint(metadata.DstPort), s.version, s.reuse, s.userKey)
+	err = snell.WriteHeader(c, metadata.String(), metadata.DstPort, s.version, s.reuse, s.userKey)
 	return
 }
 

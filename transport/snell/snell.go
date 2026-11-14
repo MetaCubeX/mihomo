@@ -100,15 +100,7 @@ func (s *Snell) ReadReply() error {
 	return fmt.Errorf("server reported code: %d, message: %s", errcode, string(msg))
 }
 
-func WriteHeader(conn net.Conn, host string, port uint, version int) error {
-	return WriteHeaderWithReuse(conn, host, port, version, false)
-}
-
-func WriteHeaderWithReuse(conn net.Conn, host string, port uint, version int, reuse bool) error {
-	return WriteHeaderWithReuseAndClientID(conn, host, port, version, reuse, nil)
-}
-
-func WriteHeaderWithReuseAndClientID(conn net.Conn, host string, port uint, version int, reuse bool, clientID []byte) error {
+func WriteHeader(conn net.Conn, host string, port uint16, version int, reuse bool, clientID []byte) error {
 	if len(clientID) > MaxClientIDLength {
 		return errors.New("snell client ID too long")
 	}
@@ -140,11 +132,7 @@ func WriteHeaderWithReuseAndClientID(conn net.Conn, host string, port uint, vers
 	return nil
 }
 
-func WriteUDPHeader(conn net.Conn, version int) error {
-	return WriteUDPHeaderWithClientID(conn, version, nil)
-}
-
-func WriteUDPHeaderWithClientID(conn net.Conn, version int, clientID []byte) error {
+func WriteUDPHeader(conn net.Conn, version int, clientID []byte) error {
 	if version < Version3 {
 		return errors.New("unsupport UDP version")
 	}
