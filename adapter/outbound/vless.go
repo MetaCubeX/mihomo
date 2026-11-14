@@ -91,31 +91,32 @@ type VlessOption struct {
 }
 
 type XHTTPOptions struct {
-	Path                 string                 `proxy:"path,omitempty"`
-	Host                 string                 `proxy:"host,omitempty"`
-	Mode                 string                 `proxy:"mode,omitempty"`
-	Headers              map[string]string      `proxy:"headers,omitempty"`
-	NoGRPCHeader         bool                   `proxy:"no-grpc-header,omitempty"`
-	XPaddingBytes        string                 `proxy:"x-padding-bytes,omitempty"`
-	XPaddingObfsMode     bool                   `proxy:"x-padding-obfs-mode,omitempty"`
-	XPaddingKey          string                 `proxy:"x-padding-key,omitempty"`
-	XPaddingHeader       string                 `proxy:"x-padding-header,omitempty"`
-	XPaddingPlacement    string                 `proxy:"x-padding-placement,omitempty"`
-	XPaddingMethod       string                 `proxy:"x-padding-method,omitempty"`
-	UplinkHTTPMethod     string                 `proxy:"uplink-http-method,omitempty"`
-	SessionPlacement     string                 `proxy:"session-placement,omitempty"`
-	SessionKey           string                 `proxy:"session-key,omitempty"`
-	SessionTable         string                 `proxy:"session-table,omitempty"`
-	SessionLength        string                 `proxy:"session-length,omitempty"`
-	SeqPlacement         string                 `proxy:"seq-placement,omitempty"`
-	SeqKey               string                 `proxy:"seq-key,omitempty"`
-	UplinkDataPlacement  string                 `proxy:"uplink-data-placement,omitempty"`
-	UplinkDataKey        string                 `proxy:"uplink-data-key,omitempty"`
-	UplinkChunkSize      string                 `proxy:"uplink-chunk-size,omitempty"`
-	ScMaxEachPostBytes   string                 `proxy:"sc-max-each-post-bytes,omitempty"`
-	ScMinPostsIntervalMs string                 `proxy:"sc-min-posts-interval-ms,omitempty"`
-	ReuseSettings        *XHTTPReuseSettings    `proxy:"reuse-settings,omitempty"` // aka XMUX
-	DownloadSettings     *XHTTPDownloadSettings `proxy:"download-settings,omitempty"`
+	Path                        string                 `proxy:"path,omitempty"`
+	Host                        string                 `proxy:"host,omitempty"`
+	Mode                        string                 `proxy:"mode,omitempty"`
+	Headers                     map[string]string      `proxy:"headers,omitempty"`
+	NoGRPCHeader                bool                   `proxy:"no-grpc-header,omitempty"`
+	XPaddingBytes               string                 `proxy:"x-padding-bytes,omitempty"`
+	XPaddingObfsMode            bool                   `proxy:"x-padding-obfs-mode,omitempty"`
+	XPaddingKey                 string                 `proxy:"x-padding-key,omitempty"`
+	XPaddingHeader              string                 `proxy:"x-padding-header,omitempty"`
+	XPaddingPlacement           string                 `proxy:"x-padding-placement,omitempty"`
+	XPaddingMethod              string                 `proxy:"x-padding-method,omitempty"`
+	UplinkHTTPMethod            string                 `proxy:"uplink-http-method,omitempty"`
+	SessionPlacement            string                 `proxy:"session-placement,omitempty"`
+	SessionKey                  string                 `proxy:"session-key,omitempty"`
+	SessionTable                string                 `proxy:"session-table,omitempty"`
+	SessionLength               string                 `proxy:"session-length,omitempty"`
+	SeqPlacement                string                 `proxy:"seq-placement,omitempty"`
+	SeqKey                      string                 `proxy:"seq-key,omitempty"`
+	UplinkDataPlacement         string                 `proxy:"uplink-data-placement,omitempty"`
+	UplinkDataKey               string                 `proxy:"uplink-data-key,omitempty"`
+	UplinkChunkSize             string                 `proxy:"uplink-chunk-size,omitempty"`
+	ScMaxEachPostBytes          string                 `proxy:"sc-max-each-post-bytes,omitempty"`
+	ScMinPostsIntervalMs        string                 `proxy:"sc-min-posts-interval-ms,omitempty"`
+	H2MaxReceiveBufferPerStream int                    `proxy:"h2-max-receive-buffer-per-stream,omitempty"`
+	ReuseSettings               *XHTTPReuseSettings    `proxy:"reuse-settings,omitempty"` // aka XMUX
+	DownloadSettings            *XHTTPDownloadSettings `proxy:"download-settings,omitempty"`
 }
 
 type XHTTPReuseSettings struct {
@@ -129,10 +130,11 @@ type XHTTPReuseSettings struct {
 
 type XHTTPDownloadSettings struct {
 	// xhttp part
-	Path          *string             `proxy:"path,omitempty"`
-	Host          *string             `proxy:"host,omitempty"`
-	Headers       *map[string]string  `proxy:"headers,omitempty"`
-	ReuseSettings *XHTTPReuseSettings `proxy:"reuse-settings,omitempty"` // aka XMUX
+	Path                        *string             `proxy:"path,omitempty"`
+	Host                        *string             `proxy:"host,omitempty"`
+	Headers                     *map[string]string  `proxy:"headers,omitempty"`
+	ReuseSettings               *XHTTPReuseSettings `proxy:"reuse-settings,omitempty"` // aka XMUX
+	H2MaxReceiveBufferPerStream *int                `proxy:"h2-max-receive-buffer-per-stream,omitempty"`
 	// proxy part
 	Server            *string           `proxy:"server,omitempty"`
 	Port              *int              `proxy:"port,omitempty"`
@@ -624,6 +626,10 @@ func NewVless(option VlessOption) (*Vless, error) {
 			}
 		}
 
+		h2ReceiveWindow := option.XHTTPOpts.H2MaxReceiveBufferPerStream
+		if h2ReceiveWindow < 0 || int64(h2ReceiveWindow) > 1<<31-1 {
+			return nil, fmt.Errorf("xhttp h2-max-receive-buffer-per-stream must be between 0 and 2147483647 bytes")
+		}
 		var hKeepAlivePeriod time.Duration
 
 		var reuseCfg *xhttp.ReuseConfig
@@ -713,6 +719,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 				},
 				v.option.ALPN,
 				hKeepAlivePeriod,
+				h2ReceiveWindow,
 			)
 		}
 		var makeDownloadTransport func() http.RoundTripper
@@ -807,6 +814,10 @@ func NewVless(option VlessOption) (*Vless, error) {
 			}
 
 			downloadHKeepAlivePeriod := hKeepAlivePeriod
+			downloadH2ReceiveWindow := lo.FromPtrOr(ds.H2MaxReceiveBufferPerStream, h2ReceiveWindow)
+			if downloadH2ReceiveWindow < 0 || int64(downloadH2ReceiveWindow) > 1<<31-1 {
+				return nil, fmt.Errorf("xhttp download-settings.h2-max-receive-buffer-per-stream must be between 0 and 2147483647 bytes")
+			}
 
 			downloadCfg := *cfg // make a copy
 			downloadCfg.Host = downloadHost
@@ -904,6 +915,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 					},
 					downloadALPN,
 					downloadHKeepAlivePeriod,
+					downloadH2ReceiveWindow,
 				)
 			}
 		}

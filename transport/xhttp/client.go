@@ -155,7 +155,7 @@ func (c *PacketUpWriter) Close() error {
 	return nil
 }
 
-func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc, dialQUIC DialQUICFunc, alpn []string, keepAlivePeriod time.Duration) http.RoundTripper {
+func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc, dialQUIC DialQUICFunc, alpn []string, keepAlivePeriod time.Duration, h2MaxReceiveBufferPerStream int) http.RoundTripper {
 	if len(alpn) == 1 && alpn[0] == "h3" { // `alpn: [h3]` means using h3 mode
 		if keepAlivePeriod == 0 {
 			keepAlivePeriod = QuicgoH3KeepAlivePeriod
@@ -223,7 +223,8 @@ func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc, dialQUIC DialQUICFun
 		IdleConnTimeout: ConnIdleTimeout,
 		Protocols:       protocols,
 		HTTP2: &http.HTTP2Config{
-			SendPingTimeout: keepAlivePeriod,
+			MaxReceiveBufferPerStream: h2MaxReceiveBufferPerStream,
+			SendPingTimeout:           keepAlivePeriod,
 		},
 	}
 }
