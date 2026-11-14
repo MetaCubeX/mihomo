@@ -121,7 +121,7 @@ func (s *Session) Close() error {
 		}
 		s.streamLock.Lock()
 		for _, stream := range s.streams {
-			stream.closeLocally()
+			stream.closeLocally(net.ErrClosed)
 		}
 		s.streams = make(map[uint32]*Stream)
 		s.streamLock.Unlock()
@@ -251,7 +251,7 @@ func (s *Session) recvLoop() error {
 				delete(s.streams, sid)
 				s.streamLock.Unlock()
 				if ok {
-					stream.closeLocally()
+					stream.closeLocally(io.EOF)
 				}
 			case cmdWaste:
 				if hdr.Length() > 0 {

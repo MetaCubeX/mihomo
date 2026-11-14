@@ -38,12 +38,8 @@ func newStream(id uint32, sess *Session) *Stream {
 }
 
 // Read implements net.Conn
-func (s *Stream) Read(b []byte) (n int, err error) {
-	n, err = s.pipeR.Read(b)
-	if n == 0 && s.dieErr != nil {
-		err = s.dieErr
-	}
-	return
+func (s *Stream) Read(b []byte) (int, error) {
+	return s.pipeR.Read(b)
 }
 
 // Write implements net.Conn
@@ -66,11 +62,11 @@ func (s *Stream) Close() error {
 }
 
 // closeLocally only closes Stream and don't notify remote peer
-func (s *Stream) closeLocally() {
+func (s *Stream) closeLocally(readErr error) {
 	var once bool
 	s.dieOnce.Do(func() {
 		s.dieErr = net.ErrClosed
-		s.pipeR.Close()
+		s.pipeW.CloseWithError(readErr)
 		once = true
 	})
 	if once {
@@ -85,7 +81,7 @@ func (s *Stream) closeWithError(err error) error {
 	var once bool
 	s.dieOnce.Do(func() {
 		s.dieErr = err
-		s.pipeR.Close()
+		s.pipeW.CloseWithError(err)
 		once = true
 	})
 	if once {

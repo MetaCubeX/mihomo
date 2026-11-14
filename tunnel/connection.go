@@ -217,6 +217,6 @@ func closeAllLocalCoon(lAddr string) {
 	})
 }
 
-func handleSocket(inbound, outbound net.Conn) {
-	N.Relay(inbound, outbound)
+func handleSocket(inbound, outbound net.Conn, resetOnError bool) {
+	N.Relay(inbound, outbound, resetOnError)
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
+	"github.com/metacubex/sing/common"
 	"golang.org/x/exp/slices"
 )
 
@@ -500,16 +501,25 @@ func handleUDPConn(packet C.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
-	if !isHandle(connCtx.Metadata().Type) {
-		_ = connCtx.Conn().Close()
+	metadata := connCtx.Metadata()
+	// TUN and transparent inbounds are backed by a local TCP stack, reset the
+	// connection so that the application gets a RST instead of a FIN.
+	resetOnError := metadata.Type == C.TUN || metadata.Type == C.REDIR || metadata.Type == C.TPROXY
+	abort := true
+	defer func() {
+		conn := connCtx.Conn()
+		if abort && resetOnError {
+			if lingerConn, ok := common.Cast[interface{ SetLinger(int) error }](conn); ok {
+				_ = lingerConn.SetLinger(0)
+			}
+		}
+		_ = conn.Close()
+	}()
+
+	if !isHandle(metadata.Type) {
 		return
 	}
 
-	defer func(conn net.Conn) {
-		_ = conn.Close()
-	}(connCtx.Conn())
-
-	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
 		return
@@ -621,7 +631,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
-	handleSocket(conn, remoteConn)
+	abort = false                         // relay handles connection closure
+	handleSocket(conn, remoteConn, resetOnError)
 }
 
 func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err error) {
