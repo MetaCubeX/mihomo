@@ -50,6 +50,7 @@ type General struct {
 	Mode              T.TunnelMode            `json:"mode"`
 	UnifiedDelay      bool                    `json:"unified-delay"`
 	LogLevel          log.LogLevel            `json:"log-level"`
+	LogTimestamp      bool                    `json:"log-timestamp"`
 	IPv6              bool                    `json:"ipv6"`
 	Interface         string                  `json:"interface-name"`
 	RoutingMark       int                     `json:"routing-mark"`
@@ -420,6 +421,7 @@ type RawConfig struct {
 	Mode                          T.TunnelMode            `yaml:"mode" json:"mode"`
 	UnifiedDelay                  bool                    `yaml:"unified-delay" json:"unified-delay"`
 	LogLevel                      log.LogLevel            `yaml:"log-level" json:"log-level"`
+	LogTimestamp                  bool                    `yaml:"log-timestamp" json:"log-timestamp"`
 	IPv6                          bool                    `yaml:"ipv6" json:"ipv6"`
 	ExternalController            string                  `yaml:"external-controller" json:"external-controller"`
 	ExternalControllerRoutingMark int                     `yaml:"external-controller-routing-mark" json:"external-controller-routing-mark"`
@@ -495,6 +497,7 @@ func DefaultRawConfig() *RawConfig {
 		UnifiedDelay:      false,
 		Authentication:    []string{},
 		LogLevel:          log.INFO,
+		LogTimestamp:      true,
 		Hosts:             map[string]any{},
 		Rule:              []string{},
 		Proxy:             []map[string]any{},
@@ -782,6 +785,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		UnifiedDelay: cfg.UnifiedDelay,
 		Mode:         cfg.Mode,
 		LogLevel:     cfg.LogLevel,
+		LogTimestamp: cfg.LogTimestamp,
 		IPv6:         cfg.IPv6,
 		Interface:    cfg.Interface,
 		RoutingMark:  cfg.RoutingMark,
