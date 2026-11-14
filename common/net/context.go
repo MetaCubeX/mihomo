@@ -3,6 +3,7 @@ package net
 import (
 	"context"
 	"net"
+	"sync"
 
 	"github.com/metacubex/mihomo/common/contextutils"
 )
@@ -20,16 +21,17 @@ import (
 //		return conn, err
 //	}
 func SetupContextForConn(ctx context.Context, conn net.Conn) (done func(*error)) {
-	stopc := make(chan struct{})
+	var stopc sync.WaitGroup
+	stopc.Add(1)
 	stop := contextutils.AfterFunc(ctx, func() {
 		// Close the connection, discarding the error
 		_ = conn.Close()
-		close(stopc)
+		stopc.Done()
 	})
 	return func(inputErr *error) {
 		if !stop() {
 			// The AfterFunc was started, wait for it to complete.
-			<-stopc
+			stopc.Wait()
 			if ctxErr := ctx.Err(); ctxErr != nil && inputErr != nil {
 				// Return context error to user.
 				*inputErr = ctxErr
