@@ -308,7 +308,37 @@ func updateHosts(tree *trie.DomainTrie[resolver.HostValue]) {
 }
 
 func updateProxies(proxies map[string]C.Proxy, providers map[string]P.ProxyProvider) {
+	oldProxies := tunnel.Proxies()
 	tunnel.UpdateProxies(proxies, providers)
+	closeReplacedWireGuard(oldProxies, proxies)
+}
+
+// closeReplacedWireGuard closes WireGuard outbounds of the previous config right away.
+//
+// Replaced proxies are normally closed by a finalizer once they are garbage collected
+// (see outbound.NewAutoCloseProxyAdapter), and connections opened through them keep them
+// alive. That is fine for most protocols, but a WireGuard outbound owns a device with the
+// peer's private key and its own UDP socket: while the old device is alive it keeps sending
+// keepalives, handshake initiations and retransmissions with the same key, so the server's
+// endpoint for the peer flaps between the old and the new device and the tunnel only works
+// intermittently. Closing the old device ends its connections; clients reconnect through
+// the new one.
+func closeReplacedWireGuard(oldProxies, newProxies map[string]C.Proxy) {
+	for name, old := range oldProxies {
+		if old == nil || old.Type() != C.WireGuard {
+			continue
+		}
+		if p, ok := newProxies[name]; ok && p == old {
+			continue
+		}
+		go func(name string, p C.Proxy) {
+			if err := p.Close(); err != nil {
+				log.Warnln("Close replaced WireGuard proxy [%s]: %s", name, err.Error())
+				return
+			}
+			log.Infoln("Closed replaced WireGuard proxy [%s]", name)
+		}(name, old)
+	}
 }
 
 func updateRules(rules []C.Rule, subRules map[string][]C.Rule, ruleProviders map[string]P.RuleProvider) {
