@@ -13,6 +13,8 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel/statistic"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 const DnsRespectRules = "RULES"
@@ -114,7 +116,8 @@ func (d *DNSDialer) DialContext(ctx context.Context, network, addr string) (net.
 			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter.Name())
 		}
 
-		packetConn, err := proxyAdapter.ListenPacketContext(ctx, metadata)
+		dialMetadata := dnsUDPMetadata(metadata)
+		packetConn, err := proxyAdapter.ListenPacketContext(ctx, dialMetadata)
 		if err != nil {
 			logMetadataErr(metadata, rule, proxyAdapter, err)
 			return nil, err
@@ -123,7 +126,7 @@ func (d *DNSDialer) DialContext(ctx context.Context, network, addr string) (net.
 
 		packetConn = statistic.NewUDPTracker(packetConn, statistic.DefaultManager, metadata, rule, 0, 0, false)
 
-		return N.NewBindPacketConn(packetConn, metadata.UDPAddr()), nil
+		return N.NewBindPacketConn(packetConn, packetConn.InitialDestination()), nil
 	}
 
 }
@@ -176,7 +179,8 @@ func (d *DNSDialer) ListenPacket(ctx context.Context, network, addr string) (net
 		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter.Name())
 	}
 
-	packetConn, err := proxyAdapter.ListenPacketContext(ctx, metadata)
+	dialMetadata := dnsUDPMetadata(metadata)
+	packetConn, err := proxyAdapter.ListenPacketContext(ctx, dialMetadata)
 	if err != nil {
 		logMetadataErr(metadata, rule, proxyAdapter, err)
 		return nil, err
@@ -186,4 +190,14 @@ func (d *DNSDialer) ListenPacket(ctx context.Context, network, addr string) (net
 	packetConn = statistic.NewUDPTracker(packetConn, statistic.DefaultManager, metadata, rule, 0, 0, false)
 
 	return packetConn, nil
+}
+
+func dnsUDPMetadata(metadata *C.Metadata) *C.Metadata {
+	dialMetadata := metadata.Clone()
+	// Bootstrap keeps the selected IP as the transport target while preserving
+	// Host for adapters whose existing local resolver uses it.
+	dialMetadata.UDP = &C.UDPRequest{
+		Target: M.SocksaddrFromNetIP(metadata.AddrPort()),
+	}
+	return dialMetadata
 }

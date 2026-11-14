@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/metacubex/sing/common/metadata"
+	M "github.com/metacubex/sing/common/metadata"
 
 	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
@@ -100,7 +100,11 @@ func (sd *Dispatcher) UDPSniff(packet C.PacketAdapter, packetSender C.PacketSend
 					}
 
 					if wrapable, ok := current.Sniffer.(sniffer.MultiPacketSniffer); ok {
-						return wrapable.WrapperSender(packetSender, replaceDomain)
+						wrapped := wrapable.WrapperSender(packetSender, replaceDomain)
+						if quic, ok := wrapped.(*quicPacketSender); ok {
+							quic.destination = packetDestination(metadata)
+						}
+						return wrapped
 					}
 
 					host, err := current.SniffData(packet.Data())
@@ -176,6 +180,12 @@ func replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
 			metadata.Host, host)
 		metadata.Host = host
 		metadata.DstIP = netip.Addr{}
+		if metadata.UDP != nil {
+			// Rule metadata can share the immutable request with the original packet.
+			request := *metadata.UDP
+			request.Target = M.ParseSocksaddrHostPort(host, metadata.DstPort)
+			metadata.UDP = &request
+		}
 	}
 	metadata.DNSMode = C.DNSNormal
 }
@@ -193,7 +203,7 @@ func (sd *Dispatcher) domainCanReplace(host string) bool {
 }
 
 func isValidSniffHost(host string) bool {
-	return host != "." && metadata.IsDomainName(host)
+	return host != "." && M.IsDomainName(host)
 }
 
 func (sd *Dispatcher) Enable() bool {

@@ -60,14 +60,19 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	if err := h.ResolveUDP(ctx, metadata); err != nil {
+	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
+	}
+	if !metadata.UDP.AllowRemote {
+		if err := h.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 	udpConn, err := h.client.DialUDP(h.genHdc(ctx))
 	if err != nil {
 		return nil, err
 	}
-	return NewPacketConn(&hyPacketConn{udpConn}, h), nil
+	return NewPacketConn(&hyPacketConn{udpConn}, h, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 func (h *Hysteria) genHdc(ctx context.Context) hyUtils.PacketDialer {
@@ -281,7 +286,11 @@ func (c *hyPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		return
 	}
 	n = copy(p, b)
-	addr = M.ParseSocksaddr(addrStr).UDPAddr()
+	source := M.ParseSocksaddr(addrStr)
+	addr = source
+	if source.IsIP() {
+		addr = source.UDPAddr()
+	}
 	return
 }
 
@@ -291,7 +300,11 @@ func (c *hyPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, e
 		return
 	}
 	data = b
-	addr = M.ParseSocksaddr(addrStr).UDPAddr()
+	source := M.ParseSocksaddr(addrStr)
+	addr = source
+	if source.IsIP() {
+		addr = source.UDPAddr()
+	}
 	return
 }
 

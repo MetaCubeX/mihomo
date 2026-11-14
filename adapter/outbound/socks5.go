@@ -88,8 +88,13 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = ss.ResolveUDP(ctx, metadata); err != nil {
+	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
+	}
+	if !metadata.UDP.AllowRemote {
+		if err = ss.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 	c, err := ss.dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
@@ -152,7 +157,7 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 		pc.Close()
 	}()
 
-	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
+	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // ProxyInfo implements C.ProxyAdapter
@@ -236,12 +241,12 @@ func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	if e != nil {
 		return 0, nil, e
 	}
-	addr, payload, err := socks5.DecodeUDPPacket(b)
+	addr, payload, err := socks5.DecodeUDPPacket(b[:n])
 	if err != nil {
 		return 0, nil, err
 	}
 
-	udpAddr := addr.UDPAddr()
+	udpAddr := addr.NetAddr()
 	if udpAddr == nil {
 		return 0, nil, errors.New("parse udp addr error")
 	}

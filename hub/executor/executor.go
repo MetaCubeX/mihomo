@@ -102,6 +102,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	updateGeneral(cfg.General, true)
+	// Parsing temporarily applies general settings; UDP defaults change only on reload.
+	tunnel.SetUDPConfig(cfg.General.UDPRemoteResolve, cfg.General.UDPMapping)
 	updateDNS(cfg.DNS, cfg.General.IPv6)
 	updateNTP(cfg.NTP) // initialize NTP after DNS because an NTP server may be a hostname.
 	updateListeners(cfg.General, cfg.Listeners, force)
@@ -128,6 +130,7 @@ func initInnerTcp() {
 
 func GetGeneral() *config.General {
 	ports := listener.GetPorts()
+	udpRemoteResolve, udpMapping := tunnel.UDPConfig()
 	var authenticator []string
 	if auth := authStore.Default.Authenticator(); auth != nil {
 		authenticator = auth.Users()
@@ -171,6 +174,8 @@ func GetGeneral() *config.General {
 		GeodataLoader:     geodata.LoaderName(),
 		GeositeMatcher:    geodata.SiteMatcherName(),
 		TCPConcurrent:     dialer.GetTcpConcurrent(),
+		UDPRemoteResolve:  udpRemoteResolve,
+		UDPMapping:        udpMapping,
 		FindProcessMode:   tunnel.FindProcessMode(),
 		Sniffing:          tunnel.IsSniffing(),
 		GlobalUA:          mihomoHttp.UA(),

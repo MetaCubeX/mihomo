@@ -55,6 +55,8 @@ type configSchema struct {
 	IPv6              *bool                    `json:"ipv6"`
 	Sniffing          *bool                    `json:"sniffing"`
 	TcpConcurrent     *bool                    `json:"tcp-concurrent"`
+	UDPRemoteResolve  *bool                    `json:"udp-remote-resolve"`
+	UDPMapping        *C.UDPMapping            `json:"udp-mapping"`
 	FindProcessMode   *process.FindProcessMode `json:"find-process-mode"`
 	InterfaceName     *string                  `json:"interface-name"`
 }
@@ -342,6 +344,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	if general.AllowLan != nil {
 		listener.SetAllowLan(*general.AllowLan)
 	}
+	tunnel.PatchUDPConfig(general.UDPRemoteResolve, general.UDPMapping)
 
 	if general.SkipAuthPrefixes != nil {
 		inbound.SetSkipAuthPrefixes(*general.SkipAuthPrefixes)

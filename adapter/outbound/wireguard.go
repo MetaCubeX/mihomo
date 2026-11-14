@@ -841,6 +841,9 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.
 }
 
 func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	var pc net.PacketConn
 	if err = w.init(ctx); err != nil {
 		return nil, err
@@ -856,7 +859,7 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return NewPacketConn(pc, w), nil
+	return NewPacketConn(pc, w, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (w *WireGuard) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

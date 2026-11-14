@@ -13,6 +13,7 @@ import (
 	"github.com/metacubex/mihomo/transport/socks5"
 
 	"github.com/metacubex/quic-go"
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 type BufferedReader interface {
@@ -563,7 +564,12 @@ func (c Address) SocksAddr() socks5.Addr {
 	return addr
 }
 
-func (c Address) UDPAddr() *net.UDPAddr {
+func (c Address) NetAddr() net.Addr {
+	if c.TYPE == AtypDomainName {
+		// The length-prefixed domain bytes can also have an IP's length.
+		// Preserve the address type instead of interpreting those bytes as an IP.
+		return M.Socksaddr{Fqdn: string(c.ADDR[1:]), Port: c.PORT}
+	}
 	return &net.UDPAddr{
 		IP:   c.ADDR,
 		Port: int(c.PORT),

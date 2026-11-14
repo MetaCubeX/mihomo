@@ -372,7 +372,7 @@ func TestUoTPacketConnReadFrom(t *testing.T) {
 	}
 
 	var stream []byte
-	stream = append(stream, frame("example.com:53", 0, "dns")...)         // domain peers are dropped
+	stream = append(stream, frame("example.com:53", 0, "dns")...)         // domain peers retain their name
 	stream = append(stream, frame("8.8.8.8:53", 0, "too long for p")...)  // consumed, reported as short
 	stream = append(stream, frame("[::ffff:1.2.3.4]:5353", 300, "ok")...) // padded address, mapped IPv6
 	client, server := net.Pipe()
@@ -384,10 +384,14 @@ func TestUoTPacketConnReadFrom(t *testing.T) {
 
 	pc := NewUoTPacketConn(client)
 	p := make([]byte, 8)
+	n, from, err := pc.ReadFrom(p)
+	if err != nil || string(p[:n]) != "dns" || from.String() != "example.com:53" {
+		t.Fatalf("domain datagram: %q, %v, %v", p[:n], from, err)
+	}
 	if _, _, err := pc.ReadFrom(p); !errors.Is(err, io.ErrShortBuffer) {
 		t.Fatalf("oversized datagram: err = %v, want io.ErrShortBuffer", err)
 	}
-	n, from, err := pc.ReadFrom(p)
+	n, from, err = pc.ReadFrom(p)
 	if err != nil || string(p[:n]) != "ok" {
 		t.Fatalf("read after short buffer: %q, %v", p[:n], err)
 	}
