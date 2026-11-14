@@ -42,7 +42,10 @@ import (
 	"github.com/metacubex/mihomo/tunnel"
 )
 
-var mux sync.Mutex
+var (
+	mux          sync.Mutex
+	shutdownOnce sync.Once
+)
 
 func readConfig(path string) ([]byte, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -530,9 +533,14 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func Shutdown() {
-	listener.Cleanup()
-	tproxy.CleanupTProxyIPTables()
-	resolver.StoreFakePoolState()
+	shutdownOnce.Do(func() {
+		listener.Cleanup()
+		tproxy.CleanupTProxyIPTables()
+		resolver.StoreFakePoolState()
+		// Release outbound-owned resources after listeners stop and before a
+		// restart replaces the process.
+		tunnel.CloseProxies()
 
-	log.Warnln("Mihomo shutting down")
+		log.Warnln("Mihomo shutting down")
+	})
 }
