@@ -223,7 +223,6 @@ func (t *Tailscale) watchBackendState() {
 	}
 	defer watcher.Close()
 
-	backendInitialized := false
 	exitNodeNeedsStatus := tailscaleExitNodeNeedsStatus(t.option)
 	for {
 		n, err := watcher.Next()
@@ -234,16 +233,18 @@ func (t *Tailscale) watchBackendState() {
 		if n.State == nil {
 			continue
 		}
-
-		if *n.State != ipn.NoState && !backendInitialized {
+		if !exitNodeNeedsStatus && *n.State != ipn.NoState {
 			t.setBackendInitialized(nil)
-			backendInitialized = true
-			if !exitNodeNeedsStatus {
-				return
-			}
+			return
 		}
 		if exitNodeNeedsStatus && *n.State == ipn.Running {
-			if err := t.applyExitNodePrefs(t.ctx); err != nil {
+			// Running may precede delivery of the peer netmap. Keep traffic
+			// gated until the fixed exit can actually be selected.
+			ctx, cancel := context.WithTimeout(t.ctx, 60*time.Second)
+			err := retryTailscaleExitNode(ctx, t.applyExitNodePrefs, 250*time.Millisecond)
+			cancel()
+			t.setBackendInitialized(err)
+			if err != nil {
 				log.Warnln("[Tailscale](%s) set exit node failed: %v", t.Name(), err)
 			}
 			return
