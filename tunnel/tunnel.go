@@ -203,12 +203,16 @@ func Listeners() map[string]C.InboundListener {
 }
 
 // UpdateRules handle update rules
-func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]P.RuleProvider) {
+func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, newRuleProviders map[string]P.RuleProvider) (oldRules []C.Rule, oldSubRule map[string][]C.Rule, oldRuleProviders map[string]P.RuleProvider) {
 	configMux.Lock()
+	oldRules = rules
+	oldSubRule = subRules
+	oldRuleProviders = ruleProviders
 	rules = newRules
-	ruleProviders = rp
+	ruleProviders = newRuleProviders
 	subRules = newSubRule
 	configMux.Unlock()
+	return
 }
 
 // Proxies return all proxies
@@ -227,11 +231,14 @@ func RuleProviders() map[string]P.RuleProvider {
 }
 
 // UpdateProxies handle update proxies
-func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]P.ProxyProvider) {
+func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]P.ProxyProvider) (oldProxies map[string]C.Proxy, oldProviders map[string]P.ProxyProvider) {
 	configMux.Lock()
+	oldProxies = proxies
+	oldProviders = providers
 	proxies = newProxies
 	providers = newProviders
 	configMux.Unlock()
+	return
 }
 
 func UpdateListeners(newListeners map[string]C.InboundListener) {
