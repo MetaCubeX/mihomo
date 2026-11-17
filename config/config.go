@@ -41,6 +41,8 @@ import (
 	RW "github.com/metacubex/mihomo/rules/wrapper"
 	T "github.com/metacubex/mihomo/tunnel"
 
+	tun "github.com/metacubex/sing-tun"
+
 	"golang.org/x/exp/slices"
 )
 
@@ -1685,6 +1687,17 @@ func parseIPV6(rawCfg *RawConfig) {
 }
 
 func parseTun(rawTun RawTun, dns *DNS, general *General) error {
+	if rawTun.Enable {
+		// Mirror the check in listener/sing_tun, so that `mihomo -t` and
+		// config reloads reject an invalid dns-mode instead of failing
+		// only when TUN starts.
+		switch rawTun.DNSMode {
+		case "", tun.DNSModeDisabled, tun.DNSModeNative, tun.DNSModeHijack:
+		default:
+			return fmt.Errorf("invalid dns-mode: %s", rawTun.DNSMode)
+		}
+	}
+
 	tunAddressPrefix := dns.FakeIPRange
 	if !tunAddressPrefix.IsValid() {
 		tunAddressPrefix = netip.MustParsePrefix("198.18.0.1/16")
