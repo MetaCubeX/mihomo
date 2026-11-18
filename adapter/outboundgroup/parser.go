@@ -70,6 +70,22 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 
 	groupName := groupOption.Name
+	for _, filter := range []struct {
+		name       string
+		expression string
+	}{
+		{"filter", groupOption.Filter},
+		{"exclude-filter", groupOption.ExcludeFilter},
+	} {
+		if filter.expression == "" {
+			continue
+		}
+		for _, expression := range strings.Split(filter.expression, "`") {
+			if _, err := regexp2.Compile(expression, regexp2.None); err != nil {
+				return nil, fmt.Errorf("%s: invalid %s regex: %w", groupName, filter.name, err)
+			}
+		}
+	}
 
 	if groupOption.EmptyFallback == "" {
 		groupOption.EmptyFallback = "COMPATIBLE"
