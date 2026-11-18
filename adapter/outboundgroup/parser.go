@@ -173,7 +173,29 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+		var excludeFilterRegs []*regexp2.Regexp
+		if groupOption.ExcludeFilter != "" {
+			for _, filter := range strings.Split(groupOption.ExcludeFilter, "`") {
+				excludeFilterRegs = append(excludeFilterRegs, regexp2.MustCompile(filter, regexp2.None))
+			}
+		}
+		excludeTypes := strings.Split(groupOption.ExcludeType, "|")
+		healthCheckProxies := make([]C.Proxy, 0, len(ps))
+	NextProxy:
+		for _, p := range ps {
+			for _, filter := range excludeFilterRegs {
+				if match, _ := filter.MatchString(p.Name()); match {
+					continue NextProxy
+				}
+			}
+			for _, excludeType := range excludeTypes {
+				if strings.EqualFold(p.Type().String(), excludeType) {
+					continue NextProxy
+				}
+			}
+			healthCheckProxies = append(healthCheckProxies, p)
+		}
+		hc := provider.NewHealthCheck(healthCheckProxies, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
