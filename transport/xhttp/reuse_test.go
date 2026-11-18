@@ -160,6 +160,38 @@ func TestManagerRotateOnReusableSecs(t *testing.T) {
 	manager.Close()
 }
 
+func TestManagerSkipExpiredBusyEntry(t *testing.T) {
+	for name, cfg := range map[string]*ReuseConfig{
+		"max-concurrency": {MaxConcurrency: "16", HMaxReusableSecs: "1"},
+		"max-connections": {MaxConnections: "1", HMaxReusableSecs: "1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var created atomic.Int64
+
+			manager, err := NewReuseManager(cfg, makeTestTransportFactory(&created))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			transport1 := manager.GetTransport().(*ReuseTransport)
+			id1 := transportID(transport1)
+
+			time.Sleep(1100 * time.Millisecond)
+
+			transport2 := manager.GetTransport().(*ReuseTransport)
+			id2 := transportID(transport2)
+
+			if id1 == id2 {
+				t.Fatalf("expected new transport after reusable timeout while busy, got same id %d", id1)
+			}
+
+			transport1.Close()
+			transport2.Close()
+			manager.Close()
+		})
+	}
+}
+
 func TestManagerRotateOnConnReuseLimit(t *testing.T) {
 	var created atomic.Int64
 
