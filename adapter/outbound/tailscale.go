@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/component/ca"
@@ -47,9 +48,23 @@ type Tailscale struct {
 	backendInitErr  error
 
 	serverStarted bool
+	generation    uint64 // creation order, see takeOverStateDir
+
+	closeOnce sync.Once
+	closeErr  error
 
 	unregisterDNSResolver func()
 }
+
+var errTailscaleClosed = errors.New("tailscale outbound closed")
+
+var (
+	tailscaleGeneration atomic.Uint64
+
+	// tailscaleStateDirOwners records which outbound runs the tsnet server of each state dir.
+	tailscaleStateDirOwnersMu sync.Mutex
+	tailscaleStateDirOwners   = map[string]*Tailscale{}
+)
 
 type TailscaleOption struct {
 	BasicOption
@@ -143,6 +158,7 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		ctx:           ctx,
 		cancel:        cancel,
 		backendInitCh: make(chan struct{}),
+		generation:    tailscaleGeneration.Add(1),
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	outbound.server = &tsnet.Server{
@@ -185,6 +201,11 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 
 func (t *Tailscale) start() error {
 	t.startOnce.Do(func() {
+		if err := t.takeOverStateDir(); err != nil {
+			t.startErr = err
+			t.setBackendInitialized(err)
+			return
+		}
 		if err := t.server.Start(); err != nil {
 			t.startErr = err
 			t.setBackendInitialized(err)
@@ -207,7 +228,49 @@ func (t *Tailscale) ensureStarted(ctx context.Context) error {
 	if err := t.start(); err != nil {
 		return err
 	}
-	return t.waitBackendInitialized(ctx)
+	if err := t.waitBackendInitialized(ctx); err != nil {
+		return err
+	}
+	if t.ctx.Err() != nil {
+		return errTailscaleClosed
+	}
+	return nil
+}
+
+// takeOverStateDir closes the outbound that still runs a tsnet server on the same state dir.
+// After a config reload the outbound of the previous config is only closed by the GC finalizer,
+// which does not happen while connections still use it. Two servers on one state dir log in with
+// the same node key, which the control server reports as "Multiple cloned devices are trying to
+// share a key", and neither of them works reliably.
+// The newer outbound always wins, so an outdated one never takes the state dir back.
+func (t *Tailscale) takeOverStateDir() error {
+	dir := t.option.StateDir
+	tailscaleStateDirOwnersMu.Lock()
+	owner := tailscaleStateDirOwners[dir]
+	if owner != nil && owner.generation > t.generation {
+		tailscaleStateDirOwnersMu.Unlock()
+		return fmt.Errorf("state dir %s has been taken over by a newer tailscale outbound", dir)
+	}
+	tailscaleStateDirOwners[dir] = t
+	tailscaleStateDirOwnersMu.Unlock()
+
+	if owner != nil {
+		log.Infoln("[Tailscale](%s) closing the outdated outbound that still runs on state dir %s", t.Name(), dir)
+		_ = owner.Close() // returns after its tsnet server is shut down
+	}
+	if t.ctx.Err() != nil {
+		return errTailscaleClosed
+	}
+	return nil
+}
+
+func (t *Tailscale) releaseStateDir() {
+	dir := t.option.StateDir
+	tailscaleStateDirOwnersMu.Lock()
+	if tailscaleStateDirOwners[dir] == t {
+		delete(tailscaleStateDirOwners, dir)
+	}
+	tailscaleStateDirOwnersMu.Unlock()
 }
 
 func (t *Tailscale) watchBackendState() {
@@ -465,15 +528,19 @@ func (t *Tailscale) IsL3Protocol(metadata *C.Metadata) bool {
 }
 
 func (t *Tailscale) Close() error {
-	t.cancel()
-	if t.unregisterDNSResolver != nil {
-		t.unregisterDNSResolver()
-	}
-	t.startOnce.Do(func() {
-		t.startErr = errors.New("tailscale outbound closed")
+	t.closeOnce.Do(func() {
+		t.cancel()
+		if t.unregisterDNSResolver != nil {
+			t.unregisterDNSResolver()
+		}
+		t.startOnce.Do(func() {
+			t.startErr = errTailscaleClosed
+		})
+		if t.server != nil && t.serverStarted { // tsnet.Server.Close() must not be called before or concurrently with Start.
+			t.closeErr = t.server.Close()
+		}
+		// only after the server is shut down, so that a newer outbound waits for it in takeOverStateDir
+		t.releaseStateDir()
 	})
-	if t.server != nil && t.serverStarted { // tsnet.Server.Close() must not be called before or concurrently with Start.
-		return t.server.Close()
-	}
-	return nil
+	return t.closeErr
 }
