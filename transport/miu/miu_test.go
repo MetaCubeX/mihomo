@@ -147,12 +147,13 @@ func TestWritePacketShaping(t *testing.T) {
 	}
 }
 
-// A stream's END is never shaped and is the last byte of its direction — also when the stream ends
-// within the first packets, where everything else is padded, and when OPEN has not even gone out yet.
+// A stream's END is never shaped by the padding scheme and is the last byte of its direction — also when
+// the stream ends within the first packets, where everything else is padded, and when OPEN has not even
+// gone out yet. Like any small record it may have a PAD in front of it, never after it.
 func TestEndIsNotShaped(t *testing.T) {
 	for _, withData := range []bool{true, false} {
 		l, peer := pipeLane(t)
-		s := &stream{c: &Client{}, open: appendFrame(nil, frOpen, []byte{1, 127, 0, 0, 1, 0, 80}), pkt: 1}
+		s := &stream{c: &Client{}, open: appendFrame(nil, frOpen, []byte{1, 127, 0, 0, 1, 0, 80})}
 		s.lane.Store(l)
 		s.upScan = recScan{st: &s.state, dead: true}
 		s.timer = time.NewTimer(time.Hour)
@@ -165,13 +166,16 @@ func TestEndIsNotShaped(t *testing.T) {
 			return s.CloseWrite()
 		})
 		last := w[len(w)-1]
+		if !bytes.HasSuffix(last, []byte{frEnd, 0, 0}) {
+			t.Fatalf("END is not the last byte: %x", last)
+		}
 		if withData {
-			// packet 1 (OPEN · DATA, padded), then END alone
-			if len(w) != 2 || len(w[0]) < 100 || !bytes.Equal(last, []byte{frEnd, 0, 0}) {
+			// packet 1 (OPEN · DATA, padded), then END alone (behind a PAD, perhaps)
+			if len(w) != 2 || len(w[0]) < 100 || !bytes.Equal(stripPad(w[1:]), []byte{frEnd, 0, 0}) {
 				t.Fatalf("with data: %d writes, last %x", len(w), last)
 			}
-		} else if len(w) != 1 || !bytes.Equal(last, append(append([]byte(nil), s.open...), frEnd, 0, 0)) {
-			// OPEN · END in one unpadded write
+		} else if len(w) != 1 || !bytes.Equal(stripPad(w), append(append([]byte(nil), s.open...), frEnd, 0, 0)) {
+			// OPEN · END in one write
 			t.Fatalf("without data: %d writes, last %x", len(w), last)
 		}
 	}
@@ -190,7 +194,7 @@ func TestServerEndIsNotShaped(t *testing.T) {
 		}
 		return s.Close()
 	})
-	if len(w) != 2 || len(w[0]) < 100 || !bytes.Equal(w[1], []byte{frEnd, 0, 0}) {
+	if len(w) != 2 || len(w[0]) < 100 || !bytes.HasSuffix(w[1], []byte{frEnd, 0, 0}) || !bytes.Equal(stripPad(w[1:]), []byte{frEnd, 0, 0}) {
 		t.Fatalf("%d writes, last %x", len(w), w[len(w)-1])
 	}
 	if _, err := s.Write([]byte("x")); err == nil {

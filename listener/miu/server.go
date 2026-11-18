@@ -47,6 +47,11 @@ func New(config LC.MiuServer, lc C.InboundListenConfig, tunnel C.Tunnel, additio
 		tlsConfig.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return certLoader()
 		}
+		// Offer what the fallback web server speaks: the connections that are not clients go to it.
+		tlsConfig.NextProtos = config.ALPN
+		if len(tlsConfig.NextProtos) == 0 {
+			tlsConfig.NextProtos = []string{"http/1.1"}
+		}
 
 		if config.EchKey != "" {
 			err = ech.LoadECHKey(config.EchKey, tlsConfig)
@@ -95,6 +100,7 @@ func New(config LC.MiuServer, lc C.InboundListenConfig, tunnel C.Tunnel, additio
 	server, err := miu.NewServer(miu.ServerConfig{
 		Users:         config.Users,
 		PaddingScheme: config.PaddingScheme,
+		Fallback:      config.Fallback,
 		Handler: func(ctx context.Context, conn net.Conn, user string, destination M.Socksaddr) {
 			_ = h.NewConnection(auth.ContextWithUser(ctx, user), conn, M.Metadata{
 				Source:      M.SocksaddrFromNet(conn.RemoteAddr()),

@@ -44,11 +44,15 @@ type serverStream struct {
 	rd    pipe.PipeDeadline
 
 	// wmu guards the downlink.
-	wmu       sync.Mutex
-	state     streamState
-	scan      recScan
-	pkt       uint32 // packets sent so far, for the shaping
-	raw       bool   // the downlink is in its raw phase
+	wmu   sync.Mutex
+	state streamState
+	scan  recScan
+	raw   bool // the downlink is in its raw phase
+	// hold is the start of an inner record whose rest has not been written yet: a raw segment only takes
+	// whole records. holdTimer sends it as DATA after holdWait.
+	hold      []byte
+	holdSpare []byte
+	holdTimer *time.Timer
 	downEnded bool   // END has been sent (or could not be)
 	frames    []byte // scratch
 	wd        pipe.PipeDeadline
@@ -71,7 +75,7 @@ func newServerStream(l *lane, idle time.Duration, udp bool) *serverStream {
 		wd:   pipe.MakePipeDeadline(),
 		done: make(chan struct{}),
 	}
-	s.scan = recScan{st: &s.state, dead: udp || !l.canRaw}
+	s.scan = recScan{st: &s.state, dead: udp || !l.canRaw, follow: true}
 	return s
 }
 
@@ -176,9 +180,10 @@ func (s *serverStream) Write(p []byte) (int, error) {
 		if s.downEnded {
 			return total, io.ErrClosedPipe
 		}
-		k := len(p)
-		if !s.raw {
-			k = minInt(k, maxBatch)
+		k := minInt(len(p), maxBatch)
+		if s.raw {
+			// Room for a held record tail: a raw segment stays within maxSeg.
+			k = minInt(len(p), maxSeg/2)
 		}
 		if err := s.send(p[:k]); err != nil {
 			s.l.close() // the lane cannot be written to any more; the read loop ends with it
@@ -193,16 +198,11 @@ func (s *serverStream) Write(p []byte) (int, error) {
 // send writes one batch. Caller holds wmu.
 func (s *serverStream) send(b []byte) error {
 	if s.raw {
-		if len(b) >= rawMin {
-			return s.l.writeRaw(b)
-		}
-		s.frames = appendData(s.frames[:0], b)
-		return s.l.writeUnshaped(s.frames)
+		return s.sendRaw(b)
 	}
 	ready := s.scan.feed(b)
-	s.pkt++
 	s.frames = appendData(s.frames[:0], b)
-	if err := s.l.writePacket(s.pkt, s.frames); err != nil {
+	if err := s.l.writeLanePacket(s.frames); err != nil {
 		return err
 	}
 	// The record header that makes the direction ready went out as DATA; raw segments start with the
@@ -211,6 +211,98 @@ func (s *serverStream) send(b []byte) error {
 		s.raw = true
 	}
 	return nil
+}
+
+// sendRaw sends b in the raw phase. Raw segments carry whole inner records only: the start of a record
+// whose rest has not arrived is held back (see holdWait), and a record that has already been partly
+// sent as DATA is finished as DATA. A batch smaller than rawMin goes as DATA. Caller holds wmu.
+func (s *serverStream) sendRaw(b []byte) error {
+	sc := &s.scan
+	if sc.lost {
+		return s.sendRawData(b)
+	}
+	// A record begun in DATA ends in DATA: a raw segment must start on a record boundary.
+	cont := len(s.hold) == 0 && !sc.atBoundary()
+	first, last := sc.walk(b)
+	if sc.lost {
+		// The downlink no longer parses as TLS records: no more raw segments on this stream.
+		if err := s.sendRawData(s.takeHold()); err != nil {
+			return err
+		}
+		return s.sendRawData(b)
+	}
+	if cont {
+		if first < 0 {
+			return s.sendRawData(b)
+		}
+		if err := s.sendRawData(b[:first]); err != nil {
+			return err
+		}
+		b, last = b[first:], last-first
+	}
+	// The whole records are hold + b[:last]; the rest of b starts the next record.
+	if last > 0 {
+		whole := b[:last]
+		b = b[last:]
+		h := s.takeHold()
+		var err error
+		if n := len(h) + len(whole); n >= rawMin {
+			err = s.l.writeRawRecords(h, whole)
+		} else {
+			s.frames = appendData(appendData(s.frames[:0], h), whole)
+			err = s.l.writeUnshaped(s.frames)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if len(b) > 0 {
+		// The wait counts from when the start of the record was first held: more pieces of the same
+		// record do not extend it.
+		if len(s.hold) == 0 {
+			if s.holdTimer == nil {
+				s.holdTimer = time.AfterFunc(holdWait, s.flushHold)
+			} else {
+				s.holdTimer.Reset(holdWait)
+			}
+		}
+		s.hold = append(s.hold, b...)
+	}
+	return nil
+}
+
+// sendRawData sends b as DATA frames, unshaped, in the raw phase. Caller holds wmu.
+func (s *serverStream) sendRawData(b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+	s.frames = appendData(s.frames[:0], b)
+	return s.l.writeUnshaped(s.frames)
+}
+
+// takeHold empties the hold and returns what it had. The two hold buffers take turns, so the result
+// stays valid until the next takeHold. Caller holds wmu.
+func (s *serverStream) takeHold() []byte {
+	h := s.hold
+	s.hold, s.holdSpare = s.holdSpare[:0], h
+	if s.holdTimer != nil {
+		s.holdTimer.Stop()
+	}
+	return h
+}
+
+// flushHold sends a held record tail as DATA once holdWait has passed without the rest of the record;
+// the rest then follows as DATA too.
+func (s *serverStream) flushHold() {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if len(s.hold) == 0 || s.downEnded {
+		return
+	}
+	s.l.event("holdflush")
+	if err := s.sendRawData(s.takeHold()); err != nil {
+		s.l.close()
+	}
 }
 
 // CloseWrite ends the downlink (a half-close). The uplink keeps going.
@@ -235,7 +327,13 @@ func (s *serverStream) endDownlink() error {
 		return nil
 	}
 	s.downEnded = true
-	err := s.l.writeFrame(frEnd, nil)
+	var err error
+	if len(s.hold) > 0 {
+		err = s.sendRawData(s.takeHold())
+	}
+	if err == nil {
+		err = s.l.writeFrame(frEnd, nil)
+	}
 	if err != nil {
 		s.l.close()
 	}

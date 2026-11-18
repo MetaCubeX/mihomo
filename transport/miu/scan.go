@@ -13,6 +13,11 @@ type streamState struct {
 // seen on a record boundary: from there on the direction may use raw segments. The condition is the one
 // XTLS-Vision uses to switch to direct copy, but boundaries are tracked over the byte stream, so no
 // single read has to line up with a record.
+//
+// A sending side keeps following the boundaries in the raw phase (follow): a raw segment may only hold
+// whole inner records. The bytes on the wire are outer records and raw bytes in turn, and the raw bytes
+// are inner records; a segment that stopped inside an inner record would put the next outer record in
+// the middle of it, and the wire would no longer read as a sequence of TLS records.
 type recScan struct {
 	st   *streamState
 	hdr  []byte
@@ -23,57 +28,107 @@ type recScan struct {
 	dead bool
 	// ready latches the result: once true, feed keeps returning true.
 	ready bool
+	// follow keeps the boundaries tracked after ready (the sending side of a direction).
+	follow bool
+	// lost: after ready the bytes stopped parsing as TLS records, so boundaries are no longer known.
+	lost bool
 }
 
 // feed consumes the next bytes of the direction and reports whether raw segments may start after them.
 func (s *recScan) feed(b []byte) bool {
-	if s.ready {
+	if s.ready && !s.follow {
 		return true
 	}
 	if s.dead {
 		return false
 	}
-	if s.seen += len(b); s.seen > sniffLimit {
-		s.dead = true
-		return false
+	if !s.ready {
+		if s.seen += len(b); s.seen > sniffLimit {
+			s.dead = true
+			return false
+		}
 	}
-	for len(b) > 0 {
+	s.walk(b)
+	return s.ready
+}
+
+// walk advances over b and returns the offsets in b just past the first and the last inner record that
+// ended in it (-1 when none did).
+func (s *recScan) walk(b []byte) (first, last int) {
+	first, last = -1, -1
+	off := 0
+	ended := func() {
+		if first < 0 {
+			first = off
+		}
+		last = off
+	}
+	for off < len(b) && !s.dead && !s.lost {
 		if s.need > 0 {
-			k := minInt(s.need, len(b))
+			k := minInt(s.need, len(b)-off)
 			if s.inSH {
-				s.sh = append(s.sh, b[:k]...)
+				s.sh = append(s.sh, b[off:off+k]...)
 			}
 			s.need -= k
-			b = b[k:]
-			if s.need == 0 && s.inSH {
-				s.inSH = false
-				if isTLS13ServerHello(s.sh) {
-					s.st.tls13.Store(true)
+			off += k
+			if s.need == 0 {
+				if s.inSH {
+					s.inSH = false
+					if isTLS13ServerHello(s.sh) {
+						s.st.tls13.Store(true)
+					}
+					s.sh = nil
 				}
-				s.sh = nil
+				ended()
 			}
 			continue
 		}
-		k := minInt(5-len(s.hdr), len(b))
-		s.hdr = append(s.hdr, b[:k]...)
-		b = b[k:]
+		k := minInt(5-len(s.hdr), len(b)-off)
+		s.hdr = append(s.hdr, b[off:off+k]...)
+		off += k
 		if len(s.hdr) < 5 {
 			break
 		}
 		typ := s.hdr[0]
 		if s.hdr[1] != 3 || typ < 0x14 || typ > 0x17 {
-			s.dead = true // not TLS
-			return false
+			if s.ready {
+				s.lost = true
+			} else {
+				s.dead = true // not TLS
+			}
+			break
 		}
 		if typ == 0x17 && s.st.tls13.Load() {
 			s.ready = true
-			return true
 		}
 		s.need = int(s.hdr[3])<<8 | int(s.hdr[4])
-		s.inSH = typ == 0x16 && !s.st.tls13.Load()
+		s.inSH = typ == 0x16 && !s.ready && !s.st.tls13.Load()
 		s.hdr = s.hdr[:0]
+		if s.need == 0 {
+			ended()
+		}
 	}
-	return false
+	return first, last
+}
+
+// atBoundary reports whether the bytes walked so far end on an inner record boundary.
+func (s *recScan) atBoundary() bool { return s.need == 0 && len(s.hdr) == 0 }
+
+// remaining is how many more bytes complete what the walk is in the middle of: the current record, or
+// the record header when that is not complete yet (the record itself then needs more).
+func (s *recScan) remaining() int {
+	if s.need > 0 {
+		return s.need
+	}
+	return 5 - len(s.hdr)
+}
+
+// clone returns a copy to probe bytes with, without moving s.
+func (s *recScan) clone() recScan {
+	c := *s
+	c.hdr = append([]byte(nil), s.hdr...)
+	c.sh = append([]byte(nil), s.sh...)
+	return c
 }
 
 // isTLS13ServerHello reports whether b is a ServerHello handshake message whose supported_versions

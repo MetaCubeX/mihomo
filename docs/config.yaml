@@ -2626,6 +2626,9 @@ listeners:
     #   server-names:
     #     - test.com
     # padding-scheme: "" # https://github.com/anytls/anytls-go/blob/main/docs/protocol.md#cmdupdatepaddingscheme
+    # 仅证书模式：不是客户端的连接（探测等）交给这个 Web 服务器，连同已读到的字节；不配置时读掉丢弃，60 秒后关闭
+    # fallback: 127.0.0.1:8080
+    # alpn: ["http/1.1"] # 仅证书模式，默认 http/1.1；只写 fallback 支持的
 
   - name: mieru-in-1
     type: mieru

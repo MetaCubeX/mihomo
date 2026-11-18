@@ -474,18 +474,24 @@ func TestLoopbackUDP(t *testing.T) {
 }
 
 func TestRejectBadCredential(t *testing.T) {
-	// Garbage instead of a token: the server closes the connection.
+	// Garbage instead of a token: no fallback, so the server reads and drops it, says nothing, and closes
+	// the connection when the handshake timeout is up — not at once.
+	const handshake = 300 * time.Millisecond
 	errs := make(chan error, 4)
-	addr := startServer(t, pairOptions{serveErrs: errs})
+	addr := startServer(t, pairOptions{serveErrs: errs, server: ServerConfig{HandshakeTimeout: handshake}})
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	start := time.Now()
 	_, _ = conn.Write(random(120))
-	if _, err := conn.Read(make([]byte, 1)); err == nil {
-		t.Fatal("server should close on a bad credential")
+	if n, err := conn.Read(make([]byte, 1)); err == nil {
+		t.Fatalf("server answered a bad credential with %d bytes", n)
+	}
+	if d := time.Since(start); d < handshake-50*time.Millisecond {
+		t.Fatalf("server closed after %v, before the handshake timeout", d)
 	}
 	if err := <-errs; !errors.Is(err, ErrAuth) {
 		t.Fatalf("Serve returned %v", err)
@@ -493,7 +499,7 @@ func TestRejectBadCredential(t *testing.T) {
 
 	// A client with the wrong PSK: the stream fails, it does not look like an orderly end.
 	for _, outer := range []string{"", "tls"} {
-		c := pair(t, pairOptions{outer: outer, psk: "this-is-not-the-right-psk"})
+		c := pair(t, pairOptions{outer: outer, psk: "this-is-not-the-right-psk", server: ServerConfig{HandshakeTimeout: handshake}})
 		conn := dial(t, c, echoTCP(t))
 		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 		_, _ = conn.Write([]byte("hello"))

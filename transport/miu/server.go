@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -22,9 +23,16 @@ import (
 const (
 	authHead = 32 + 2 // token · padlen
 
-	defaultIdleTimeout      = 180 * time.Second
-	defaultHandshakeTimeout = 4 * time.Second
-	defaultDialTimeout      = 10 * time.Second
+	defaultIdleTimeout = 180 * time.Second
+	// defaultHandshakeTimeout: as long as web servers wait for a request (nginx's client_header_timeout),
+	// so that a connection that sends nothing is closed when theirs would be. A client's warm lane may
+	// also stay silent this long before its first use.
+	defaultHandshakeTimeout = 60 * time.Second
+	// settingsWait is how long ServerSettings waits for the lane's next write to go out with. The client
+	// needs it only once its stream is past the inner handshake, which starts with the server's first
+	// downlink write; until then it would be a short record of its own.
+	settingsWait       = time.Second
+	defaultDialTimeout = 10 * time.Second
 
 	// pskMinLen is the shortest PSK string accepted.
 	pskMinLen = 16
@@ -46,8 +54,13 @@ type ServerConfig struct {
 	PaddingScheme string
 	// IdleTimeout is how long a lane without a stream is kept (default 180s). Clients are told.
 	IdleTimeout time.Duration
-	// HandshakeTimeout bounds the wait for the authentication header (default 4s).
+	// HandshakeTimeout bounds the wait for the authentication header (default 60s).
 	HandshakeTimeout time.Duration
+	// Fallback, when set, is the address (host:port) of a web server that gets every connection that is
+	// not a client: the bytes already read, then everything that follows, both ways. Without it such a
+	// connection is read and dropped until HandshakeTimeout, and then closed. Only the outer TLS of the
+	// Miu server faces these connections; with REALITY they never get this far.
+	Fallback string
 	// DisableRaw turns raw segments off: the server declares raw=0 and never sends any.
 	DisableRaw bool
 	Handler    Handler
@@ -111,21 +124,26 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 // A nil error means the lane ended normally. ErrAuth and protocol violations are reported as errors.
 func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 	defer conn.Close()
-	user, token, err := s.authenticate(conn)
+	user, token, err := s.authenticate(ctx, conn)
 	if err != nil {
 		return err
 	}
 
 	l := newLane(conn, true, !s.cfg.DisableRaw)
-	laneScheme := s.scheme
+	// Each lane gets its own idle timeout, so that lane lifetimes do not all end at the same mark.
+	l.idle = jitter(s.cfg.IdleTimeout, 0.85)
+	base := s.scheme
 	if s.cfg.PaddingScheme == "" {
 		derived, err := derivedScheme(token)
 		if err != nil {
 			return err
 		}
-		laneScheme = padding.NewPaddingFactory([]byte(derived))
+		base = padding.NewPaddingFactory([]byte(derived))
+		l.scheme.Store(newLaneScheme(token, base)) // this lane's own draw, for the downlink
+	} else {
+		l.scheme.Store(base)
 	}
-	l.scheme.Store(laneScheme)
+	l.base = base
 	// cur is the stream on the lane (the last one, once it has ended); nil before the first OPEN.
 	// However the lane ends, that stream ends with it.
 	var cur atomic.Pointer[serverStream]
@@ -147,7 +165,7 @@ func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 	// There is a single frame reading loop. It queues the uplink of a stream (DATA / RAW / END) for the
 	// handler, which writes the downlink from its own goroutine, and it keeps reading after the
 	// uplink's END — which is how a RESET sent after a half-close still gets through.
-	_ = conn.SetReadDeadline(time.Now().Add(s.cfg.IdleTimeout))
+	_ = conn.SetReadDeadline(time.Now().Add(l.idle))
 	for {
 		typ, payload, err := l.next()
 		if err != nil {
@@ -204,7 +222,7 @@ func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 				return errors.New("miu: bad destination in OPEN")
 			}
 			_ = conn.SetReadDeadline(time.Time{})
-			st = newServerStream(l, s.cfg.IdleTimeout, isUoT(destination))
+			st = newServerStream(l, l.idle, isUoT(destination))
 			cur.Store(st)
 			go func() {
 				defer st.Close()
@@ -217,17 +235,23 @@ func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 }
 
 // authenticate reads the authentication header — token(32) · padlen(u16) · padding — exactly, never
-// ahead, and returns the name of the user the token belongs to.
-func (s *Server) authenticate(conn net.Conn) (string, [32]byte, error) {
+// ahead, and returns the name of the user the token belongs to. A connection that is not a client is
+// dealt with here (notAClient) and reported as ErrAuth.
+func (s *Server) authenticate(ctx context.Context, conn net.Conn) (string, [32]byte, error) {
 	_ = conn.SetReadDeadline(time.Now().Add(s.cfg.HandshakeTimeout))
 	var h [authHead]byte
-	if _, err := io.ReadFull(conn, h[:]); err != nil {
-		return "", [32]byte{}, fmt.Errorf("miu: auth failed: %w", err)
-	}
+	n, err := readAuthHead(conn, h[:])
 	var token [32]byte
 	copy(token[:], h[:])
-	user, ok := s.users[token]
+	user, ok := "", false
+	if n == authHead {
+		user, ok = s.users[token]
+	}
 	if !ok {
+		s.notAClient(ctx, conn, h[:n])
+		if n < authHead && err != nil {
+			return "", [32]byte{}, fmt.Errorf("miu: auth failed: %w", err)
+		}
 		return "", [32]byte{}, ErrAuth
 	}
 	if padlen := int64(binary.BigEndian.Uint16(h[32:])); padlen > 0 {
@@ -238,15 +262,79 @@ func (s *Server) authenticate(conn net.Conn) (string, [32]byte, error) {
 	return user, token, nil
 }
 
+// readAuthHead reads the authentication header into h. Over TLS a single Read returns at most the rest
+// of the current record, and a client writes the header together with its padding and Settings: a first
+// record shorter than the header does not come from a client, and there is no point waiting for more.
+func readAuthHead(conn net.Conn, h []byte) (int, error) {
+	// Any of the TLS implementations in use (crypto/tls, metacubex/tls, REALITY) has ConnectionState.
+	if !reflect.ValueOf(conn).MethodByName("ConnectionState").IsValid() {
+		return io.ReadFull(conn, h)
+	}
+	return conn.Read(h)
+}
+
+// notAClient deals with a connection that did not present a valid header: it goes to the fallback web
+// server (consumed first) when there is one; otherwise what it sends is read and dropped until the
+// handshake deadline. Either way it is answered the way something other than Miu would answer it.
+func (s *Server) notAClient(ctx context.Context, conn net.Conn, consumed []byte) {
+	if s.cfg.Fallback == "" {
+		_, _ = io.Copy(io.Discard, conn)
+		return
+	}
+	d := net.Dialer{Timeout: defaultDialTimeout}
+	back, err := d.DialContext(ctx, "tcp", s.cfg.Fallback)
+	if err != nil {
+		_, _ = io.Copy(io.Discard, conn)
+		return
+	}
+	defer back.Close()
+	_ = conn.SetReadDeadline(time.Time{})
+	if len(consumed) > 0 {
+		if _, err := back.Write(consumed); err != nil {
+			return
+		}
+	}
+	done := make(chan struct{}, 2)
+	go func() {
+		_, _ = io.Copy(back, conn)
+		if cw, ok := back.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		}
+		done <- struct{}{}
+	}()
+	go func() {
+		_, _ = io.Copy(conn, back)
+		if cw, ok := conn.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		} else {
+			_ = conn.Close()
+		}
+		done <- struct{}{}
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+	_ = conn.Close()
+	_ = back.Close()
+	<-done
+}
+
 // handleSettings notes whether the client can receive raw segments and answers with ServerSettings,
-// followed by the server's padding scheme when the client's md5 differs.
+// followed by the scheme the client's lanes should come from when its md5 is not that of the lane's
+// base (the PSK-derived scheme, or the configured one). The answer goes out at the start of the next
+// write on the lane, or alone after settingsWait.
 func (s *Server) handleSettings(l *lane, text string) error {
 	kv := parseKV(text)
 	l.peerRaw.Store(kv["raw"] == "1")
-	reply := appendFrame(nil, frServerSettings, l.settingsText(fmt.Sprintf("\nidle=%d", int(s.cfg.IdleTimeout/time.Second))))
-	scheme := l.scheme.Load()
-	if md5 := strings.ToLower(strings.TrimSpace(kv["padding-md5"])); md5 != "" && md5 != scheme.Md5 {
-		reply = appendFrame(reply, frUpdatePadding, scheme.RawScheme)
+	reply := appendFrame(nil, frServerSettings, l.settingsText(fmt.Sprintf("\nidle=%d", int(l.idle/time.Second))))
+	base := l.base
+	if base == nil {
+		base = l.scheme.Load()
 	}
-	return l.writeUnshaped(reply)
+	if md5 := strings.ToLower(strings.TrimSpace(kv["padding-md5"])); md5 != "" && md5 != base.Md5 {
+		reply = appendFrame(reply, frUpdatePadding, base.RawScheme)
+	}
+	l.deferPrefix(reply, settingsWait)
+	return nil
 }

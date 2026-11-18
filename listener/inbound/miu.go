@@ -19,6 +19,8 @@ type MiuOption struct {
 	EchKey         string            `inbound:"ech-key,omitempty"`
 	RealityConfig  RealityConfig     `inbound:"reality-config,omitempty"`
 	PaddingScheme  string            `inbound:"padding-scheme,omitempty"`
+	Fallback       string            `inbound:"fallback,omitempty"`
+	ALPN           []string          `inbound:"alpn,omitempty"`
 }
 
 func (o MiuOption) Equal(config C.InboundConfig) bool {
@@ -51,6 +53,8 @@ func NewMiu(options *MiuOption) (*Miu, error) {
 			EchKey:         options.EchKey,
 			RealityConfig:  options.RealityConfig.Build(),
 			PaddingScheme:  options.PaddingScheme,
+			Fallback:       options.Fallback,
+			ALPN:           options.ALPN,
 		},
 	}, nil
 }

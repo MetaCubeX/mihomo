@@ -117,6 +117,14 @@ func TestDerivedUpdatePersistsToNextHello(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
+		// The header waits for the lane's first write; send just that (the fake server below reads no
+		// further than Settings, so nothing may follow it on the pipe).
+		l.wmu.Lock()
+		e = l.write(nil)
+		l.wmu.Unlock()
+		if e != nil {
+			t.Fatal(e)
+		}
 		typ, p, e := l.next()
 		if e != nil || typ != frUpdatePadding {
 			t.Fatalf("update: %d %v", typ, e)

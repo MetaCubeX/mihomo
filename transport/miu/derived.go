@@ -1,12 +1,16 @@
 package miu
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/metacubex/mihomo/transport/anytls/padding"
 
 	"golang.org/x/crypto/hkdf"
 )
@@ -28,11 +32,16 @@ type derivedReader struct {
 	block   []byte
 	pos     int
 	counter uint32
+	info    string
 }
 
 func newDerivedReader(token [32]byte) (*derivedReader, error) {
-	r := &derivedReader{prk: hkdf.Extract(sha256.New, token[:], []byte(derivedSalt))}
-	if err := r.expand(derivedInfo); err != nil {
+	return newDerivedReaderInfo(token, derivedInfo)
+}
+
+func newDerivedReaderInfo(token [32]byte, info string) (*derivedReader, error) {
+	r := &derivedReader{prk: hkdf.Extract(sha256.New, token[:], []byte(derivedSalt)), info: info}
+	if err := r.expand(info); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -50,7 +59,7 @@ func (r *derivedReader) expand(info string) error {
 func (r *derivedReader) uint16() (uint16, error) {
 	if r.pos+2 > len(r.block) {
 		r.counter++
-		if err := r.expand(derivedInfo + "/counter/" + strconv.FormatUint(uint64(r.counter), 10)); err != nil {
+		if err := r.expand(r.info + "/counter/" + strconv.FormatUint(uint64(r.counter), 10)); err != nil {
 			return 0, err
 		}
 	}
@@ -92,6 +101,43 @@ func derivedScheme(token [32]byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return generateScheme(r)
+}
+
+// laneInfo is the HKDF info prefix of a lane's own scheme; the lane's nonce follows it in hex.
+const laneInfo = derivedInfo + "/lane/"
+
+// laneScheme draws one lane's scheme from the same family as the PSK-derived one: the same generator and
+// bounds, fed by HKDF over the authentication token with a random per-lane nonce. Each side does this on
+// its own, for what it sends, and tells nobody: shaping is the sender's business and the receiver does
+// not check it. Settings still carries the md5 of the PSK-derived scheme. Lanes of one user therefore do
+// not share one fixed set of lengths.
+func laneScheme(token [32]byte, nonce []byte) (string, error) {
+	r, err := newDerivedReaderInfo(token, laneInfo+hex.EncodeToString(nonce))
+	if err != nil {
+		return "", err
+	}
+	return generateScheme(r)
+}
+
+// newLaneScheme returns a fresh lane scheme from the PSK-derived family, or base when none can be had.
+func newLaneScheme(token [32]byte, base *padding.PaddingFactory) *padding.PaddingFactory {
+	var nonce [16]byte
+	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
+		return base
+	}
+	text, err := laneScheme(token, nonce[:])
+	if err != nil {
+		return base
+	}
+	if p := padding.NewPaddingFactory([]byte(text)); p != nil {
+		return p
+	}
+	return base
+}
+
+// generateScheme is the generator of the derived schemes, reading its choices from r.
+func generateScheme(r *derivedReader) (string, error) {
 	count, err := r.sample(4, 10)
 	if err != nil {
 		return "", err
