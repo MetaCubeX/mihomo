@@ -101,6 +101,9 @@ type httpConn struct {
 	createErr error
 	cancelFn  func()
 	closeFn   func()
+	// client: Close lets the stream finish before tearing it down
+	lingerClose bool
+	lingerOnce  sync.Once
 	httputils.NetAddr
 
 	// deadlines
@@ -126,14 +129,43 @@ func (h *httpConn) waitCreated() error {
 	return h.createErr
 }
 
+// closeLinger bounds how long a closed client stream may still finish.
+const closeLinger = 5 * time.Second
+
 func (h *httpConn) Close() error {
-	var errorArr []error
-	h.setup(nil, net.ErrClosed)
+	var err error
 	if closer, ok := h.writer.(io.Closer); ok {
-		errorArr = append(errorArr, closer.Close())
+		err = closer.Close() // the request body ends here: END_STREAM after the data
 	}
+	if h.lingerClose {
+		// Closing the response body or cancelling the request resets the stream
+		// at once: HTTP/2 drops data still waiting for the flow-control window,
+		// HTTP/3 the stream's send buffer. Let the server see the end of the
+		// upload and finish its response, then tear down.
+		h.lingerOnce.Do(func() { go h.lingerTeardown() })
+		return err
+	}
+	h.setup(nil, net.ErrClosed)
+	return errors.Join(err, h.teardown())
+}
+
+func (h *httpConn) lingerTeardown() {
+	force := time.AfterFunc(closeLinger, func() {
+		h.setup(nil, net.ErrClosed)
+		_ = h.teardown()
+	})
+	<-h.created // the forced teardown cancels the request, so this ends too
 	if h.body != nil {
-		errorArr = append(errorArr, h.body.Close())
+		_, _ = io.Copy(io.Discard, h.body)
+	}
+	force.Stop()
+	_ = h.teardown()
+}
+
+func (h *httpConn) teardown() error {
+	var err error
+	if h.body != nil {
+		err = h.body.Close()
 	}
 	if h.cancelFn != nil {
 		h.cancelFn()
@@ -141,7 +173,7 @@ func (h *httpConn) Close() error {
 	if h.closeFn != nil {
 		h.closeFn()
 	}
-	return errors.Join(errorArr...)
+	return err
 }
 
 func (h *httpConn) writeFlush(p []byte) (n int, err error) {

@@ -146,8 +146,9 @@ func (c *Client) roundTrip(ctx context.Context, request *http.Request, conn *htt
 	pipeReader, pipeWriter := io.Pipe()
 	request.Body = pipeReader
 	*conn = httpConn{
-		writer:  pipeWriter,
-		created: make(chan struct{}),
+		writer:      pipeWriter,
+		created:     make(chan struct{}),
+		lingerClose: true,
 	}
 	c.count.Add(1)
 	conn.closeFn = once.OnceFunc(func() {
