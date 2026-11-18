@@ -277,7 +277,8 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	switch options.DNSMode {
 	case "", tun.DNSModeDisabled, tun.DNSModeNative, tun.DNSModeHijack:
 	default:
-		return nil, fmt.Errorf("invalid dns-mode: %s", options.DNSMode)
+		log.Warnln("[TUN] ignored invalid dns-mode: %s", options.DNSMode)
+		options.DNSMode = ""
 	}
 
 	var dnsAdds []netip.AddrPort
