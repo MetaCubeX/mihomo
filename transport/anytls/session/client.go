@@ -87,7 +87,7 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 		return nil, fmt.Errorf("failed to create stream: %w", err)
 	}
 
-	stream.dieHook = func() {
+	stream.setCloseHook(func() {
 		// If Session is not closed, put this Stream to pool
 		if !session.IsClosed() {
 			if c.disableReuse {
@@ -106,7 +106,7 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 				c.idleSessionLock.Unlock()
 			}
 		}
-	}
+	})
 
 	return stream, nil
 }
