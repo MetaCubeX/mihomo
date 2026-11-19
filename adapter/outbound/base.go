@@ -407,6 +407,12 @@ func (p *autoCloseProxyAdapter) Close() error {
 	return p.closeErr
 }
 
+// UnwrapProxyAdapter returns the wrapped adapter, allowing callers that need a
+// concrete adapter type (e.g. tailscale) to reach through the auto-close layer.
+func (p *autoCloseProxyAdapter) UnwrapProxyAdapter() C.ProxyAdapter {
+	return p.ProxyAdapter
+}
+
 func NewAutoCloseProxyAdapter(adapter ProxyAdapter) ProxyAdapter {
 	proxy := &autoCloseProxyAdapter{
 		ProxyAdapter: adapter,
