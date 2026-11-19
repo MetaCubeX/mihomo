@@ -168,6 +168,7 @@ type DNS struct {
 	FakeIPPool6           *fakeip.Pool
 	FakeIPSkipper         *fakeip.Skipper
 	FakeIPTTL             int
+	FakeIPRedirHost       bool
 	NameServerPolicy      []dns.Policy
 	ProxyServerNameserver []dns.NameServer
 	ProxyServerPolicy     []dns.Policy
@@ -237,6 +238,7 @@ type RawDNS struct {
 	FakeIPRange6                 string                              `yaml:"fake-ip-range6" json:"fake-ip-range6"`
 	FakeIPFilter                 []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
 	FakeIPFilterMode             C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
+	FakeIPRedirHost              bool                                `yaml:"fake-ip-redir-host" json:"fake-ip-redir-host"`
 	FakeIPTTL                    int                                 `yaml:"fake-ip-ttl" json:"fake-ip-ttl"`
 	DefaultNameserver            []string                            `yaml:"default-nameserver" json:"default-nameserver"`
 	CacheAlgorithm               string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
@@ -504,14 +506,15 @@ func DefaultRawConfig() *RawConfig {
 		GlobalUA:          "clash.meta/" + C.Version,
 		ETagSupport:       true,
 		DNS: RawDNS{
-			Enable:         false,
-			IPv6:           false,
-			UseHosts:       true,
-			UseSystemHosts: true,
-			IPv6Timeout:    100,
-			EnhancedMode:   C.DNSMapping,
-			FakeIPRange:    "198.18.0.1/16",
-			FakeIPTTL:      1,
+			Enable:          false,
+			IPv6:            false,
+			UseHosts:        true,
+			UseSystemHosts:  true,
+			IPv6Timeout:     100,
+			EnhancedMode:    C.DNSMapping,
+			FakeIPRange:     "198.18.0.1/16",
+			FakeIPTTL:       1,
+			FakeIPRedirHost: true,
 			FallbackFilter: RawFallbackFilter{
 				GeoIP:     true,
 				GeoIPCode: "CN",
@@ -1538,6 +1541,7 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 
 		dnsCfg.FakeIPSkipper = skipper
 		dnsCfg.FakeIPTTL = cfg.FakeIPTTL
+		dnsCfg.FakeIPRedirHost = cfg.FakeIPRedirHost
 
 		if dnsCfg.FakeIPRange.IsValid() {
 			pool, err := fakeip.New(fakeip.Options{

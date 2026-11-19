@@ -16,6 +16,7 @@ type ResolverEnhancer struct {
 	fakeIPPool6   *fakeip.Pool
 	fakeIPSkipper *fakeip.Skipper
 	fakeIPTTL     int
+	mapSkipped    bool
 	mapping       *lru.LruCache[netip.Addr, string]
 	useHosts      bool
 }
@@ -165,6 +166,7 @@ type EnhancerConfig struct {
 	FakeIPPool6   *fakeip.Pool
 	FakeIPSkipper *fakeip.Skipper
 	FakeIPTTL     int
+	MapSkipped    bool
 	UseHosts      bool
 }
 
@@ -182,6 +184,7 @@ func NewEnhancer(cfg EnhancerConfig) *ResolverEnhancer {
 		}
 		e.fakeIPSkipper = cfg.FakeIPSkipper
 		e.fakeIPTTL = cfg.FakeIPTTL
+		e.mapSkipped = cfg.MapSkipped
 		if e.fakeIPTTL < 1 {
 			e.fakeIPTTL = 1
 		}

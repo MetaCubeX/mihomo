@@ -272,6 +272,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		FakeIPSkipper: c.FakeIPSkipper,
 		FakeIPTTL:     c.FakeIPTTL,
 		UseHosts:      c.UseHosts,
+		MapSkipped:    c.FakeIPRedirHost,
 	})
 
 	// reuse cache of old host mapper
