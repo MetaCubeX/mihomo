@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -90,7 +91,18 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string
 	return uid, pp, err
 }
 
-func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uid uint32, inode uint32, err error) {
+func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uint32, uint32, error) {
+	uid, inode, err := resolveSocketByNetlinkFamily(network, ip, srcPort)
+	if errors.Is(err, ErrNotFound) && ip.Is4() {
+		// a dual-stack AF_INET6 socket (IPV6_V6ONLY=0) can also send IPv4 packets,
+		// but INET_DIAG only dumps sockets of the requested family, so retry the
+		// lookup as AF_INET6 with the IPv4-mapped address
+		return resolveSocketByNetlinkFamily(network, netip.AddrFrom16(ip.As16()), srcPort)
+	}
+	return uid, inode, err
+}
+
+func resolveSocketByNetlinkFamily(network string, ip netip.Addr, srcPort int) (uid uint32, inode uint32, err error) {
 	request := &inetDiagRequest{
 		States: 0xffffffff,
 		Cookie: [2]uint32{0xffffffff, 0xffffffff},
