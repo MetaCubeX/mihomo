@@ -64,21 +64,12 @@ func (s SocketFactory) ListenTCP(ctx context.Context, options platform.TCPListen
 	if direct, ok := s.Dialer.(dialer.Dialer); ok {
 		return dialer.Listen(ctx, network, address, append(listenOpts, dialer.WithOption(direct.Opt))...)
 	}
-	if externalTCPListen(options.Purpose) {
-		return nil, fmt.Errorf("easytier: TCP listeners are unavailable through a proxy or custom dialer")
-	}
-	// ProxyNAT, port leases, and hole-punch reservations must bind on the host
-	// even when peer traffic uses dialer-proxy.
+	// Every listener binds on the host, regardless of the dialer. A
+	// dialer-proxy turns s.Dialer into a proxy dialer, and the previous code
+	// then failed Direct/Manual listeners, which made the whole easytier
+	// outbound fail to start even though listeners never use the outbound
+	// dialer. Peer traffic still goes through the proxy via ConnectTCP.
 	return dialer.Listen(ctx, network, address, listenOpts...)
-}
-
-func externalTCPListen(purpose platform.TCPListenPurpose) bool {
-	switch purpose {
-	case platform.TCPListenDirect, platform.TCPListenManual:
-		return true
-	default:
-		return false
-	}
 }
 
 func tcpNetwork(options platform.TCPBindOptions) string {
