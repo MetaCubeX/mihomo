@@ -55,6 +55,23 @@ func testInboundVless(t *testing.T, inboundOptions inbound.VlessOption, outbound
 
 	tunnel.DoTest(t, out)
 
+	if outboundOptions.Flow == "" && !outboundOptions.MuxCoolOpts.Enabled { // Mux.Cool can't be used with flow
+		t.Run("muxcool", func(t *testing.T) {
+			outboundOptions := outboundOptions
+			outboundOptions.MuxCoolOpts = outbound.MuxCoolOptions{Enabled: true}
+			out, err := outbound.NewVless(outboundOptions)
+			if !assert.NoError(t, err) {
+				return
+			}
+			defer out.Close()
+
+			// The Mux.Cool server of sing-vmess can leave a frame unflushed when many sub connections
+			// write at the same time, so only do the sequential test here.
+			// The concurrent case is covered by TestMuxCool_V2RayInterop and the tests in transport/muxcool.
+			tunnel.DoSequentialTest(t, out)
+		})
+	}
+
 	if outboundOptions.Network == "grpc" { // don't test sing-mux over grpc
 		return
 	}
@@ -134,6 +151,33 @@ func TestInboundVless_TLS(t *testing.T) {
 		Fingerprint: tlsFingerprint,
 	}
 	testInboundVlessTLS(t, inboundOptions, outboundOptions, true)
+}
+
+func TestInboundVless_TLS_Fragment(t *testing.T) {
+	inboundOptions := inbound.VlessOption{
+		Certificate: tlsCertificate,
+		PrivateKey:  tlsPrivateKey,
+	}
+	for _, fragment := range []outbound.FragmentOption{
+		{Enabled: true}, // default: tlshello
+		{Enabled: true, Packets: "tlshello", Length: "10-20", Interval: "0"},
+		{Enabled: true, Packets: "1-3", Length: "5-50", Interval: "0-1"},
+		{Enabled: true, Lengths: []string{"1", "5-10", "100-200"}, Intervals: []string{"0", "1"}, MaxSplit: "3-5"},
+		{}, // tcp-oob alone
+	} {
+		fragment := fragment
+		t.Run(fragment.Packets+"_"+fragment.Length+"_"+fragment.Interval+"_"+fragment.MaxSplit, func(t *testing.T) {
+			outboundOptions := outbound.VlessOption{
+				TLS:         true,
+				Fingerprint: tlsFingerprint,
+			}
+			outboundOptions.Fragment = fragment
+			if !fragment.Enabled || fragment.MaxSplit != "" {
+				outboundOptions.TCPOOB = "0"
+			}
+			testInboundVless(t, inboundOptions, outboundOptions)
+		})
+	}
 }
 
 func TestInboundVless_Encryption(t *testing.T) {

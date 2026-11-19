@@ -58,6 +58,23 @@ func testInboundVMess(t *testing.T, inboundOptions inbound.VmessOption, outbound
 
 	tunnel.DoTest(t, out)
 
+	if !outboundOptions.MuxCoolOpts.Enabled {
+		t.Run("muxcool", func(t *testing.T) {
+			outboundOptions := outboundOptions
+			outboundOptions.MuxCoolOpts = outbound.MuxCoolOptions{Enabled: true}
+			out, err := outbound.NewVmess(outboundOptions)
+			if !assert.NoError(t, err) {
+				return
+			}
+			defer out.Close()
+
+			// The Mux.Cool server of sing-vmess can leave a frame unflushed when many sub connections
+			// write at the same time, so only do the sequential test here.
+			// The concurrent case is covered by TestMuxCool_V2RayInterop and the tests in transport/muxcool.
+			tunnel.DoSequentialTest(t, out)
+		})
+	}
+
 	if outboundOptions.Network == "grpc" { // don't test sing-mux over grpc
 		return
 	}

@@ -19,6 +19,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/jls"
+	"github.com/metacubex/mihomo/transport/muxcool"
 	"github.com/metacubex/mihomo/transport/restls"
 	"github.com/metacubex/mihomo/transport/shadowtls"
 	"github.com/metacubex/mihomo/transport/tuic/common"
@@ -47,6 +48,8 @@ type Vless struct {
 	gunClient *gun.Client
 	// for xhttp
 	xhttpClient *xhttp.Client
+	// for Mux.Cool
+	muxCoolClient *muxcool.Client
 
 	echConfig       *ech.Config
 	shadowTLSConfig *shadowtls.Config
@@ -88,6 +91,7 @@ type VlessOption struct {
 	PrivateKey        string            `proxy:"private-key,omitempty"`
 	ServerName        string            `proxy:"servername,omitempty"`
 	ClientFingerprint string            `proxy:"client-fingerprint,omitempty"`
+	MuxCoolOpts       MuxCoolOptions    `proxy:"mux-cool,omitempty"`
 }
 
 type XHTTPOptions struct {
@@ -153,6 +157,15 @@ type XHTTPDownloadSettings struct {
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
+	c, err = v.streamTransportContext(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return v.streamConnContext(ctx, c, metadata)
+}
+
+// streamTransportContext setup the transport layer (tls, ws, http, h2...) on c
+func (v *Vless) streamTransportContext(ctx context.Context, c net.Conn) (_ net.Conn, err error) {
 	switch v.option.Network {
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
@@ -264,8 +277,34 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	if err != nil {
 		return nil, err
 	}
+	return c, nil
+}
 
-	return v.streamConnContext(ctx, c, metadata)
+// dialMuxCool opens a new connection to the server carrying Mux.Cool frames
+func (v *Vless) dialMuxCool(ctx context.Context) (_ net.Conn, err error) {
+	c, err := v.dialContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
+
+	c, err = v.streamTransportContext(ctx, c)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
+	if ctx.Done() != nil {
+		done := N.SetupContextForConn(ctx, c)
+		defer done(&err)
+	}
+	if v.encryption != nil {
+		c, err = v.encryption.Handshake(c)
+		if err != nil {
+			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+		}
+	}
+	return v.client.StreamConn(c, &vless.DstAddr{Mux: true})
 }
 
 func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
@@ -350,6 +389,13 @@ func (v *Vless) dialContext(ctx context.Context) (c net.Conn, err error) {
 
 // DialContext implements C.ProxyAdapter
 func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	if v.muxCoolClient != nil {
+		c, err := v.muxCoolClient.DialContext(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
+		if err != nil {
+			return nil, err
+		}
+		return NewConn(c, v), nil
+	}
 	c, err := v.dialContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
@@ -418,6 +464,11 @@ func (v *Vless) ProxyInfo() C.ProxyInfo {
 // Close implements C.ProxyAdapter
 func (v *Vless) Close() error {
 	var errs []error
+	if v.muxCoolClient != nil {
+		if err := v.muxCoolClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if v.gunClient != nil {
 		if err := v.gunClient.Close(); err != nil {
 			errs = append(errs, err)
@@ -484,6 +535,10 @@ func NewVless(option VlessOption) (*Vless, error) {
 		option.PacketAddr = false
 	}
 
+	if option.MuxCoolOpts.Enabled && addons != nil {
+		return nil, fmt.Errorf("mux-cool can't be used with flow %s", option.Flow)
+	}
+
 	client, err := vless.NewClient(option.UUID, addons)
 	if err != nil {
 		return nil, err
@@ -507,6 +562,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 		option: &option,
 	}
 	v.dialer = option.NewDialer(v.DialOptions())
+	if option.MuxCoolOpts.Enabled {
+		v.muxCoolClient = muxcool.NewClient(v.dialMuxCool, option.MuxCoolOpts.Concurrency)
+	}
 
 	v.encryption, err = encryption.NewClient(option.Encryption)
 	if err != nil {

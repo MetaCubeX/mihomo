@@ -5,6 +5,7 @@ import (
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/structure"
+	"github.com/metacubex/mihomo/component/fragment"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -26,6 +27,25 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 		proxy outbound.ProxyAdapter
 		err   error
 	)
+	if fragmentMapping, fragmentExist := mapping["fragment"].(map[string]any); fragmentExist {
+		fragmentOption := &outbound.FragmentOption{}
+		err = decoder.Decode(fragmentMapping, fragmentOption)
+		if err != nil {
+			return nil, err
+		}
+		if fragmentOption.Enabled {
+			if _, err = fragmentOption.Parse(); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if tcpOOB, exist := mapping["tcp-oob"]; exist {
+		if _, err = fragment.ParseOOB(fmt.Sprint(tcpOOB)); err != nil {
+			return nil, err
+		}
+	}
+
 	switch proxyType {
 	case "ss":
 		ssOption := &outbound.ShadowSocksOption{BasicOption: basicOption}
@@ -229,6 +249,22 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 
 	if err != nil {
 		return nil, err
+	}
+
+	if muxMapping, muxExist := mapping["mux-cool"].(map[string]any); muxExist {
+		muxOption := &outbound.MuxCoolOptions{}
+		err = decoder.Decode(muxMapping, muxOption)
+		if err != nil {
+			return nil, err
+		}
+		if muxOption.Enabled {
+			if proxyType != "vless" && proxyType != "vmess" {
+				return nil, fmt.Errorf("mux-cool is only supported by vless and vmess, not %s", proxyType)
+			}
+			if smuxMapping, _ := mapping["smux"].(map[string]any); smuxMapping["enabled"] == true {
+				return nil, fmt.Errorf("mux-cool and smux can't be enabled at the same time")
+			}
+		}
 	}
 
 	if muxMapping, muxExist := mapping["smux"].(map[string]any); muxExist {
