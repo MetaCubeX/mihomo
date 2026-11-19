@@ -20,6 +20,7 @@ const (
 	Version3            = 3
 	Version4            = 4
 	Version5            = 5
+	Version6            = 6
 	DefaultSnellVersion = Version1
 
 	// max packet length
@@ -38,6 +39,9 @@ const (
 	CommandError  byte = 2
 
 	Version byte = 1
+
+	// MaxClientIDLength is the maximum ClientID length encoded in a Snell request header.
+	MaxClientIDLength = 255
 )
 
 var endSignal = []byte{}
@@ -96,11 +100,13 @@ func (s *Snell) ReadReply() error {
 	return fmt.Errorf("server reported code: %d, message: %s", errcode, string(msg))
 }
 
-func WriteHeader(conn net.Conn, host string, port uint, version int) error {
-	return WriteHeaderWithReuse(conn, host, port, version, false)
-}
-
-func WriteHeaderWithReuse(conn net.Conn, host string, port uint, version int, reuse bool) error {
+func WriteHeader(conn net.Conn, host string, port uint16, version int, reuse bool, clientID []byte) error {
+	if len(clientID) > MaxClientIDLength {
+		return errors.New("snell client ID too long")
+	}
+	if len(clientID) > 0 && version != Version6 {
+		return errors.New("snell client ID is only supported on version 6")
+	}
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
 	buf.WriteByte(Version)
@@ -111,7 +117,8 @@ func WriteHeaderWithReuse(conn net.Conn, host string, port uint, version int, re
 	}
 
 	// clientID length & id
-	buf.WriteByte(0)
+	buf.WriteByte(uint8(len(clientID)))
+	buf.Write(clientID)
 
 	// host & port
 	buf.WriteByte(uint8(len(host)))
@@ -125,13 +132,21 @@ func WriteHeaderWithReuse(conn net.Conn, host string, port uint, version int, re
 	return nil
 }
 
-func WriteUDPHeader(conn net.Conn, version int) error {
+func WriteUDPHeader(conn net.Conn, version int, clientID []byte) error {
 	if version < Version3 {
 		return errors.New("unsupport UDP version")
 	}
+	if len(clientID) > MaxClientIDLength {
+		return errors.New("snell client ID too long")
+	}
+	if len(clientID) > 0 && version != Version6 {
+		return errors.New("snell client ID is only supported on version 6")
+	}
 
-	// version, command, clientID length
-	_, err := conn.Write([]byte{Version, CommandUDP, 0x00})
+	// version, command, client ID length, and optional per-user identity
+	header := []byte{Version, CommandUDP, uint8(len(clientID))}
+	header = append(header, clientID...)
+	_, err := conn.Write(header)
 	return err
 }
 
@@ -154,6 +169,9 @@ func HalfClose(conn net.Conn) error {
 }
 
 func StreamConn(conn net.Conn, psk []byte, version int) *Snell {
+	if version >= Version6 {
+		return StreamConnV6(conn, psk, V6ModeDefault)
+	}
 	if version >= Version4 {
 		return &Snell{Conn: newV4Conn(conn, psk)}
 	}
@@ -169,6 +187,18 @@ func StreamConn(conn net.Conn, psk []byte, version int) *Snell {
 
 func ServerStreamConn(conn net.Conn, psk []byte, version int) *Snell {
 	stream := StreamConn(conn, psk, version)
+	stream.reply = true
+	return stream
+}
+
+// StreamConnV6 wraps conn with the Snell v6 record layer in the given mode.
+// The request/reply layer above it is shared with the other versions.
+func StreamConnV6(conn net.Conn, psk []byte, mode V6Mode) *Snell {
+	return &Snell{Conn: newV6Conn(conn, psk, mode)}
+}
+
+func ServerStreamConnV6(conn net.Conn, psk []byte, mode V6Mode) *Snell {
+	stream := StreamConnV6(conn, psk, mode)
 	stream.reply = true
 	return stream
 }

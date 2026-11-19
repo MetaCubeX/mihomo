@@ -63,7 +63,6 @@ var randomFingerprint = once.OnceValue(func() UClientHelloID {
 	chooser, _ := weightedrand.NewChooser(
 		weightedrand.NewChoice("chrome", 6),
 		weightedrand.NewChoice("safari", 3),
-		weightedrand.NewChoice("ios", 2),
 		weightedrand.NewChoice("firefox", 1),
 	)
 	initClient := chooser.Pick()
@@ -104,6 +103,8 @@ func init() {
 	weights := utls.DefaultWeights
 	weights.TLSVersMax_Set_VersionTLS13 = 1
 	weights.FirstKeyShare_Set_CurveP256 = 0
+	weights.CurveIDs_Append_X25519 = 1
+	weights.KeyShare_Append_RandomGroups = 1
 	randomized := utls.HelloRandomized
 	randomized.Seed, _ = utls.NewPRNGSeed()
 	randomized.Weights = &weights

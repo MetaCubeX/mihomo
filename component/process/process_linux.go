@@ -190,7 +190,7 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 
 		info, err := f.Info()
 		if err != nil {
-			return "", err
+			continue
 		}
 		if info.Sys().(*syscall.Stat_t).Uid != uid {
 			continue

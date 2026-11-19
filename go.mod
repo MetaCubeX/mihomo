@@ -6,7 +6,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/dlclark/regexp2 v1.12.0
-	github.com/easytier/easytier/easytier-go v0.0.0-20260910071355-3d0c9c3ca5e2
+	github.com/easytier/easytier/easytier-go v0.0.0-20261111015056-2abb1676b475
 	github.com/enfein/mieru/v3 v3.39.0
 	github.com/gobwas/ws v1.4.0
 	github.com/gofrs/uuid/v5 v5.4.0
@@ -39,9 +39,9 @@ require (
 	github.com/metacubex/sing v0.5.9
 	github.com/metacubex/sing-mux v0.3.12
 	github.com/metacubex/sing-quic v0.0.0-20260904234848-1c242664697a
-	github.com/metacubex/sing-shadowsocks v0.2.13
+	github.com/metacubex/sing-shadowsocks v0.2.14
 	github.com/metacubex/sing-shadowsocks2 v0.2.8
-	github.com/metacubex/sing-tun v0.4.28
+	github.com/metacubex/sing-tun v0.4.29
 	github.com/metacubex/sing-vmess v0.2.5
 	github.com/metacubex/sing-wireguard v0.0.0-20261002050126-e5fa1a607406
 	github.com/metacubex/smux v0.0.0-20260105030934-d0c8756d3141
@@ -49,7 +49,7 @@ require (
 	github.com/metacubex/tailscale v0.0.0-20260821153257-ff0ecd818181
 	github.com/metacubex/tfo-go v0.0.0-20261026151606-08d83ec08c84
 	github.com/metacubex/tls v0.1.9
-	github.com/metacubex/utls v1.8.8
+	github.com/metacubex/utls v1.9.0-alpha.1
 	github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f
 	github.com/metacubex/zerotier-go v0.0.0-20260813124750-13fa6f45da5f
 	github.com/mroth/weightedrand/v2 v2.1.0

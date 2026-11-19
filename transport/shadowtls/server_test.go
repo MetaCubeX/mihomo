@@ -32,6 +32,7 @@ func TestServer(t *testing.T) {
 	}{
 		{name: "v1", version: 1},
 		{name: "v2", version: 2},
+		{name: "v2-utls", version: 2, fingerprint: "chrome"},
 		{name: "v2-utls-websocket", version: 2, fingerprint: "chrome", alpn: WsALPN},
 		{name: "v3", version: 3},
 		{name: "v3-utls", version: 3, fingerprint: "chrome"},

@@ -190,11 +190,6 @@ func uTLSHandshakeFunc(config *tls.Config, clientFingerprint string, version int
 					return err
 				}
 			}
-			if version == 2 { // ShadowTLS v2 not work with X25519MLKEM768
-				if err := tlsC.BuildRemovedX25519MLKEM768HandshakeState(tlsConn); err != nil {
-					return err
-				}
-			}
 			return tlsConn.HandshakeContext(ctx)
 		}
 		return tlsC.Client(conn, tlsConfig).HandshakeContext(ctx)

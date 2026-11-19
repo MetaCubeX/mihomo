@@ -31,6 +31,7 @@ type Listener struct {
 	closed    bool
 	config    LC.SnellServer
 	listeners []net.Listener
+	v6Mode    snell.V6Mode // only used for version 6
 }
 
 func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
@@ -39,6 +40,10 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	}
 	switch config.Version {
 	case snell.Version1, snell.Version2, snell.Version3, snell.Version4, snell.Version5:
+		if config.Mode != "" {
+			return nil, errors.New("snell inbound mode is only supported on version 6")
+		}
+	case snell.Version6:
 	default:
 		return nil, fmt.Errorf("snell inbound version %d is not supported", config.Version)
 	}
@@ -52,6 +57,20 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	}
 
 	l := &Listener{config: config}
+	if config.Version == snell.Version6 {
+		if err := snell.ValidateV6PSK([]byte(config.Psk)); err != nil {
+			return nil, fmt.Errorf("snell inbound %w", err)
+		}
+		if config.ObfsMode != "" {
+			// v6 replaced the simple-obfs layer with PSK-derived traffic shaping
+			return nil, fmt.Errorf("snell inbound version 6 does not support obfs mode %s", config.ObfsMode)
+		}
+		var err error
+		l.v6Mode, err = snell.ParseV6Mode(config.Mode)
+		if err != nil {
+			return nil, fmt.Errorf("snell inbound %w", err)
+		}
+	}
 
 	securityModes := make([]string, 0, 3)
 	if config.ShadowTLS.Enable {
@@ -162,7 +181,12 @@ func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...in
 	default:
 		return
 	}
-	stream := snell.ServerStreamConn(conn, []byte(l.config.Psk), l.config.Version)
+	var stream *snell.Snell
+	if l.config.Version == snell.Version6 {
+		stream = snell.ServerStreamConnV6(conn, []byte(l.config.Psk), l.v6Mode)
+	} else {
+		stream = snell.ServerStreamConn(conn, []byte(l.config.Psk), l.config.Version)
+	}
 	for {
 		reuse, err := l.handleRequest(stream, tunnel, additions...)
 		if err != nil || !reuse {

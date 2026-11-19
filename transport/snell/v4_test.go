@@ -301,7 +301,7 @@ func TestSnellWriteHeaderConnectCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conn := &bufferConn{}
-			if err := WriteHeaderWithReuse(conn, "example.com", 443, tt.version, tt.reuse); err != nil {
+			if err := WriteHeader(conn, "example.com", 443, tt.version, tt.reuse, nil); err != nil {
 				t.Fatal(err)
 			}
 			data := conn.Bytes()
@@ -312,6 +312,58 @@ func TestSnellWriteHeaderConnectCommand(t *testing.T) {
 				t.Fatalf("unexpected command: got %#x, want %#x", data[1], tt.want)
 			}
 		})
+	}
+}
+
+func TestSnellClientIDValidation(t *testing.T) {
+	maxID := bytes.Repeat([]byte{'k'}, MaxClientIDLength)
+	tcpConn := &bufferConn{}
+	if err := WriteHeader(tcpConn, "example.com", 443, Version6, false, maxID); err != nil {
+		t.Fatalf("TCP header rejected a %d-byte client ID: %v", MaxClientIDLength, err)
+	}
+	if got := tcpConn.Bytes()[2]; got != 0xff {
+		t.Fatalf("TCP client ID length = %d, want 255", got)
+	}
+	udpConn := &bufferConn{}
+	if err := WriteUDPHeader(udpConn, Version6, maxID); err != nil {
+		t.Fatalf("UDP header rejected a %d-byte client ID: %v", MaxClientIDLength, err)
+	}
+	if got := udpConn.Bytes()[2]; got != 0xff {
+		t.Fatalf("UDP client ID length = %d, want 255", got)
+	}
+
+	oversizedID := make([]byte, 256)
+	if err := WriteHeader(&bufferConn{}, "example.com", 443, Version6, false, oversizedID); err == nil {
+		t.Fatal("TCP header accepted a client ID longer than 255 bytes")
+	}
+	if err := WriteUDPHeader(&bufferConn{}, Version6, oversizedID); err == nil {
+		t.Fatal("UDP header accepted a client ID longer than 255 bytes")
+	}
+
+	clientID := []byte("alice-key")
+	if err := WriteHeader(&bufferConn{}, "example.com", 443, Version4, false, clientID); err == nil {
+		t.Fatal("TCP header accepted a client ID for Snell v4")
+	}
+	if err := WriteUDPHeader(&bufferConn{}, Version4, clientID); err == nil {
+		t.Fatal("UDP header accepted a client ID for Snell v4")
+	}
+}
+
+func TestSnellEmptyClientIDRemainsCompatible(t *testing.T) {
+	tcpConn := &bufferConn{}
+	if err := WriteHeader(tcpConn, "example.com", 443, Version6, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := tcpConn.Bytes()[2]; got != 0 {
+		t.Fatalf("legacy TCP client ID length = %d, want 0", got)
+	}
+
+	udpConn := &bufferConn{}
+	if err := WriteUDPHeader(udpConn, Version6, nil); err != nil {
+		t.Fatal(err)
+	}
+	if want := []byte{Version, CommandUDP, 0}; !bytes.Equal(udpConn.Bytes(), want) {
+		t.Fatalf("legacy UDP header = %x, want %x", udpConn.Bytes(), want)
 	}
 }
 
