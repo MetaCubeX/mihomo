@@ -171,6 +171,8 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		record := C.DelayHistory{Time: time.Now()}
 		if alive {
 			record.Delay = t
+		} else {
+			record.Error = err.Error()
 		}
 
 		p.alive.Store(alive)
@@ -188,6 +190,9 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 
 		if !satisfied {
 			record.Delay = 0
+			if alive {
+				record.Error = "unexpected status code"
+			}
 			alive = false
 		}
 
