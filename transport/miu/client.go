@@ -22,13 +22,13 @@ const (
 	// closed after defaultLaneIdle. Neither exceeds what the server announced minus 5s.
 	defaultLaneIdle = 30 * time.Second
 	warmLaneIdle    = 120 * time.Second
-	warmLanes       = 4
+	warmLanes       = 8
 	// abortDrain is how long an aborted stream waits for the server's END before giving the lane up.
 	abortDrain = 3 * time.Second
 	// Only when two streams are opened within laneBurstWindow is the pool topped up to minIdle lanes in
 	// the background: an occasional background connection is not worth extra handshakes.
 	laneBurstWindow = 10 * time.Second
-	defaultMinIdle  = 2
+	defaultMinIdle  = 1
 	maxIdleLanes    = 32
 	// firstPayloadWait is how long a new stream waits for the application's first bytes, so that they
 	// leave in the same packet as OPEN.
