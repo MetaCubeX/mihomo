@@ -237,13 +237,13 @@ func newHandler(resolver resolver.Resolver, mapper *ResolverEnhancer) handler {
 		middlewares = append(middlewares, withHosts(mapper.mapping))
 	}
 
-	enableMapping := true
+	disableMapping := false
 	if mapper.mode == C.DNSFakeIP {
 		middlewares = append(middlewares, withFakeIP(mapper.fakeIPSkipper, mapper.fakeIPPool, mapper.fakeIPPool6, mapper.fakeIPTTL))
-		enableMapping = mapper.mapSkipped
+		disableMapping = mapper.fakeIPDisableMapping
 	}
 
-	if mapper.mode != C.DNSNormal && enableMapping {
+	if mapper.mode != C.DNSNormal && !disableMapping {
 		middlewares = append(middlewares, withMapping(mapper.mapping))
 	}
 
