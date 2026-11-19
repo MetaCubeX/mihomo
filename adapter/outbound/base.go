@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"runtime"
 	"sync"
 	"syscall"
@@ -405,6 +406,24 @@ func (p *autoCloseProxyAdapter) Close() error {
 		p.closeErr = p.ProxyAdapter.Close()
 	})
 	return p.closeErr
+}
+
+func (p *autoCloseProxyAdapter) StartBackground() {
+	if starter, ok := p.ProxyAdapter.(C.BackgroundProxy); ok {
+		starter.StartBackground()
+	}
+}
+
+func (p *autoCloseProxyAdapter) SupportICMP() bool {
+	proxy, ok := p.ProxyAdapter.(C.ICMPEchoProxy)
+	return ok && proxy.SupportICMP()
+}
+
+func (p *autoCloseProxyAdapter) PingICMP(ctx context.Context, destination netip.Addr) error {
+	if proxy, ok := p.ProxyAdapter.(C.ICMPEchoProxy); ok && proxy.SupportICMP() {
+		return proxy.PingICMP(ctx, destination)
+	}
+	return C.ErrNotSupport
 }
 
 func NewAutoCloseProxyAdapter(adapter ProxyAdapter) ProxyAdapter {
