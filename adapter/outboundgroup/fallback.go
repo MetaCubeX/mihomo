@@ -120,6 +120,18 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 		}
 	}
 
+	// The selected proxy is not in the group: it was renamed or removed, it was
+	// restored from the cache file under a name the group no longer has, or its
+	// provider has not loaded yet. Pick as if nothing were selected, and keep
+	// the selection so it applies again once a provider lists the proxy.
+	if len(f.selected) != 0 {
+		for _, proxy := range proxies {
+			if proxy.AliveForTestUrl(f.testUrl) {
+				return proxy
+			}
+		}
+	}
+
 	return proxies[0]
 }
 
