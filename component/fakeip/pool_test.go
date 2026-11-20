@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -43,6 +44,27 @@ func createCachefileStore(options Options) (*Pool, string, error) {
 
 	pool.store = newCachefileStore(&cachefile.CacheFile{DB: db}, options.IPNet)
 	return pool, f.Name(), nil
+}
+
+// createSharedCachefile opens a cache file that several pools can be built on,
+// as the pools of a running config and of a reloaded one are
+func createSharedCachefile(t *testing.T) *cachefile.CacheFile {
+	db, err := bbolt.Open(filepath.Join(t.TempDir(), "cache.db"), 0o666, &bbolt.Options{Timeout: time.Second, NoStatistics: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return &cachefile.CacheFile{DB: db}
+}
+
+func newCachefilePool(t *testing.T, cache *cachefile.CacheFile, ipnet netip.Prefix) *Pool {
+	pool, err := New(Options{IPNet: ipnet})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.store = newCachefileStore(cache, ipnet)
+	pool.restoreState()
+	return pool
 }
 
 func TestPool_Basic(t *testing.T) {
@@ -307,4 +329,103 @@ func TestPool_FlushMemoryCache(t *testing.T) {
 	assert.Equal(t, bar, baz)
 	assert.NotEqual(t, bar, next)
 	assert.Equal(t, baz, nero)
+}
+
+func TestPool_CloneKeepsCachefileMappings(t *testing.T) {
+	ipnet := netip.MustParsePrefix("192.168.0.1/24")
+	cache := createSharedCachefile(t)
+
+	// no offset is stored until shutdown, so the file holds mappings without one
+	pool := newCachefilePool(t, cache, ipnet)
+	foo := pool.Lookup("foo.com")
+
+	// a reload builds the new pool while the old one is still serving
+	newPool := newCachefilePool(t, cache, ipnet)
+
+	host, exist := pool.LookBack(foo)
+	assert.True(t, exist)
+	assert.Equal(t, "foo.com", host)
+
+	newPool.CloneFrom(pool)
+
+	host, exist = newPool.LookBack(foo)
+	assert.True(t, exist)
+	assert.Equal(t, "foo.com", host)
+	assert.Equal(t, foo, newPool.Lookup("foo.com"))
+	assert.NotEqual(t, foo, newPool.Lookup("bar.com"))
+}
+
+func TestPool_OtherRangeFlushesCachefileOnUse(t *testing.T) {
+	uses := map[string]func(pool *Pool, ip netip.Addr){
+		"Lookup":   func(pool *Pool, ip netip.Addr) { pool.Lookup("bar.com") },
+		"LookBack": func(pool *Pool, ip netip.Addr) { pool.LookBack(ip) },
+		"Exist":    func(pool *Pool, ip netip.Addr) { pool.Exist(ip) },
+	}
+
+	for name, use := range uses {
+		t.Run(name, func(t *testing.T) {
+			cache := createSharedCachefile(t)
+			pool := newCachefilePool(t, cache, netip.MustParsePrefix("192.168.0.1/24"))
+			foo := pool.Lookup("foo.com")
+			pool.StoreState()
+
+			// the stored offset is outside the new range; building the pool must not
+			// flush the file yet, the reload may still be rejected
+			newPool := newCachefilePool(t, cache, netip.MustParsePrefix("192.168.1.1/24"))
+
+			host, exist := pool.LookBack(foo)
+			assert.True(t, exist)
+			assert.Equal(t, "foo.com", host)
+
+			newPool.CloneFrom(pool)
+			use(newPool, foo)
+
+			_, exist = pool.LookBack(foo)
+			assert.False(t, exist)
+			assert.True(t, newPool.IPNet().Contains(newPool.Lookup("foo.com")))
+		})
+	}
+}
+
+// with the flush deferred, a pool must still never use the mappings restoreState rejected
+func TestPool_StaleCachefileIsFlushedBeforeUse(t *testing.T) {
+	ipnet := netip.MustParsePrefix("192.168.0.1/24")
+	cases := map[string]func(t *testing.T, cache *cachefile.CacheFile) *Pool{
+		"new pool": func(t *testing.T, cache *cachefile.CacheFile) *Pool {
+			return newCachefilePool(t, cache, ipnet)
+		},
+		"state stored before use": func(t *testing.T, cache *cachefile.CacheFile) *Pool {
+			newCachefilePool(t, cache, ipnet).StoreState()
+			return newCachefilePool(t, cache, ipnet)
+		},
+		"cloned from an unused pool": func(t *testing.T, cache *cachefile.CacheFile) *Pool {
+			pool := newCachefilePool(t, cache, ipnet)
+			newPool := newCachefilePool(t, cache, ipnet)
+			newPool.CloneFrom(pool)
+			return newPool
+		},
+		"cloned from a memory pool": func(t *testing.T, cache *cachefile.CacheFile) *Pool {
+			pool, _ := New(Options{IPNet: ipnet, Size: 10})
+			newPool := newCachefilePool(t, cache, ipnet)
+			newPool.CloneFrom(pool)
+			return newPool
+		},
+	}
+
+	for name, build := range cases {
+		t.Run(name, func(t *testing.T) {
+			cache := createSharedCachefile(t)
+			// a previous run that did not store its offset
+			stale := newCachefilePool(t, cache, ipnet).Lookup("foo.com")
+
+			pool := build(t, cache)
+			assert.False(t, pool.Exist(stale))
+			foo := pool.Lookup("foo.com")
+			bar := pool.Lookup("bar.com")
+			assert.NotEqual(t, foo, bar)
+			host, exist := pool.LookBack(foo)
+			assert.True(t, exist)
+			assert.Equal(t, "foo.com", host)
+		})
+	}
 }
