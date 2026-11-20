@@ -56,10 +56,7 @@ func AddrFromNetAddr(addr net.Addr) (socks5.Addr, error) {
 }
 
 func AddrToNetAddr(addr socks5.Addr) net.Addr {
-	if udpAddr := addr.UDPAddr(); udpAddr != nil {
-		return udpAddr
-	}
-	return socksNetAddr{addr: addr}
+	return addr.NetAddr()
 }
 
 func WriteRequest(w io.Writer, command byte, addr socks5.Addr) error {
@@ -161,16 +158,4 @@ func ReadUint16(r io.Reader) (uint16, error) {
 		return 0, err
 	}
 	return binary.BigEndian.Uint16(buf[:]), nil
-}
-
-type socksNetAddr struct {
-	addr socks5.Addr
-}
-
-func (a socksNetAddr) Network() string {
-	return "udp"
-}
-
-func (a socksNetAddr) String() string {
-	return a.addr.String()
 }

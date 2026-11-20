@@ -31,6 +31,9 @@ func (d *Dns) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, er
 
 // ListenPacketContext implements C.ProxyAdapter
 func (d *Dns) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	log.Debugln("[DNS] hijack udp:%s from %s", metadata.RemoteAddress(), metadata.SourceAddrPort())
 	if err := d.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
@@ -42,7 +45,7 @@ func (d *Dns) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.
 		response: make(chan dnsPacket, 1),
 		ctx:      ctx,
 		cancel:   cancel,
-	}, d), nil
+	}, d, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (d *Dns) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

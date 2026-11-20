@@ -491,6 +491,9 @@ func (w *Masque) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 }
 
 func (w *Masque) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if w.l4Client != nil {
 		return nil, errors.New("masque L4 proxy mode is not supported for UDP")
 	}
@@ -509,7 +512,7 @@ func (w *Masque) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if pc == nil {
 		return nil, errors.New("packetConn is nil")
 	}
-	return NewPacketConn(pc, w), nil
+	return NewPacketConn(pc, w, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (w *Masque) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

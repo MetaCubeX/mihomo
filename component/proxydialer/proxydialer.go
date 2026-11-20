@@ -10,6 +10,8 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel/statistic"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 type proxyDialer struct {
@@ -31,14 +33,7 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 		if err != nil {
 			return nil, err
 		}
-		if !currentMeta.Resolved() { // should not happen, maybe by a wrongly implemented proxy, but we can handle this (:
-			err = pc.ResolveUDP(ctx, currentMeta)
-			if err != nil {
-				_ = pc.Close()
-				return nil, err
-			}
-		}
-		return N.NewBindPacketConn(pc, currentMeta.UDPAddr()), nil
+		return N.NewBindPacketConn(pc, pc.InitialDestination()), nil
 	}
 	conn, err := p.proxy.DialContext(ctx, currentMeta)
 	if err != nil {
@@ -60,6 +55,10 @@ func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, 
 
 func (p proxyDialer) listenPacket(ctx context.Context, currentMeta *C.Metadata) (C.PacketConn, error) {
 	currentMeta.NetWork = C.UDP
+	// This address belongs to the enclosing transport, not its business target.
+	currentMeta.UDP = &C.UDPRequest{
+		Target: M.ParseSocksaddrHostPort(currentMeta.String(), currentMeta.DstPort),
+	}
 	pc, err := p.proxy.ListenPacketContext(ctx, currentMeta)
 	if err != nil {
 		return nil, err

@@ -36,6 +36,9 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 
 // ListenPacketContext implements C.ProxyAdapter
 func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if err := d.loopBack.CheckPacketConn(metadata); err != nil {
 		return nil, err
 	}
@@ -46,7 +49,11 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err != nil {
 		return nil, err
 	}
-	return d.loopBack.NewPacketConn(NewPacketConn(pc, d)), nil
+	packetConn, err := NewPacketConn(pc, d, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
+	if err != nil {
+		return nil, err
+	}
+	return d.loopBack.NewPacketConn(packetConn), nil
 }
 
 func (d *Direct) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

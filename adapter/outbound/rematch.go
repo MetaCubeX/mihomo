@@ -26,8 +26,11 @@ func (l *Rematch) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn
 }
 
 func (l *Rematch) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	l.applyMetadata(metadata)
-	return NewPacketConn(&nopPacketConn{}, l), nil
+	return NewPacketConn(&nopPacketConn{}, l, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (l *Rematch) applyMetadata(metadata *C.Metadata) {

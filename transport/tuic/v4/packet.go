@@ -27,12 +27,12 @@ type quicStreamPacketConn struct {
 
 	closeOnce sync.Once
 	closeErr  error
-	closed    bool
+	closed    atomic.Bool
 }
 
 func (q *quicStreamPacketConn) Close() error {
 	q.closeOnce.Do(func() {
-		q.closed = true
+		q.closed.Store(true)
 		q.closeErr = q.close()
 	})
 	return q.closeErr
@@ -48,8 +48,8 @@ func (q *quicStreamPacketConn) close() (err error) {
 		}()
 	}
 	if q.inputConn != nil {
+		// Keep the pointer immutable: Close may race with either read method.
 		_ = q.inputConn.Close()
-		q.inputConn = nil
 
 		buf := pool.GetBuffer()
 		defer pool.PutBuffer(buf)
@@ -99,7 +99,7 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 			return
 		}
 		n = copy(p, packet.DATA)
-		addr = packet.ADDR.UDPAddr()
+		addr = packet.ADDR.NetAddr()
 	} else {
 		err = net.ErrClosed
 	}
@@ -114,7 +114,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 			return
 		}
 		data = packet.DATA
-		addr = packet.ADDR.UDPAddr()
+		addr = packet.ADDR.NetAddr()
 	} else {
 		err = net.ErrClosed
 	}
@@ -125,7 +125,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	if q.udpRelayMode != types.QUIC && len(p) > q.maxUdpRelayPacketSize {
 		return 0, &quic.DatagramTooLargeError{MaxDatagramPayloadSize: int64(q.maxUdpRelayPacketSize)}
 	}
-	if q.closed {
+	if q.closed.Load() {
 		return 0, net.ErrClosed
 	}
 	if q.writeClosed != nil && q.writeClosed.Load() {

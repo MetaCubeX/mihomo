@@ -248,6 +248,9 @@ func (ss *ShadowSocks) listenPacketContext(ctx context.Context) (net.PacketConn,
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	if ss.option.UDPOverTCP {
 		var c net.Conn
 		c, err = ss.DialContext(ctx, metadata)
@@ -257,18 +260,30 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		defer func(c net.Conn) {
 			safeConnClose(c, err)
 		}(c)
-		if err = ss.ResolveUDP(ctx, metadata); err != nil {
-			return nil, err
-		}
-		destination := M.SocksaddrFromNet(metadata.UDPAddr())
-		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
-			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
+		var destination M.Socksaddr
+		// sing-box v1.14.3 common/uot/router.go starts legacy associations at
+		// 0.0.0.0:0 and never resolves frame destinations. Keep v1 IP-only.
+		if metadata.UDP.AllowRemote && ss.option.UDPOverTCPVersion != uot.LegacyVersion {
+			destination, err = remoteUDPTarget(metadata.UDP.Target)
+			if err != nil {
+				return nil, err
+			}
 		} else {
-			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
+			if err = ss.ResolveUDP(ctx, metadata); err != nil {
+				return nil, err
+			}
+			destination = M.SocksaddrFromNet(metadata.UDPAddr())
+		}
+		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
+			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyAddress})
+		} else {
+			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 		}
 	}
-	if err := ss.ResolveUDP(ctx, metadata); err != nil {
-		return nil, err
+	if !metadata.UDP.AllowRemote {
+		if err := ss.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 
 	pc, addr, err := ss.listenPacketContext(ctx)
@@ -276,7 +291,7 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		return nil, err
 	}
 	pc = ss.method.DialPacketConn(bufio.NewBindPacketConn(pc, addr))
-	return NewPacketConn(pc, ss), nil
+	return NewPacketConn(pc, ss, metadata, C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyAddress})
 }
 
 // ProxyInfo implements C.ProxyAdapter

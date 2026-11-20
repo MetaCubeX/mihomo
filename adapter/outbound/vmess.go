@@ -296,19 +296,30 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		}
 	}
 	if metadata.NetWork == C.UDP {
+		var destination M.Socksaddr
+		if metadata.UDP != nil && metadata.UDP.AllowRemote && !v.option.PacketAddr {
+			destination, err = remoteUDPTarget(metadata.UDP.Target)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			destination = M.Socksaddr{Addr: metadata.DstIP.Unmap(), Port: metadata.DstPort}
+		}
 		if v.option.XUDP {
 			var globalID [8]byte
-			if metadata.SourceValid() {
-				globalID = utils.GlobalID(metadata.SourceAddress())
+			// The immutable association key includes the mapping mode and origin;
+			// using only the source would merge distinct sessions at the server.
+			if metadata.UDP != nil && metadata.UDP.SessionKey != "" {
+				globalID = utils.GlobalID(metadata.UDP.SessionKey)
 			}
 			if useEarly {
 				conn = v.client.DialEarlyXUDPPacketConn(c,
 					globalID,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					destination)
 			} else {
 				conn, err = v.client.DialXUDPPacketConn(c,
 					globalID,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					destination)
 			}
 		} else if v.option.PacketAddr {
 			if useEarly {
@@ -322,10 +333,10 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		} else {
 			if useEarly {
 				conn = v.client.DialEarlyPacketConn(c,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					destination)
 			} else {
 				conn, err = v.client.DialPacketConn(c,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+					destination)
 			}
 		}
 	} else {
@@ -421,8 +432,13 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = v.ResolveUDP(ctx, metadata); err != nil {
+	if err := validateUDPRequest(metadata); err != nil {
 		return nil, err
+	}
+	if !metadata.UDP.AllowRemote || v.option.PacketAddr {
+		if err = v.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 
 	c, err := v.dialContext(ctx)
@@ -438,10 +454,21 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
 
-	if pc, ok := c.(net.PacketConn); ok {
-		return NewPacketConn(N.NewThreadSafePacketConn(pc), v), nil
+	capabilities := C.UDPCapabilities{Destination: C.UDPDomain, Reply: C.UDPReplyBoundDestination}
+	if v.option.XUDP {
+		capabilities.Reply = C.UDPReplyAddress
+	} else if v.option.PacketAddr {
+		capabilities.Destination = C.UDPIPOnly
+		capabilities.Reply = C.UDPReplyIPOnly
 	}
-	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+	if pc, ok := c.(net.PacketConn); ok {
+		return NewPacketConn(N.NewThreadSafePacketConn(pc), v, metadata, capabilities)
+	}
+	var destination net.Addr = metadata.UDPAddr()
+	if metadata.UDP.AllowRemote && !v.option.PacketAddr {
+		destination = metadata.UDP.Target.Unwrap()
+	}
+	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: destination}, v, metadata, capabilities)
 }
 
 // ProxyInfo implements C.ProxyAdapter

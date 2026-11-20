@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"sync"
 	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/dialer"
+
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 // Adapter Type
@@ -104,7 +105,9 @@ type Conn interface {
 type PacketConn interface {
 	N.EnhancePacketConn
 	Connection
-	ResolveUDP(ctx context.Context, metadata *Metadata) error
+	PrepareUDP(ctx context.Context, metadata *Metadata) (M.Socksaddr, error)
+	InitialDestination() M.Socksaddr
+	UDPCapabilities() UDPCapabilities
 }
 
 type Dialer interface {
@@ -286,6 +289,8 @@ type PacketAdapter interface {
 	Metadata() *Metadata
 	// Key is a SNAT key
 	Key() string
+	// BindNATSource pins reply sockets to the source group selected for this packet.
+	BindNATSource(NatSource)
 }
 
 type packetAdapter struct {
@@ -302,6 +307,12 @@ func (s *packetAdapter) Metadata() *Metadata {
 // Key is a SNAT key
 func (s *packetAdapter) Key() string {
 	return s.key
+}
+
+func (s *packetAdapter) BindNATSource(source NatSource) {
+	if packet, ok := s.UDPPacket.(interface{ BindNATSource(NatSource) }); ok {
+		packet.BindNATSource(source)
+	}
 }
 
 func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
@@ -331,27 +342,15 @@ type PacketSender interface {
 	Close()
 	// DoSniff will blocking after sniffer work done
 	DoSniff(*Metadata) error
-	// AddMapping add a destination NAT record
-	AddMapping(originMetadata *Metadata, metadata *Metadata)
-	// RestoreReadFrom restore destination NAT for ReadFrom
-	// the implement must ensure returned netip.Add is valid (or just return input addr)
-	RestoreReadFrom(addr netip.Addr) netip.Addr
 }
 
 type NatTable interface {
-	GetOrCreate(key string, maker func() PacketSender) (PacketSender, bool)
+	LoadSession(source string, origin M.Socksaddr) (PacketSender, NatSource, bool)
+	GetOrCreateSession(source string, origin M.Socksaddr, config UDPConfig, maker func(UDPSessionKey, NatSource, UDPConfig) PacketSender) (PacketSender, NatSource, bool)
+	DeleteSession(key UDPSessionKey, sender PacketSender) bool
+}
 
-	Delete(key string)
-
-	GetForLocalConn(lAddr, rAddr string) *net.UDPConn
-
-	AddForLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
-
-	RangeForLocalConn(lAddr string, f func(key string, value *net.UDPConn) bool)
-
-	GetOrCreateLockForLocalConn(lAddr string, key string) (*sync.Cond, bool)
-
-	DeleteForLocalConn(lAddr, key string)
-
-	DeleteLockForLocalConn(lAddr, key string)
+// NatSource owns reply sockets shared by the sessions of one source address.
+type NatSource interface {
+	WithLocalConn(remote string, maker func() (*net.UDPConn, error), write func(*net.UDPConn) (int, error)) (int, error)
 }

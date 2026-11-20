@@ -182,6 +182,9 @@ func (o *OpenVPN) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 }
 
 func (o *OpenVPN) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if err := validateUDPRequest(metadata); err != nil {
+		return nil, err
+	}
 	var pc net.PacketConn
 	tunDevice, r, err := o.run(ctx)
 	if err != nil {
@@ -198,7 +201,7 @@ func (o *OpenVPN) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 	if pc == nil {
 		return nil, errors.New("packetConn is nil")
 	}
-	return NewPacketConn(pc, o), nil
+	return NewPacketConn(pc, o, metadata, C.UDPCapabilities{Destination: C.UDPIPOnly, Reply: C.UDPReplyIPOnly})
 }
 
 func (o *OpenVPN) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

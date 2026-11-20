@@ -19,6 +19,7 @@ import (
 	"github.com/metacubex/mihomo/constant/sniffer"
 
 	"github.com/metacubex/quic-go/quicvarint"
+	M "github.com/metacubex/sing/common/metadata"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -153,6 +154,7 @@ type quicPacketSender struct {
 	result              string
 
 	replaceDomain sniffer.ReplaceDomain
+	destination   M.Socksaddr
 
 	constant.PacketSender
 
@@ -166,6 +168,12 @@ type quicPacketSender struct {
 func (q *quicPacketSender) Send(current constant.PacketAdapter) {
 	defer q.PacketSender.Send(current)
 
+	// A source session can carry unrelated targets while its first QUIC
+	// handshake is incomplete. Their CRYPTO fragments must stay separate.
+	if packetDestination(current.Metadata()) != q.destination {
+		return
+	}
+
 	q.lock.RLock()
 	if q.closed {
 		q.lock.RUnlock()
@@ -178,6 +186,13 @@ func (q *quicPacketSender) Send(current constant.PacketAdapter) {
 		q.close()
 		return
 	}
+}
+
+func packetDestination(metadata *constant.Metadata) M.Socksaddr {
+	if metadata.Host != "" {
+		return M.Socksaddr{Fqdn: metadata.Host, Port: metadata.DstPort}
+	}
+	return M.Socksaddr{Addr: metadata.DstIP.Unmap(), Port: metadata.DstPort}
 }
 
 // DoSniff wait sniffer recv all fragments and update the domain
