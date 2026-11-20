@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/adapter"
@@ -48,7 +49,7 @@ type baseProvider struct {
 	name        string
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
-	version     uint32
+	version     atomic.Uint32
 }
 
 func (bp *baseProvider) Name() string {
@@ -56,9 +57,7 @@ func (bp *baseProvider) Name() string {
 }
 
 func (bp *baseProvider) Version() uint32 {
-	bp.mutex.RLock()
-	defer bp.mutex.RUnlock()
-	return bp.version
+	return bp.version.Load()
 }
 
 func (bp *baseProvider) Initial() error {
@@ -104,8 +103,9 @@ func (bp *baseProvider) setProxies(proxies []C.Proxy) {
 	bp.mutex.Lock()
 	defer bp.mutex.Unlock()
 	bp.proxies = proxies
-	bp.version += 1
 	bp.healthCheck.setProxies(proxies)
+	// Publish only after proxy and health-check state has been installed.
+	bp.version.Add(1)
 	if bp.healthCheck.auto() {
 		go bp.healthCheck.check()
 	}
