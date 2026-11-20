@@ -17,12 +17,15 @@ var (
 )
 
 type healthCheckSchema struct {
-	Enable         bool   `provider:"enable"`
-	URL            string `provider:"url,omitempty"`
-	Interval       int    `provider:"interval,omitempty"`
-	TestTimeout    int    `provider:"timeout,omitempty"`
-	Lazy           bool   `provider:"lazy,omitempty"`
-	ExpectedStatus string `provider:"expected-status,omitempty"`
+	Enable            bool   `provider:"enable"`
+	URL               string `provider:"url,omitempty"`
+	Interval          int    `provider:"interval,omitempty"`
+	TestTimeout       int    `provider:"timeout,omitempty"`
+	Lazy              bool   `provider:"lazy,omitempty"`
+	ExpectedStatus    string `provider:"expected-status,omitempty"`
+	CheckMethod       string `provider:"check-method,omitempty"`
+	HTTPHeaders       any    `provider:"http-headers,omitempty"`
+	ExpectedBodyMatch string `provider:"expected-body-match,omitempty"`
 }
 
 type proxyProviderSchema struct {
@@ -60,6 +63,10 @@ func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P
 	if err != nil {
 		return nil, err
 	}
+	healthCheckOption, err := C.NewHealthCheckOption(expectedStatus, schema.HealthCheck.CheckMethod, schema.HealthCheck.HTTPHeaders, schema.HealthCheck.ExpectedBodyMatch)
+	if err != nil {
+		return nil, err
+	}
 
 	var hcInterval uint
 	if schema.HealthCheck.Enable {
@@ -68,7 +75,7 @@ func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P
 		}
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus)
+	hc := NewHealthCheckWithOption([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, healthCheckOption)
 
 	parser, err := NewProxiesParser(name, tunnel, schema.Filter, schema.ExcludeFilter, schema.ExcludeType, schema.DialerProxy, schema.Override, schema.AgeSecretKey)
 	if err != nil {
