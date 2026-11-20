@@ -29,6 +29,8 @@ func proxyRouter() http.Handler {
 		r.Use(parseProxyName, findProxyByName)
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
+		r.Get("/route-cache", targetRouteCache)
+		r.Delete("/route-cache", targetRouteCache)
 		r.Put("/", updateProxy)
 		r.Delete("/", unfixedProxy)
 	})
@@ -157,4 +159,21 @@ func unfixedProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	render.Status(r, http.StatusBadRequest)
 	render.JSON(w, r, ErrBadRequest)
+}
+
+// Route caches expose aggregate counts only; target history is never returned.
+func targetRouteCache(w http.ResponseWriter, r *http.Request) {
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+	cache, ok := proxy.Adapter().(*outboundgroup.TargetFallback)
+	if !ok {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("Not a target-fallback group"))
+		return
+	}
+	if r.Method == http.MethodDelete {
+		cache.FlushRouteCache()
+		render.NoContent(w, r)
+		return
+	}
+	render.JSON(w, r, cache.RouteCacheStats())
 }
