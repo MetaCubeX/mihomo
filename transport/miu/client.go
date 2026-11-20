@@ -219,8 +219,15 @@ func (c *Client) takeIdle(now time.Time) (*lane, bool) {
 		c.mu.Unlock()
 
 		alive, pending := connAlive(it.l.sock)
-		// Nothing should arrive on an idle lane: if something has, the server is closing it
-		// (close_notify). A lane that has not been used has not even sent its header yet.
+		// Nothing should arrive on a used idle lane: if something has, the server is closing it
+		// (close_notify). A lane that has not been used yet is different: it has not sent its header,
+		// so the server says nothing on it but may well have sent its post-handshake records (session
+		// tickets — a REALITY server sends them after the client's Finished), which nobody has read.
+		// Those are not a close; the server only closes an unused lane at its handshake timeout, which
+		// preauthLaneTTL stays under. The TLS layer takes the tickets off on the lane's first read.
+		if pending && it.l.unauthed.Load() {
+			pending = false
+		}
 		if now.Sub(it.since) < c.ttl(it.l, 0) && alive && !pending {
 			return it.l, it.used
 		}
