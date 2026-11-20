@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"io"
 	"net"
 
@@ -64,9 +65,26 @@ func closeWrite(writer io.Closer) error {
 	return writer.Close()
 }
 
+// CloseReset resets the connection if supported before closing it.
+func CloseReset(conn net.Conn) error {
+	if conn == nil {
+		return nil
+	}
+	if lingerConn, ok := common.Cast[interface{ SetLinger(int) error }](conn); ok {
+		_ = lingerConn.SetLinger(0)
+	}
+	return conn.Close()
+}
+
+func isNormalClose(err error) bool {
+	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
+}
+
 // Relay copies between left and right bidirectionally.
+// If resetLeftOnError is true, copy errors reset the left connection when supported.
 // like [bufio.CopyConn] but remove unneeded [context.Context] handle and the cost of [task.Group]
-func Relay(leftConn, rightConn net.Conn) {
+func Relay(leftConn, rightConn net.Conn, resetLeftOnError ...bool) {
+	resetLeft := len(resetLeftOnError) > 0 && resetLeftOnError[0]
 	defer func() {
 		_ = leftConn.Close()
 		_ = rightConn.Close()
@@ -75,18 +93,25 @@ func Relay(leftConn, rightConn net.Conn) {
 	ch := make(chan struct{})
 	go func() {
 		_, err := bufio.Copy(leftConn, rightConn)
-		if err == nil {
+		if isNormalClose(err) {
 			_ = closeWrite(leftConn)
 		} else {
-			_ = leftConn.Close()
+			if resetLeft {
+				_ = CloseReset(leftConn)
+			} else {
+				_ = leftConn.Close()
+			}
 		}
 		close(ch)
 	}()
 
 	_, err := bufio.Copy(rightConn, leftConn)
-	if err == nil {
+	if isNormalClose(err) {
 		_ = closeWrite(rightConn)
 	} else {
+		if resetLeft {
+			_ = CloseReset(leftConn)
+		}
 		_ = rightConn.Close()
 	}
 	<-ch
