@@ -262,6 +262,16 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 	}
 }
 
+// Attribute the failure before asynchronous accounting: a later defer cancel
+// must not erase a real node failure. Socket errors after client cancellation
+// are not evidence that a node failed; dial-budget expiry remains countable.
+func (gb *GroupBase) onTCPDialFailed(ctx context.Context, adapterType C.AdapterType, err error, fn func()) {
+	if ctx.Err() == context.Canceled {
+		return
+	}
+	gb.onDialFailed(adapterType, err, fn)
+}
+
 func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func()) {
 	if adapterType == C.Direct || adapterType == C.Compatible || adapterType == C.Reject || adapterType == C.Pass || adapterType == C.RejectDrop {
 		return
@@ -278,8 +288,7 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 		}
 
 		gb.failedTestMux.Lock()
-		defer gb.failedTestMux.Unlock()
-
+		shouldCheck := false
 		gb.failedTimes++
 		if gb.failedTimes == 1 {
 			log.Debugln("ProxyGroup: %s first failed", gb.Name())
@@ -287,24 +296,28 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 		} else {
 			if time.Since(gb.failedTime) > time.Duration(gb.testTimeout)*time.Millisecond {
 				gb.failedTimes = 0
+				gb.failedTestMux.Unlock()
 				return
 			}
 
 			log.Debugln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
 			if gb.failedTimes >= gb.maxFailedTimes {
-				log.Warnln("because %s failed multiple times, activate health check", gb.Name())
-				fn()
+				shouldCheck = true
 			}
+		}
+		gb.failedTestMux.Unlock()
+		if shouldCheck {
+			log.Warnln("because %s failed multiple times, activate health check", gb.Name())
+			fn()
 		}
 	}()
 }
 
 func (gb *GroupBase) healthCheck() {
-	if gb.failedTesting.Load() {
+	if !gb.failedTesting.CompareAndSwap(false, true) {
 		return
 	}
 
-	gb.failedTesting.Store(true)
 	wg := sync.WaitGroup{}
 	for _, proxyProvider := range gb.providers {
 		wg.Add(1)
@@ -316,11 +329,15 @@ func (gb *GroupBase) healthCheck() {
 	}
 
 	wg.Wait()
-	gb.failedTesting.Store(false)
+	gb.failedTestMux.Lock()
 	gb.failedTimes = 0
+	gb.failedTesting.Store(false)
+	gb.failedTestMux.Unlock()
 }
 
 func (gb *GroupBase) onDialSuccess() {
+	gb.failedTestMux.Lock()
+	defer gb.failedTestMux.Unlock()
 	if !gb.failedTesting.Load() {
 		gb.failedTimes = 0
 	}
