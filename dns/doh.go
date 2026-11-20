@@ -36,9 +36,9 @@ const (
 	// connections in HTTP transport.
 	transportDefaultIdleConnTimeout = 5 * time.Minute
 
-	dialTimeout        = 10 * time.Second
+	dialTimeout = 10 * time.Second
 
-	maxElapsedTime  = time.Second * 30
+	maxElapsedTime = time.Second * 30
 )
 
 var DefaultHTTPVersions = []C.HTTPVersion{C.HTTPVersion11, C.HTTPVersion2}
@@ -424,12 +424,16 @@ func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripp
 		// upstream.
 		transportH3, err := doh.createTransportH3(ctx, tlsConfig)
 		if err == nil {
-			log.Debugln("[%s] using HTTP/3 for this upstream: QUIC was faster", doh.url.String())
+			if log.DebugEnabled() {
+				log.Debugln("[%s] using HTTP/3 for this upstream: QUIC was faster", doh.url.String())
+			}
 			return transportH3, nil
 		}
 	}
 
-	log.Debugln("[%s] using HTTP/2 for this upstream: %v", doh.url.String(), err)
+	if log.DebugEnabled() {
+		log.Debugln("[%s] using HTTP/2 for this upstream: %v", doh.url.String(), err)
+	}
 
 	if !doh.supportsHTTP() {
 		return nil, errors.New("HTTP1/1 and HTTP2 are not supported by this upstream")
