@@ -692,7 +692,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	log.Infoln("Geosite Matcher implementation: %s", geodata.SiteMatcherName())
-	ruleProviders, err := parseRuleProviders(rawCfg)
+	ruleProviders, err := parseRuleProviders(rawCfg, proxies)
 	if err != nil {
 		return nil, err
 	}
@@ -1019,12 +1019,12 @@ func parseListeners(cfg *RawConfig) (listeners map[string]C.InboundListener, err
 	return
 }
 
-func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]P.RuleProvider, err error) {
+func parseRuleProviders(cfg *RawConfig, proxies map[string]C.Proxy) (ruleProviders map[string]P.RuleProvider, err error) {
 	RP.SetTunnel(T.Tunnel)
 	ruleProviders = map[string]P.RuleProvider{}
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
-		rp, err := RP.ParseRuleProvider(name, mapping, R.ParseRule, RB.MakeBundleFile)
+		rp, err := RP.ParseRuleProvider(name, mapping, R.ParseRule, RB.MakeBundleFile, proxies)
 		if err != nil {
 			return nil, err
 		}

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/constant"
@@ -14,6 +15,7 @@ const (
 	HTTP
 	Compatible
 	Inline
+	Tailscale
 )
 
 // VehicleType defined
@@ -29,6 +31,8 @@ func (v VehicleType) String() string {
 		return "Compatible"
 	case Inline:
 		return "Inline"
+	case Tailscale:
+		return "Tailscale"
 	default:
 		return "Unknown"
 	}
@@ -184,4 +188,19 @@ type Tunnel interface {
 	Providers() map[string]ProxyProvider
 	RuleProviders() map[string]RuleProvider
 	RuleUpdateCallback() *utils.Callback[RuleProvider]
+}
+
+// TailscaleRouteSource is implemented by tailscale outbounds. It supplies a
+// tailscale rule provider with the tailnet's current route set and with
+// notifications whenever that route set changes.
+type TailscaleRouteSource interface {
+	// RouteSet returns the current tailnet route set: every peer's tailnet
+	// addresses, the advertised subnets peers are primary for, and the
+	// MagicDNS resolver address when MagicDNS is enabled.
+	RouteSet(ctx context.Context) ([]netip.Prefix, error)
+
+	// WatchRouteSet returns a channel that receives a value whenever the
+	// tailnet's routing information changes (peer up/down, route changes).
+	// The channel is closed when watching stops.
+	WatchRouteSet(ctx context.Context) <-chan struct{}
 }

@@ -25,7 +25,7 @@ type ruleProviderSchema struct {
 	PathInBundle string              `provider:"path-in-bundle,omitempty"`
 }
 
-func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRuleFunc, makeBundleFile func(pathInBundle string) resource.BundleFile) (P.RuleProvider, error) {
+func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRuleFunc, makeBundleFile func(pathInBundle string) resource.BundleFile, proxies map[string]C.Proxy) (P.RuleProvider, error) {
 	schema := &ruleProviderSchema{}
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 	if err := decoder.Decode(mapping, schema); err != nil {
@@ -59,6 +59,11 @@ func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRu
 		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout, schema.SizeLimit)
 	case "inline":
 		return NewInlineProvider(name, behavior, schema.Payload, parse), nil
+	case "tailscale":
+		if behavior != P.IPCIDR {
+			return nil, fmt.Errorf("tailscale rule provider only supports behavior: ipcidr, got: %s", behavior.String())
+		}
+		return newTailscaleRuleProvider(name, schema.Proxy, proxies, parse)
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}
