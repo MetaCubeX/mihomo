@@ -167,6 +167,11 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewMieru(*mieruOption)
+	case "nowhere":
+		option := &outbound.NowhereOption{BasicOption: basicOption}
+		if err = decoder.Decode(mapping, option); err == nil {
+			proxy, err = outbound.NewNowhere(*option)
+		}
 	case "anytls":
 		anytlsOption := &outbound.AnyTLSOption{BasicOption: basicOption}
 		err = decoder.Decode(mapping, anytlsOption)
