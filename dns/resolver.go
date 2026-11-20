@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/arc"
@@ -45,6 +46,8 @@ type Resolver struct {
 	fallbackIPFilters     []C.IpMatcher
 	fallbackLazyQuery     bool
 	group                 singleflight.Group[*D.Msg]
+	refreshMu             sync.Mutex
+	refreshing            map[string]struct{}
 	cache                 dnsCache
 	policy                []dnsPolicy
 	defaultResolver       *Resolver
@@ -156,11 +159,7 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	continueFetch := false
 	defer func() {
 		if continueFetch || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
-				defer cancel()
-				_, _ = r.exchangeWithoutCache(ctx, m) // ignore result, just for putMsgToCache
-			}()
+			r.refresh(m)
 		}
 	}()
 
@@ -179,10 +178,47 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 		}
 		return
 	}
-	return r.exchangeWithoutCache(ctx, m)
+	// The shared exchange can outlive this caller's context. Do not retain the
+	// caller's mutable request after ExchangeContext returns.
+	return r.exchangeWithoutCache(ctx, m.Copy())
 }
 
-// ExchangeWithoutCache a batch of dns request, and it do NOT GET from cache
+// refresh reserves one background task per question before copying or spawning.
+func (r *Resolver) refresh(m *D.Msg) {
+	key := m.Question[0].String()
+	r.refreshMu.Lock()
+	if _, active := r.refreshing[key]; active {
+		r.refreshMu.Unlock()
+		return
+	}
+	if cached, expire, hit := r.cache.GetWithExpire(key); hit && cached != nil && !expire.Before(time.Now()) {
+		r.refreshMu.Unlock()
+		return
+	}
+	if r.refreshing == nil {
+		r.refreshing = make(map[string]struct{})
+	}
+	r.refreshing[key] = struct{}{}
+	request := m.Copy()
+	r.refreshMu.Unlock()
+
+	go func() {
+		defer func() {
+			r.refreshMu.Lock()
+			delete(r.refreshing, key)
+			r.refreshMu.Unlock()
+		}()
+		if cached, expire, hit := r.cache.GetWithExpire(key); hit && cached != nil && !expire.Before(time.Now()) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+		defer cancel()
+		_, _ = r.exchangeWithoutCache(ctx, request)
+	}()
+}
+
+// exchangeWithoutCache takes an internally owned request; shared work and its
+// single retry can continue after the caller returns. It does not GET from cache.
 func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	q := m.Question[0]
 
@@ -220,7 +256,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 		return
 	}
 
-	ch := r.group.DoChan(q.String(), fn)
+	ch, owner := r.group.DoChanWithOwner(q.String(), fn)
 
 	var result singleflight.Result[*D.Msg]
 
@@ -232,13 +268,15 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 		case result = <-ch: // maybe ctxDone and chFinish in same time, get DoChan's result as much as possible
 			break
 		default:
-			go func() { // start a retrying monitor in background
-				result := <-ch
-				ret, err, shared := result.Val, result.Err, result.Shared
-				if err != nil && !shared && ret.Opcode < retryMax { // retry
-					r.group.DoChan(q.String(), fn)
-				}
-			}()
+			if owner {
+				go func() { // Only the owner needs a cancellation/retry monitor.
+					result := <-ch
+					ret, err, shared := result.Val, result.Err, result.Shared
+					if err != nil && !shared && ret.Opcode < retryMax { // retry
+						r.group.DoChan(q.String(), fn)
+					}
+				}()
+			}
 			return nil, ctx.Err()
 		}
 	}
