@@ -531,8 +531,8 @@ func DefaultRawConfig() *RawConfig {
 				"tls://223.5.5.5:853",
 			},
 			FakeIPFilter: []string{
-				"dns.msftnsci.com",
-				"www.msftnsci.com",
+				"dns.msftncsi.com",
+				"www.msftncsi.com",
 				"www.msftconnecttest.com",
 			},
 			FakeIPFilterMode: C.FilterBlackList,
