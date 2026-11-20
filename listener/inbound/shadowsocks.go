@@ -52,8 +52,10 @@ func NewShadowSocks(options *ShadowSocksOption) (*ShadowSocks, error) {
 	if err != nil {
 		return nil, err
 	}
-	if options.Password == "" && len(options.Users) == 0 {
-		return nil, errors.New("shadowsocks: missing password")
+	if options.Cipher != "none" {
+		if options.Password == "" && len(options.Users) == 0 {
+			return nil, errors.New("shadowsocks: missing password")
+		}
 	}
 	return &ShadowSocks{
 		Base:   base,
