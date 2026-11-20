@@ -14,7 +14,8 @@ var MrsMagicBytes = [4]byte{'M', 'R', 'S', 1} // MRSv1
 
 func rulesMrsParse(buf []byte, strategy ruleStrategy) (ruleStrategy, error) {
 	if _strategy, ok := strategy.(mrsRuleStrategy); ok {
-		reader, err := zstd.NewReader(bytes.NewReader(buf))
+		// Avoid queued decoded blocks while consuming one MRS stream.
+		reader, err := zstd.NewReader(bytes.NewReader(buf), zstd.WithDecoderConcurrency(1))
 		if err != nil {
 			return nil, err
 		}
