@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
@@ -39,6 +41,7 @@ type SshOption struct {
 	PrivateKeyPassphrase string   `proxy:"private-key-passphrase,omitempty"`
 	HostKey              []string `proxy:"host-key,omitempty"`
 	HostKeyAlgorithms    []string `proxy:"host-key-algorithms,omitempty"`
+	ServerAliveInterval  int      `proxy:"server-alive-interval,omitempty"`
 }
 
 func (s *Ssh) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
@@ -88,18 +91,62 @@ func (s *Ssh) connect(ctx context.Context, addr string) (client *ssh.Client, err
 	client = ssh.NewClient(clientConn, chans, reqs)
 
 	s.client = client
+	var done chan struct{}
+	if s.option.ServerAliveInterval > 0 {
+		done = make(chan struct{})
+		go s.watchTransport(client, time.Duration(s.option.ServerAliveInterval)*time.Second, done)
+	}
 
 	go func() {
 		_ = client.Wait() // wait shutdown
-		_ = client.Close()
-		s.cMutex.Lock()
-		defer s.cMutex.Unlock()
-		if s.client == client {
-			s.client = nil
+		if done != nil {
+			close(done)
 		}
+		_ = client.Close()
+		s.clearClient(client)
 	}()
 
 	return client, nil
+}
+
+func (s *Ssh) clearClient(client *ssh.Client) {
+	s.cMutex.Lock()
+	defer s.cMutex.Unlock()
+	if s.client == client {
+		s.client = nil
+	}
+}
+
+func (s *Ssh) watchTransport(client *ssh.Client, interval time.Duration, done <-chan struct{}) {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-timer.C:
+		}
+
+		// SendRequest has no context. Close the transport to unblock it at the deadline.
+		expired := make(chan struct{})
+		deadline := time.AfterFunc(interval, func() {
+			s.clearClient(client)
+			_ = client.Close()
+			close(expired)
+		})
+		// A negative SSH reply still proves that the server is responding.
+		_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
+		if !deadline.Stop() {
+			<-expired
+			return
+		}
+		if err != nil {
+			s.clearClient(client)
+			_ = client.Close()
+			return
+		}
+		timer.Reset(interval)
+	}
 }
 
 type closeOnWriteErrorConn struct {
@@ -132,6 +179,9 @@ func (s *Ssh) Close() error {
 }
 
 func NewSsh(option SshOption) (*Ssh, error) {
+	if option.ServerAliveInterval < 0 || int64(option.ServerAliveInterval) > math.MaxInt64/int64(time.Second) {
+		return nil, fmt.Errorf("invalid SSH server-alive-interval")
+	}
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 
 	config := ssh.ClientConfig{
