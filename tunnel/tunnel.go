@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -360,13 +359,13 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 				attemptProcessLookup = false
 				if !features.CMFA {
 					// normal check for process
-					uid, path, err := process.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
+					info, err := process.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
 					if err != nil {
 						log.Debugln("[Process] find process error for %s: %v", metadata.String(), err)
 					} else {
-						metadata.Process = filepath.Base(path)
-						metadata.ProcessPath = path
-						metadata.Uid = uid
+						metadata.Process = info.ProcessName
+						metadata.ProcessPath = info.ExecutablePath
+						metadata.Uid = info.UID
 
 						if pkg, err := process.FindPackageName(metadata); err == nil { // for android (not CMFA) package names
 							metadata.Process = pkg

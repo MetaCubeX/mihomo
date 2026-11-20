@@ -3,6 +3,7 @@ package common
 import (
 	"strings"
 
+	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/wildcard"
 	C "github.com/metacubex/mihomo/constant"
 
@@ -47,6 +48,12 @@ func (ps *Process) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, 
 		return match, ps.adapter
 	case C.ProcessNameWildcard, C.ProcessPathWildcard:
 		return wildcard.Match(strings.ToLower(ps.pattern), strings.ToLower(target)), ps.adapter
+	case C.ProcessName:
+		if process.ProcessNameMaxLen > 0 && len(ps.pattern) > process.ProcessNameMaxLen {
+			pattern := ps.pattern[:process.ProcessNameMaxLen]
+			return strings.EqualFold(target, pattern), ps.adapter
+		}
+		fallthrough
 	default:
 		return strings.EqualFold(target, ps.pattern), ps.adapter
 	}
