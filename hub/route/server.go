@@ -130,6 +130,8 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 		r.Mount("/group", groupRouter())
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
+		r.Mount("/traffic/hosts", trafficHostsRouter())
+		r.Mount("/traffic/hosts", trafficHostsRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
 		r.Mount("/providers/rules", ruleProviderRouter())
 		r.Mount("/cache", cacheRouter())
@@ -148,6 +150,16 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 			fs := http.StripPrefix("/ui", http.FileServer(http.Dir(uiPath)))
 			r.Get("/ui", http.RedirectHandler("/ui/", http.StatusTemporaryRedirect).ServeHTTP)
 			r.Get("/ui/*", func(w http.ResponseWriter, r *http.Request) {
+				rel := strings.TrimPrefix(r.URL.Path, "/ui")
+				if rel != "" && rel != "/" {
+					if info, err := os.Stat(filepath.Join(uiPath, filepath.FromSlash(rel))); err != nil || info.IsDir() {
+						// SPA 回退：前端路由的深层链接交给 200.html
+						if _, statErr := os.Stat(filepath.Join(uiPath, "200.html")); statErr == nil {
+							http.ServeFile(w, r, filepath.Join(uiPath, "200.html"))
+							return
+						}
+					}
+				}
 				fs.ServeHTTP(w, r)
 			})
 		})
