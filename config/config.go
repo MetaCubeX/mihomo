@@ -273,6 +273,7 @@ type RawNTP struct {
 type RawTun struct {
 	Enable              bool       `yaml:"enable" json:"enable"`
 	Device              string     `yaml:"device" json:"device"`
+	WintunGUID          string     `yaml:"wintun-guid" json:"wintun-guid,omitempty"` // Windows only
 	Stack               C.TUNStack `yaml:"stack" json:"stack"`
 	DNSMode             string     `yaml:"dns-mode" json:"dns-mode"`
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
@@ -1691,9 +1692,19 @@ func parseTun(rawTun RawTun, dns *DNS, general *General) error {
 	}
 	tunAddressPrefix = netip.PrefixFrom(tunAddressPrefix.Addr(), 30)
 
+	if rawTun.WintunGUID != "" {
+		// only Windows gives the TUN a GUID, but a typo should fail on load anywhere
+		guid, err := utils.ParseGUID(rawTun.WintunGUID)
+		if err != nil {
+			return fmt.Errorf("parse wintun-guid: %w", err)
+		}
+		rawTun.WintunGUID = guid.String()
+	}
+
 	general.Tun = LC.Tun{
 		Enable:              rawTun.Enable,
 		Device:              rawTun.Device,
+		WintunGUID:          rawTun.WintunGUID,
 		Stack:               rawTun.Stack,
 		DNSMode:             rawTun.DNSMode,
 		DNSHijack:           rawTun.DNSHijack,

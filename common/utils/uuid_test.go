@@ -64,3 +64,40 @@ func TestUUIDMap(t *testing.T) {
 		})
 	}
 }
+
+func TestParseGUID(t *testing.T) {
+	for _, c := range []struct {
+		guid string
+		want uuid.UUID
+	}{
+		{"00000000-0000-0000-0000-000000000000", uuid.Nil},
+		{"6ba7b810-9dad-11d1-80b4-00c04fd430c8", uuid.FromStringOrNil("6ba7b810-9dad-11d1-80b4-00c04fd430c8")},
+		{"6BA7B810-9DAD-11D1-80B4-00C04FD430C8", uuid.FromStringOrNil("6ba7b810-9dad-11d1-80b4-00c04fd430c8")},
+	} {
+		got, err := ParseGUID(c.guid)
+		if err != nil {
+			t.Errorf("ParseGUID(%q) failed: %v", c.guid, err)
+			continue
+		}
+		if !reflect.DeepEqual(got, c.want) {
+			t.Errorf("ParseGUID(%q) got = %v, want %v", c.guid, got, c.want)
+		}
+	}
+	for _, guid := range []string{
+		"",
+		" ",
+		"Mihomo",
+		"6ba7b8109-dad-11d1-80b4-00c04fd430c8",
+		"6ba7b810-9dad-11d1-80b4-00c04fd430c",
+		"6ba7b810-9dad-11d1-80b4-00c04fd430c88",
+		"6ba7b810-9dad-11d1-80b4-00c04fd430cg",
+		"6ba7b8109dad11d180b400c04fd430c8",
+		"{6ba7b810-9dad-11d1-80b4-00c04fd430c8}",
+		"urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+		"6ba7b810-9dad-11d1-80b4-00c04fd430c8 ",
+	} {
+		if got, err := ParseGUID(guid); err == nil {
+			t.Errorf("ParseGUID(%q) = %v, want an error", guid, got)
+		}
+	}
+}

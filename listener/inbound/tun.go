@@ -13,6 +13,7 @@ import (
 type TunOption struct {
 	BaseOption
 	Device              string     `inbound:"device,omitempty"`
+	WintunGUID          string     `inbound:"wintun-guid,omitempty"`
 	Stack               C.TUNStack `inbound:"stack,omitempty"`
 	DNSMode             string     `inbound:"dns-mode,omitempty"`
 	DNSHijack           []string   `inbound:"dns-hijack,omitempty"`
@@ -97,6 +98,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 		tun: LC.Tun{
 			Enable:                                true,
 			Device:                                options.Device,
+			WintunGUID:                            options.WintunGUID,
 			Stack:                                 options.Stack,
 			DNSMode:                               options.DNSMode,
 			DNSHijack:                             options.DNSHijack,

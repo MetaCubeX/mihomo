@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha1"
+	"fmt"
+	"strings"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -49,4 +51,19 @@ func UUIDMap(str string) uuid.UUID {
 		return NewUUIDV5(uuid.Nil, str)
 	}
 	return u
+}
+
+// ParseGUID parses a canonical textual GUID, as in
+// "00000000-0000-0000-0000-000000000000".
+// The form is all that is accepted, not the other ones uuid.FromString takes,
+// such as one without hyphens.
+func ParseGUID(s string) (uuid.UUID, error) {
+	u, err := uuid.FromString(s)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if u.String() != strings.ToLower(s) {
+		return uuid.Nil, fmt.Errorf("invalid guid: %s, want xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", s)
+	}
+	return u, nil
 }
