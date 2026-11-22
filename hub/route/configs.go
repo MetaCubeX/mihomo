@@ -62,6 +62,7 @@ type configSchema struct {
 type tunSchema struct {
 	Enable              bool        `yaml:"enable" json:"enable"`
 	Device              *string     `yaml:"device" json:"device"`
+	WintunGUID          *string     `yaml:"wintun-guid" json:"wintun-guid,omitempty"`
 	Stack               *C.TUNStack `yaml:"stack" json:"stack"`
 	DNSMode             *string     `yaml:"dns-mode" json:"dns-mode,omitempty"`
 	DNSHijack           *[]string   `yaml:"dns-hijack" json:"dns-hijack"`
@@ -148,6 +149,9 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		def.Enable = p.Enable
 		if p.Device != nil {
 			def.Device = *p.Device
+		}
+		if p.WintunGUID != nil {
+			def.WintunGUID = *p.WintunGUID
 		}
 		if p.Stack != nil {
 			def.Stack = *p.Stack

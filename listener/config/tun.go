@@ -12,6 +12,7 @@ import (
 type Tun struct {
 	Enable              bool       `yaml:"enable" json:"enable"`
 	Device              string     `yaml:"device" json:"device"`
+	WintunGUID          string     `yaml:"wintun-guid" json:"wintun-guid,omitempty"` // Windows only
 	Stack               C.TUNStack `yaml:"stack" json:"stack"`
 	DNSMode             string     `yaml:"dns-mode" json:"dns-mode"`
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
@@ -102,6 +103,9 @@ func (t *Tun) Equal(other Tun) bool {
 		return false
 	}
 	if t.Device != other.Device {
+		return false
+	}
+	if t.WintunGUID != other.WintunGUID {
 		return false
 	}
 	if t.Stack != other.Stack {

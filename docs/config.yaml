@@ -134,6 +134,7 @@ profile: # 存储 select 选择记录
 tun:
   enable: false
   stack: mips # gvisor/mixed/system
+  # wintun-guid: 6ba7b810-9dad-11d1-80b4-00c04fd430c8 # 指定 Windows 上 Wintun 适配器的 GUID，留空则根据设备名自动生成。仅 Windows 生效
   # 系统 DNS 配置方式
   # - disabled，不设置系统 DNS
   # - native，将 tun 地址设为系统 DNS

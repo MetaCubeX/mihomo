@@ -392,6 +392,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 
 	tunOptions := tun.Options{
 		Name:                                  tunName,
+		WintunGUID:                            options.WintunGUID,
 		MTU:                                   tunMTU,
 		GSO:                                   options.GSO,
 		Inet4Address:                          options.Inet4Address,
