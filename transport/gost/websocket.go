@@ -15,18 +15,21 @@ import (
 
 // Option is options of gost websocket
 type Option struct {
-	Host           string
-	Port           string
-	Path           string
-	Headers        map[string]string
-	TLS            bool
-	ECHConfig      *ech.Config
-	SkipCertVerify bool
-	NameCertVerify string
-	Fingerprint    string
-	Certificate    string
-	PrivateKey     string
-	Mux            bool
+	Host                 string
+	Port                 string
+	Path                 string
+	Headers              map[string]string
+	TLS                  bool
+	ECHConfig            *ech.Config
+	SkipCertVerify       bool
+	NameCertVerify       string
+	Fingerprint          string
+	Certificate          string
+	PrivateKey           string
+	SNI                  string
+	ClientFingerprint    string
+	Mux                  bool
+	MuxKeepAliveDisabled bool
 }
 
 // muxConn is a wrapper around smux.Stream that also closes the session when closed
@@ -54,11 +57,12 @@ func NewGostWebsocket(ctx context.Context, conn net.Conn, option *Option) (net.C
 	}
 
 	config := &vmess.WebsocketConfig{
-		Host:      option.Host,
-		Port:      option.Port,
-		Path:      option.Path,
-		ECHConfig: option.ECHConfig,
-		Headers:   header,
+		Host:              option.Host,
+		Port:              option.Port,
+		Path:              option.Path,
+		ECHConfig:         option.ECHConfig,
+		Headers:           header,
+		ClientFingerprint: option.ClientFingerprint,
 	}
 
 	var err error
@@ -82,6 +86,9 @@ func NewGostWebsocket(ctx context.Context, conn net.Conn, option *Option) (net.C
 		if host := config.Headers.Get("Host"); host != "" {
 			config.TLSConfig.ServerName = host
 		}
+		if option.SNI != "" {
+			config.TLSConfig.ServerName = option.SNI
+		}
 	}
 
 	conn, err = vmess.StreamWebsocketConn(ctx, conn, config)
@@ -90,8 +97,9 @@ func NewGostWebsocket(ctx context.Context, conn net.Conn, option *Option) (net.C
 	}
 
 	if option.Mux {
+		// Keep the default smux v1 and keepalive settings aligned with GOST MWS.
 		config := smux.DefaultConfig()
-		config.KeepAliveDisabled = true
+		config.KeepAliveDisabled = option.MuxKeepAliveDisabled
 
 		session, err := smux.Client(conn, config)
 		if err != nil {

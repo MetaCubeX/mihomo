@@ -18,22 +18,29 @@ type GostRelay struct {
 
 type GostRelayOption struct {
 	BasicOption
-	Name              string `proxy:"name"`
-	Server            string `proxy:"server"`
-	Port              int    `proxy:"port"`
-	Forward           bool   `proxy:"forward,omitempty"`
-	UDP               bool   `proxy:"udp,omitempty"`
-	TLS               bool   `proxy:"tls,omitempty"`
-	Mux               bool   `proxy:"mux,omitempty"`
-	SNI               string `proxy:"sni,omitempty"`
-	Username          string `proxy:"username,omitempty"`
-	Password          string `proxy:"password,omitempty"`
-	SkipCertVerify    bool   `proxy:"skip-cert-verify,omitempty"`
-	NameCertVerify    string `proxy:"name-cert-verify,omitempty"`
-	Fingerprint       string `proxy:"fingerprint,omitempty"`
-	Certificate       string `proxy:"certificate,omitempty"`
-	PrivateKey        string `proxy:"private-key,omitempty"`
-	ClientFingerprint string `proxy:"client-fingerprint,omitempty"`
+	Name              string             `proxy:"name"`
+	Server            string             `proxy:"server"`
+	Port              int                `proxy:"port"`
+	Forward           bool               `proxy:"forward,omitempty"`
+	UDP               bool               `proxy:"udp,omitempty"`
+	WS                bool               `proxy:"ws,omitempty"`
+	WSOpts            GostRelayWSOptions `proxy:"ws-opts,omitempty"`
+	TLS               bool               `proxy:"tls,omitempty"`
+	Mux               bool               `proxy:"mux,omitempty"`
+	SNI               string             `proxy:"sni,omitempty"`
+	Username          string             `proxy:"username,omitempty"`
+	Password          string             `proxy:"password,omitempty"`
+	SkipCertVerify    bool               `proxy:"skip-cert-verify,omitempty"`
+	NameCertVerify    string             `proxy:"name-cert-verify,omitempty"`
+	Fingerprint       string             `proxy:"fingerprint,omitempty"`
+	Certificate       string             `proxy:"certificate,omitempty"`
+	PrivateKey        string             `proxy:"private-key,omitempty"`
+	ClientFingerprint string             `proxy:"client-fingerprint,omitempty"`
+}
+
+type GostRelayWSOptions struct {
+	Path    string            `proxy:"path,omitempty"`
+	Headers map[string]string `proxy:"headers,omitempty"`
 }
 
 func (g *GostRelay) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
@@ -95,6 +102,9 @@ func NewGostRelay(option GostRelayOption) (*GostRelay, error) {
 		Server:            option.Server,
 		Port:              option.Port,
 		Forward:           option.Forward,
+		WS:                option.WS,
+		WSPath:            option.WSOpts.Path,
+		WSHeaders:         option.WSOpts.Headers,
 		TLS:               option.TLS,
 		Mux:               option.Mux,
 		SNI:               option.SNI,

@@ -49,20 +49,23 @@ const (
 
 // RelayOption is the common gost relay transport configuration that can wrap any TCP outbound dial.
 type RelayOption struct {
-	Server            string `proxy:"server,omitempty"`
-	Port              int    `proxy:"port,omitempty"`
-	Forward           bool   `proxy:"forward,omitempty"`
-	TLS               bool   `proxy:"tls,omitempty"`
-	Mux               bool   `proxy:"mux,omitempty"`
-	SNI               string `proxy:"sni,omitempty"`
-	Username          string `proxy:"username,omitempty"`
-	Password          string `proxy:"password,omitempty"`
-	SkipCertVerify    bool   `proxy:"skip-cert-verify,omitempty"`
-	NameCertVerify    string `proxy:"name-cert-verify,omitempty"`
-	Fingerprint       string `proxy:"fingerprint,omitempty"`
-	Certificate       string `proxy:"certificate,omitempty"`
-	PrivateKey        string `proxy:"private-key,omitempty"`
-	ClientFingerprint string `proxy:"client-fingerprint,omitempty"`
+	Server            string            `proxy:"server,omitempty"`
+	Port              int               `proxy:"port,omitempty"`
+	Forward           bool              `proxy:"forward,omitempty"`
+	WS                bool              `proxy:"ws,omitempty"`
+	WSPath            string            `proxy:"ws-path,omitempty"`
+	WSHeaders         map[string]string `proxy:"ws-headers,omitempty"`
+	TLS               bool              `proxy:"tls,omitempty"`
+	Mux               bool              `proxy:"mux,omitempty"`
+	SNI               string            `proxy:"sni,omitempty"`
+	Username          string            `proxy:"username,omitempty"`
+	Password          string            `proxy:"password,omitempty"`
+	SkipCertVerify    bool              `proxy:"skip-cert-verify,omitempty"`
+	NameCertVerify    string            `proxy:"name-cert-verify,omitempty"`
+	Fingerprint       string            `proxy:"fingerprint,omitempty"`
+	Certificate       string            `proxy:"certificate,omitempty"`
+	PrivateKey        string            `proxy:"private-key,omitempty"`
+	ClientFingerprint string            `proxy:"client-fingerprint,omitempty"`
 }
 
 type relayDialer struct {
@@ -106,12 +109,9 @@ func (d *relayDialer) DialContext(ctx context.Context, network, address string) 
 	if err := writeRelayRequest(conn, relayCmdConnect, targetAddress, relayNetworkTCP, d.option.Username, d.option.Password); err != nil {
 		return nil, err
 	}
-	if err := readRelayConnectResponse(conn); err != nil {
-		return nil, err
-	}
 
 	success = true
-	return conn, nil
+	return newRelayConn(conn), nil
 }
 
 func (d *relayDialer) ListenPacket(ctx context.Context, network, _ string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
@@ -142,9 +142,6 @@ func (d *relayDialer) ListenPacket(ctx context.Context, network, _ string, rAddr
 	if err := writeRelayRequest(conn, relayCmdConnect|relayFlagUDP, targetAddress, relayNetworkUDP, d.option.Username, d.option.Password); err != nil {
 		return nil, err
 	}
-	if err := readRelayConnectResponse(conn); err != nil {
-		return nil, err
-	}
 
 	success = true
 	return &relayPacketConn{
@@ -172,42 +169,76 @@ func (d *relayDialer) dialRelayServer(ctx context.Context, fallbackAddress strin
 		return nil, err
 	}
 
-	if d.option.TLS {
-		tlsConn, err := mihomoVMess.StreamTLSConn(ctx, conn, &mihomoVMess.TLSConfig{
-			Host:              d.serverName(relayAddress),
+	if d.option.WS {
+		host, port, err := net.SplitHostPort(relayAddress)
+		if err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("invalid gost relay websocket address %q: %w", relayAddress, err)
+		}
+		wsPath := d.option.WSPath
+		if wsPath == "" {
+			// Match the default path of GOST's ws/wss/mws/mwss listeners.
+			wsPath = "/ws"
+		}
+
+		wsConn, err := NewGostWebsocket(ctx, conn, &Option{
+			Host:              host,
+			Port:              port,
+			Path:              wsPath,
+			Headers:           d.option.WSHeaders,
+			TLS:               d.option.TLS,
+			SNI:               d.option.SNI,
 			SkipCertVerify:    d.option.SkipCertVerify,
 			NameCertVerify:    d.option.NameCertVerify,
-			FingerPrint:       d.option.Fingerprint,
+			Fingerprint:       d.option.Fingerprint,
 			Certificate:       d.option.Certificate,
 			PrivateKey:        d.option.PrivateKey,
 			ClientFingerprint: d.option.ClientFingerprint,
+			Mux:               d.option.Mux,
 		})
 		if err != nil {
 			_ = conn.Close()
 			return nil, err
 		}
-		conn = tlsConn
-	}
-
-	if d.option.Mux {
-		config := smux.DefaultConfig()
-		config.KeepAliveDisabled = true
-
-		session, err := smux.Client(conn, config)
-		if err != nil {
-			_ = conn.Close()
-			return nil, err
+		conn = wsConn
+	} else {
+		if d.option.TLS {
+			tlsConn, err := mihomoVMess.StreamTLSConn(ctx, conn, &mihomoVMess.TLSConfig{
+				Host:              d.serverName(relayAddress),
+				SkipCertVerify:    d.option.SkipCertVerify,
+				NameCertVerify:    d.option.NameCertVerify,
+				FingerPrint:       d.option.Fingerprint,
+				Certificate:       d.option.Certificate,
+				PrivateKey:        d.option.PrivateKey,
+				ClientFingerprint: d.option.ClientFingerprint,
+			})
+			if err != nil {
+				_ = conn.Close()
+				return nil, err
+			}
+			conn = tlsConn
 		}
 
-		stream, err := session.OpenStream()
-		if err != nil {
-			_ = session.Close()
-			return nil, err
-		}
+		if d.option.Mux {
+			// Keep the default smux v1 and keepalive settings aligned with GOST.
+			config := smux.DefaultConfig()
 
-		conn = &muxConn{
-			Conn:    stream,
-			session: session,
+			session, err := smux.Client(conn, config)
+			if err != nil {
+				_ = conn.Close()
+				return nil, err
+			}
+
+			stream, err := session.OpenStream()
+			if err != nil {
+				_ = session.Close()
+				return nil, err
+			}
+
+			conn = &muxConn{
+				Conn:    stream,
+				session: session,
+			}
 		}
 	}
 
@@ -284,13 +315,71 @@ func writeRelayRequest(w io.Writer, command byte, address string, network uint16
 	return nil
 }
 
+// relayConn strips GOST's CONNECT response on the first read. With the
+// default nodelay=false, GOST sends that response together with the first
+// bytes received from the target, so waiting inside DialContext would stall.
+type relayConn struct {
+	net.Conn
+	responseOnce sync.Once
+	responseErr  error
+}
+
+func newRelayConn(conn net.Conn) net.Conn {
+	wrapped := &relayConn{Conn: conn}
+	if closeWriter, ok := conn.(interface{ CloseWrite() error }); ok {
+		return &relayConnWithCloseWrite{
+			relayConn:   wrapped,
+			closeWriter: closeWriter,
+		}
+	}
+	return wrapped
+}
+
+func (c *relayConn) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	c.responseOnce.Do(func() {
+		c.responseErr = readRelayConnectResponse(c.Conn)
+	})
+	if c.responseErr != nil {
+		return 0, c.responseErr
+	}
+
+	return c.Conn.Read(p)
+}
+
+// Keep TCP half-close available where the wrapped transport supports it.
+type relayConnWithCloseWrite struct {
+	*relayConn
+	closeWriter interface{ CloseWrite() error }
+}
+
+func (c *relayConnWithCloseWrite) CloseWrite() error {
+	return c.closeWriter.CloseWrite()
+}
+
 type relayPacketConn struct {
-	conn  net.Conn
-	raddr net.Addr
-	wmu   sync.Mutex
+	conn         net.Conn
+	raddr        net.Addr
+	rmu          sync.Mutex
+	wmu          sync.Mutex
+	responseOnce sync.Once
+	responseErr  error
 }
 
 func (c *relayPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
+	c.rmu.Lock()
+	defer c.rmu.Unlock()
+
+	c.responseOnce.Do(func() {
+		c.responseErr = readRelayConnectResponse(c.conn)
+	})
+	if c.responseErr != nil {
+		return 0, nil, c.responseErr
+	}
+
 	var header [2]byte
 	if _, err := io.ReadFull(c.conn, header[:]); err != nil {
 		return 0, nil, err
