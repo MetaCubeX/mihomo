@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -400,7 +401,34 @@ type RawTLS struct {
 	ClientAuthType  string   `yaml:"client-auth-type" json:"client-auth-type"`
 	ClientAuthCert  string   `yaml:"client-auth-cert" json:"client-auth-cert"`
 	EchKey          string   `yaml:"ech-key" json:"ech-key"`
-	CustomTrustCert []string `yaml:"custom-certifactes" json:"custom-certifactes"`
+	CustomTrustCert []string `yaml:"custom-certificates" json:"custom-certificates"`
+}
+
+func (t *RawTLS) UnmarshalYAML(unmarshal func(any) error) error {
+	return t.unmarshal(unmarshal)
+}
+
+func (t *RawTLS) UnmarshalJSON(data []byte) error {
+	return t.unmarshal(func(v any) error { return json.Unmarshal(data, v) })
+}
+
+func (t *RawTLS) unmarshal(decode func(any) error) error {
+	type plain RawTLS
+	fields := struct {
+		plain  `yaml:",inline"`
+		Legacy []string `yaml:"custom-certifactes" json:"custom-certifactes"`
+	}{plain: plain(*t), Legacy: t.CustomTrustCert}
+	if err := decode(&fields); err != nil {
+		return err
+	}
+
+	// Apply the deprecated spelling as a default. An explicit empty list or null overrides it.
+	fields.CustomTrustCert, fields.Legacy = fields.Legacy, nil
+	if err := decode(&fields); err != nil {
+		return err
+	}
+	*t = RawTLS(fields.plain)
+	return nil
 }
 
 type RawConfig struct {
