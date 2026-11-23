@@ -55,6 +55,15 @@ func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, 
 		return nil, fmt.Errorf("proxyDialer only support udp network, but got: %s", network)
 	}
 	currentMeta := &C.Metadata{Type: C.INNER, DstIP: rAddrPort.Addr(), DstPort: rAddrPort.Port()}
+	if !currentMeta.DstIP.IsValid() {
+		// Unconnected listeners (e.g. tsnet's magicsock) have no destination. Leaving
+		// DstIP empty makes the outbound resolve an empty host: "can't resolve ip".
+		if strings.HasSuffix(network, "6") {
+			currentMeta.DstIP = netip.IPv6Unspecified()
+		} else {
+			currentMeta.DstIP = netip.IPv4Unspecified()
+		}
+	}
 	return p.listenPacket(ctx, currentMeta)
 }
 
