@@ -9,6 +9,7 @@ import (
 	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 )
@@ -194,6 +195,18 @@ func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSen
 
 		// restore DestinationNAT
 		fromAddr = sender.RestoreReadFrom(fromAddr).Unmap()
+
+		// A real peer can never source from the fake-ip pool, so a fake-ip
+		// source means this datagram is our own TUN write-back that the kernel
+		// delivered back into the outbound socket. Writing it back again would
+		// loop forever, so drop it and let the read deadline close the session.
+		if resolver.IsFakeIP(fromAddr) {
+			if put != nil {
+				put()
+			}
+			log.Debugln("[UDP] drop self-looping fake-ip reply from %s", fromAddr)
+			continue
+		}
 
 		fromAddrPort = netip.AddrPortFrom(fromAddr, fromAddrPort.Port())
 
