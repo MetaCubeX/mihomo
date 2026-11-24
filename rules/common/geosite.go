@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/memconservative"
@@ -23,7 +24,8 @@ func (gs *GEOSITE) RuleType() C.RuleType {
 }
 
 func (gs *GEOSITE) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
-	return gs.MatchDomain(metadata.RuleHost()), gs.adapter
+	domain := strings.ToLower(metadata.RuleHost())
+	return gs.MatchDomain(domain), gs.adapter
 }
 
 // MatchDomain implements C.DomainMatcher
