@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/memconservative"
@@ -16,6 +17,14 @@ type GEOSITE struct {
 	country    string
 	adapter    string
 	recodeSize int
+	matcher    atomic.Pointer[geoSiteMatcherRef]
+}
+
+// Retain the matcher, not its cache generation: a live rule must not keep
+// retired raw categories and unrelated matchers alive after a reload.
+type geoSiteMatcherRef struct {
+	generation uint64
+	matcher    router.DomainMatcher
 }
 
 func (gs *GEOSITE) RuleType() C.RuleType {
@@ -47,10 +56,14 @@ func (gs *GEOSITE) Payload() string {
 }
 
 func (gs *GEOSITE) GetDomainMatcher() (router.DomainMatcher, error) {
-	matcher, err := geodata.LoadGeoSiteMatcher(gs.country)
+	if ref := gs.matcher.Load(); ref != nil && ref.generation == geodata.GeoSiteCacheGeneration() {
+		return ref.matcher, nil
+	}
+	matcher, generation, err := geodata.LoadGeoSiteMatcherWithGeneration(gs.country)
 	if err != nil {
 		return nil, fmt.Errorf("load GeoSite data error, %w", err)
 	}
+	gs.matcher.Store(&geoSiteMatcherRef{generation: generation, matcher: matcher})
 	return matcher, nil
 }
 
