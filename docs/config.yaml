@@ -594,8 +594,13 @@ proxies: # socks5
     port: 443
     udp: true
     tls: true
-    # mux: true # relay+mtls when tls is also true
-    # sni: relay.example.com
+    # mux: true # with tls enabled and ws disabled, this selects relay+mtls
+    # ws: true # enables WebSocket; combine with tls/mux for relay+wss/mws/mwss
+    # ws-opts:
+    #   path: /ws # GOST default; set to match the listener's ws.path
+    #   headers:
+    #     Host: relay.example.com
+    # sni: relay.example.com # optional; defaults to ws-opts.headers.Host, or server if absent
     # username: user
     # password: pass
     # client-fingerprint: chrome

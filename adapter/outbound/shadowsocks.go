@@ -373,10 +373,11 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		}
 		obfsMode = opts.Mode
 		gostOption = &gost.Option{
-			Host:    opts.Host,
-			Path:    opts.Path,
-			Headers: opts.Headers,
-			Mux:     opts.Mux,
+			Host:                 opts.Host,
+			Path:                 opts.Path,
+			Headers:              opts.Headers,
+			Mux:                  opts.Mux,
+			MuxKeepAliveDisabled: true,
 		}
 
 		if opts.TLS {
