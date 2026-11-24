@@ -11,6 +11,7 @@ import (
 
 	tun "github.com/metacubex/sing-tun"
 	"github.com/metacubex/sing-tun/ping"
+	"github.com/metacubex/sing/common/buf"
 	M "github.com/metacubex/sing/common/metadata"
 	N "github.com/metacubex/sing/common/network"
 )
@@ -49,4 +50,25 @@ func (h *ListenerHandler) skipPingForwardingByAddr(addr netip.Addr) bool {
 		return true
 	}
 	return false
+}
+
+func (h *ListenerHandler) wrapPacketWriter(packetWriter N.PacketWriter) N.PacketWriter {
+	return safePacketWriter{packetWriter}
+}
+
+type safePacketWriter struct {
+	N.PacketWriter
+}
+
+func (w safePacketWriter) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) error {
+	// A real peer can never source from the fake-ip pool, so a fake-ip
+	// source means this datagram is our own TUN write-back that the kernel
+	// delivered back into the outbound socket. Writing it back again would
+	// loop forever, so drop it and let the read deadline close the session.
+	if resolver.IsFakeIP(destination.Addr) {
+		buffer.Release()
+		log.Debugln("[TUN] drop self-looping fake-ip udp reply from %s", destination.Addr)
+		return nil
+	}
+	return w.PacketWriter.WritePacket(buffer, destination)
 }

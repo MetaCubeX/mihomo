@@ -47,7 +47,9 @@ func (h *ListenerHandler) NewPacket(ctx context.Context, key netip.AddrPort, buf
 		go relayDnsPacket(ctx, buffer, rwOptions, metadata.Destination, nil, &writer)
 		return
 	}
-	h.ListenerHandler.NewPacket(ctx, key, buffer, metadata, init)
+	h.ListenerHandler.NewPacket(ctx, key, buffer, metadata, func(natConn network.PacketConn) network.PacketWriter {
+		return h.wrapPacketWriter(natConn)
+	})
 }
 
 func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
