@@ -233,6 +233,10 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 		return dialFn(ctx, network, ipv4s, port, opt)
 	}
 
+	// Stop the other address family once a connection has been selected.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	preferIPVersion := opt.prefer
 	fallbackTicker := time.NewTicker(dualStackFallbackTimeout)
 	defer fallbackTicker.Stop()
@@ -320,6 +324,10 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 	if len(ips) == 1 {
 		return dialContext(ctx, network, ips[0], port, opt)
 	}
+	// Stop pending dials once a connection has been selected.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	results := make(chan dialResult)
 	returned := make(chan struct{})
 	defer close(returned)
