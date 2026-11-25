@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/transport/anytls/pipe"
@@ -20,9 +21,11 @@ type Stream struct {
 	pipeW         *pipe.PipeWriter
 	writeDeadline pipe.PipeDeadline
 
-	dieOnce sync.Once
-	dieHook func()
-	dieErr  error
+	dieOnce       sync.Once
+	dieErr        atomic.Pointer[error]
+	hookMu        sync.Mutex
+	dieHook       func()
+	closeFinished bool
 
 	reportOnce sync.Once
 }
@@ -40,8 +43,10 @@ func newStream(id uint32, sess *Session) *Stream {
 // Read implements net.Conn
 func (s *Stream) Read(b []byte) (n int, err error) {
 	n, err = s.pipeR.Read(b)
-	if n == 0 && s.dieErr != nil {
-		err = s.dieErr
+	if n == 0 {
+		if closeErr := s.closedError(); closeErr != nil {
+			err = closeErr
+		}
 	}
 	return
 }
@@ -53,8 +58,8 @@ func (s *Stream) Write(b []byte) (n int, err error) {
 		return 0, os.ErrDeadlineExceeded
 	default:
 	}
-	if s.dieErr != nil {
-		return 0, s.dieErr
+	if closeErr := s.closedError(); closeErr != nil {
+		return 0, closeErr
 	}
 	n, err = s.sess.writeDataFrame(s.id, b)
 	return
@@ -69,35 +74,61 @@ func (s *Stream) Close() error {
 func (s *Stream) closeLocally() {
 	var once bool
 	s.dieOnce.Do(func() {
-		s.dieErr = net.ErrClosed
+		err := net.ErrClosed
+		s.dieErr.Store(&err)
 		s.pipeR.Close()
 		once = true
 	})
 	if once {
-		if s.dieHook != nil {
-			s.dieHook()
-			s.dieHook = nil
-		}
+		s.finishClose()
 	}
 }
 
 func (s *Stream) closeWithError(err error) error {
 	var once bool
 	s.dieOnce.Do(func() {
-		s.dieErr = err
+		s.dieErr.Store(&err)
 		s.pipeR.Close()
 		once = true
 	})
 	if once {
 		err := s.sess.streamClosed(s.id)
-		if s.dieHook != nil {
-			s.dieHook()
-			s.dieHook = nil
-		}
+		s.finishClose()
 		return err
 	} else {
-		return s.dieErr
+		return s.closedError()
 	}
+}
+
+// A peer can close the stream between OpenStream and hook registration.
+// Deliver a late hook as well, without calling it under a stream lock.
+func (s *Stream) setCloseHook(hook func()) {
+	s.hookMu.Lock()
+	if !s.closeFinished {
+		s.dieHook = hook
+		s.hookMu.Unlock()
+		return
+	}
+	s.hookMu.Unlock()
+	hook()
+}
+
+func (s *Stream) finishClose() {
+	s.hookMu.Lock()
+	s.closeFinished = true
+	hook := s.dieHook
+	s.dieHook = nil
+	s.hookMu.Unlock()
+	if hook != nil {
+		hook()
+	}
+}
+
+func (s *Stream) closedError() error {
+	if err := s.dieErr.Load(); err != nil {
+		return *err
+	}
+	return nil
 }
 
 func (s *Stream) SetReadDeadline(t time.Time) error {
@@ -140,7 +171,7 @@ func (s *Stream) HandshakeFailure(err error) error {
 	s.reportOnce.Do(func() {
 		once = true
 	})
-	if once && err != nil && s.sess.peerVersion >= 2 {
+	if once && err != nil && s.sess.peerVersion.Load() >= 2 {
 		f := newFrame(cmdSYNACK, s.id)
 		f.data = []byte(err.Error())
 		if _, err := s.sess.writeControlFrame(f); err != nil {
@@ -156,7 +187,7 @@ func (s *Stream) HandshakeSuccess() error {
 	s.reportOnce.Do(func() {
 		once = true
 	})
-	if once && s.sess.peerVersion >= 2 {
+	if once && s.sess.peerVersion.Load() >= 2 {
 		if _, err := s.sess.writeControlFrame(newFrame(cmdSYNACK, s.id)); err != nil {
 			return err
 		}

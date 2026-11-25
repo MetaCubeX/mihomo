@@ -69,3 +69,30 @@ jobs:
 
       - name: Test with tag with_gvisor
         run: go test ./... -v -count=1 -tags "with_gvisor"
+
+      - name: Test Vision concurrency
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        env:
+          CGO_ENABLED: 1
+        run: >-
+          go test -race ./transport/vless/vision ./listener/sing_vless ./listener/inbound
+          -run 'TestConn|TestVisionResponseHeadroomConcurrent|TestInboundVless_(TLS|Reality)'
+          -count=1 -timeout=3m
+
+      - name: Test AnyTLS concurrency
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        env:
+          CGO_ENABLED: 1
+        run: >-
+          go test -race ./transport/anytls/session ./listener/inbound
+          -run 'TestStream|TestSessionSettings|TestInboundAnyTLS_TLS'
+          -count=1 -timeout=3m
+
+      - name: Test TUIC concurrency
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        env:
+          CGO_ENABLED: 1
+        run: >-
+          go test -race ./transport/tuic/v4 ./transport/tuic/v5 ./listener/inbound
+          -run 'TestPacketConn|TestInboundTuic_TLS'
+          -count=1 -timeout=3m
