@@ -60,7 +60,7 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 	if err == nil {
 		c.AppendToChains(u)
 	} else {
-		u.onDialFailed(proxy.Type(), err, u.healthCheck)
+		u.onTCPDialFailed(ctx, proxy.Type(), err, u.healthCheck)
 	}
 
 	if N.NeedHandshake(c) {
@@ -68,7 +68,7 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 			if err == nil {
 				u.onDialSuccess()
 			} else {
-				u.onDialFailed(proxy.Type(), err, u.healthCheck)
+				u.onTCPDialFailed(ctx, proxy.Type(), err, u.healthCheck)
 			}
 		})
 	}
