@@ -303,10 +303,15 @@ type packetConn struct {
 	connID      string
 	adapterAddr string
 	resolveUDP  func(ctx context.Context, metadata *C.Metadata) error
+	relayDomain bool
 }
 
 func (c *packetConn) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
 	return c.resolveUDP(ctx, metadata)
+}
+
+func (c *packetConn) RelayUDPDomain() bool {
+	return c.relayDomain
 }
 
 func (c *packetConn) RemoteDestination() string {
@@ -361,7 +366,11 @@ func NewPacketConn(pc net.PacketConn, a ProxyAdapter) C.PacketConn {
 	default:
 		epc = N.NewDeadlineEnhancePacketConn(epc) // most conn from outbound can't handle readDeadline correctly
 	}
-	cpc := &packetConn{epc, nil, nil, a.Name(), utils.NewUUIDV4().String(), a.Addr(), a.ResolveUDP}
+	relayDomain := false
+	if relay, ok := a.(interface{ RelayUDPDomain() bool }); ok {
+		relayDomain = relay.RelayUDPDomain()
+	}
+	cpc := &packetConn{epc, nil, nil, a.Name(), utils.NewUUIDV4().String(), a.Addr(), a.ResolveUDP, relayDomain}
 	cpc.AppendToChains(a)
 	return cpc
 }

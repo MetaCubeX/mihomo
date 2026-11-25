@@ -105,6 +105,9 @@ type PacketConn interface {
 	N.EnhancePacketConn
 	Connection
 	ResolveUDP(ctx context.Context, metadata *Metadata) error
+	// RelayUDPDomain reports that this connection can carry a domain in UDP packets.
+	// The tunnel then skips ResolveUDP and lets the remote side resolve the name.
+	RelayUDPDomain() bool
 }
 
 type Dialer interface {

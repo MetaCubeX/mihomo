@@ -301,14 +301,14 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			if metadata.SourceValid() {
 				globalID = utils.GlobalID(metadata.SourceAddress())
 			}
+			dest, destErr := xudpDestination(metadata)
+			if destErr != nil {
+				return nil, destErr
+			}
 			if useEarly {
-				conn = v.client.DialEarlyXUDPPacketConn(c,
-					globalID,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+				conn = v.client.DialEarlyXUDPPacketConn(c, globalID, dest)
 			} else {
-				conn, err = v.client.DialXUDPPacketConn(c,
-					globalID,
-					M.SocksaddrFromNet(metadata.UDPAddr()))
+				conn, err = v.client.DialXUDPPacketConn(c, globalID, dest)
 			}
 		} else if v.option.PacketAddr {
 			if useEarly {
@@ -421,8 +421,10 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = v.ResolveUDP(ctx, metadata); err != nil {
-		return nil, err
+	if !v.option.XUDP {
+		if err = v.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
 	}
 
 	c, err := v.dialContext(ctx)
@@ -442,6 +444,11 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return NewPacketConn(N.NewThreadSafePacketConn(pc), v), nil
 	}
 	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+}
+
+// RelayUDPDomain reports that XUDP can carry the original domain.
+func (v *Vmess) RelayUDPDomain() bool {
+	return v.option.XUDP
 }
 
 // ProxyInfo implements C.ProxyAdapter

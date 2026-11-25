@@ -367,7 +367,13 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if err = v.ResolveUDP(ctx, metadata); err != nil {
+	var xudpAddr M.Socksaddr
+	if v.option.XUDP {
+		xudpAddr, err = xudpDestination(metadata)
+		if err != nil {
+			return nil, err
+		}
+	} else if err = v.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
 
@@ -392,7 +398,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return NewPacketConn(N.NewThreadSafePacketConn(
 			vmessSing.NewXUDPConn(c,
 				globalID,
-				M.SocksaddrFromNet(metadata.UDPAddr())),
+				xudpAddr),
 		), v), nil
 	} else if v.option.PacketAddr {
 		return NewPacketConn(N.NewThreadSafePacketConn(
@@ -401,6 +407,10 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		), v), nil
 	}
 	return NewPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, metadata.UDPAddr())), v), nil
+}
+
+func (v *Vless) RelayUDPDomain() bool {
+	return v.option.XUDP
 }
 
 // SupportUOT implements C.ProxyAdapter
