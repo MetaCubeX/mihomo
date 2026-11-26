@@ -154,6 +154,9 @@ type ProxyAdapter interface {
 type DelayHistory struct {
 	Time  time.Time `json:"time"`
 	Delay uint16    `json:"delay"`
+	// Error is why the test failed, empty when it passed. It is only for
+	// showing or counting failures; its wording is not stable.
+	Error string `json:"error,omitempty"`
 }
 
 type ProxyState struct {
