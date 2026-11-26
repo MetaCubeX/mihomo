@@ -510,7 +510,7 @@ func StreamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig)
 }
 
 func newWebsocketConn(conn net.Conn, state ws.State) *websocketConn {
-	controlHandler := wsutil.ControlFrameHandler(conn, state)
+	controlHandler := boundedControlFrameHandler(wsutil.ControlFrameHandler(conn, state))
 	return &websocketConn{
 		Conn:  conn,
 		state: state,
@@ -523,6 +523,22 @@ func newWebsocketConn(conn net.Conn, state ws.State) *websocketConn {
 		},
 		controlHandler: controlHandler,
 		rawWriter:      N.NewExtendedWriter(conn),
+	}
+}
+
+// boundedControlFrameHandler holds a control frame to RFC 6455 section 5.5 -- at most 125 bytes,
+// not fragmented -- with the errors ws.CheckHeader gives, before handler takes it. The reader skips
+// the header check, so the rule is kept here, for the frames Read hands over and for those between
+// a message's fragments (OnIntermediate).
+func boundedControlFrameHandler(handler wsutil.FrameHandlerFunc) wsutil.FrameHandlerFunc {
+	return func(header ws.Header, reader io.Reader) error {
+		if header.Length > ws.MaxControlFramePayloadSize {
+			return ws.ErrProtocolControlPayloadOverflow
+		}
+		if !header.Fin {
+			return ws.ErrProtocolControlNotFinal
+		}
+		return handler(header, reader)
 	}
 }
 
