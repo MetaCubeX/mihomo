@@ -32,7 +32,7 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 		log.Debugln("[DNS] hijack tcp:%s", metadata.Destination.String())
 		return resolver.RelayDnsConn(ctx, conn, resolver.DefaultDnsReadTimeout)
 	}
-	return h.ListenerHandler.NewConnection(ctx, conn, metadata)
+	return h.handleTCPConnection(ctx, conn, metadata)
 }
 
 func (h *ListenerHandler) NewPacket(ctx context.Context, key netip.AddrPort, buffer *buf.Buffer, metadata M.Metadata, init func(natConn network.PacketConn) network.PacketWriter) {
