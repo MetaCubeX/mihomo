@@ -42,6 +42,10 @@ func (m *Manager) Join(c Tracker) {
 }
 
 func (m *Manager) Leave(c Tracker) {
+	// 连接关闭时结算最后一段流量，避免采样间隔造成的尾巴丢失。
+	if defaultTrafficStats != nil {
+		defaultTrafficStats.OnClose(c.Info())
+	}
 	m.connections.Delete(c.ID())
 }
 
@@ -118,6 +122,15 @@ func (m *Manager) handle() {
 	for range ticker.C {
 		m.uploadBlip.Store(m.uploadTemp.Swap(0))
 		m.downloadBlip.Store(m.downloadTemp.Swap(0))
+
+		if defaultTrafficStats != nil && defaultTrafficStats.Enabled() {
+			infos := make([]*TrackerInfo, 0, 128)
+			m.Range(func(c Tracker) bool {
+				infos = append(infos, c.Info())
+				return true
+			})
+			defaultTrafficStats.Sample(infos, time.Now())
+		}
 	}
 }
 
