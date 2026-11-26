@@ -61,6 +61,27 @@ func TestServerHandlerModeRestrictions(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name:       "PacketUpAcceptsPostUpload",
+			mode:       "packet-up",
+			method:     http.MethodPost,
+			target:     "https://example.com/xhttp/session/0",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "PacketUpAcceptsGetUpload",
+			mode:       "packet-up",
+			method:     http.MethodGet,
+			target:     "https://example.com/xhttp/session/0",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "StreamUpRejectsGetPacketUpload",
+			mode:       "stream-up",
+			method:     http.MethodGet,
+			target:     "https://example.com/xhttp/session/0",
+			wantStatus: http.StatusNotFound,
+		},
+		{
 			name:       "PacketUpRejectsStreamOne",
 			mode:       "packet-up",
 			method:     http.MethodPost,
