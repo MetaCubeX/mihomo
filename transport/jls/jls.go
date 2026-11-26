@@ -5,23 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"sync"
-	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/ratelimit"
 	"github.com/metacubex/mihomo/ntp"
 
 	tls "github.com/metacubex/jls-tls"
 )
 
 const (
-	Mode                   = "jls"
-	bitsPerByte            = 8
-	rateLimitCycle         = 10 * time.Millisecond
-	maxRateLimitBurstBytes = 64 * 1024
+	Mode = "jls"
 )
 
 var (
@@ -216,124 +211,13 @@ func relayFallback(ctx context.Context, inbound net.Conn, prefix []byte, config 
 		return err
 	}
 	inbound = N.NewCachedConn(inbound, prefix)
-	upstream = newRateLimitedConn(upstream, config.RateLimit)
+	upstream = ratelimit.NewRateLimitedConn(upstream, config.RateLimit)
 	if err = N.RelayContext(ctx, inbound, upstream); err != nil {
 		return err
 	}
 	return ErrFallbackCompleted
 }
 
-type rateLimitedConn struct {
-	net.Conn
-	ctx          context.Context
-	cancel       context.CancelFunc
-	readLimiter  *bitRateLimiter
-	writeLimiter *bitRateLimiter
-	burst        int
-}
-
-func newRateLimitedConn(conn net.Conn, rateBps uint64) net.Conn {
-	if rateBps == 0 {
-		return conn
-	}
-	burst := rateBps / bitsPerByte / uint64(time.Second/rateLimitCycle)
-	if burst == 0 {
-		burst = 1
-	} else if burst > maxRateLimitBurstBytes {
-		burst = maxRateLimitBurstBytes
-	}
-	limitCtx, cancel := context.WithCancel(context.Background())
-	return &rateLimitedConn{
-		Conn:         conn,
-		ctx:          limitCtx,
-		cancel:       cancel,
-		readLimiter:  &bitRateLimiter{rateBps: rateBps},
-		writeLimiter: &bitRateLimiter{rateBps: rateBps},
-		burst:        int(burst),
-	}
-}
-
-func (c *rateLimitedConn) Read(p []byte) (n int, err error) {
-	if len(p) > c.burst {
-		p = p[:c.burst]
-	}
-	n, err = c.Conn.Read(p)
-	if n > 0 {
-		if limitErr := c.readLimiter.WaitN(c.ctx, n); err == nil {
-			err = limitErr
-		}
-	}
-	return
-}
-
-func (c *rateLimitedConn) Write(p []byte) (n int, err error) {
-	for len(p) > 0 {
-		chunkSize := len(p)
-		if chunkSize > c.burst {
-			chunkSize = c.burst
-		}
-		if err = c.writeLimiter.WaitN(c.ctx, chunkSize); err != nil {
-			return n, err
-		}
-		var written int
-		written, err = c.Conn.Write(p[:chunkSize])
-		n += written
-		p = p[written:]
-		if err != nil {
-			return n, err
-		}
-		if written != chunkSize {
-			return n, io.ErrShortWrite
-		}
-	}
-	return n, nil
-}
-
-func (c *rateLimitedConn) Close() error {
-	c.cancel()
-	return c.Conn.Close()
-}
-
-func (c *rateLimitedConn) CloseWrite() error {
-	if conn, ok := c.Conn.(interface{ CloseWrite() error }); ok {
-		return conn.CloseWrite()
-	}
-	return c.Close()
-}
-
-type bitRateLimiter struct {
-	mu      sync.Mutex
-	rateBps uint64
-	next    time.Time
-}
-
-func (l *bitRateLimiter) WaitN(ctx context.Context, n int) error {
-	delay := l.reserveN(time.Now(), n)
-	if delay <= 0 {
-		return nil
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (l *bitRateLimiter) reserveN(now time.Time, n int) time.Duration {
-	interval := time.Duration(uint64(n) * bitsPerByte * uint64(time.Second) / l.rateBps)
-
-	l.mu.Lock()
-	ready := l.next
-	if ready.Before(now) {
-		ready = now
-	}
-	l.next = ready.Add(interval)
-	l.mu.Unlock()
-	return ready.Sub(now)
-}
 
 type handshakeRecorderConn struct {
 	net.Conn
