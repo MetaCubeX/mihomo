@@ -175,6 +175,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewTrustTunnel(trusttunnelOption)
+	case "miu":
+		miuOption := &IN.MiuOption{}
+		err = decoder.Decode(mapping, miuOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewMiu(miuOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
