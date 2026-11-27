@@ -148,6 +148,17 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 			fs := http.StripPrefix("/ui", http.FileServer(http.Dir(uiPath)))
 			r.Get("/ui", http.RedirectHandler("/ui/", http.StatusTemporaryRedirect).ServeHTTP)
 			r.Get("/ui/*", func(w http.ResponseWriter, r *http.Request) {
+				rel := strings.TrimPrefix(r.URL.Path, "/ui")
+				if rel != "" && rel != "/" {
+					if info, err := os.Stat(filepath.Join(uiPath, filepath.FromSlash(rel))); err != nil || info.IsDir() {
+						// Serve the SPA entry point for client-side routes so that
+						// deep links such as /ui/connections do not return 404.
+						if _, statErr := os.Stat(filepath.Join(uiPath, "200.html")); statErr == nil {
+							http.ServeFile(w, r, filepath.Join(uiPath, "200.html"))
+							return
+						}
+					}
+				}
 				fs.ServeHTTP(w, r)
 			})
 		})
