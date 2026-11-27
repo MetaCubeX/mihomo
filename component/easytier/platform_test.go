@@ -77,22 +77,22 @@ func (forbiddenDialer) ListenPacket(context.Context, string, string, netip.AddrP
 	panic("unexpected proxy socket")
 }
 
-func TestListenTCPInternalAllowedThroughProxyDialer(t *testing.T) {
+func TestListenTCPBindsHostWithProxyDialer(t *testing.T) {
 	factory := SocketFactory{Dialer: forbiddenDialer{}}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	listener, err := factory.ListenTCP(ctx, platform.TCPListenOptions{
-		Bind:    platform.TCPBindOptions{LocalAddr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}},
-		Purpose: platform.TCPListenProxyNAT,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	if _, err := factory.ListenTCP(ctx, platform.TCPListenOptions{
-		Bind:    platform.TCPBindOptions{LocalAddr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}},
-		Purpose: platform.TCPListenDirect,
-	}); err == nil {
-		t.Fatal("external listener through proxy must fail")
+	for _, purpose := range []platform.TCPListenPurpose{
+		platform.TCPListenProxyNAT,
+		platform.TCPListenDirect,
+		platform.TCPListenManual,
+	} {
+		listener, err := factory.ListenTCP(ctx, platform.TCPListenOptions{
+			Bind:    platform.TCPBindOptions{LocalAddr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}},
+			Purpose: purpose,
+		})
+		if err != nil {
+			t.Fatalf("listen purpose %v: %v", purpose, err)
+		}
+		_ = listener.Close()
 	}
 }
