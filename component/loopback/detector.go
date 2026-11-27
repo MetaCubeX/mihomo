@@ -88,24 +88,47 @@ func (l *Detector) CheckConn(metadata *C.Metadata) error {
 }
 
 func (l *Detector) CheckPacketConn(metadata *C.Metadata) error {
-	if l == nil {
+	port, err := l.localPacketSourcePort(metadata)
+	if err != nil || port == 0 {
+		return err
+	}
+	if _, ok := l.packetConnMap.Load(port); ok {
+		return fmt.Errorf("%w to: %s", ErrReject, metadata.RemoteAddress())
+	}
+	return nil
+}
+
+// CheckPacketConnPort rejects a newly allocated socket that could receive its
+// own TUN write-back after the original local client releases its source port.
+func (l *Detector) CheckPacketConnPort(metadata *C.Metadata, port uint16) error {
+	if l == nil || port == 0 || port != metadata.SrcPort {
 		return nil
 	}
+	sourcePort, err := l.localPacketSourcePort(metadata)
+	if err != nil {
+		return err
+	}
+	if sourcePort != 0 {
+		return fmt.Errorf("%w to: %s", ErrReject, metadata.RemoteAddress())
+	}
+	return nil
+}
+
+func (l *Detector) localPacketSourcePort(metadata *C.Metadata) (uint16, error) {
+	if l == nil {
+		return 0, nil
+	}
 	connAddr := metadata.SourceAddrPort()
-	if !connAddr.IsValid() {
-		return nil
+	if !connAddr.IsValid() || connAddr.Port() == 0 {
+		return 0, nil
 	}
 
 	isLocalIp, err := iface.IsLocalIp(connAddr.Addr())
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !isLocalIp && !connAddr.Addr().IsLoopback() {
-		return nil
+		return 0, nil
 	}
-
-	if _, ok := l.packetConnMap.Load(connAddr.Port()); ok {
-		return fmt.Errorf("%w to: %s", ErrReject, metadata.RemoteAddress())
-	}
-	return nil
+	return connAddr.Port(), nil
 }
