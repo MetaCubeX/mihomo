@@ -85,6 +85,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
 	log.SetLevel(cfg.General.LogLevel)
+	log.SetTimestamp(cfg.General.LogTimestamp)
 
 	tunnel.OnSuspend()
 

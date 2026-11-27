@@ -18,8 +18,14 @@ var (
 func init() {
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
+	SetTimestamp(true)
+}
+
+// SetTimestamp controls timestamps in console logs, without changing API log events.
+func SetTimestamp(enabled bool) {
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp:             true,
+		DisableTimestamp:          !enabled,
 		TimestampFormat:           "2006-01-02T15:04:05.000000000Z07:00",
 		EnvironmentOverrideColors: true,
 	})
