@@ -303,13 +303,15 @@ func (c *Config) ExtractXPaddingFromRequest(req *http.Request, obfsMode bool) (s
 }
 
 func (c *Config) IsPaddingValid(paddingValue string, from, to int, method PaddingMethod) bool {
-	if paddingValue == "" {
-		return false
-	}
 	if to <= 0 {
 		if r, err := c.GetNormalizedXPaddingBytes(); err == nil {
 			from, to = r.Min, r.Max
+		} else {
+			return false
 		}
+	}
+	if paddingValue == "" {
+		return from == 0
 	}
 
 	switch method {
