@@ -149,3 +149,6 @@ require (
 
 // for https://github.com/golang/protobuf/issues/1704
 replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20260306035419-7ceee0674686
+
+// Temporary for review of MetaCubeX/utls#14. Drop when an upstream version includes HelloChrome_158.
+replace github.com/metacubex/utls v1.9.0-alpha.1 => github.com/wywywywycloud/utls v0.0.0-20261127145043-a2ce61b71e00

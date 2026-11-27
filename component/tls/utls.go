@@ -87,6 +87,7 @@ var fingerprints = map[string]UClientHelloID{
 
 	// classical fingerprints without X25519MLKEM768
 	"chrome120":  utls.HelloChrome_120,
+	"chrome158":  utls.HelloChrome_158,
 	"firefox120": utls.HelloFirefox_120,
 	"safari16":   utls.HelloSafari_16_0,
 
