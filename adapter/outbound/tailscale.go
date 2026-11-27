@@ -159,7 +159,13 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		},
 		SystemPacketListener: func(ctx context.Context, network, address string) (net.PacketConn, error) {
 			log.Debugln("[Tailscale](%s) SystemPacketListener: start listen %s %s", option.Name, network, address)
-			pc, err := outbound.dialer.ListenPacket(ctx, network, address, netip.AddrPort{})
+			var rAddrPort netip.AddrPort
+			if strings.HasSuffix(network, "6") {
+				rAddrPort = netip.AddrPortFrom(netip.IPv6Unspecified(), 0)
+			} else {
+				rAddrPort = netip.AddrPortFrom(netip.IPv4Unspecified(), 0)
+			}
+			pc, err := outbound.dialer.ListenPacket(ctx, network, address, rAddrPort)
 			log.Debugln("[Tailscale](%s) SystemPacketListener: finish listen %s %s, err: %v", option.Name, network, address, err)
 			return pc, err
 		},
