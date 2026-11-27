@@ -398,6 +398,9 @@ func (r *Resolver) ClearCache() {
 
 func (r *Resolver) ResetConnection() {
 	if r != nil {
+		// The network changed: lookups still in flight were sent through the old network and may never be
+		// answered. Forget them so new requests start a fresh lookup instead of waiting out the old one.
+		r.group.Reset()
 		for _, c := range r.main {
 			c.ResetConnection()
 		}
