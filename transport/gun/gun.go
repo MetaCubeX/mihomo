@@ -358,7 +358,8 @@ func (t *Transport) Dial() (net.Conn, error) {
 		ProtoMinor: 0,
 		Header:     header,
 	}
-	request = request.WithContext(t.ctx)
+	ctx, cancel := context.WithCancel(t.ctx)
+	request = request.WithContext(ctx)
 	initStarted := make(chan struct{})
 
 	conn := &Conn{
@@ -367,6 +368,7 @@ func (t *Transport) Dial() (net.Conn, error) {
 			request = request.WithContext(httputils.NewAddrContext(addr, request.Context()))
 			response, err := t.transport.RoundTrip(request)
 			if err != nil {
+				cancel()
 				return nil, err
 			}
 			return response.Body, nil
@@ -375,7 +377,10 @@ func (t *Transport) Dial() (net.Conn, error) {
 	}
 
 	t.count.Add(1)
-	conn.onClose = func() { t.count.Add(-1) }
+	conn.onClose = func() {
+		cancel()
+		t.count.Add(-1)
+	}
 
 	go conn.Init()
 
