@@ -483,3 +483,75 @@ func (t *Tailscale) Close() error {
 	}
 	return nil
 }
+
+// RouteSet returns the current tailnet route set: every peer's tailnet
+// addresses, the advertised subnets peers are primary for, and the MagicDNS
+// resolver address when MagicDNS is enabled on the tailnet.
+func (t *Tailscale) RouteSet(ctx context.Context) ([]netip.Prefix, error) {
+	if err := t.ensureStarted(ctx); err != nil {
+		return nil, err
+	}
+	lc, err := t.server.LocalClient()
+	if err != nil {
+		return nil, err
+	}
+	st, err := lc.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[netip.Prefix]struct{})
+	for _, peer := range st.Peer {
+		for _, ip := range peer.TailscaleIPs {
+			set[netip.PrefixFrom(ip, ip.BitLen())] = struct{}{}
+		}
+		if peer.PrimaryRoutes != nil {
+			for i := 0; i < peer.PrimaryRoutes.Len(); i++ {
+				set[peer.PrimaryRoutes.At(i)] = struct{}{}
+			}
+		}
+	}
+	if st.CurrentTailnet != nil && st.CurrentTailnet.MagicDNSEnabled {
+		set[netip.MustParsePrefix("100.100.100.100/32")] = struct{}{}
+	}
+	routes := make([]netip.Prefix, 0, len(set))
+	for prefix := range set {
+		routes = append(routes, prefix)
+	}
+	return routes, nil
+}
+
+// WatchRouteSet returns a channel that receives a value whenever the
+// tailnet's routing information changes (peer up/down, route changes). The
+// channel is closed when watching stops, e.g. when the outbound is shut down.
+func (t *Tailscale) WatchRouteSet(ctx context.Context) <-chan struct{} {
+	ch := make(chan struct{}, 1)
+	go func() {
+		defer close(ch)
+		if err := t.ensureStarted(ctx); err != nil {
+			return
+		}
+		lc, err := t.server.LocalClient()
+		if err != nil {
+			return
+		}
+		watcher, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialStatus|ipn.NotifyPeerChanges)
+		if err != nil {
+			return
+		}
+		defer watcher.Close()
+		for {
+			n, err := watcher.Next()
+			if err != nil {
+				return
+			}
+			if n.InitialStatus == nil && len(n.PeersChanged) == 0 && len(n.PeersRemoved) == 0 {
+				continue
+			}
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
+	}()
+	return ch
+}
