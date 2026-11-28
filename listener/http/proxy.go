@@ -76,11 +76,6 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...
 				return // hijack connection
 			}
 
-			host := request.Header.Get("Host")
-			if host != "" {
-				request.Host = host
-			}
-
 			request.RequestURI = ""
 
 			if isUpgradeRequest(request) {
