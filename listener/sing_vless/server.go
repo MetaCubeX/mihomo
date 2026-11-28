@@ -169,7 +169,11 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 		httpMux.HandleFunc(config.WsPath, func(w http.ResponseWriter, r *http.Request) {
 			conn, err := mihomoVMess.StreamUpgradedWebsocketConn(w, r)
 			if err != nil {
-				http.Error(w, err.Error(), 500)
+				if errors.Is(err, mihomoVMess.ErrNotWebSocketUpgrade) {
+					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+					return
+				}
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			sl.HandleConn(conn, tunnel, additions...)
