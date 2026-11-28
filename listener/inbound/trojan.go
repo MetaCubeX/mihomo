@@ -11,21 +11,22 @@ import (
 
 type TrojanOption struct {
 	BaseOption
-	Users           []TrojanUser   `inbound:"users"`
-	WsPath          string         `inbound:"ws-path,omitempty"`
-	GrpcServiceName string         `inbound:"grpc-service-name,omitempty"`
-	Certificate     string         `inbound:"certificate,omitempty"`
-	PrivateKey      string         `inbound:"private-key,omitempty"`
-	ClientAuthType  string         `inbound:"client-auth-type,omitempty"`
-	ClientAuthCert  string         `inbound:"client-auth-cert,omitempty"`
-	EchKey          string         `inbound:"ech-key,omitempty"`
-	AllowInsecure   bool           `inbound:"allow-insecure,omitempty"`
-	ShadowTLS       ShadowTLS      `inbound:"shadow-tls,omitempty"`
-	ResTLS          ResTLS         `inbound:"res-tls,omitempty"`
-	JLSConfig       JLSConfig      `inbound:"jls-config,omitempty"`
-	RealityConfig   RealityConfig  `inbound:"reality-config,omitempty"`
-	MuxOption       MuxOption      `inbound:"mux-option,omitempty"`
-	SSOption        TrojanSSOption `inbound:"ss-option,omitempty"`
+	Users              []TrojanUser   `inbound:"users"`
+	WsPath             string         `inbound:"ws-path,omitempty"`
+	GrpcServiceName    string         `inbound:"grpc-service-name,omitempty"`
+	Certificate        string         `inbound:"certificate,omitempty"`
+	PrivateKey         string         `inbound:"private-key,omitempty"`
+	ClientAuthType     string         `inbound:"client-auth-type,omitempty"`
+	ClientAuthCert     string         `inbound:"client-auth-cert,omitempty"`
+	EchKey             string         `inbound:"ech-key,omitempty"`
+	AllowInsecure      bool           `inbound:"allow-insecure,omitempty"`
+	TrustedProxyHeader string         `inbound:"trusted-proxy-header,omitempty"`
+	ShadowTLS          ShadowTLS      `inbound:"shadow-tls,omitempty"`
+	ResTLS             ResTLS         `inbound:"res-tls,omitempty"`
+	JLSConfig          JLSConfig      `inbound:"jls-config,omitempty"`
+	RealityConfig      RealityConfig  `inbound:"reality-config,omitempty"`
+	MuxOption          MuxOption      `inbound:"mux-option,omitempty"`
+	SSOption           TrojanSSOption `inbound:"ss-option,omitempty"`
 }
 
 type TrojanUser struct {
@@ -67,22 +68,23 @@ func NewTrojan(options *TrojanOption) (*Trojan, error) {
 		Base:   base,
 		config: options,
 		vs: LC.TrojanServer{
-			Enable:          true,
-			Listen:          base.RawAddress(),
-			Users:           users,
-			WsPath:          options.WsPath,
-			GrpcServiceName: options.GrpcServiceName,
-			Certificate:     options.Certificate,
-			PrivateKey:      options.PrivateKey,
-			ClientAuthType:  options.ClientAuthType,
-			ClientAuthCert:  options.ClientAuthCert,
-			EchKey:          options.EchKey,
-			AllowInsecure:   options.AllowInsecure,
-			ShadowTLS:       options.ShadowTLS.Build(),
-			ResTLS:          options.ResTLS.Build(),
-			JLSConfig:       options.JLSConfig.Build(),
-			RealityConfig:   options.RealityConfig.Build(),
-			MuxOption:       options.MuxOption.Build(),
+			Enable:             true,
+			Listen:             base.RawAddress(),
+			Users:              users,
+			WsPath:             options.WsPath,
+			GrpcServiceName:    options.GrpcServiceName,
+			Certificate:        options.Certificate,
+			PrivateKey:         options.PrivateKey,
+			ClientAuthType:     options.ClientAuthType,
+			ClientAuthCert:     options.ClientAuthCert,
+			EchKey:             options.EchKey,
+			AllowInsecure:      options.AllowInsecure,
+			TrustedProxyHeader: options.TrustedProxyHeader,
+			ShadowTLS:          options.ShadowTLS.Build(),
+			ResTLS:             options.ResTLS.Build(),
+			JLSConfig:          options.JLSConfig.Build(),
+			RealityConfig:      options.RealityConfig.Build(),
+			MuxOption:          options.MuxOption.Build(),
 			TrojanSSOption: LC.TrojanSSOption{
 				Enabled:  options.SSOption.Enabled,
 				Method:   options.SSOption.Method,
