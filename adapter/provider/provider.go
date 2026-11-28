@@ -96,8 +96,8 @@ func (bp *baseProvider) HealthCheckURL() string {
 	return bp.healthCheck.url
 }
 
-func (bp *baseProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
-	bp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
+func (bp *baseProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint, downloadSize int) {
+	bp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval, downloadSize)
 }
 
 func (bp *baseProvider) setProxies(proxies []C.Proxy) {

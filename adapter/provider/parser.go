@@ -10,6 +10,7 @@ import (
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/log"
 )
 
 var (
@@ -23,6 +24,7 @@ type healthCheckSchema struct {
 	TestTimeout    int    `provider:"timeout,omitempty"`
 	Lazy           bool   `provider:"lazy,omitempty"`
 	ExpectedStatus string `provider:"expected-status,omitempty"`
+	DownloadSize   int    `provider:"download-size,omitempty"`
 }
 
 type proxyProviderSchema struct {
@@ -68,7 +70,10 @@ func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P
 		}
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus)
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus, schema.HealthCheck.DownloadSize)
+	if schema.HealthCheck.DownloadSize > C.MaxHealthCheckDownloadSize {
+		log.Warnln("proxy provider %s: download-size %d moves that many bytes per proxy on every check", name, schema.HealthCheck.DownloadSize)
+	}
 
 	parser, err := NewProxiesParser(name, tunnel, schema.Filter, schema.ExcludeFilter, schema.ExcludeType, schema.DialerProxy, schema.Override, schema.AgeSecretKey)
 	if err != nil {
