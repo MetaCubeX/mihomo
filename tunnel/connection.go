@@ -218,5 +218,6 @@ func closeAllLocalCoon(lAddr string) {
 }
 
 func handleSocket(inbound, outbound net.Conn) {
-	N.Relay(inbound, outbound)
+	clientTimeout, serverTimeout := TCPHalfCloseTimeout()
+	N.RelayWithHalfCloseTimeout(inbound, outbound, clientTimeout, serverTimeout)
 }
