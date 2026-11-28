@@ -19,7 +19,7 @@ type ProxyGroup interface {
 	Hidden() bool
 	Icon() string
 
-	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (mp map[string]uint16, err error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], options ...C.HealthCheckOption) (mp map[string]uint16, err error)
 }
 
 var _ ProxyGroup = (*Fallback)(nil)
