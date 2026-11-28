@@ -211,6 +211,15 @@ func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, 
 
 // ClientHandshake fast-tracks SOCKS initialization to get target address to connect on client side.
 func ClientHandshake(rw io.ReadWriter, addr Addr, command Command, user *User) (Addr, error) {
+	return clientHandshake(rw, addr, command, user, false)
+}
+
+// ClientHandshakeConfirmed validates the target connection result for callers
+// that must distinguish proxy TCP establishment from successful SOCKS CONNECT.
+func ClientHandshakeConfirmed(rw io.ReadWriter, addr Addr, command Command, user *User) (Addr, error) {
+	return clientHandshake(rw, addr, command, user, true)
+}
+func clientHandshake(rw io.ReadWriter, addr Addr, command Command, user *User, confirmed bool) (Addr, error) {
 	buf := make([]byte, MaxAddrLen)
 	var err error
 
@@ -271,6 +280,14 @@ func ClientHandshake(rw io.ReadWriter, addr Addr, command Command, user *User) (
 		return nil, err
 	}
 
+	if confirmed {
+		if buf[0] != 5 || buf[2] != 0 {
+			return nil, errors.New("invalid SOCKS reply header")
+		}
+		if buf[1] != 0 {
+			return nil, Error(buf[1])
+		}
+	}
 	return ReadAddr(rw, buf)
 }
 

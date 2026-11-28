@@ -45,6 +45,9 @@ type Socks5Option struct {
 
 // StreamConnContext implements C.ProxyAdapter
 func (ss *Socks5) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	return ss.streamConnContext(ctx, c, metadata, false)
+}
+func (ss *Socks5) streamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata, confirmed bool) (net.Conn, error) {
 	if ss.tls {
 		cc := tls.Client(c, ss.tlsConfig)
 		err := cc.HandshakeContext(ctx)
@@ -61,14 +64,26 @@ func (ss *Socks5) StreamConnContext(ctx context.Context, c net.Conn, metadata *C
 			Password: ss.pass,
 		}
 	}
-	if _, err := ss.clientHandshakeContext(ctx, c, serializesSocksAddr(metadata), socks5.CmdConnect, user); err != nil {
+	handshake := ss.clientHandshakeContext
+	if confirmed {
+		handshake = ss.clientHandshakeConfirmedContext
+	}
+	if _, err := handshake(ctx, c, serializesSocksAddr(metadata), socks5.CmdConnect, user); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
 // DialContext implements C.ProxyAdapter
-func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	return ss.dialContext(ctx, metadata, false)
+}
+
+// DialContextConfirmed is opt-in; legacy SOCKS paths retain their existing behavior.
+func (ss *Socks5) DialContextConfirmed(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	return ss.dialContext(ctx, metadata, true)
+}
+func (ss *Socks5) dialContext(ctx context.Context, metadata *C.Metadata, confirmed bool) (_ C.Conn, err error) {
 	c, err := ss.dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
@@ -78,7 +93,7 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = ss.StreamConnContext(ctx, c, metadata)
+	c, err = ss.streamConnContext(ctx, c, metadata, confirmed)
 	if err != nil {
 		return nil, err
 	}
@@ -168,6 +183,14 @@ func (ss *Socks5) clientHandshakeContext(ctx context.Context, c net.Conn, addr s
 		defer done(&err)
 	}
 	return socks5.ClientHandshake(c, addr, command, user)
+}
+
+func (ss *Socks5) clientHandshakeConfirmedContext(ctx context.Context, c net.Conn, addr socks5.Addr, command socks5.Command, user *socks5.User) (_ socks5.Addr, err error) {
+	if ctx.Done() != nil {
+		done := N.SetupContextForConn(ctx, c)
+		defer done(&err)
+	}
+	return socks5.ClientHandshakeConfirmed(c, addr, command, user)
 }
 
 func NewSocks5(option Socks5Option) (*Socks5, error) {

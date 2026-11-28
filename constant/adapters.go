@@ -55,6 +55,7 @@ const (
 	ZeroTier
 	EasyTier
 	GostRelay
+	TargetFallback
 )
 
 const (
@@ -64,6 +65,8 @@ const (
 	DefaultTLSTimeout = DefaultTCPTimeout
 	DefaultTestURL    = "https://www.gstatic.com/generate_204"
 )
+
+var ErrTargetFallbackTerminal = errors.New("target-fallback attempt finished")
 
 var ErrNotSupport = errors.New("no support")
 
@@ -246,6 +249,8 @@ func (at AdapterType) String() string {
 		return "Relay"
 	case Selector:
 		return "Selector"
+	case TargetFallback:
+		return "TargetFallback"
 	case Fallback:
 		return "Fallback"
 	case URLTest:
