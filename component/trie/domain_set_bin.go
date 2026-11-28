@@ -63,6 +63,7 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 
 	ds = &DomainSet{}
 	var length int64
+	var word [8]byte
 
 	// leaves
 	err = binary.Read(r, binary.BigEndian, &length)
@@ -74,10 +75,11 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 	}
 	ds.leaves = make([]uint64, length)
 	for i := int64(0); i < length; i++ {
-		err = binary.Read(r, binary.BigEndian, &ds.leaves[i])
+		_, err = io.ReadFull(r, word[:])
 		if err != nil {
 			return nil, err
 		}
+		ds.leaves[i] = binary.BigEndian.Uint64(word[:])
 	}
 
 	// labelBitmap
@@ -90,10 +92,11 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 	}
 	ds.labelBitmap = make([]uint64, length)
 	for i := int64(0); i < length; i++ {
-		err = binary.Read(r, binary.BigEndian, &ds.labelBitmap[i])
+		_, err = io.ReadFull(r, word[:])
 		if err != nil {
 			return nil, err
 		}
+		ds.labelBitmap[i] = binary.BigEndian.Uint64(word[:])
 	}
 
 	// labels
