@@ -88,14 +88,18 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string
 		return 0, "", ErrInvalidNetwork
 	}
 
-	buf, err := getTransportTable(fn, family, class)
+	bufPtr := transportTablePool.Get().(*[]byte)
+	buf, err := getTransportTable(fn, family, class, *bufPtr)
+	*bufPtr = buf
 	if err != nil {
+		transportTablePool.Put(bufPtr)
 		return 0, "", err
 	}
 
 	s := newSearcher(family == windows.AF_INET, network == TCP)
 
 	pid, err := s.Search(buf, ip, uint16(srcPort))
+	transportTablePool.Put(bufPtr)
 	if err != nil {
 		return 0, "", err
 	}
@@ -177,8 +181,19 @@ func newSearcher(isV4, isTCP bool) *searcher {
 	}
 }
 
-func getTransportTable(fn uintptr, family int, class int) ([]byte, error) {
-	for size, buf := uint32(8), make([]byte, 8); ; {
+// transportTablePool keeps the buffers of previous lookups, so that a lookup
+// usually fetches the table with one call instead of first asking for its size.
+var transportTablePool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 8)
+		return &buf
+	},
+}
+
+// getTransportTable fills buf with the table, growing it if needed, and returns
+// the buffer that holds the table.
+func getTransportTable(fn uintptr, family int, class int, buf []byte) ([]byte, error) {
+	for size := uint32(len(buf)); ; {
 		ptr := unsafe.Pointer(&buf[0])
 		err, _, _ := syscall.Syscall6(fn, 6, uintptr(ptr), uintptr(unsafe.Pointer(&size)), 0, uintptr(family), uintptr(class), 0)
 
@@ -188,7 +203,7 @@ func getTransportTable(fn uintptr, family int, class int) ([]byte, error) {
 		case uintptr(syscall.ERROR_INSUFFICIENT_BUFFER):
 			buf = make([]byte, size)
 		default:
-			return nil, fmt.Errorf("syscall error: %d", err)
+			return buf, fmt.Errorf("syscall error: %d", err)
 		}
 	}
 }
