@@ -42,7 +42,7 @@ func (c *systemClient) getDnsClients() ([]dnsClient, error) {
 			}
 			available := 0
 			for nameserver, sdc := range c.dnsClients {
-				if slices.Contains(nameservers, nameserver) {
+				if !resolver.IsSystemDnsBlacklisted(nameserver) && slices.Contains(nameservers, nameserver) {
 					sdc.disableTimes = 0 // enable
 					available++
 				} else {
@@ -59,8 +59,8 @@ func (c *systemClient) getDnsClients() ([]dnsClient, error) {
 		}
 	}
 	dnsClients := make([]dnsClient, 0, len(c.dnsClients))
-	for _, sdc := range c.dnsClients {
-		if sdc.disableTimes == 0 {
+	for nameserver, sdc := range c.dnsClients {
+		if sdc.disableTimes == 0 && !resolver.IsSystemDnsBlacklisted(nameserver) {
 			dnsClients = append(dnsClients, sdc.dnsClient)
 		}
 	}
@@ -70,4 +70,14 @@ func (c *systemClient) getDnsClients() ([]dnsClient, error) {
 	return nil, err
 }
 
-func (c *systemClient) ResetConnection() {}
+func (c *systemClient) ResetConnection() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastFlush = time.Time{}
+	for _, sdc := range c.dnsClients {
+		sdc.dnsClient.ResetConnection()
+	}
+	for _, dc := range c.defaultNS {
+		dc.ResetConnection()
+	}
+}
