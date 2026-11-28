@@ -17,6 +17,7 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/loopback"
 	"github.com/metacubex/mihomo/component/nat"
+	"github.com/metacubex/mihomo/component/neighbor"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -204,6 +205,8 @@ func Listeners() map[string]C.InboundListener {
 
 // UpdateRules handle update rules
 func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, newRuleProviders map[string]P.RuleProvider) (oldRules []C.Rule, oldSubRule map[string][]C.Rule, oldRuleProviders map[string]P.RuleProvider) {
+	sourceMACConfigMu.Lock()
+	defer sourceMACConfigMu.Unlock()
 	configMux.Lock()
 	oldRules = rules
 	oldSubRule = subRules
@@ -212,6 +215,8 @@ func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, newRuleProvi
 	ruleProviders = newRuleProviders
 	subRules = newSubRule
 	configMux.Unlock()
+	sourceMACClosed = false
+	refreshSourceMACLocked()
 	return
 }
 
@@ -321,10 +326,11 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(ctx context.Context, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+	state := snapshotRouting()
 	if metadata.SpecialProxy != "" {
 		var exist bool
-		proxy, exist = proxies[metadata.SpecialProxy]
+		proxy, exist = state.proxies[metadata.SpecialProxy]
 		if !exist {
 			err = fmt.Errorf("proxy %s not found", metadata.SpecialProxy)
 		}
@@ -341,9 +347,10 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 	}
 
 	helper := C.RuleMatchHelper{
+		FindSourceMAC: sourceMACLookup(metadata, func(index int, ip netip.Addr) (neighbor.MAC, bool) { return sourceMACResolver.Resolve(ctx, index, ip) }),
 		ResolveIP: func() {
 			if !resolved && metadata.Host != "" && !metadata.Resolved() {
-				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+				ctx, cancel := context.WithTimeout(ctx, resolver.DefaultDNSTimeout)
 				defer cancel()
 				ip, err := resolver.ResolveIP(ctx, metadata.Host)
 				if err != nil {
@@ -383,18 +390,6 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 				}
 			}
 		},
-		CheckPassRule: func(adapterName string) bool {
-			adapter, ok := proxies[adapterName]
-			if !ok {
-				return false
-			}
-			for a := adapter; a != nil; a = a.Unwrap(metadata, false) {
-				if a.Type() == C.PassRule {
-					return true
-				}
-			}
-			return false
-		},
 	}
 
 	switch FindProcessMode() {
@@ -407,12 +402,15 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 
 	switch mode {
 	case Direct:
-		proxy = proxies["DIRECT"]
+		proxy = state.proxies["DIRECT"]
 	case Global:
-		proxy = proxies["GLOBAL"]
+		proxy = state.proxies["GLOBAL"]
 	// Rule
 	default:
-		proxy, rule, err = match(metadata, helper)
+		proxy, rule, err = state.match(metadata, helper)
+	}
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
 	}
 	return
 }
@@ -445,8 +443,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 	}
 
 	key := packet.Key()
+	routeCtx := context.Background()
 	sender, loaded := natTable.GetOrCreate(key, func() C.PacketSender {
 		sender := newPacketSender()
+		routeCtx = sender.ctx
 		if sniffingEnable && snifferDispatcher.Enable() {
 			return snifferDispatcher.UDPSniff(packet, sender)
 		}
@@ -464,14 +464,14 @@ func handleUDPConn(packet C.PacketAdapter) {
 
 			_ = preHandleMetadata(metadata) // error was pre-checked
 
-			proxy, rule, err := resolveMetadata(metadata)
+			proxy, rule, err := resolveMetadata(routeCtx, metadata)
 			if err != nil {
 				log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 				return nil, nil, err
 			}
 
 			dialMetadata := metadata.Pure()
-			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
+			ctx, cancel := context.WithTimeout(routeCtx, C.DefaultUDPTimeout)
 			defer cancel()
 			rawPc, err := retry(ctx, func(ctx context.Context) (C.PacketConn, error) {
 				return proxy.ListenPacketContext(ctx, dialMetadata)
@@ -547,18 +547,25 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	routeCtx, routeCancel := context.WithCancel(context.Background())
+	defer routeCancel()
 	peekMutex := sync.Mutex{}
 	if !conn.Peeked() {
 		peekMutex.Lock()
 		go func() {
 			defer peekMutex.Unlock()
 			_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-			_, _ = conn.Peek(1)
+			_, peekErr := conn.Peek(1)
+			if peekErr != nil {
+				if e, ok := peekErr.(net.Error); ok && !e.Timeout() {
+					routeCancel()
+				}
+			}
 			_ = conn.SetReadDeadline(time.Time{})
 		}()
 	}
 
-	proxy, rule, err := resolveMetadata(metadata)
+	proxy, rule, err := resolveMetadata(routeCtx, metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
@@ -659,17 +666,20 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 }
 
 func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, error) {
-	configMux.RLock()
-	defer configMux.RUnlock()
+	return snapshotRouting().match(metadata, helper)
+}
+
+func (state routingSnapshot) match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, error) {
+	helper = state.helpers(metadata, helper)
 
 	var rematchChain []string
 	for {
 		var rematchProxy C.Proxy
 		var rematchRule C.Rule
 	GetRules:
-		for _, rule := range getRules(metadata) {
+		for _, rule := range state.getRules(metadata) {
 			if matched, ada := rule.Match(metadata, helper); matched {
-				adapter, ok := proxies[ada]
+				adapter, ok := state.proxies[ada]
 				if !ok {
 					continue
 				}
@@ -713,17 +723,17 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 			log.Debugln("[Rule] rematch proxy %s update metadata to rematch-name=%q sub-rule=%q", rematchProxy.Name(), metadata.InName, metadata.SpecialRules)
 			continue
 		}
-		return proxies["DIRECT"], nil, nil
+		return state.proxies["DIRECT"], nil, nil
 	}
 }
 
-func getRules(metadata *C.Metadata) []C.Rule {
-	if sr, ok := subRules[metadata.SpecialRules]; ok {
+func (state routingSnapshot) getRules(metadata *C.Metadata) []C.Rule {
+	if sr, ok := state.subRules[metadata.SpecialRules]; ok {
 		log.Debugln("[Rule] use %s rules", metadata.SpecialRules)
 		return sr
 	} else {
 		log.Debugln("[Rule] use default rules")
-		return rules
+		return state.rules
 	}
 }
 
