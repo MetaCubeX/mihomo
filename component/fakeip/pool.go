@@ -37,12 +37,16 @@ type Pool struct {
 	mux     sync.Mutex
 	ipnet   netip.Prefix
 	store   store
+
+	// flushPending is set by restoreState; see flushIfPending
+	flushPending bool
 }
 
 // Lookup return a fake ip with host
 func (p *Pool) Lookup(host string) netip.Addr {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+	p.flushIfPending()
 
 	// RFC4343: DNS Case Insensitive, we SHOULD return result with all cases.
 	host = strings.ToLower(host)
@@ -59,6 +63,7 @@ func (p *Pool) Lookup(host string) netip.Addr {
 func (p *Pool) LookBack(ip netip.Addr) (string, bool) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+	p.flushIfPending()
 
 	return p.store.GetByIP(ip)
 }
@@ -67,6 +72,7 @@ func (p *Pool) LookBack(ip netip.Addr) (string, bool) {
 func (p *Pool) Exist(ip netip.Addr) bool {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+	p.flushIfPending()
 
 	return p.store.Exist(ip)
 }
@@ -94,11 +100,29 @@ func (p *Pool) CloneFrom(o *Pool) {
 	o.mux.Lock()
 	defer o.mux.Unlock()
 
+	// an old pool that was never used still owes its flush; do it before the new pool takes over
+	o.flushIfPending()
+
 	o.store.CloneTo(p.store)
 
 	// the allocation state only matches the cloned entries if both pools cover the same range
 	if o.first == p.first && o.last == p.last {
 		p.offset, p.cycle = o.offset, o.cycle
+
+		// both pools are on the same cache file, which the old pool's state describes
+		if _, ok := o.store.(*cachefileStore); ok {
+			p.flushPending = false
+		}
+	}
+}
+
+// flushIfPending flushes the store when restoreState found it unusable for this pool.
+// It is deferred from New to the first use: on reload the new pool is built while the
+// running one still uses the same cache file, and the new config may never be applied.
+func (p *Pool) flushIfPending() {
+	if p.flushPending {
+		p.flushPending = false
+		_ = p.store.FlushFakeIP()
 	}
 }
 
@@ -128,6 +152,10 @@ func (p *Pool) FlushFakeIP() error {
 }
 
 func (p *Pool) StoreState() {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	p.flushIfPending()
+
 	if s, ok := p.store.(*cachefileStore); ok {
 		s.PutByHost(offsetKey, p.offset)
 		if p.cycle {
@@ -146,10 +174,10 @@ func (p *Pool) restoreState() {
 			if p.ipnet.Contains(offset) {
 				p.offset = offset
 			} else {
-				_ = p.FlushFakeIP()
+				p.cycle, p.flushPending = false, true
 			}
 		} else if s.Exist(p.first) {
-			_ = p.FlushFakeIP()
+			p.cycle, p.flushPending = false, true
 		}
 	}
 }
