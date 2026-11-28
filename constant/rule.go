@@ -156,6 +156,67 @@ type RuleMatchHelper struct {
 	ResolveIP     func()
 	FindProcess   func()
 	CheckPassRule func(adapterName string) bool
+	// Diagnostics is nil for live traffic and propagates through nested rules.
+	Diagnostics *RuleMatchDiagnostics
+}
+
+// RuleMatchDiagnostics holds state for diagnostic evaluation, which does not record statistics.
+type RuleMatchDiagnostics struct {
+	BeforeMatch              func(Rule, *Metadata, *RuleMatchDiagnostics) bool
+	AfterMatch               func(Rule, *Metadata, *RuleMatchDiagnostics) bool
+	MatchProvider            func(string, *Metadata, RuleMatchHelper) bool
+	SubRuleMatched           func(string, int, Rule)
+	Incomplete               func() bool
+	BeginRule                func()
+	SourceDestinationSwapped bool
+}
+
+// OriginalField maps fields in a source-mode rule set back to request metadata.
+func (d *RuleMatchDiagnostics) OriginalField(field string) string {
+	if d.SourceDestinationSwapped {
+		switch field {
+		case "ip":
+			return "source-ip"
+		case "source-ip":
+			return "ip"
+		case "port":
+			return "source-port"
+		case "source-port":
+			return "port"
+		}
+	}
+	return field
+}
+
+// MatchRule evaluates a rule with optional diagnostic metadata checks.
+func (h RuleMatchHelper) MatchRule(rule Rule, metadata *Metadata) (bool, string) {
+	if h.Diagnostics == nil {
+		return rule.Match(metadata, h)
+	}
+	if h.Diagnostics.Incomplete != nil && h.Diagnostics.Incomplete() {
+		return false, ""
+	}
+	for {
+		wrapper, ok := rule.(RuleWrapper)
+		if !ok {
+			break
+		}
+		if wrapper.IsDisabled() {
+			return false, ""
+		}
+		rule = wrapper.Unwrap()
+	}
+	if h.Diagnostics.BeforeMatch != nil && !h.Diagnostics.BeforeMatch(rule, metadata, h.Diagnostics) {
+		return false, ""
+	}
+	matched, adapter := rule.Match(metadata, h)
+	if h.Diagnostics.AfterMatch != nil && !h.Diagnostics.AfterMatch(rule, metadata, h.Diagnostics) {
+		return false, ""
+	}
+	if h.Diagnostics.Incomplete != nil && h.Diagnostics.Incomplete() {
+		return false, ""
+	}
+	return matched, adapter
 }
 
 type RuleGroup interface {
