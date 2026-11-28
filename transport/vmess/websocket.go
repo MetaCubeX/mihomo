@@ -542,8 +542,10 @@ func decodeXray0rtt(requestHeader http.Header) []byte {
 	return nil
 }
 
+var ErrNotWebSocketUpgrade = errors.New("not a websocket upgrade request")
+
 func IsWebSocketUpgrade(r *http.Request) bool {
-	return r.Header.Get("Upgrade") == "websocket"
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
 
 func IsV2rayHttpUpdate(r *http.Request) bool {
@@ -554,6 +556,13 @@ func StreamUpgradedWebsocketConn(w http.ResponseWriter, r *http.Request) (net.Co
 	var conn net.Conn
 	var rw *bufio.ReadWriter
 	var err error
+	if !IsWebSocketUpgrade(r) {
+		return nil, ErrNotWebSocketUpgrade
+	}
+	hijacker, canHijack := w.(http.Hijacker)
+	if !canHijack {
+		return nil, errors.New("invalid connection, maybe HTTP/2")
+	}
 	isRaw := IsV2rayHttpUpdate(r)
 	w.Header().Set("Connection", "upgrade")
 	w.Header().Set("Upgrade", "websocket")
@@ -566,10 +575,6 @@ func StreamUpgradedWebsocketConn(w http.ResponseWriter, r *http.Request) (net.Co
 		if err != nil {
 			return nil, fmt.Errorf("flush response: %w", err)
 		}
-	}
-	hijacker, canHijack := w.(http.Hijacker)
-	if !canHijack {
-		return nil, errors.New("invalid connection, maybe HTTP/2")
 	}
 	conn, rw, err = hijacker.Hijack()
 	if err != nil {
