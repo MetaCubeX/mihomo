@@ -302,3 +302,18 @@ func Test_defragger_Feed(t *testing.T) {
 		})
 	}
 }
+
+func Test_defragger_FeedFragCountChange(t *testing.T) {
+	var d defragger
+	if got := d.Feed(udpMessage{MsgID: 0, FragID: 0, FragCount: 2, Data: []byte("ab")}); got != nil {
+		t.Fatalf("unexpected early reassembly: %v", got)
+	}
+	got := d.Feed(udpMessage{MsgID: 0, FragID: 1, FragCount: 2, Data: []byte("cd")})
+	if got == nil || string(got.Data) != "abcd" {
+		t.Fatalf("got %v, want abcd", got)
+	}
+	d.Feed(udpMessage{MsgID: 7, FragID: 0, FragCount: 2, Data: []byte("1")})
+	if got := d.Feed(udpMessage{MsgID: 7, FragID: 3, FragCount: 4, Data: []byte("4")}); got != nil {
+		t.Fatalf("expected nil on mismatched FragCount reset, got %v", got)
+	}
+}
