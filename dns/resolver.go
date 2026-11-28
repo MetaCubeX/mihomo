@@ -398,6 +398,10 @@ func (r *Resolver) ClearCache() {
 
 func (r *Resolver) ResetConnection() {
 	if r != nil {
+		// The network changed: lookups still in flight went out on the old network and may never be
+		// answered. Forget them before resetting the clients, which can block (DoH waits for clientMu),
+		// so new requests start a fresh lookup right away instead of joining the old ones.
+		r.group.Reset()
 		for _, c := range r.main {
 			c.ResetConnection()
 		}
@@ -407,6 +411,9 @@ func (r *Resolver) ResetConnection() {
 		if dr := r.defaultResolver; dr != nil {
 			dr.ResetConnection()
 		}
+		// Forget them again after: a lookup that started while the clients were being reset may be using
+		// a connection from before the change, and requests made after ResetConnection must not join it.
+		r.group.Reset()
 	}
 }
 
